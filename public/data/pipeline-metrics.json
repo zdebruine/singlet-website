@@ -1,21 +1,21 @@
 {
-  "last_updated": "2026-04-02T10:11:55+00:00",
+  "last_updated": "2026-04-02T11:13:26+00:00",
   "corpus": {
-    "total_series": 9438,
-    "total_samples": 85562,
-    "samples_quantified": 20554,
-    "samples_with_metadata": 20759,
-    "total_cells": 1860604121,
-    "samples_with_cells": 25774,
-    "avg_cells_per_sample": 72189,
+    "total_series": 9441,
+    "total_samples": 85830,
+    "samples_quantified": 20560,
+    "samples_with_metadata": 20765,
+    "total_cells": 1868365322,
+    "samples_with_cells": 25790,
+    "avg_cells_per_sample": 72445,
     "species": {
       "Mus musculus": {
-        "samples": 41049,
-        "cells": 826353439
+        "samples": 41299,
+        "cells": 833929859
       },
       "Homo sapiens": {
-        "samples": 36004,
-        "cells": 934039477
+        "samples": 36013,
+        "cells": 934224258
       },
       "Gallus gallus": {
         "samples": 146,
@@ -182,7 +182,7 @@
         "cells": 0
       },
       "Mus musculus; Homo sapiens": {
-        "samples": 21,
+        "samples": 22,
         "cells": 0
       },
       "Homo sapiens; synthetic construct": {
@@ -210,13 +210,13 @@
         "cells": 0
       }
     },
-    "qc_pass_rate": 0.8131,
+    "qc_pass_rate": 0.8129,
     "pipeline_version": "v3_pipelined_kraken2"
   },
   "compute": {
-    "active_jobs": 36,
-    "running_tasks": 27,
-    "pending_tasks": 9,
+    "active_jobs": 43,
+    "running_tasks": 32,
+    "pending_tasks": 11,
     "nodes_active": 16,
     "nodes_list": [
       "b002",
@@ -225,7 +225,7 @@
       "c001",
       "c002",
       "c004",
-      "c006",
+      "c005",
       "c008",
       "c009",
       "c010",
@@ -238,23 +238,33 @@
     ],
     "job_arrays": [
       {
-        "name": "v6-bigmem-w2",
-        "running": 2,
-        "pending": 1
-      },
-      {
         "name": "v6-bigmem",
         "running": 3,
         "pending": 1
       },
       {
+        "name": "v6-bigmem-w2",
+        "running": 2,
+        "pending": 1
+      },
+      {
+        "name": "v7-retry",
+        "running": 4,
+        "pending": 1
+      },
+      {
         "name": "v6-cpu-w2",
-        "running": 6,
+        "running": 5,
         "pending": 1
       },
       {
         "name": "v6-cpu",
         "running": 9,
+        "pending": 1
+      },
+      {
+        "name": "meta_2a_final_merge",
+        "running": 0,
         "pending": 1
       },
       {
@@ -268,18 +278,28 @@
         "pending": 0
       },
       {
+        "name": "meta_s2a_cleanup",
+        "running": 1,
+        "pending": 0
+      },
+      {
+        "name": "pilot-proto",
+        "running": 1,
+        "pending": 0
+      },
+      {
         "name": "meta_s2b_retry",
         "running": 1,
         "pending": 0
       },
       {
-        "name": "v6-gpu-v100",
-        "running": 3,
+        "name": "v6-gpu-v100-w2",
+        "running": 0,
         "pending": 1
       },
       {
-        "name": "v6-gpu-v100-w2",
-        "running": 0,
+        "name": "v6-gpu-v100",
+        "running": 3,
         "pending": 1
       },
       {
@@ -366,6 +386,12 @@
       "samples_quantified": 20554,
       "total_cells": 1860604121,
       "running_tasks": 27
+    },
+    {
+      "timestamp": "2026-04-02T11:13:26+00:00",
+      "samples_quantified": 20560,
+      "total_cells": 1868365322,
+      "running_tasks": 32
     }
   ]
 }
