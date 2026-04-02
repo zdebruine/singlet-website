@@ -42,7 +42,7 @@ const Dashboard = () => {
               {
                 icon: Bot,
                 title: "MCP Tools",
-                desc: "Query Singlet AI from VS Code, Claude Code, or Cursor via MCP. Query results stream directly into AnnData.",
+                desc: "Query Singlet Bio from VS Code, Claude Code, or Cursor via MCP. Query results stream directly into AnnData.",
                 link: "/docs",
                 cta: "Connect via MCP",
                 pro: true,
@@ -95,7 +95,7 @@ const Dashboard = () => {
             <h3 className="font-display text-lg font-bold text-foreground mb-2">Quick Start</h3>
             <div className="rounded-lg bg-background border border-border p-4">
               <pre className="font-mono text-xs text-muted-foreground leading-6 overflow-x-auto">
-                {`pip install singletai
+                {`pip install singlet
 
 import singlet
 

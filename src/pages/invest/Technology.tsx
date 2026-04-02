@@ -241,7 +241,7 @@ const Technology = () => {
               </div>
             </div>
             <div className="rounded-lg border border-primary/30 bg-card p-5">
-              <p className="font-mono text-xs text-primary mb-3">Singlet AI PGI (our architecture)</p>
+              <p className="font-mono text-xs text-primary mb-3">Singlet Bio PGI (our architecture)</p>
               <div className="font-mono text-xs text-muted-foreground space-y-1">
                 <p>DNA → Borzoi / AlphaGenome → sc Expression Head → Multimodal NMF → LLM → Clinical</p>
                 <p>Verifier: <span className="text-foreground">NMF factors (interpretable) + literature case reports</span></p>

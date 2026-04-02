@@ -42,7 +42,7 @@ const Navbar = () => {
             {/* Bottom-right – "1" in mono font */}
             <text x="15" y="15" textAnchor="middle" dominantBaseline="central" fontFamily="'JetBrains Mono', monospace" fontSize="10" fontWeight="700" fill="hsl(174 84% 32%)">1</text>
           </svg>
-          <span className="font-display font-bold text-[1.45rem] tracking-tightest text-foreground">Singlet AI</span>
+          <span className="font-display font-bold text-[1.45rem] tracking-tightest text-foreground">Singlet Bio</span>
         </Link>
 
         {/* Desktop Nav */}

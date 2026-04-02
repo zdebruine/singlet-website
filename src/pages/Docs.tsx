@@ -176,7 +176,7 @@ const Docs = () => {
           </p>
           <div className="flex flex-wrap gap-3">
             <div className="inline-flex items-center gap-2 px-4 py-2.5 rounded-md bg-muted border border-border font-mono text-sm text-foreground">
-              pip install singletai
+              pip install singlet
             </div>
             <a href="https://github.com/singletdb/singlet" target="_blank" rel="noopener noreferrer"
               className="inline-flex items-center gap-2 px-4 py-2.5 rounded-md border border-border text-sm text-muted-foreground hover:text-foreground transition-colors">
@@ -217,7 +217,7 @@ const Docs = () => {
             <h2 className="font-display text-2xl font-bold text-foreground tracking-tightest mb-6">Install</h2>
 
             <CodeBlock
-              code={`pip install singletai\n\n# GPU acceleration (optional)\npip install singletai[cuda]`}
+              code={`pip install singlet\n\n# GPU acceleration (optional)\npip install singlet[cuda]`}
               title="Terminal"
             />
 
@@ -723,7 +723,7 @@ $ claude mcp add singlet \\
             <h2 className="font-display text-2xl font-bold text-foreground tracking-tightest mb-6">Citation &amp; Licensing</h2>
 
             <div className="rounded-lg border border-border bg-card p-5 mb-6">
-              <h3 className="font-display text-sm font-semibold text-foreground mb-3">Cite Singlet AI</h3>
+              <h3 className="font-display text-sm font-semibold text-foreground mb-3">Cite Singlet Bio</h3>
               <div className="rounded-md bg-muted/40 p-4 font-mono text-xs text-muted-foreground leading-relaxed">
                 DeBruine ZJ, Melber K, Bhatt D, et al. Fast and interpretable non-negative matrix
                 factorization for single-cell data. <em>Bioinformatics</em>, 2024.
@@ -767,7 +767,7 @@ $ claude mcp add singlet \\
           <section className="pt-20 pb-8">
             <div className="border-t border-border pt-14 text-center">
               <h2 className="font-display text-2xl font-bold text-foreground tracking-tightest mb-2">
-                <span className="font-mono">pip install singletai</span> <span className="gradient-text">and go.</span>
+                <span className="font-mono">pip install singlet</span> <span className="gradient-text">and go.</span>
               </h2>
               <p className="text-sm text-muted-foreground mb-6 max-w-lg mx-auto">
                 Predict, generate, analyze. Start free.

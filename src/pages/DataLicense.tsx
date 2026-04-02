@@ -16,7 +16,7 @@ const DataLicense = () => (
                         Data License
                     </h1>
                     <p className="text-lg text-muted-foreground leading-relaxed">
-                        Clear terms for raw data, Singlet AI-added intelligence layers, and API outputs.
+                        Clear terms for raw data, Singlet Bio-added intelligence layers, and API outputs.
                     </p>
                 </div>
 
@@ -29,7 +29,7 @@ const DataLicense = () => (
                             <span className="text-sm text-muted-foreground">No restrictions on academic use</span>
                         </div>
                         <p className="text-sm text-muted-foreground leading-relaxed mb-4">
-                            All count matrices in Singlet AI are derived from publicly deposited data on{" "}
+                            All count matrices in Singlet Bio are derived from publicly deposited data on{" "}
                             <a href="https://www.ncbi.nlm.nih.gov/geo/" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">GEO</a>{" "}
                             and{" "}
                             <a href="https://www.ebi.ac.uk/ena" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">ENA/SRA</a>.
@@ -38,7 +38,7 @@ const DataLicense = () => (
                         <ul className="space-y-2 text-sm text-muted-foreground">
                             <li className="flex items-start gap-2">
                                 <span className="text-primary font-bold mt-0.5">•</span>
-                                <span><span className="text-foreground font-medium">Academic use:</span> Freely available. Cite the dataset DOI and Singlet AI.</span>
+                                <span><span className="text-foreground font-medium">Academic use:</span> Freely available. Cite the dataset DOI and Singlet Bio.</span>
                             </li>
                             <li className="flex items-start gap-2">
                                 <span className="text-primary font-bold mt-0.5">•</span>
@@ -52,16 +52,16 @@ const DataLicense = () => (
                     </div>
                 </section>
 
-                {/* Singlet AI-Added Layers */}
+                {/* Singlet Bio-Added Layers */}
                 <section className="mb-12">
-                    <h2 className="font-display text-2xl font-bold text-foreground mb-4">Singlet AI Intelligence Layers</h2>
+                    <h2 className="font-display text-2xl font-bold text-foreground mb-4">Singlet Bio Intelligence Layers</h2>
                     <div className="rounded-xl border border-primary/30 bg-primary/[0.04] p-6">
                         <div className="flex items-center gap-2 mb-3">
                             <span className="px-2.5 py-1 rounded-full bg-primary/15 text-primary text-xs font-mono font-bold uppercase">CC-BY 4.0</span>
                             <span className="text-sm text-muted-foreground">Academic use — commercial requires Enterprise license</span>
                         </div>
                         <p className="text-sm text-muted-foreground leading-relaxed mb-4">
-                            The following data layers are created by Singlet AI and represent our intellectual contribution beyond the raw public data:
+                            The following data layers are created by Singlet Bio and represent our intellectual contribution beyond the raw public data:
                         </p>
                         <div className="rounded-lg border border-border bg-background overflow-hidden mb-4">
                             <table className="w-full text-sm">
@@ -137,7 +137,7 @@ const DataLicense = () => (
                             </li>
                             <li className="flex items-start gap-2">
                                 <span className="text-red-500 font-bold mt-0.5">•</span>
-                                <span><span className="text-foreground font-medium">Competing commercial services:</span> Using bulk downloads of Singlet AI data or intelligence layers to build, train, or operate a competing commercial service, database, or API.</span>
+                                <span><span className="text-foreground font-medium">Competing commercial services:</span> Using bulk downloads of Singlet Bio data or intelligence layers to build, train, or operate a competing commercial service, database, or API.</span>
                             </li>
                             <li className="flex items-start gap-2">
                                 <span className="text-red-500 font-bold mt-0.5">•</span>
@@ -159,7 +159,7 @@ const DataLicense = () => (
                     <h2 className="font-display text-2xl font-bold text-foreground mb-4">API & Tool Outputs</h2>
                     <div className="rounded-xl border border-border bg-card p-6">
                         <p className="text-sm text-muted-foreground leading-relaxed mb-4">
-                            Responses from Singlet AI features — including structured queries, MCP tools, gene program lookups, and NMF inference — are licensed under your subscription terms:
+                            Responses from Singlet Bio features — including structured queries, MCP tools, gene program lookups, and NMF inference — are licensed under your subscription terms:
                         </p>
                         <ul className="space-y-2 text-sm text-muted-foreground">
                             <li className="flex items-start gap-2">
@@ -183,7 +183,7 @@ const DataLicense = () => (
                     <h2 className="font-display text-2xl font-bold text-foreground mb-4">How to Cite</h2>
                     <div className="rounded-xl border border-border bg-card p-6">
                         <p className="text-sm text-muted-foreground leading-relaxed mb-4">
-                            If you use Singlet AI data or tools in a publication, please cite:
+                            If you use Singlet Bio data or tools in a publication, please cite:
                         </p>
                         <div className="rounded-lg bg-muted/40 border border-border p-4 font-mono text-xs text-foreground leading-relaxed mb-4">
                             DeBruine ZJ, Melcher K, Bhatt D. "Fast and interpretable non-negative matrix factorization."
@@ -191,7 +191,7 @@ const DataLicense = () => (
                             <span className="text-primary italic">Bioinformatics</span>, 2024. doi:10.1093/bioinformatics/btad786
                         </div>
                         <p className="text-sm text-muted-foreground leading-relaxed">
-                            For specific datasets, include the GEO accession number and the Singlet AI release version (e.g., "Singlet AI Release 2026-Q3").
+                            For specific datasets, include the GEO accession number and the Singlet Bio release version (e.g., "Singlet Bio Release 2026-Q3").
                         </p>
                     </div>
                 </section>
@@ -201,7 +201,7 @@ const DataLicense = () => (
                     <h2 className="font-display text-2xl font-bold text-foreground mb-4">ML Model Training</h2>
                     <div className="rounded-xl border border-border bg-card p-6">
                         <p className="text-sm text-muted-foreground leading-relaxed mb-4">
-                            Using Singlet AI data to train machine learning models:
+                            Using Singlet Bio data to train machine learning models:
                         </p>
                         <ul className="space-y-2 text-sm text-muted-foreground">
                             <li className="flex items-start gap-2">

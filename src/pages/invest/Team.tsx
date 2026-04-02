@@ -42,7 +42,7 @@ const Team = () => {
                 <p className="font-mono text-xs text-primary mb-4">Founder & CEO · Assistant Professor, Grand Valley State University</p>
                 <div className="space-y-3 text-sm text-muted-foreground leading-relaxed">
                   <p>
-                    Zach's oldest son was diagnosed with a rare disease through whole-genome sequencing — a result that was <span className="text-foreground font-medium">life-changing</span>, unlocking targeted treatment that transformed his care. His younger son also lives with a rare disease but remains undiagnosed despite trio whole-genome sequencing. Singlet AI is dedicated to giving him — and millions like him — the gift of precision treatment and, one day, a diagnosis.
+                    Zach's oldest son was diagnosed with a rare disease through whole-genome sequencing — a result that was <span className="text-foreground font-medium">life-changing</span>, unlocking targeted treatment that transformed his care. His younger son also lives with a rare disease but remains undiagnosed despite trio whole-genome sequencing. Singlet Bio is dedicated to giving him — and millions like him — the gift of precision treatment and, one day, a diagnosis.
                   </p>
                   <p>
                     Zach earned his PhD in structural biology at the <span className="text-foreground font-medium">Van Andel Research Institute</span>, taught himself to code during COVID lockdowns, pivoted into bioinformatics, and completed a genomics ML postdoc. He is now <span className="text-foreground font-medium">Assistant Professor of Computing</span> at Grand Valley State University, where his lab focuses on Genomics AI — building the infrastructure and models to make single-cell data universally accessible and actionable.
@@ -155,7 +155,7 @@ const Team = () => {
             {[
               { role: "Senior ML Engineer", when: "Immediate", why: "Bridge model training, reasoning AI development" },
               { role: "Clinical Genomics Lead", when: "Month 6", why: "Evaluation harness, clinical partnerships, FDA" },
-              { role: "Full-Stack Engineer", when: "Month 6", why: "Singlet AI platform, Epic integration" },
+              { role: "Full-Stack Engineer", when: "Month 6", why: "Singlet Bio platform, Epic integration" },
               { role: "BD / Pharma Sales", when: "Month 12", why: "Enterprise sales, pharma pilot expansion" },
             ].map((h) => (
               <div key={h.role} className="flex items-start gap-4 pb-4 border-b border-border/50">

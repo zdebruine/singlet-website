@@ -52,7 +52,7 @@ const Business = () => {
         <section>
           <h2 className="font-display text-2xl font-bold text-foreground mb-4">Partnership Model</h2>
           <p className="text-sm text-muted-foreground mb-6 leading-relaxed">
-            Singlet AI partners with <span className="text-foreground font-medium">any WGS/WES provider</span> — Illumina, Ultima Genomics, Element Biosciences, BGI, or clinical sequencing labs. We are not a sequencing company. We are the <span className="text-foreground font-medium">on-demand insight layer</span> that transforms raw sequence into mechanistic interpretation.
+            Singlet Bio partners with <span className="text-foreground font-medium">any WGS/WES provider</span> — Illumina, Ultima Genomics, Element Biosciences, BGI, or clinical sequencing labs. We are not a sequencing company. We are the <span className="text-foreground font-medium">on-demand insight layer</span> that transforms raw sequence into mechanistic interpretation.
           </p>
           <div className="grid md:grid-cols-2 gap-4 mb-6">
             <div className="rounded-lg border border-border bg-card p-5">
@@ -71,7 +71,7 @@ const Business = () => {
           <div className="rounded-lg border-2 border-primary/20 bg-primary/5 p-5">
             <p className="text-sm text-foreground font-medium mb-1">Partnership examples</p>
             <p className="text-xs text-muted-foreground">
-              Illumina TruSight → Singlet AI PGI interpretation · Ultima UG100 → Singlet AI rare disease reasoning · Element AVITI → Singlet AI pharmacogenomics insight · Any clinical lab VCF → Singlet AI mechanistic report
+              Illumina TruSight → Singlet Bio PGI interpretation · Ultima UG100 → Singlet Bio rare disease reasoning · Element AVITI → Singlet Bio pharmacogenomics insight · Any clinical lab VCF → Singlet Bio mechanistic report
             </p>
           </div>
         </section>
@@ -321,7 +321,7 @@ const Business = () => {
               ["TileDB", "Data infrastructure SaaS", "Private (~$142M raised)"],
               ["Benchling", "Lab notebook SaaS", "~$100M ARR est."],
               ["DNAnexus", "Genomics cloud platform", "~$100M raised"],
-              ["Singlet AI (Year 3)", "Intelligence layer", "$4.5M ARR"],
+              ["Singlet Bio (Year 3)", "Intelligence layer", "$4.5M ARR"],
             ]}
           />
         </section>

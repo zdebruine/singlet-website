@@ -79,7 +79,7 @@ const Benchmarks = () => {
               {
                 tier: "Tier 3",
                 title: "Open-Source Benchmark",
-                desc: "A novel community benchmark — 'GenomicEval' — for evaluating AI systems that reason about genomic variants. Published and maintained by Singlet AI.",
+                desc: "A novel community benchmark — 'GenomicEval' — for evaluating AI systems that reason about genomic variants. Published and maintained by Singlet Bio.",
                 color: "text-primary",
               },
             ].map((item) => (
@@ -200,7 +200,7 @@ const Benchmarks = () => {
           <p className="font-mono text-xs text-primary uppercase tracking-widest mb-4">Tier 3</p>
           <h2 className="font-display text-2xl font-bold text-foreground mb-4">GenomicEval: An Open-Source Benchmark</h2>
           <p className="text-muted-foreground mb-6 leading-relaxed">
-            We will create and publish <span className="text-foreground font-medium">GenomicEval</span> — a standardized benchmark for evaluating AI systems that reason about genomic variants. Think <span className="text-foreground font-medium">"HumanEval, but for genomic reasoning."</span> This becomes a community resource and cements Singlet AI as the standard-setter.
+            We will create and publish <span className="text-foreground font-medium">GenomicEval</span> — a standardized benchmark for evaluating AI systems that reason about genomic variants. Think <span className="text-foreground font-medium">"HumanEval, but for genomic reasoning."</span> This becomes a community resource and cements Singlet Bio as the standard-setter.
           </p>
 
           <h3 className="font-display text-lg font-semibold text-foreground mb-4">Benchmark Structure</h3>

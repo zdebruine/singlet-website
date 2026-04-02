@@ -29,7 +29,7 @@ const SinglePressInstall = () => {
           </div>
           <div className="bg-background p-5 text-left">
             <pre className="font-mono text-sm text-foreground">
-              {installTab === "python" ? "pip install singletai" : 'install.packages("singlet")'}
+              {installTab === "python" ? "pip install singlet" : 'install.packages("singlet")'}
             </pre>
           </div>
         </div>

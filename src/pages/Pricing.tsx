@@ -30,7 +30,7 @@ const tiers = [
     sub: "/ mo",
     desc: "Higher throughput and Bring Your Own Data projection.",
     cta: "Get Started",
-    ctaLink: "mailto:hello@singletdb.com?subject=Singlet%20AI%20Pro",
+    ctaLink: "mailto:hello@singletdb.com?subject=Singlet%20Bio%20Pro",
     ctaStyle: "border border-border bg-secondary text-secondary-foreground hover:bg-muted",
     highlight: false,
     badge: null,
@@ -49,7 +49,7 @@ const tiers = [
     sub: "",
     desc: "Custom model training, commercial licensing, and dedicated support.",
     cta: "Contact Sales",
-    ctaLink: "mailto:hello@singletdb.com?subject=Singlet%20AI%20Enterprise",
+    ctaLink: "mailto:hello@singletdb.com?subject=Singlet%20Bio%20Enterprise",
     ctaStyle: "border border-border bg-secondary text-secondary-foreground hover:bg-muted",
     highlight: false,
     badge: null,
@@ -231,13 +231,13 @@ const Pricing = () => {
               Free programs. Scalable inference.
             </p>
             <p className="text-sm text-muted-foreground mb-6 max-w-md mx-auto">
-              <span className="font-mono text-primary">pip install singletai</span> — start predicting in minutes.
+              <span className="font-mono text-primary">pip install singlet</span> — start predicting in minutes.
             </p>
             <div className="flex flex-wrap gap-3 justify-center">
               <Link to="/docs" className="shimmer-border inline-flex items-center gap-2 px-6 py-2.5 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity">
                 Get Started Free <ArrowRight size={14} />
               </Link>
-              <a href="mailto:hello@singletdb.com?subject=Singlet%20AI%20Enterprise" className="inline-flex items-center gap-2 px-6 py-2.5 rounded-md border border-border bg-secondary text-secondary-foreground text-sm font-medium hover:bg-muted transition-colors">
+              <a href="mailto:hello@singletdb.com?subject=Singlet%20Bio%20Enterprise" className="inline-flex items-center gap-2 px-6 py-2.5 rounded-md border border-border bg-secondary text-secondary-foreground text-sm font-medium hover:bg-muted transition-colors">
                 Contact Sales
               </a>
             </div>

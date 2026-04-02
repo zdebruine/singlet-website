@@ -49,7 +49,7 @@ const SinglePress = () => {
               href="#install"
               className="inline-flex items-center gap-2 px-7 py-3 rounded-md border border-border bg-secondary text-secondary-foreground text-sm font-mono hover:bg-muted transition-colors"
             >
-              pip install singletai
+              pip install singlet
             </a>
           </div>
         </div>

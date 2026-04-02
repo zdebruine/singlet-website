@@ -483,7 +483,7 @@ const ChatDemo = () => {
       {/* Top bar */}
       <div className="flex items-center justify-between px-5 py-3 flex-shrink-0 border-b border-border/50">
         <Link to="/" className="font-display font-bold text-base tracking-tightest text-foreground">
-          Singlet AI
+          Singlet Bio
         </Link>
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20">
@@ -592,7 +592,7 @@ const ChatDemo = () => {
             </button>
           </div>
           <p className="text-[10px] text-muted-foreground/60 mt-2 text-center">
-            Singlet AI PGI · Responses are AI-generated and should be verified by qualified professionals
+            Singlet Bio PGI · Responses are AI-generated and should be verified by qualified professionals
           </p>
         </div>
       </div>

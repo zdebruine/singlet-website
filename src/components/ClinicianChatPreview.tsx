@@ -7,7 +7,7 @@ const ClinicianChatPreview = () => {
           <span className="text-primary text-xs font-bold">PGI</span>
         </div>
         <div>
-          <p className="text-sm font-semibold text-foreground">Singlet AI PGI</p>
+          <p className="text-sm font-semibold text-foreground">Singlet Bio PGI</p>
           <p className="text-[10px] text-muted-foreground">Clinical Genomics Intelligence</p>
         </div>
         <div className="ml-auto flex items-center gap-1.5">

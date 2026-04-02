@@ -189,7 +189,7 @@ const Index = () => {
           </div>
 
           <p className="text-xs text-muted-foreground/50 mt-5 font-mono tracking-wide">
-            pip install singletai · Open source · Permissive licensing
+            pip install singlet · Open source · Permissive licensing
           </p>
         </div>
       </section>
@@ -630,7 +630,7 @@ profile <- gene_profile("TREM2")` : `// .vscode/mcp.json
                   <li key={f} className="flex items-center gap-2 text-xs"><Check size={13} className="text-green-600 flex-shrink-0" /><span className="text-muted-foreground">{f}</span></li>
                 ))}
               </ul>
-              <a href="mailto:hello@singletdb.com?subject=Singlet%20AI%20Enterprise" className="inline-flex items-center justify-center gap-2 w-full px-4 py-2.5 rounded-md border border-border bg-secondary text-secondary-foreground text-sm font-medium hover:bg-muted transition-colors">Contact Sales</a>
+              <a href="mailto:hello@singletdb.com?subject=Singlet%20Bio%20Enterprise" className="inline-flex items-center justify-center gap-2 w-full px-4 py-2.5 rounded-md border border-border bg-secondary text-secondary-foreground text-sm font-medium hover:bg-muted transition-colors">Contact Sales</a>
             </div>
           </div>
         </div>

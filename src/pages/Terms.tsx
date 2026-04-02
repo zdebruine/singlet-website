@@ -15,14 +15,14 @@ const Terms = () => (
           <section>
             <h2 className="font-display text-lg font-bold text-foreground mb-3">1. Acceptance of Terms</h2>
             <p className="text-sm leading-relaxed">
-              By accessing or using Singlet AI ("Service"), you agree to these Terms of Service. If you do not agree, do not use the Service.
+              By accessing or using Singlet Bio ("Service"), you agree to these Terms of Service. If you do not agree, do not use the Service.
             </p>
           </section>
 
           <section>
             <h2 className="font-display text-lg font-bold text-foreground mb-3">2. Description of Service</h2>
             <p className="text-sm leading-relaxed">
-              Singlet AI provides an API and web interface for predictive transcriptomics intelligence, including gene expression prediction, perturbation modeling, and gene program analysis. The Service includes free, Pro, and Enterprise tiers.
+              Singlet Bio provides an API and web interface for predictive transcriptomics intelligence, including gene expression prediction, perturbation modeling, and gene program analysis. The Service includes free, Pro, and Enterprise tiers.
             </p>
           </section>
 
@@ -55,14 +55,14 @@ const Terms = () => (
           <section>
             <h2 className="font-display text-lg font-bold text-foreground mb-3">6. Disclaimers</h2>
             <p className="text-sm leading-relaxed">
-              The Service is provided "as is" without warranty of any kind. Predictions are computational outputs and should not be used as the sole basis for clinical decisions. Singlet AI is not a medical device and is not intended for diagnostic use.
+              The Service is provided "as is" without warranty of any kind. Predictions are computational outputs and should not be used as the sole basis for clinical decisions. Singlet Bio is not a medical device and is not intended for diagnostic use.
             </p>
           </section>
 
           <section>
             <h2 className="font-display text-lg font-bold text-foreground mb-3">7. Limitation of Liability</h2>
             <p className="text-sm leading-relaxed">
-              To the fullest extent permitted by law, Singlet AI shall not be liable for any indirect, incidental, special, consequential, or punitive damages arising from your use of the Service.
+              To the fullest extent permitted by law, Singlet Bio shall not be liable for any indirect, incidental, special, consequential, or punitive damages arising from your use of the Service.
             </p>
           </section>
 
