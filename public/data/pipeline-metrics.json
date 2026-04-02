@@ -1,21 +1,21 @@
 {
-  "last_updated": "2026-04-02T18:09:54+00:00",
+  "last_updated": "2026-04-02T19:14:55+00:00",
   "corpus": {
-    "total_series": 9457,
-    "total_samples": 89471,
-    "samples_quantified": 20753,
-    "samples_with_metadata": 20958,
-    "total_cells": 1900329774,
-    "samples_with_cells": 26091,
-    "avg_cells_per_sample": 72835,
+    "total_series": 9466,
+    "total_samples": 90195,
+    "samples_quantified": 20759,
+    "samples_with_metadata": 20964,
+    "total_cells": 1903232727,
+    "samples_with_cells": 26151,
+    "avg_cells_per_sample": 72779,
     "species": {
       "Mus musculus": {
-        "samples": 43417,
-        "cells": 854371370
+        "samples": 43935,
+        "cells": 854496543
       },
       "Homo sapiens": {
-        "samples": 34963,
-        "cells": 945519342
+        "samples": 35058,
+        "cells": 948290738
       },
       "Gallus gallus": {
         "samples": 138,
@@ -26,8 +26,8 @@
         "cells": 19848954
       },
       "Drosophila melanogaster": {
-        "samples": 577,
-        "cells": 25407882
+        "samples": 579,
+        "cells": 25407979
       },
       "Mesocricetus auratus": {
         "samples": 150,
@@ -186,8 +186,8 @@
         "cells": 0
       },
       "Mus musculus; Homo sapiens": {
-        "samples": 22,
-        "cells": 0
+        "samples": 40,
+        "cells": 6287
       },
       "Homo sapiens; synthetic construct": {
         "samples": 2,
@@ -210,14 +210,14 @@
         "cells": 0
       }
     },
-    "qc_pass_rate": 0.8057,
+    "qc_pass_rate": 0.8034,
     "pipeline_version": "v3_pipelined_kraken2"
   },
   "compute": {
-    "active_jobs": 82,
+    "active_jobs": 81,
     "running_tasks": 70,
-    "pending_tasks": 12,
-    "nodes_active": 12,
+    "pending_tasks": 11,
+    "nodes_active": 13,
     "nodes_list": [
       "b001",
       "b003",
@@ -230,7 +230,8 @@
       "c100",
       "g001",
       "g002",
-      "g004"
+      "g004",
+      "g005"
     ],
     "job_arrays": [
       {
@@ -244,12 +245,12 @@
         "pending": 1
       },
       {
-        "name": "v7-cpu-w2",
+        "name": "v7-cpu",
         "running": 20,
         "pending": 1
       },
       {
-        "name": "v7-cpu",
+        "name": "v7-cpu-w2",
         "running": 20,
         "pending": 1
       },
@@ -260,11 +261,6 @@
       },
       {
         "name": "meta_s2c_merge",
-        "running": 0,
-        "pending": 1
-      },
-      {
-        "name": "meta_sretry-2b_merge",
         "running": 0,
         "pending": 1
       },
@@ -284,11 +280,6 @@
         "pending": 0
       },
       {
-        "name": "meta_sretry-2b_b3",
-        "running": 1,
-        "pending": 0
-      },
-      {
         "name": "meta_sbulk-desc_b0",
         "running": 1,
         "pending": 0
@@ -304,18 +295,13 @@
         "pending": 0
       },
       {
-        "name": "meta_sbulk-desc_b3",
-        "running": 1,
-        "pending": 0
+        "name": "v7-gpu-v100",
+        "running": 5,
+        "pending": 1
       },
       {
         "name": "v7-gpu-rtx",
         "running": 0,
-        "pending": 1
-      },
-      {
-        "name": "v7-gpu-v100",
-        "running": 5,
         "pending": 1
       },
       {
@@ -325,7 +311,7 @@
       },
       {
         "name": "v7-gpu-rtx-w2",
-        "running": 0,
+        "running": 2,
         "pending": 1
       }
     ]
@@ -419,6 +405,12 @@
       "timestamp": "2026-04-02T18:09:54+00:00",
       "samples_quantified": 20753,
       "total_cells": 1900329774,
+      "running_tasks": 70
+    },
+    {
+      "timestamp": "2026-04-02T19:14:55+00:00",
+      "samples_quantified": 20759,
+      "total_cells": 1903232727,
       "running_tasks": 70
     }
   ]
