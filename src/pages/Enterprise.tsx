@@ -16,7 +16,7 @@ const Enterprise = () => (
                         Transcriptomics intelligence,<br /><span className="gradient-text">behind your firewall.</span>
                     </h1>
                     <p className="text-lg text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-                        Train Singlet on your proprietary data. Screen thousands of perturbations in minutes. All with the interpretability and speed your team needs to accelerate discovery. <a href="mailto:hello@singletdb.com?subject=Singlet%20AI%20Enterprise" className="text-primary hover:underline">Contact sales</a> for an enterprise agreement.
+                        Train Singlet on your proprietary data. Screen thousands of perturbations in minutes. All with the interpretability and speed your team needs to accelerate discovery. <a href="mailto:hello@singletdb.com?subject=Singlet%20Bio%20Enterprise" className="text-primary hover:underline">Contact sales</a> for an enterprise agreement.
                     </p>
                 </div>
 
@@ -99,7 +99,7 @@ const Enterprise = () => (
                         Enterprise pricing starts at $25K/year, depending on deployment model, data volume, and team size. Let's find the right fit.
                     </p>
                     <a
-                        href="mailto:hello@singletdb.com?subject=Singlet%20AI%20Enterprise"
+                        href="mailto:hello@singletdb.com?subject=Singlet%20Bio%20Enterprise"
                         className="inline-flex items-center gap-2 px-6 py-2.5 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity"
                     >
                         Contact Sales <ArrowRight size={14} />

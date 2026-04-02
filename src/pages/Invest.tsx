@@ -184,7 +184,7 @@ const Invest = () => {
             <span className="w-1.5 h-1.5 rounded-full bg-primary" />
             Shared by invitation only
           </div>
-          <p className="font-mono text-xs text-primary uppercase tracking-widest mb-6">Singlet AI — Pre-Seed</p>
+          <p className="font-mono text-xs text-primary uppercase tracking-widest mb-6">Singlet Bio — Pre-Seed</p>
 
           <h1 className="font-display text-4xl md:text-5xl font-bold text-foreground leading-[1.05] tracking-tightest mb-6">
             Interpretable AI for<br />
@@ -479,7 +479,7 @@ const Invest = () => {
 
           <div className="rounded-lg border-2 border-primary/20 bg-primary/[0.04] px-5 py-4 mb-8">
             <p className="text-sm text-muted-foreground leading-relaxed">
-              <span className="text-foreground font-semibold">Tempus AI</span> reached $632M revenue and a ~$6B market cap by organizing clinical genomic data at bulk resolution. They serve 250+ biopharma companies. Singlet AI adds <span className="text-primary font-semibold">single-cell resolution + interpretable AI</span> with software margins (90%+) vs clinical-lab margins (~60%).
+              <span className="text-foreground font-semibold">Tempus AI</span> reached $632M revenue and a ~$6B market cap by organizing clinical genomic data at bulk resolution. They serve 250+ biopharma companies. Singlet Bio adds <span className="text-primary font-semibold">single-cell resolution + interpretable AI</span> with software margins (90%+) vs clinical-lab margins (~60%).
             </p>
           </div>
 

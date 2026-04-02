@@ -47,7 +47,7 @@ const Market = () => {
         <section>
           <h2 className="font-display text-2xl font-bold text-foreground mb-6">Total Addressable Market</h2>
           <SubTable
-            headers={["Market", "2024", "2030", "Singlet AI's Role"]}
+            headers={["Market", "2024", "2030", "Singlet Bio's Role"]}
             rows={[
               ["Precision medicine", "~$73B", "~$175B", "Intelligence layer"],
               ["Rare disease dx + tx", "~$8B", "~$17B", "Phenotype prediction"],

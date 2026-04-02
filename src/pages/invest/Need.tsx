@@ -65,7 +65,7 @@ const Need = () => {
                         She's a <span className="text-foreground font-semibold">computational biology postdoc or staff scientist</span> at an academic lab or biotech. She uses Python (Scanpy) or R (Seurat) daily. She downloads data from GEO/SRA manually, processes with her own pipeline, and fights batch effects that make cross-lab comparisons meaningless. She makes ~$60K/yr (~$30/hr). There are <span className="text-foreground font-semibold">~50,000</span> of her worldwide — and 20%+ more every year as single-cell becomes the default.
                     </p>
                     <p className="text-sm text-muted-foreground leading-relaxed mb-6">
-                        They already pay for specialized bioinformatics tools — <span className="text-foreground font-semibold">$200–$2,150/yr per seat</span> — plus cloud compute at <span className="text-foreground font-semibold">$500–$2,000/mo per lab</span>. What they don't have is a single platform that unifies single-cell data access, annotation, and querying. Singlet AI fills that gap at a price point they already budget for.
+                        They already pay for specialized bioinformatics tools — <span className="text-foreground font-semibold">$200–$2,150/yr per seat</span> — plus cloud compute at <span className="text-foreground font-semibold">$500–$2,000/mo per lab</span>. What they don't have is a single platform that unifies single-cell data access, annotation, and querying. Singlet Bio fills that gap at a price point they already budget for.
                     </p>
                     <div className="grid grid-cols-3 gap-4">
                         <div className="text-center rounded-lg border border-border bg-card p-4">
@@ -129,7 +129,7 @@ const Need = () => {
                 <section>
                     <h2 className="font-display text-2xl font-bold text-foreground mb-4">What They Already Pay For</h2>
                     <p className="text-sm text-muted-foreground leading-relaxed mb-6">
-                        The beachhead customer is <span className="text-foreground font-semibold">not</span> spending $0 on tools. They pay for specialized bioinformatics software, cloud compute, and figure/notebook tools. Singlet AI's $29/mo entry point is anchored to prices they already budget for.
+                        The beachhead customer is <span className="text-foreground font-semibold">not</span> spending $0 on tools. They pay for specialized bioinformatics software, cloud compute, and figure/notebook tools. Singlet Bio's $29/mo entry point is anchored to prices they already budget for.
                     </p>
                     <SubTable
                         headers={["Tool", "Academic Price", "What It Does"]}
@@ -154,18 +154,18 @@ const Need = () => {
                 <section>
                     <h2 className="font-display text-2xl font-bold text-foreground mb-4">The ROI Argument</h2>
                     <p className="text-sm text-muted-foreground leading-relaxed mb-6">
-                        Researchers spend $620/yr for Geneious (sequence analysis), $384/yr for BioRender (figures), and <span className="text-foreground font-semibold">$500–$2,000/mo on cloud compute</span> they don't even like. Singlet AI token packs start at $29/mo — less than Geneious — for a tool that eliminates their #1 pain point: data wrangling. Heavy users who download more data naturally graduate to higher tiers.
+                        Researchers spend $620/yr for Geneious (sequence analysis), $384/yr for BioRender (figures), and <span className="text-foreground font-semibold">$500–$2,000/mo on cloud compute</span> they don't even like. Singlet Bio token packs start at $29/mo — less than Geneious — for a tool that eliminates their #1 pain point: data wrangling. Heavy users who download more data naturally graduate to higher tiers.
                     </p>
                     <SubTable
                         headers={["Metric", "Value"]}
                         rows={[
                             ["Postdoc salary", "~$60K/yr = ~$30/hr"],
                             ["Hours wrangling data per week", "10–20 hrs (downloading, reformatting, QCing, integrating)"],
-                            ["Hours saved with Singlet AI", "8–15 hrs/week (pre-processed, uniform, queryable)"],
+                            ["Hours saved with Singlet Bio", "8–15 hrs/week (pre-processed, uniform, queryable)"],
                             ["Monthly time-savings value", "$960–$1,800/month"],
                             ["Comparable tool budget (existing)", "$600–$2,500/yr on Geneious, Prism, BioRender, etc."],
                             ["Cloud compute budget (existing)", "$500–$2,000/mo per lab (Terra, AWS, GCP)"],
-                            ["Singlet AI Pro price", "$29/mo → less than Geneious, <3% of time saved"],
+                            ["Singlet Bio Pro price", "$29/mo → less than Geneious, <3% of time saved"],
                         ]}
                     />
                     <p className="text-xs text-muted-foreground mt-3 italic">
@@ -246,7 +246,7 @@ const Need = () => {
                 <section>
                     <div className="rounded-lg border-2 border-primary/30 bg-primary/[0.05] px-6 py-5">
                         <p className="text-sm text-foreground leading-relaxed">
-                            <span className="font-bold">Bottom line:</span> The beachhead customer already spends <span className="font-semibold">$600–$2,500/yr on comparable tools</span> plus <span className="font-semibold">$500–$2,000/mo on cloud compute</span>. Singlet AI starts at $29/mo — below their existing tool budget — and eliminates the <span className="font-semibold">60–80% of time</span> they spend on data wrangling. Once they're querying the entire atlas in one line of code, they don't go back to downloading from GEO.
+                            <span className="font-bold">Bottom line:</span> The beachhead customer already spends <span className="font-semibold">$600–$2,500/yr on comparable tools</span> plus <span className="font-semibold">$500–$2,000/mo on cloud compute</span>. Singlet Bio starts at $29/mo — below their existing tool budget — and eliminates the <span className="font-semibold">60–80% of time</span> they spend on data wrangling. Once they're querying the entire atlas in one line of code, they don't go back to downloading from GEO.
                         </p>
                     </div>
                 </section>

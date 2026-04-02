@@ -118,7 +118,7 @@ const Moat = () => {
               ))}
             </div>
             <p className="text-sm text-muted-foreground leading-relaxed text-center">
-              Once researchers cite Singlet AI in publications, downstream labs need the same data for reproducibility. This isn't customer stickiness — it's <span className="text-foreground font-semibold">scientific dependency</span>.
+              Once researchers cite Singlet Bio in publications, downstream labs need the same data for reproducibility. This isn't customer stickiness — it's <span className="text-foreground font-semibold">scientific dependency</span>.
             </p>
           </div>
         </section>

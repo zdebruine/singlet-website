@@ -4,7 +4,7 @@ Operational documentation for the [SingletDB](https://singletdb.com) website and
 
 ## Overview
 
-**singletdb** is a React + TypeScript + Vite web application serving as the primary interface for Singlet AI. This documentation covers deployment, architecture, and content management.
+**singletdb** is a React + TypeScript + Vite web application serving as the primary interface for Singlet Bio. This documentation covers deployment, architecture, and content management.
 
 - **Technology Stack** — React 18, TypeScript, Vite, Tailwind CSS, shadcn/ui, Supabase
 - **Pages** — Landing, investor pitch (8 sections), pricing, API docs, gene programs, dashboard

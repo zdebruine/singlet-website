@@ -76,7 +76,7 @@ const TargetExplorer = () => (
                     <h2 className="font-display text-lg font-bold text-foreground mb-4">How it works</h2>
                     <ol className="space-y-3">
                         {[
-                            "Every dataset in Singlet AI is processed through a uniform pipeline — same reference, same QC, same normalization.",
+                            "Every dataset in Singlet Bio is processed through a uniform pipeline — same reference, same QC, same normalization.",
                             "Expression is pre-indexed per gene, so queries resolve in seconds rather than scanning raw matrices.",
                             "Results are computed across all matching cells in the atlas, weighted by dataset quality.",
                             "NMF gene programs provide additional context: which biological programs your target participates in.",

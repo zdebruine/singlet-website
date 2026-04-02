@@ -84,7 +84,7 @@ const Footer = () => (
                 <circle cx="5" cy="15" r="2" fill="hsl(174 84% 32%)" />
                 <text x="15" y="15" textAnchor="middle" dominantBaseline="central" fontFamily="'JetBrains Mono', monospace" fontSize="10" fontWeight="700" fill="hsl(174 84% 32%)">1</text>
               </svg>
-              <span className="font-display font-bold text-sm tracking-tightest text-foreground">Singlet AI</span>
+              <span className="font-display font-bold text-sm tracking-tightest text-foreground">Singlet Bio</span>
             </div>
             <p className="text-xs text-muted-foreground/60 text-center md:text-left max-w-md">
               Free for academic research. Singlet is open source under MIT license.

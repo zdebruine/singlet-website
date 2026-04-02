@@ -61,7 +61,7 @@ const Competition = () => {
               </div>
             </div>
             <div className="rounded-lg border border-primary/30 bg-card p-5">
-              <p className="font-mono text-xs text-primary mb-3">Singlet AI PGI</p>
+              <p className="font-mono text-xs text-primary mb-3">Singlet Bio PGI</p>
               <div className="flex flex-wrap items-center gap-2 font-mono text-xs">
                 <span className="px-2 py-1 rounded bg-secondary text-foreground">genome</span>
                 <span className="text-primary">→</span>

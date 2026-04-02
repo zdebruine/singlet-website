@@ -179,7 +179,7 @@ const GenePrograms = () => (
               <thead>
                 <tr className="border-b border-border bg-muted/30">
                   <th className="text-left px-4 py-3 text-xs font-bold text-muted-foreground uppercase tracking-wider" />
-                  <th className="text-left px-4 py-3 text-xs font-bold text-primary uppercase tracking-wider border-l border-border bg-primary/[0.04]">NMF (Singlet AI)</th>
+                  <th className="text-left px-4 py-3 text-xs font-bold text-primary uppercase tracking-wider border-l border-border bg-primary/[0.04]">NMF (Singlet Bio)</th>
                   <th className="text-left px-4 py-3 text-xs font-bold text-muted-foreground uppercase tracking-wider">Transformers</th>
                 </tr>
               </thead>

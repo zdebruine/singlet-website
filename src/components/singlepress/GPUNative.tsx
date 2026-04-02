@@ -28,7 +28,7 @@ const SinglePressGPU = () => (
         Built for the GPU, not adapted to it
       </h2>
       <p className="text-muted-foreground leading-relaxed mb-8 max-w-3xl">
-        Most formats were designed for CPUs and retro-fitted for accelerators. Singlet AI's compression was engineered from the ground up for GPU training pipelines — zero-copy CuSPARSE integration, native PyTorch sparse tensor support, and on-the-fly normalization that keeps every CUDA core busy.
+        Most formats were designed for CPUs and retro-fitted for accelerators. Singlet Bio's compression was engineered from the ground up for GPU training pipelines — zero-copy CuSPARSE integration, native PyTorch sparse tensor support, and on-the-fly normalization that keeps every CUDA core busy.
       </p>
       <div className="grid md:grid-cols-[2fr_1fr] gap-6">
         <div className="rounded-xl border border-border overflow-hidden">
