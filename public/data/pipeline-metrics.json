@@ -1,21 +1,21 @@
 {
-  "last_updated": "2026-04-02T17:06:43+00:00",
+  "last_updated": "2026-04-02T18:09:54+00:00",
   "corpus": {
-    "total_series": 9455,
-    "total_samples": 87734,
-    "samples_quantified": 20746,
-    "samples_with_metadata": 20951,
-    "total_cells": 1899111270,
-    "samples_with_cells": 26081,
-    "avg_cells_per_sample": 72816,
+    "total_series": 9457,
+    "total_samples": 89471,
+    "samples_quantified": 20753,
+    "samples_with_metadata": 20958,
+    "total_cells": 1900329774,
+    "samples_with_cells": 26091,
+    "avg_cells_per_sample": 72835,
     "species": {
       "Mus musculus": {
-        "samples": 41770,
-        "cells": 854383265
+        "samples": 43417,
+        "cells": 854371370
       },
       "Homo sapiens": {
-        "samples": 34922,
-        "cells": 944304174
+        "samples": 34963,
+        "cells": 945519342
       },
       "Gallus gallus": {
         "samples": 138,
@@ -51,7 +51,7 @@
       },
       "Rattus norvegicus": {
         "samples": 1045,
-        "cells": 10951230
+        "cells": 10966461
       },
       "Bos taurus": {
         "samples": 96,
@@ -210,13 +210,13 @@
         "cells": 0
       }
     },
-    "qc_pass_rate": 0.8072,
+    "qc_pass_rate": 0.8057,
     "pipeline_version": "v3_pipelined_kraken2"
   },
   "compute": {
-    "active_jobs": 71,
-    "running_tasks": 60,
-    "pending_tasks": 11,
+    "active_jobs": 82,
+    "running_tasks": 70,
+    "pending_tasks": 12,
     "nodes_active": 12,
     "nodes_list": [
       "b001",
@@ -224,13 +224,13 @@
       "c001",
       "c002",
       "c004",
+      "c005",
       "c006",
       "c008",
       "c100",
       "g001",
       "g002",
-      "g004",
-      "g005"
+      "g004"
     ],
     "job_arrays": [
       {
@@ -245,7 +245,7 @@
       },
       {
         "name": "v7-cpu-w2",
-        "running": 19,
+        "running": 20,
         "pending": 1
       },
       {
@@ -254,7 +254,12 @@
         "pending": 1
       },
       {
-        "name": "email-hourly",
+        "name": "v8-retry",
+        "running": 10,
+        "pending": 1
+      },
+      {
+        "name": "meta_s2c_merge",
         "running": 0,
         "pending": 1
       },
@@ -269,12 +274,12 @@
         "pending": 1
       },
       {
-        "name": "meta_sretry-2b_b1",
+        "name": "email-hourly",
         "running": 1,
         "pending": 0
       },
       {
-        "name": "meta_sretry-2b_b2",
+        "name": "meta_s2c_b0",
         "running": 1,
         "pending": 0
       },
@@ -320,7 +325,7 @@
       },
       {
         "name": "v7-gpu-rtx-w2",
-        "running": 1,
+        "running": 0,
         "pending": 1
       }
     ]
@@ -409,6 +414,12 @@
       "samples_quantified": 20746,
       "total_cells": 1899111270,
       "running_tasks": 60
+    },
+    {
+      "timestamp": "2026-04-02T18:09:54+00:00",
+      "samples_quantified": 20753,
+      "total_cells": 1900329774,
+      "running_tasks": 70
     }
   ]
 }
