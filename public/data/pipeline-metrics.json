@@ -1,32 +1,32 @@
 {
-  "last_updated": "2026-04-02T02:50:21+00:00",
+  "last_updated": "2026-04-02T03:51:22+00:00",
   "corpus": {
-    "total_series": 9404,
-    "total_samples": 82971,
+    "total_series": 9417,
+    "total_samples": 83187,
     "samples_quantified": 20554,
     "samples_with_metadata": 20759,
-    "total_cells": 1847473879,
-    "samples_with_cells": 25519,
-    "avg_cells_per_sample": 72396,
+    "total_cells": 1851177758,
+    "samples_with_cells": 25539,
+    "avg_cells_per_sample": 72484,
     "species": {
       "Mus musculus": {
-        "samples": 38827,
-        "cells": 822250823
+        "samples": 38916,
+        "cells": 825778790
       },
       "Homo sapiens": {
-        "samples": 35660,
-        "cells": 925165400
+        "samples": 35788,
+        "cells": 925341312
       },
       "Gallus gallus": {
         "samples": 146,
         "cells": 4949946
       },
       "Danio rerio": {
-        "samples": 2529,
+        "samples": 2531,
         "cells": 19843942
       },
       "Drosophila melanogaster": {
-        "samples": 604,
+        "samples": 606,
         "cells": 25407882
       },
       "Mesocricetus auratus": {
@@ -206,31 +206,50 @@
         "cells": 0
       }
     },
-    "qc_pass_rate": 0.8133,
+    "qc_pass_rate": 0.8132,
     "pipeline_version": "v3_pipelined_kraken2"
   },
   "compute": {
-    "active_jobs": 20,
-    "running_tasks": 16,
-    "pending_tasks": 4,
-    "nodes_active": 7,
+    "active_jobs": 43,
+    "running_tasks": 32,
+    "pending_tasks": 11,
+    "nodes_active": 16,
     "nodes_list": [
+      "b002",
       "b003",
       "b004",
       "c001",
       "c004",
+      "c005",
       "c006",
       "c008",
-      "c100"
+      "c009",
+      "c010",
+      "c100",
+      "c101",
+      "g001",
+      "g002",
+      "g004",
+      "g005"
     ],
     "job_arrays": [
       {
-        "name": "retry-v4b",
+        "name": "v6-bigmem-w2",
+        "running": 2,
+        "pending": 1
+      },
+      {
+        "name": "v6-bigmem",
         "running": 3,
         "pending": 1
       },
       {
-        "name": "retry-v4c",
+        "name": "v6-cpu-w2",
+        "running": 6,
+        "pending": 1
+      },
+      {
+        "name": "v6-cpu",
         "running": 9,
         "pending": 1
       },
@@ -240,9 +259,24 @@
         "pending": 1
       },
       {
-        "name": "meta_s1_merge",
+        "name": "meta_s2a_merge",
         "running": 0,
         "pending": 1
+      },
+      {
+        "name": "meta_s2b_merge",
+        "running": 0,
+        "pending": 1
+      },
+      {
+        "name": "meta_s2a_b2",
+        "running": 1,
+        "pending": 0
+      },
+      {
+        "name": "meta_s2a_b3",
+        "running": 1,
+        "pending": 0
       },
       {
         "name": "metrics",
@@ -250,14 +284,44 @@
         "pending": 0
       },
       {
-        "name": "bash",
-        "running": 2,
+        "name": "meta_s2a_b0",
+        "running": 1,
         "pending": 0
       },
       {
-        "name": "meta_s1_b2",
+        "name": "meta_s2a_b1",
         "running": 1,
         "pending": 0
+      },
+      {
+        "name": "meta_s2b_b0",
+        "running": 1,
+        "pending": 0
+      },
+      {
+        "name": "meta_s2b_b1",
+        "running": 1,
+        "pending": 0
+      },
+      {
+        "name": "v6-gpu-v100",
+        "running": 3,
+        "pending": 1
+      },
+      {
+        "name": "v6-gpu-v100-w2",
+        "running": 0,
+        "pending": 1
+      },
+      {
+        "name": "v6-gpu-rtx-w2",
+        "running": 0,
+        "pending": 1
+      },
+      {
+        "name": "v6-gpu-rtx",
+        "running": 2,
+        "pending": 1
       }
     ]
   },
@@ -291,6 +355,12 @@
       "samples_quantified": 20554,
       "total_cells": 1847473879,
       "running_tasks": 16
+    },
+    {
+      "timestamp": "2026-04-02T03:51:22+00:00",
+      "samples_quantified": 20554,
+      "total_cells": 1851177758,
+      "running_tasks": 32
     }
   ]
 }
