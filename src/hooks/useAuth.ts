@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import type { User, Session } from "@supabase/supabase-js";
 
 const hasAuthConfig = Boolean(
@@ -9,7 +9,7 @@ export const useAuth = () => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(hasAuthConfig);
-  const [signOutFn, setSignOutFn] = useState<(() => Promise<void>) | null>(null);
+  const signOutRef = useRef<(() => Promise<void>) | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -25,9 +25,9 @@ export const useAuth = () => {
         const { supabase } = await import("@/integrations/supabase/client");
         if (!active) return;
 
-        setSignOutFn(() => async () => {
+        signOutRef.current = async () => {
           await supabase.auth.signOut();
-        });
+        };
 
         const {
           data: { subscription },
@@ -68,9 +68,8 @@ export const useAuth = () => {
   }, []);
 
   const signOut = useCallback(async () => {
-    if (!signOutFn) return;
-    await signOutFn();
-  }, [signOutFn]);
+    await signOutRef.current?.();
+  }, []);
 
   return { user, session, loading, signOut, isConfigured: hasAuthConfig };
 };
