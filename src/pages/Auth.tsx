@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
-import { lovable } from "@/integrations/lovable/index";
-import { Github, Mail } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+
+const hasAuthConfig = Boolean(
+  import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+);
 
 const Auth = () => {
   const [mode, setMode] = useState<"signin" | "signup">("signin");
@@ -19,36 +20,71 @@ const Auth = () => {
     setLoading(true);
     setMessage(null);
 
-    if (mode === "signup") {
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: { emailRedirectTo: window.location.origin },
-      });
-      if (error) {
-        setMessage({ type: "error", text: error.message });
-      } else {
-        setMessage({ type: "success", text: "Check your email for a confirmation link." });
-      }
-    } else {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) {
-        setMessage({ type: "error", text: error.message });
-      } else {
-        navigate("/dashboard");
-      }
+    if (!hasAuthConfig) {
+      setMessage({ type: "error", text: "Authentication is temporarily unavailable." });
+      setLoading(false);
+      return;
     }
-    setLoading(false);
+
+    try {
+      const { supabase } = await import("@/integrations/supabase/client");
+
+      if (mode === "signup") {
+        const { error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: { emailRedirectTo: window.location.origin },
+        });
+
+        if (error) {
+          setMessage({ type: "error", text: error.message });
+        } else {
+          setMessage({ type: "success", text: "Check your email for a confirmation link." });
+        }
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+
+        if (error) {
+          setMessage({ type: "error", text: error.message });
+        } else {
+          navigate("/dashboard");
+        }
+      }
+    } catch (error) {
+      setMessage({
+        type: "error",
+        text: error instanceof Error ? error.message : "Authentication is temporarily unavailable.",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleGoogleSignIn = async () => {
     setLoading(true);
     setMessage(null);
-    const { error } = await lovable.auth.signInWithOAuth("google", {
-      redirect_uri: window.location.origin,
-    });
-    if (error) {
-      setMessage({ type: "error", text: error.message });
+
+    if (!hasAuthConfig) {
+      setMessage({ type: "error", text: "Authentication is temporarily unavailable." });
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const { lovable } = await import("@/integrations/lovable/index");
+      const { error } = await lovable.auth.signInWithOAuth("google", {
+        redirect_uri: window.location.origin,
+      });
+
+      if (error) {
+        setMessage({ type: "error", text: error.message });
+        setLoading(false);
+      }
+    } catch (error) {
+      setMessage({
+        type: "error",
+        text: error instanceof Error ? error.message : "Authentication is temporarily unavailable.",
+      });
       setLoading(false);
     }
   };
@@ -69,13 +105,12 @@ const Auth = () => {
             </p>
           </div>
 
-          {/* Google */}
           <button
             onClick={handleGoogleSignIn}
-            disabled={loading}
+            disabled={loading || !hasAuthConfig}
             className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-md border border-border bg-card text-foreground text-sm font-medium hover:bg-muted transition-colors disabled:opacity-50"
           >
-            <svg width="18" height="18" viewBox="0 0 24 24">
+            <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
               <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4" />
               <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
               <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
@@ -90,7 +125,6 @@ const Auth = () => {
             <div className="flex-1 h-px bg-border" />
           </div>
 
-          {/* Email form */}
           <form onSubmit={handleEmailAuth} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-foreground mb-1.5">Email</label>
@@ -124,12 +158,18 @@ const Auth = () => {
 
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || !hasAuthConfig}
               className="w-full px-4 py-3 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
             >
               {loading ? "Loading..." : mode === "signin" ? "Sign in" : "Create account"}
             </button>
           </form>
+
+          {!hasAuthConfig && (
+            <p className="mt-4 text-center text-sm text-muted-foreground">
+              Authentication is temporarily unavailable on this deployment.
+            </p>
+          )}
 
           <p className="text-center text-sm text-muted-foreground mt-6">
             {mode === "signin" ? (

@@ -1,33 +1,76 @@
 import { useState, useEffect, useCallback } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import type { User, Session } from "@supabase/supabase-js";
+
+const hasAuthConfig = Boolean(
+  import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+);
 
 export const useAuth = () => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(hasAuthConfig);
+  const [signOutFn, setSignOutFn] = useState<(() => Promise<void>) | null>(null);
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
-        setLoading(false);
-      }
-    );
+    let active = true;
+    let unsubscribe: (() => void) | undefined;
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
+    if (!hasAuthConfig) {
       setLoading(false);
-    });
+      return;
+    }
 
-    return () => subscription.unsubscribe();
+    const initializeAuth = async () => {
+      try {
+        const { supabase } = await import("@/integrations/supabase/client");
+        if (!active) return;
+
+        setSignOutFn(() => async () => {
+          await supabase.auth.signOut();
+        });
+
+        const {
+          data: { subscription },
+        } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+          if (!active) return;
+          setSession(nextSession);
+          setUser(nextSession?.user ?? null);
+          setLoading(false);
+        });
+
+        unsubscribe = () => subscription.unsubscribe();
+
+        const {
+          data: { session: initialSession },
+        } = await supabase.auth.getSession();
+
+        if (!active) return;
+        setSession(initialSession);
+        setUser(initialSession?.user ?? null);
+      } catch (error) {
+        console.error("Auth initialization failed.", error);
+        if (!active) return;
+        setSession(null);
+        setUser(null);
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
+    };
+
+    void initializeAuth();
+
+    return () => {
+      active = false;
+      unsubscribe?.();
+    };
   }, []);
 
   const signOut = useCallback(async () => {
-    await supabase.auth.signOut();
-  }, []);
+    if (!signOutFn) return;
+    await signOutFn();
+  }, [signOutFn]);
 
-  return { user, session, loading, signOut };
+  return { user, session, loading, signOut, isConfigured: hasAuthConfig };
 };
