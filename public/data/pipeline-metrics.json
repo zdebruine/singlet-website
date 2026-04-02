@@ -1,21 +1,21 @@
 {
-  "last_updated": "2026-04-02T21:27:54+00:00",
+  "last_updated": "2026-04-02T22:35:55+00:00",
   "corpus": {
-    "total_series": 9478,
-    "total_samples": 90505,
-    "samples_quantified": 20782,
-    "samples_with_metadata": 20987,
-    "total_cells": 1908101303,
-    "samples_with_cells": 26241,
-    "avg_cells_per_sample": 72715,
+    "total_series": 9484,
+    "total_samples": 90603,
+    "samples_quantified": 20790,
+    "samples_with_metadata": 20995,
+    "total_cells": 1908794626,
+    "samples_with_cells": 26205,
+    "avg_cells_per_sample": 72841,
     "species": {
       "Mus musculus": {
-        "samples": 44069,
-        "cells": 855230831
+        "samples": 44269,
+        "cells": 855499507
       },
       "Homo sapiens": {
-        "samples": 35214,
-        "cells": 952226395
+        "samples": 35435,
+        "cells": 952755837
       },
       "Gallus gallus": {
         "samples": 138,
@@ -27,30 +27,30 @@
       },
       "Drosophila melanogaster": {
         "samples": 579,
-        "cells": 25407979
+        "cells": 25408076
       },
       "Mesocricetus auratus": {
-        "samples": 150,
+        "samples": 162,
         "cells": 731173
       },
       "Caenorhabditis elegans": {
-        "samples": 112,
+        "samples": 113,
         "cells": 1631880
       },
       "Macaca fascicularis": {
-        "samples": 329,
+        "samples": 333,
         "cells": 2632224
       },
       "Sus scrofa": {
-        "samples": 358,
-        "cells": 5289274
+        "samples": 370,
+        "cells": 5289553
       },
       "Dictyostelium discoideum": {
         "samples": 34,
         "cells": 71817
       },
       "Rattus norvegicus": {
-        "samples": 1045,
+        "samples": 1046,
         "cells": 10966461
       },
       "Bos taurus": {
@@ -66,7 +66,7 @@
         "cells": 421574
       },
       "Arabidopsis thaliana": {
-        "samples": 209,
+        "samples": 212,
         "cells": 1917009
       },
       "Saccharomyces cerevisiae": {
@@ -82,7 +82,7 @@
         "cells": 244630
       },
       "Macaca mulatta": {
-        "samples": 1040,
+        "samples": 1045,
         "cells": 10077425
       },
       "Mus musculus musculus x Mus musculus castaneus": {
@@ -166,7 +166,7 @@
         "cells": 17957
       },
       "Homo sapiens; Mus musculus": {
-        "samples": 87,
+        "samples": 91,
         "cells": 94954
       },
       "Ciona robusta": {
@@ -186,8 +186,8 @@
         "cells": 0
       },
       "Mus musculus; Homo sapiens": {
-        "samples": 52,
-        "cells": 123895
+        "samples": 108,
+        "cells": 18724
       },
       "Homo sapiens; synthetic construct": {
         "samples": 2,
@@ -210,24 +210,26 @@
         "cells": 0
       }
     },
-    "qc_pass_rate": 0.8006,
+    "qc_pass_rate": 0.8022,
     "pipeline_version": "v3_pipelined_kraken2"
   },
   "compute": {
-    "active_jobs": 75,
+    "active_jobs": 76,
     "running_tasks": 66,
-    "pending_tasks": 9,
-    "nodes_active": 13,
+    "pending_tasks": 10,
+    "nodes_active": 15,
     "nodes_list": [
       "b001",
+      "b002",
       "b003",
       "c001",
       "c002",
       "c004",
       "c005",
       "c006",
-      "c008",
+      "c007",
       "c100",
+      "c101",
       "g001",
       "g002",
       "g004",
@@ -235,13 +237,18 @@
     ],
     "job_arrays": [
       {
+        "name": "v7-bigmem-w2",
+        "running": 3,
+        "pending": 1
+      },
+      {
         "name": "v7-bigmem",
         "running": 4,
         "pending": 1
       },
       {
-        "name": "v7-bigmem-w2",
-        "running": 4,
+        "name": "v8-retry",
+        "running": 10,
         "pending": 1
       },
       {
@@ -255,23 +262,23 @@
         "pending": 1
       },
       {
-        "name": "v8-retry",
-        "running": 10,
-        "pending": 1
-      },
-      {
         "name": "email-hourly",
         "running": 1,
         "pending": 0
       },
       {
-        "name": "v7-gpu-rtx",
-        "running": 0,
-        "pending": 1
+        "name": "wave7",
+        "running": 1,
+        "pending": 0
       },
       {
-        "name": "v7-gpu-v100",
-        "running": 5,
+        "name": "v7-gpu-rtx",
+        "running": 2,
+        "pending": 2
+      },
+      {
+        "name": "v7-gpu-rtx-w2",
+        "running": 0,
         "pending": 1
       },
       {
@@ -280,8 +287,8 @@
         "pending": 1
       },
       {
-        "name": "v7-gpu-rtx-w2",
-        "running": 2,
+        "name": "v7-gpu-v100",
+        "running": 5,
         "pending": 1
       }
     ]
@@ -393,6 +400,12 @@
       "timestamp": "2026-04-02T21:27:54+00:00",
       "samples_quantified": 20782,
       "total_cells": 1908101303,
+      "running_tasks": 66
+    },
+    {
+      "timestamp": "2026-04-02T22:35:55+00:00",
+      "samples_quantified": 20790,
+      "total_cells": 1908794626,
       "running_tasks": 66
     }
   ]
