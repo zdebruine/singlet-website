@@ -9,6 +9,7 @@ import bookerPhoto from "@/assets/booker.png";
 import adkinsPhoto from "@/assets/adkins.png";
 import buppPhoto from "@/assets/bupp.png";
 import pospisilikPhoto from "@/assets/pospisilik.png";
+import { CorpusSection, ComputeSection, usePipelineMetrics } from "@/components/PipelineDashboard";
 import {
   Accordion,
   AccordionContent,
@@ -32,10 +33,12 @@ const SECTIONS = [
   { id: "problem", label: "02 — Problem", n: "02" },
   { id: "solution", label: "03 — Solution", n: "03" },
   { id: "traction", label: "04 — Traction", n: "04" },
-  { id: "market", label: "05 — Market", n: "05" },
-  { id: "model", label: "06 — Business", n: "06" },
-  { id: "team", label: "07 — Team", n: "07" },
-  { id: "ask", label: "08 — The Ask", n: "08" },
+  { id: "corpus", label: "05 — Data Corpus", n: "05" },
+  { id: "compute", label: "06 — Live Compute", n: "06" },
+  { id: "market", label: "07 — Market", n: "07" },
+  { id: "model", label: "08 — Business", n: "08" },
+  { id: "team", label: "09 — Team", n: "09" },
+  { id: "ask", label: "10 — The Ask", n: "10" },
 ] as const;
 
 /* ── Request Deck Modal ── */
@@ -126,6 +129,7 @@ const fundsData = [
 ];
 
 const Invest = () => {
+  const { data: pipelineData } = usePipelineMetrics();
   const [deckOpen, setDeckOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const sectionIds = SECTIONS.map((s) => s.id);
@@ -426,8 +430,22 @@ const Invest = () => {
               a="We contributed NMF embeddings to CELLxGENE Census in 2023. CZI selected it alongside Geneformer, scGPT, UCE, and TranscriptFormer \u2014 the only non-transformer approach on the platform. This is not a partnership in the corporate sense \u2014 it is open-science data sharing. But it validates that our approach is taken seriously by the most important institution in the space." />
             <QA q="What are splicing layers and why do they matter?"
               a="When we process raw FASTQ, we quantify not just total gene expression but spliced, unspliced, and ambiguous RNA (S/U/A). These layers enable RNA velocity analysis \u2014 predicting where cells are going in developmental or disease trajectories. CZI cannot add this because they take pre-processed counts. It is a structural advantage that requires FASTQ-level reprocessing." />
-          </Accordion>
-        </Section>
+          </AccorDATA CORPUS */}
+          {pipelineData && (
+            <Section id="corpus" n="05">
+              <CorpusSection data={pipelineData} />
+            </Section>
+          )}
+
+          {/* 06 — LIVE COMPUTE */}
+          {pipelineData && (
+            <Section id="compute" n="06">
+              <ComputeSection data={pipelineData} />
+            </Section>
+          )}
+
+          {/* 07 — MARKET */}
+          <Section id="market" n="07
 
         {/* 05 — MARKET */}
         <Section id="market" n="05">
@@ -491,8 +509,8 @@ const Invest = () => {
           </Accordion>
         </Section>
 
-        {/* 06 — BUSINESS MODEL */}
-        <Section id="model" n="06">
+        {/* 08 — BUSINESS MODEL */}
+        <Section id="model" n="08">
           <p className="font-mono text-xs text-primary uppercase tracking-widest mb-4">Business Model</p>
           <h2 className="font-display text-3xl md:text-4xl font-bold text-foreground tracking-tightest mb-3">
             Free for research. Paid for industry.
@@ -547,8 +565,8 @@ const Invest = () => {
           </Accordion>
         </Section>
 
-        {/* 07 — TEAM */}
-        <Section id="team" n="07">
+        {/* 09 — TEAM */}
+        <Section id="team" n="09">
           <p className="font-mono text-xs text-primary uppercase tracking-widest mb-4">Team</p>
           <h2 className="font-display text-3xl md:text-4xl font-bold text-foreground tracking-tightest mb-8">
             One founder. Known risk. Here is why it works.
@@ -613,8 +631,8 @@ const Invest = () => {
           </Accordion>
         </Section>
 
-        {/* 08 — THE ASK */}
-        <Section id="ask" n="08">
+        {/* 10 — THE ASK */}
+        <Section id="ask" n="10">
           <p className="font-mono text-xs text-primary uppercase tracking-widest mb-4">The Ask</p>
 
           <div className="rounded-lg border-2 border-primary/30 bg-primary/[0.04] p-8 text-center mb-10">
