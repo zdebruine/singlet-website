@@ -280,7 +280,7 @@ const Invest = () => {
                 { label: "Condition", sub: "tissue, cell type, disease" },
                 { label: "Encoder", sub: "cross-attention + MLP" },
                 { label: "Programs", sub: "10,000+ named dims" },
-                { label: "W \u00b7 h", sub: "matrix multiply" },
+                { label: "W · h", sub: "matrix multiply" },
                 { label: "Expression", sub: "~30,000 genes" },
               ].map((step, i) => (
                 <React.Fragment key={i}>
@@ -309,7 +309,7 @@ const Invest = () => {
               <tbody>
                 {[
                   { cap: "Output", us: "Named programs", a: "Embeddings", b: "Embeddings", c: "Latent z" },
-                  { cap: "Interpretable", us: "Yes \u2014 per-program", a: "No", b: "No", c: "No" },
+                  { cap: "Interpretable", us: "Yes — per-program", a: "No", b: "No", c: "No" },
                   { cap: "Generative", us: "Any condition", a: "Fine-tune only", b: "Yes", c: "Yes" },
                   { cap: "Inference", us: "<1ms", a: "~500ms", b: "~200ms", c: "~50ms" },
                   { cap: "Training data", us: "1.9B cells", a: "104M cells", b: "33M cells", c: "Per-dataset" },
@@ -331,7 +331,7 @@ const Invest = () => {
           <h3 className="font-display text-base font-semibold text-foreground mb-4">What the API does</h3>
           <div className="grid md:grid-cols-2 gap-3 mb-8">
             {[
-              { icon: Beaker, title: "Predict expression", desc: "Any cell type, any condition \u2014 even unobserved combinations.", phase: "Phase 1" },
+              { icon: Beaker, title: "Predict expression", desc: "Any cell type, any condition — even unobserved combinations.", phase: "Phase 1" },
               { icon: Target, title: "Predict perturbation effects", desc: "Gene knockouts and drug treatments mapped to program-level changes.", phase: "Phase 1" },
               { icon: TrendingUp, title: "Compare conditions", desc: "Named differential programs between any two biological states.", phase: "Phase 1" },
               { icon: Zap, title: "Cross-species translation", desc: "Independent models per species with learned bridges.", phase: "Phase 2" },
@@ -349,11 +349,11 @@ const Invest = () => {
 
           <Accordion type="multiple" className="space-y-2">
             <QA q="How is NMF competitive with transformers?"
-              a="Different tool for a different job. Transformers excel at learning dense representations \u2014 useful for embedding search and transfer learning. NMF excels at additive decomposition \u2014 every prediction is a weighted sum of named programs that a biologist can read. For drug target identification, regulatory analysis, and clinical interpretation, interpretability is a requirement, not a nice-to-have. Our NMF engine is also 40x faster at inference and has been validated by CZI alongside Geneformer and scGPT on CELLxGENE Census." />
+              a="Different tool for a different job. Transformers excel at learning dense representations — useful for embedding search and transfer learning. NMF excels at additive decomposition — every prediction is a weighted sum of named programs that a biologist can read. For drug target identification, regulatory analysis, and clinical interpretation, interpretability is a requirement, not a nice-to-have. Our NMF engine is also 40x faster at inference and has been validated by CZI alongside Geneformer and scGPT on CELLxGENE Census." />
             <QA q="What about CZI's TranscriptFormer?"
-              a="TranscriptFormer (2025) is the newest CZI foundation model, trained on 110M cells across 5 species. It is impressive \u2014 and it produces embeddings. CZI builds open research infrastructure (they host our NMF alongside their models). They do not build commercial products. Our relationship with CZI is complementary, not competitive." />
+              a="TranscriptFormer (2025) is the newest CZI foundation model, trained on 110M cells across 5 species. It is impressive — and it produces embeddings. CZI builds open research infrastructure (they host our NMF alongside their models). They do not build commercial products. Our relationship with CZI is complementary, not competitive." />
             <QA q="What is the long-term vision beyond the CPM?"
-              a="Phase 1: CPM inference API (the current raise). Phase 2: Sequence-to-function head using Borzoi/AlphaGenome \u2014 predict variant effects at cell-type resolution. Phase 3: Clinical genomics intelligence for rare disease diagnosis. Each phase is independently valuable as a business. We are raising for Phase 1." />
+              a="Phase 1: CPM inference API (the current raise). Phase 2: Sequence-to-function head using Borzoi/AlphaGenome — predict variant effects at cell-type resolution. Phase 3: Clinical genomics intelligence for rare disease diagnosis. Each phase is independently valuable as a business. We are raising for Phase 1." />
           </Accordion>
         </Section>
 
@@ -392,10 +392,10 @@ const Invest = () => {
                   "Atlas-scale FASTQ reprocessing pipeline",
                   "NMF engine (Bioinformatics pub, CRAN package)",
                   "~10x compression with GPU streaming",
-                  "CZI validation \u2014 NMF on CELLxGENE Census",
+                  "CZI validation — NMF on CELLxGENE Census",
                   "CPM architecture designed",
                   "NSF ACCESS compute allocation",
-                  "Splicing layers (S/U/A) \u2014 structural moat",
+                  "Splicing layers (S/U/A) — structural moat",
                 ].map((item) => (
                   <li key={item} className="flex items-start gap-2">
                     <Check size={13} className="text-emerald-600 mt-0.5 flex-shrink-0" />
@@ -425,11 +425,11 @@ const Invest = () => {
 
           <Accordion type="multiple" className="space-y-2">
             <QA q="What exactly is the atlas?"
-              a="Every dataset in NCBI GEO with single-cell data \u2014 thousands of series, hundreds of species \u2014 reprocessed from raw FASTQ reads through one standardized pipeline. Same parameters, same references, same QC. Every cell is directly comparable. CZI CELLxGENE Census takes author-processed data (different pipelines, different quality). Our uniform reprocessing is what makes atlas-scale NMF training possible." />
+              a="Every dataset in NCBI GEO with single-cell data — thousands of series, hundreds of species — reprocessed from raw FASTQ reads through one standardized pipeline. Same parameters, same references, same QC. Every cell is directly comparable. CZI CELLxGENE Census takes author-processed data (different pipelines, different quality). Our uniform reprocessing is what makes atlas-scale NMF training possible." />
             <QA q="Why is CZI hosting your NMF?"
-              a="We contributed NMF embeddings to CELLxGENE Census in 2023. CZI selected it alongside Geneformer, scGPT, UCE, and TranscriptFormer \u2014 the only non-transformer approach on the platform. This is not a partnership in the corporate sense \u2014 it is open-science data sharing. But it validates that our approach is taken seriously by the most important institution in the space." />
+              a="We contributed NMF embeddings to CELLxGENE Census in 2023. CZI selected it alongside Geneformer, scGPT, UCE, and TranscriptFormer — the only non-transformer approach on the platform. This is not a partnership in the corporate sense — it is open-science data sharing. But it validates that our approach is taken seriously by the most important institution in the space." />
             <QA q="What are splicing layers and why do they matter?"
-              a="When we process raw FASTQ, we quantify not just total gene expression but spliced, unspliced, and ambiguous RNA (S/U/A). These layers enable RNA velocity analysis \u2014 predicting where cells are going in developmental or disease trajectories. CZI cannot add this because they take pre-processed counts. It is a structural advantage that requires FASTQ-level reprocessing." />
+              a="When we process raw FASTQ, we quantify not just total gene expression but spliced, unspliced, and ambiguous RNA (S/U/A). These layers enable RNA velocity analysis — predicting where cells are going in developmental or disease trajectories. CZI cannot add this because they take pre-processed counts. It is a structural advantage that requires FASTQ-level reprocessing." />
           </Accordion>
         </Section>
 
@@ -469,20 +469,20 @@ const Invest = () => {
           </div>
 
           <div className="rounded-lg border border-border bg-card p-6 mb-8">
-            <h3 className="font-display text-sm font-semibold text-foreground mb-3">Serviceable market \u2014 honest framing</h3>
+            <h3 className="font-display text-sm font-semibold text-foreground mb-3">Serviceable market — honest framing</h3>
             <div className="space-y-3 text-xs text-muted-foreground">
               <div className="flex items-start gap-3">
                 <span className="font-mono text-primary font-bold mt-0.5">01</span>
                 <div>
-                  <p className="text-foreground font-medium">Near-term: Inference API ($200M\u2013$500M SAM)</p>
+                  <p className="text-foreground font-medium">Near-term: Inference API ($200M–$500M SAM)</p>
                   <p>~50,000 computational biologists worldwide. Pharma comp bio teams, academic labs, AI companies training genomics models. At $149/mo Pro pricing, 1,000 commercial subscribers = $1.8M ARR.</p>
                 </div>
               </div>
               <div className="flex items-start gap-3">
                 <span className="font-mono text-primary font-bold mt-0.5">02</span>
                 <div>
-                  <p className="text-foreground font-medium">Medium-term: Enterprise data licensing ($1B\u2013$3B SAM)</p>
-                  <p>Foundation model training data for AI companies. On-prem deployment for pharma. Follows the Tempus model \u2014 data licensing at $50K\u2013$500K/yr.</p>
+                  <p className="text-foreground font-medium">Medium-term: Enterprise data licensing ($1B–$3B SAM)</p>
+                  <p>Foundation model training data for AI companies. On-prem deployment for pharma. Follows the Tempus model — data licensing at $50K–$500K/yr.</p>
                 </div>
               </div>
               <div className="flex items-start gap-3">
@@ -503,7 +503,7 @@ const Invest = () => {
 
           <Accordion type="multiple" className="space-y-2">
             <QA q="How do you get to paying customers from 0?"
-              a="Academics use the model free. They publish papers citing our gene programs. Their industry counterparts see results described in our vocabulary. When a pharma comp bio team needs bulk perturbation screening or commercial licensing, they cannot get it from the free tier. This is the Benchling playbook \u2014 free for academia, paid for industry. Benchling grew to 1,300+ paying biotech companies and a $6B+ valuation this way." />
+              a="Academics use the model free. They publish papers citing our gene programs. Their industry counterparts see results described in our vocabulary. When a pharma comp bio team needs bulk perturbation screening or commercial licensing, they cannot get it from the free tier. This is the Benchling playbook — free for academia, paid for industry. Benchling grew to 1,300+ paying biotech companies and a $6B+ valuation this way." />
             <QA q="How does a pre-seed company get to Tempus-scale?"
               a="We do not claim Tempus-scale within this raise. We claim: ship inference API, get first paying customers, demonstrate product-market fit, raise a proper seed. The Tempus comparison illustrates the market opportunity, not our near-term plan." />
           </Accordion>
@@ -522,7 +522,7 @@ const Invest = () => {
           <div className="space-y-3 mb-8">
             {[
               { tier: "Open Source", badge: "MIT", paid: false, desc: "10,000+ gene programs (W matrix), NMF engine, compression format, NNLS projection tools. Free forever.", who: "Everyone" },
-              { tier: "Academic", badge: "FREE", paid: false, desc: "Full inference API \u2014 predict, perturb, compare. Rate-limited (10 req/min). .edu verification.", who: "Researchers" },
+              { tier: "Academic", badge: "FREE", paid: false, desc: "Full inference API — predict, perturb, compare. Rate-limited (10 req/min). .edu verification.", who: "Researchers" },
               { tier: "Pro", badge: "$149/MO", paid: true, desc: "100 req/min, bulk API, BYOD projection, commercial license for outputs.", who: "Industry scientists" },
               { tier: "Enterprise", badge: "FROM $25K/YR", paid: true, desc: "On-prem CPM deployment, custom NMF models on proprietary data, training data licensing, SLA.", who: "Pharma / AI companies" },
             ].map((t) => (
@@ -557,11 +557,11 @@ const Invest = () => {
 
           <Accordion type="multiple" className="space-y-2">
             <QA q="Comp bio researchers pay $0 for everything. Why would they pay you?"
-              a="They will not. That is the point. Academics use our full model free \u2014 predict, perturb, compare. They publish papers using our gene program vocabulary. When their colleagues at Novartis or Genentech need the same tool at production scale with a commercial license, they upgrade to Pro or Enterprise. We do not sell to postdocs. We sell to pharma teams who discover us through academic publications." />
+              a="They will not. That is the point. Academics use our full model free — predict, perturb, compare. They publish papers using our gene program vocabulary. When their colleagues at Novartis or Genentech need the same tool at production scale with a commercial license, they upgrade to Pro or Enterprise. We do not sell to postdocs. We sell to pharma teams who discover us through academic publications." />
             <QA q="What is the conversion funnel?"
               a="MIT-licensed gene programs drive awareness. Academics use the free inference tier and publish using our program vocabulary. Pharma scientists encounter our language in literature. They need commercial access for drug programs and upgrade to Pro/Enterprise. The funnel is the academic publication graph. It is slow (12-18 months) but creates durable demand." />
             <QA q="Why is the open-source layer not a risk?"
-              a="We open-source the gene programs (W matrix) \u2014 the vocabulary. The commercial value is the CPM encoder that maps conditions to program activities, trained on our proprietary atlas. Giving away W is like giving away a dictionary: useful, but it does not let you write sentences. The encoder is the author." />
+              a="We open-source the gene programs (W matrix) — the vocabulary. The commercial value is the CPM encoder that maps conditions to program activities, trained on our proprietary atlas. Giving away W is like giving away a dictionary: useful, but it does not let you write sentences. The encoder is the author." />
           </Accordion>
         </Section>
 
@@ -578,16 +578,16 @@ const Invest = () => {
             </div>
             <div className="flex-1">
               <h3 className="font-display text-xl font-bold text-foreground">Zach DeBruine, PhD</h3>
-              <p className="font-mono text-xs text-primary mb-3">Founder & CEO \u00b7 Full-time \u00b7 IP clean</p>
+              <p className="font-mono text-xs text-primary mb-3">Founder & CEO · Full-time · IP clean</p>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                Built every layer of the stack solo \u2014 C++ compression engine, GPU-accelerated NMF, atlas reprocessing pipeline \u2014 on university compute. Published in <span className="text-foreground italic">Bioinformatics</span>. PhD structural biology (Van Andel Institute). Transitioning from GVSU faculty to full-time CEO.
+                Built every layer of the stack solo — C++ compression engine, GPU-accelerated NMF, atlas reprocessing pipeline — on university compute. Published in <span className="text-foreground italic">Bioinformatics</span>. PhD structural biology (Van Andel Institute). Transitioning from GVSU faculty to full-time CEO.
               </p>
             </div>
           </div>
 
           <div className="rounded-lg border border-primary/20 bg-primary/[0.03] px-5 py-4 mb-8">
             <p className="text-sm text-foreground leading-relaxed italic">
-              "My oldest son was diagnosed with a rare genetic disease through whole-genome sequencing \u2014 it changed his life. My younger son lives with a rare disease but remains undiagnosed despite trio WGS. The tools that exist today failed our family. That is why I am building this."
+              "My oldest son was diagnosed with a rare genetic disease through whole-genome sequencing — it changed his life. My younger son lives with a rare disease but remains undiagnosed despite trio WGS. The tools that exist today failed our family. That is why I am building this."
             </p>
           </div>
 
@@ -616,7 +616,7 @@ const Invest = () => {
               <div key={a.name} className="flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3">
                 <img src={a.photo} alt={a.name} className="w-9 h-9 rounded-full object-cover flex-shrink-0 grayscale" />
                 <div className="min-w-0">
-                  <p className="text-xs font-semibold text-foreground">{a.name} <span className="text-muted-foreground font-normal">\u00b7 {a.role}</span></p>
+                  <p className="text-xs font-semibold text-foreground">{a.name} <span className="text-muted-foreground font-normal">· {a.role}</span></p>
                   <p className="text-[10px] text-muted-foreground truncate">{a.desc}</p>
                 </div>
               </div>
@@ -625,9 +625,9 @@ const Invest = () => {
 
           <Accordion type="multiple" className="space-y-2">
             <QA q="Solo founder is the #1 risk for early-stage companies. How do you address it?"
-              a="Three ways: (1) Faculty salary provides living expenses \u2014 the capital goes to product, not the founder. (2) First hire is a senior ML engineer (month 1), making us a two-person team immediately. (3) The advisor bench covers business, ops, clinical genetics, and science. Solo founder risk is real, and the mitigation is that the capital directly buys a team." />
+              a="Three ways: (1) Faculty salary provides living expenses — the capital goes to product, not the founder. (2) First hire is a senior ML engineer (month 1), making us a two-person team immediately. (3) The advisor bench covers business, ops, clinical genetics, and science. Solo founder risk is real, and the mitigation is that the capital directly buys a team." />
             <QA q="Why not just stay in academia?"
-              a="The atlas and gene programs are academic outputs \u2014 they will be published open-source regardless. The CPM inference API, commercial licensing, and enterprise deployment need a company. The differentiation is in productizing the intelligence layer, which academia does not do." />
+              a="The atlas and gene programs are academic outputs — they will be published open-source regardless. The CPM inference API, commercial licensing, and enterprise deployment need a company. The differentiation is in productizing the intelligence layer, which academia does not do." />
           </Accordion>
         </Section>
 
@@ -677,11 +677,11 @@ const Invest = () => {
             <h3 className="font-display text-sm font-semibold text-foreground mb-4">Milestones</h3>
             <div className="space-y-3">
               {[
-                { time: "Month 1\u20133", milestone: "Hire ML engineer. Train CPM encoder on human atlas.", status: "next" },
-                { time: "Month 3\u20136", milestone: "Launch inference API beta. Ship MCP tools. Academic free tier live.", status: "planned" },
-                { time: "Month 6\u20139", milestone: "Public launch. Pro tier ($149/mo). First paying customers.", status: "planned" },
-                { time: "Month 9\u201312", milestone: "Multi-species CPM. Enterprise tier pilots with pharma.", status: "planned" },
-                { time: "Month 12\u201318", milestone: "Demonstrated revenue. Position for seed round.", status: "planned" },
+                { time: "Month 1–3", milestone: "Hire ML engineer. Train CPM encoder on human atlas.", status: "next" },
+                { time: "Month 3–6", milestone: "Launch inference API beta. Ship MCP tools. Academic free tier live.", status: "planned" },
+                { time: "Month 6–9", milestone: "Public launch. Pro tier ($149/mo). First paying customers.", status: "planned" },
+                { time: "Month 9–12", milestone: "Multi-species CPM. Enterprise tier pilots with pharma.", status: "planned" },
+                { time: "Month 12–18", milestone: "Demonstrated revenue. Position for seed round.", status: "planned" },
               ].map((m) => (
                 <div key={m.time} className="flex items-start gap-3">
                   <div className={"w-2 h-2 rounded-full mt-1.5 flex-shrink-0 " + (m.status === "next" ? "bg-primary" : "bg-border")} />
@@ -707,8 +707,8 @@ const Invest = () => {
               </thead>
               <tbody>
                 {[
-                  ["Acqui-hire (floor)", "$300K", "$5\u201310M", "10\u201320x"],
-                  ["API traction (base)", "$3\u20135M Y3", "$30\u201350M", "60\u2013100x"],
+                  ["Acqui-hire (floor)", "$300K", "$5–10M", "10–20x"],
+                  ["API traction (base)", "$3–5M Y3", "$30–50M", "60–100x"],
                   ["Platform (upside)", "$10M+ Y4", "$100M+", "200x+"],
                 ].map((row, i) => (
                   <tr key={i} className="border-b border-border/50">
