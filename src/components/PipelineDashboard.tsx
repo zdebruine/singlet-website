@@ -1,14 +1,12 @@
 import React, { useEffect, useState } from "react";
 import {
-    AreaChart,
-    Area,
+    BarChart,
+    Bar,
+    Cell,
     XAxis,
     YAxis,
     Tooltip,
     ResponsiveContainer,
-    BarChart,
-    Bar,
-    Cell,
 } from "recharts";
 import { Database, Cpu, Activity, Server, Clock } from "lucide-react";
 
