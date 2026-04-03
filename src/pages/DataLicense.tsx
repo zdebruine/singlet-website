@@ -183,15 +183,10 @@ const DataLicense = () => (
                     <h2 className="font-display text-2xl font-bold text-foreground mb-4">How to Cite</h2>
                     <div className="rounded-xl border border-border bg-card p-6">
                         <p className="text-sm text-muted-foreground leading-relaxed mb-4">
-                            If you use Singlet Bio data or tools in a publication, please cite:
+                            If you use Singlet Bio data or tools in a publication, please cite Singlet Bio and include the release version (e.g., "Singlet Bio Release 2026-Q3").
                         </p>
-                        <div className="rounded-lg bg-muted/40 border border-border p-4 font-mono text-xs text-foreground leading-relaxed mb-4">
-                            DeBruine ZJ, Melcher K, Bhatt D. "Fast and interpretable non-negative matrix factorization."
-                            <br />
-                            <span className="text-primary italic">Bioinformatics</span>, 2024. doi:10.1093/bioinformatics/btad786
-                        </div>
                         <p className="text-sm text-muted-foreground leading-relaxed">
-                            For specific datasets, include the GEO accession number and the Singlet Bio release version (e.g., "Singlet Bio Release 2026-Q3").
+                            For specific datasets, include the GEO accession number.
                         </p>
                     </div>
                 </section>

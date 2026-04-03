@@ -196,7 +196,7 @@ const Invest = () => {
           </h1>
 
           <p className="text-lg text-muted-foreground max-w-2xl leading-relaxed mb-8">
-            We built the largest uniformly reprocessed single-cell atlas and designed a generative model that will predict gene expression with <span className="text-foreground font-semibold">named biological programs — not black-box embeddings</span>. NMF published in <em className="text-foreground">Bioinformatics</em>. Validated by CZI. Atlas and engine built on university compute by one person.
+            We built the largest uniformly reprocessed single-cell atlas and designed a generative model that will predict gene expression with <span className="text-foreground font-semibold">named biological programs — not black-box embeddings</span>. Validated by CZI. Atlas and engine built on university compute by one person.
           </p>
 
           <div className="grid grid-cols-3 gap-4 mb-8">
@@ -390,7 +390,7 @@ const Invest = () => {
               <ul className="space-y-2 text-xs text-muted-foreground">
                 {[
                   "Atlas-scale FASTQ reprocessing pipeline",
-                  "NMF engine (Bioinformatics pub, CRAN package)",
+                  "NMF engine (CRAN package)",
                   "~10x compression with GPU streaming",
                   "CZI validation — NMF on CELLxGENE Census",
                   "CPM architecture designed",
@@ -580,7 +580,7 @@ const Invest = () => {
               <h3 className="font-display text-xl font-bold text-foreground">Zach DeBruine, PhD</h3>
               <p className="font-mono text-xs text-primary mb-3">Founder & CEO · Full-time · IP clean</p>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                Built every layer of the stack solo — C++ compression engine, GPU-accelerated NMF, atlas reprocessing pipeline — on university compute. Published in <span className="text-foreground italic">Bioinformatics</span>. PhD structural biology (Van Andel Institute). Transitioning from GVSU faculty to full-time CEO.
+                Built every layer of the stack solo — C++ compression engine, GPU-accelerated NMF, atlas reprocessing pipeline — on university compute. PhD structural biology (Van Andel Institute). Transitioning from GVSU faculty to full-time CEO.
               </p>
             </div>
           </div>
