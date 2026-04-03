@@ -139,7 +139,7 @@ export const CorpusSection = ({ data }: { data: PipelineMetrics }) => {
 
             {/* Primary metrics */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-                <Stat value={formatNumber(corpus.total_cells)} label="Total cells" sub="Exact count from manifests" />
+                <Stat value={formatNumber(corpus.total_cells)} label="Total cells" sub="From count matrix headers" />
                 <Stat value={corpus.total_samples.toLocaleString()} label="GEO samples" sub="GSM accessions cataloged" />
                 <Stat value={corpus.samples_quantified.toLocaleString()} label="Samples quantified" sub="FASTQ → counts.1pz" />
                 <Stat value={corpus.total_series.toLocaleString()} label="GEO series" sub="GSE accessions" />

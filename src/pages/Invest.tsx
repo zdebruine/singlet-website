@@ -312,7 +312,7 @@ const Invest = () => {
                   { cap: "Interpretable", us: "Yes — per-program", a: "No", b: "No", c: "No" },
                   { cap: "Generative", us: "Any condition", a: "Fine-tune only", b: "Yes", c: "Yes" },
                   { cap: "Inference", us: "<1ms", a: "~500ms", b: "~200ms", c: "~50ms" },
-                  { cap: "Training data", us: "1.9B cells", a: "104M cells", b: "33M cells", c: "Per-dataset" },
+                  { cap: "Training data", us: "20K+ samples", a: "104M cells", b: "33M cells", c: "Per-dataset" },
                   { cap: "Perturbation", us: "Built-in", a: "Fine-tune", b: "Fine-tune", c: "Extension" },
                   { cap: "Cross-species", us: "Yes (bridges)", a: "No", b: "No", c: "No" },
                 ].map((row) => (
@@ -420,6 +420,23 @@ const Invest = () => {
                   </li>
                 ))}
               </ul>
+            </div>
+          </div>
+
+          <div className="rounded-lg border-2 border-amber-500/30 bg-amber-500/[0.04] p-6 mb-8">
+            <div className="flex items-start gap-3">
+              <div className="w-8 h-8 rounded-full bg-amber-500/15 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <Zap size={14} className="text-amber-500" />
+              </div>
+              <div>
+                <h3 className="font-display text-sm font-semibold text-foreground mb-2">Compute bottleneck — why we need investment</h3>
+                <p className="text-xs text-muted-foreground leading-relaxed mb-3">
+                  We have been awarded <span className="text-foreground font-semibold">200,000 service units through the NSF ACCESS program</span>, but have not yet been able to secure a compute instance due to a waiting queue from previously allocated resources on national supercomputers. Every week without GPU compute delays CPM training.
+                </p>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  University HPC provides CPU nodes for atlas reprocessing, but <span className="text-foreground font-semibold">GPU training requires cloud compute</span>. Pre-seed capital will fund dedicated GPU instances (AWS/Lambda Labs) to unblock model training — the single biggest bottleneck between where we are and a shipped product.
+                </p>
+              </div>
             </div>
           </div>
 
