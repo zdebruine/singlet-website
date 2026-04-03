@@ -64,8 +64,8 @@ const Technology = () => {
               {[
                 { label: "Metadata", sub: "species · tissue · cell type\ndisease · perturbation", accent: false },
                 { label: "Encoder fθ", sub: "cross-attention + MLP\nlearned embeddings", accent: true },
-                { label: "Activities \u0125", sub: "k interpretable dims\n\"lipid metabolism: 2.3\"", accent: true },
-                { label: "W \u00B7 \u0125 = x\u0302", sub: "one matrix multiply\n~30K genes decoded", accent: true },
+                { label: "Activities ĥ", sub: "k interpretable dims\n\"lipid metabolism: 2.3\"", accent: true },
+                { label: "W · ĥ = x̂", sub: "one matrix multiply\n~30K genes decoded", accent: true },
               ].map((step, i) => (
                 <React.Fragment key={i}>
                   {i > 0 && <ChevronRight size={18} className="text-primary flex-shrink-0 hidden md:block" />}

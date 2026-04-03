@@ -213,22 +213,22 @@ const IntelligenceLayers = () => (
               </thead>
               <tbody>
                 {[
-                  { feat: "All 5 data layers", acad: "\u2713", pro: "\u2713" },
-                  { feat: "CPM inference (predict, perturb, compare)", acad: "\u2713", pro: "\u2713" },
-                  { feat: "Trajectory & factor velocities", acad: "\u2713", pro: "\u2713" },
-                  { feat: "Multimodal prediction (ATAC / protein)", acad: "\u2713", pro: "\u2713" },
-                  { feat: "Spatial deconvolution", acad: "\u2713", pro: "\u2713" },
-                  { feat: "NMF gene programs (MIT)", acad: "\u2713", pro: "\u2713" },
-                  { feat: "MCP tools", acad: "\u2713", pro: "\u2713" },
+                  { feat: "All 5 data layers", acad: "✓", pro: "✓" },
+                  { feat: "CPM inference (predict, perturb, compare)", acad: "✓", pro: "✓" },
+                  { feat: "Trajectory & factor velocities", acad: "✓", pro: "✓" },
+                  { feat: "Multimodal prediction (ATAC / protein)", acad: "✓", pro: "✓" },
+                  { feat: "Spatial deconvolution", acad: "✓", pro: "✓" },
+                  { feat: "NMF gene programs (MIT)", acad: "✓", pro: "✓" },
+                  { feat: "MCP tools", acad: "✓", pro: "✓" },
                   { feat: "Rate limit", acad: "10/min", pro: "100/min" },
-                  { feat: "Bulk API access", acad: "\u2014", pro: "\u2713" },
-                  { feat: "Commercial license", acad: "\u2014", pro: "\u2713" },
-                  { feat: "Bring Your Own Data", acad: "\u2014", pro: "\u2713" },
+                  { feat: "Bulk API access", acad: "—", pro: "✓" },
+                  { feat: "Commercial license", acad: "—", pro: "✓" },
+                  { feat: "Bring Your Own Data", acad: "—", pro: "✓" },
                 ].map((row) => (
                   <tr key={row.feat} className="border-b border-border last:border-0">
                     <td className="px-4 py-2.5 text-xs font-medium text-foreground">{row.feat}</td>
-                    <td className={`px-4 py-2.5 text-center text-xs border-x border-border ${row.acad === "\u2713" ? "text-green-600 font-bold bg-primary/[0.02]" : row.acad === "\u2014" ? "text-muted-foreground/40 bg-primary/[0.02]" : "text-muted-foreground font-mono bg-primary/[0.02]"}`}>{row.acad}</td>
-                    <td className={`px-4 py-2.5 text-center text-xs ${row.pro === "\u2713" ? "text-green-600 font-bold" : row.pro === "\u2014" ? "text-muted-foreground/40" : "text-muted-foreground font-mono"}`}>{row.pro}</td>
+                    <td className={`px-4 py-2.5 text-center text-xs border-x border-border ${row.acad === "✓" ? "text-green-600 font-bold bg-primary/[0.02]" : row.acad === "—" ? "text-muted-foreground/40 bg-primary/[0.02]" : "text-muted-foreground font-mono bg-primary/[0.02]"}`}>{row.acad}</td>
+                    <td className={`px-4 py-2.5 text-center text-xs ${row.pro === "✓" ? "text-green-600 font-bold" : row.pro === "—" ? "text-muted-foreground/40" : "text-muted-foreground font-mono"}`}>{row.pro}</td>
                   </tr>
                 ))}
               </tbody>

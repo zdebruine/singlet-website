@@ -125,15 +125,15 @@ const HeroTerminal = () => (
       <div className="text-foreground">{"... "}<span className="text-foreground">)</span></div>
       <div className="h-2" />
       <div className="text-muted-foreground">{`>>> `}<span className="text-foreground">result.programs</span></div>
-      <div className="text-muted-foreground/70 mt-1">{"  fibroblast_ECM_remodeling    +2.1\u00D7   p=0.002"}</div>
-      <div className="text-muted-foreground/70">{"  AT2_senescence               +1.8\u00D7   p=0.005"}</div>
-      <div className="text-muted-foreground/70">{"  inflammatory_signaling       +1.4\u00D7   p=0.011"}</div>
+      <div className="text-muted-foreground/70 mt-1">{"  fibroblast_ECM_remodeling    +2.1×   p=0.002"}</div>
+      <div className="text-muted-foreground/70">{"  AT2_senescence               +1.8×   p=0.005"}</div>
+      <div className="text-muted-foreground/70">{"  inflammatory_signaling       +1.4×   p=0.011"}</div>
       <div className="h-2" />
       <div className="text-muted-foreground">{`>>> `}<span className="text-foreground">adata = result.generate(n_cells=500)</span></div>
-      <div className="text-muted-foreground/70 mt-1">{"Generating 500 cells via W \u00B7 \u0125..."}</div>
-      <div className="text-muted-foreground/70">{"AnnData: 500 \u00D7 28,476 genes"}</div>
+      <div className="text-muted-foreground/70 mt-1">{"Generating 500 cells via W · ĥ..."}</div>
+      <div className="text-muted-foreground/70">{"AnnData: 500 × 28,476 genes"}</div>
       <div className="h-2" />
-      <div className="text-primary font-semibold">{`>>> `}# Predicted \u00b7 Decomposed \u00b7 Generated locally</div>
+      <div className="text-primary font-semibold">{`>>> `}# Predicted · Decomposed · Generated locally</div>
     </div>
   </div>
 );
@@ -384,11 +384,11 @@ const Index = () => {
               <div className="absolute -top-2.5 left-4 px-2 py-0.5 rounded-full bg-primary text-primary-foreground text-[8px] font-mono font-bold uppercase tracking-wider">Singlet</div>
               <p className="text-[10px] text-primary/70 mt-1 mb-3 font-mono">Interpretable by design</p>
               <div className="space-y-2">
-                <div className="flex items-center gap-2 text-sm"><div className="w-2 h-2 rounded-full bg-primary" /><span className="text-foreground font-medium">lipid_metabolism</span><span className="text-primary font-mono text-xs">{"\u2191 2.3\u00D7  p=0.001"}</span></div>
-                <div className="flex items-center gap-2 text-sm"><div className="w-2 h-2 rounded-full bg-primary/60" /><span className="text-foreground font-medium">inflammatory_NF-kB</span><span className="text-primary font-mono text-xs">{"\u2191 1.8\u00D7  p=0.005"}</span></div>
-                <div className="flex items-center gap-2 text-sm"><div className="w-2 h-2 rounded-full bg-primary/40" /><span className="text-foreground font-medium">mitochondrial_respiration</span><span className="text-primary font-mono text-xs">{"\u2193 0.6\u00D7  p=0.02"}</span></div>
+                <div className="flex items-center gap-2 text-sm"><div className="w-2 h-2 rounded-full bg-primary" /><span className="text-foreground font-medium">lipid_metabolism</span><span className="text-primary font-mono text-xs">{"↑ 2.3×  p=0.001"}</span></div>
+                <div className="flex items-center gap-2 text-sm"><div className="w-2 h-2 rounded-full bg-primary/60" /><span className="text-foreground font-medium">inflammatory_NF-kB</span><span className="text-primary font-mono text-xs">{"↑ 1.8×  p=0.005"}</span></div>
+                <div className="flex items-center gap-2 text-sm"><div className="w-2 h-2 rounded-full bg-primary/40" /><span className="text-foreground font-medium">mitochondrial_respiration</span><span className="text-primary font-mono text-xs">{"↓ 0.6×  p=0.02"}</span></div>
               </div>
-              <p className="text-[10px] text-primary/70 mt-3 font-mono">Named programs \u2192 effect sizes \u2192 p-values \u2192 actionable</p>
+              <p className="text-[10px] text-primary/70 mt-3 font-mono">Named programs → effect sizes → p-values → actionable</p>
             </div>
             <div className="rounded-xl border border-border bg-muted/30 p-5 relative opacity-60">
               <div className="absolute -top-2.5 left-4 px-2 py-0.5 rounded-full bg-muted-foreground/20 text-muted-foreground text-[8px] font-mono font-bold uppercase tracking-wider">Transformer models</div>
@@ -398,7 +398,7 @@ const Index = () => {
                 <div className="flex items-center gap-2 text-sm"><div className="w-2 h-2 rounded-full bg-muted-foreground/30" /><span className="text-muted-foreground">dim_112</span><span className="text-muted-foreground/60 font-mono text-xs">-0.441</span></div>
                 <div className="flex items-center gap-2 text-sm"><div className="w-2 h-2 rounded-full bg-muted-foreground/30" /><span className="text-muted-foreground">dim_203</span><span className="text-muted-foreground/60 font-mono text-xs">0.297</span></div>
               </div>
-              <p className="text-[10px] text-muted-foreground/50 mt-3 font-mono">Generate \u2192 SHAP / LIME \u2192 hope the explanation is right</p>
+              <p className="text-[10px] text-muted-foreground/50 mt-3 font-mono">Generate → SHAP / LIME → hope the explanation is right</p>
             </div>
           </div>
 
@@ -421,7 +421,7 @@ const Index = () => {
                       { f: "Explains predictions", us: "Yes — effect sizes + p-values", them: ["SHAP / LIME", "SHAP / LIME", "No"] },
                       { f: "Generative", us: "Yes", them: ["Fine-tune", "Yes", "Yes"] },
                       { f: "Inference", us: "~5 ms", them: ["~500 ms", "~200 ms", "~50 ms"] },
-                      { f: "Cross-species", us: "Coming soon", them: ["\u2014", "\u2014", "\u2014"] },
+                      { f: "Cross-species", us: "Coming soon", them: ["—", "—", "—"] },
                       { f: "Perturbation", us: "Built-in", them: ["Fine-tune", "Fine-tune", "CPA ext."] },
                       { f: "Open-source programs", us: "10K+ named", them: ["No", "No", "No"] },
                     ].map((row) => (
