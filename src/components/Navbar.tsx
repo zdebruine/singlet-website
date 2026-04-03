@@ -27,8 +27,8 @@ const Navbar = () => {
         {/* Logo */}
         <Link to="/" className="flex items-center gap-0">
           <span className="font-display font-bold text-[1.45rem] tracking-tightest text-foreground">singlet</span>
-          <span className="inline-block mx-[0.3em]">
-            <svg className="inline-block" style={{ height: '0.65em', width: '0.65em' }} viewBox="0 0 10 10" xmlns="http://www.w3.org/2000/svg">
+          <span className="inline-block mx-[0.18em]">
+            <svg className="inline-block" style={{ height: '0.52em', width: '0.52em' }} viewBox="0 0 10 10" xmlns="http://www.w3.org/2000/svg">
               <circle cx="5" cy="5" r="5" fill="hsl(174 84% 32%)" />
             </svg>
           </span>
