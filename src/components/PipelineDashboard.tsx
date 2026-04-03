@@ -221,31 +221,7 @@ export const CorpusSection = ({ data }: { data: PipelineMetrics }) => {
 
 /* ── ComputeSection ── */
 export const ComputeSection = ({ data }: { data: PipelineMetrics }) => {
-    const { compute, history, corpus } = data;
-
-    // Compute processing rate from history
-    const processingRate = (() => {
-        if (history.length < 2) return null;
-        const latest = history[history.length - 1];
-        const earliest = history[0];
-        const timeDiffHrs = (new Date(latest.timestamp).getTime() - new Date(earliest.timestamp).getTime()) / 3_600_000;
-        if (timeDiffHrs <= 0) return null;
-        const samplesDiff = latest.samples_quantified - earliest.samples_quantified;
-        const cellsDiff = latest.total_cells - earliest.total_cells;
-        return {
-            samplesPerHour: Math.round(samplesDiff / timeDiffHrs),
-            cellsPerHour: Math.round(cellsDiff / timeDiffHrs),
-            hoursTracked: Math.round(timeDiffHrs),
-        };
-    })();
-
-    // Format history for chart
-    const chartData = history.map((h) => ({
-        time: new Date(h.timestamp).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }),
-        samples: h.samples_quantified,
-        cells: h.total_cells,
-        tasks: h.running_tasks,
-    }));
+    const { compute, corpus } = data;
 
     const completionPct = corpus.total_samples > 0
         ? ((corpus.samples_quantified / corpus.total_samples) * 100).toFixed(1)
