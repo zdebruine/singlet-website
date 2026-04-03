@@ -724,18 +724,8 @@ $ claude mcp add singlet \\
 
             <div className="rounded-lg border border-border bg-card p-5 mb-6">
               <h3 className="font-display text-sm font-semibold text-foreground mb-3">Cite Singlet Bio</h3>
-              <div className="rounded-md bg-muted/40 p-4 font-mono text-xs text-muted-foreground leading-relaxed">
-                DeBruine ZJ, Melber K, Bhatt D, et al. Fast and interpretable non-negative matrix
-                factorization for single-cell data. <em>Bioinformatics</em>, 2024.
-                <br />
-                DOI:{" "}
-                <a href="https://doi.org/10.1093/bioinformatics/btae003" target="_blank" rel="noopener noreferrer"
-                  className="text-primary hover:underline">
-                  10.1093/bioinformatics/btae003
-                </a>
-              </div>
               <p className="text-xs text-muted-foreground mt-3">
-                If you use generated data in a publication, please cite this paper.
+                If you use Singlet Bio data or generated results in a publication, please cite Singlet Bio and include the release version.
               </p>
             </div>
 

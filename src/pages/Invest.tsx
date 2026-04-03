@@ -580,7 +580,7 @@ const Invest = () => {
               <h3 className="font-display text-xl font-bold text-foreground">Zach DeBruine, PhD</h3>
               <p className="font-mono text-xs text-primary mb-3">Founder & CEO · Full-time · IP clean</p>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                Built every layer of the stack solo — C++ compression engine, GPU-accelerated NMF, atlas reprocessing pipeline — on university compute. Published in <span className="text-foreground italic">Bioinformatics</span>. PhD structural biology (Van Andel Institute). Transitioning from GVSU faculty to full-time CEO.
+                Built every layer of the stack solo — C++ compression engine, GPU-accelerated NMF, atlas reprocessing pipeline — on university compute. PhD structural biology (Van Andel Institute). Transitioning from GVSU faculty to full-time CEO.
               </p>
             </div>
           </div>
