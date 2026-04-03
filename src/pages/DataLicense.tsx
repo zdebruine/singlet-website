@@ -46,7 +46,7 @@ const DataLicense = () => (
                             </li>
                             <li className="flex items-start gap-2">
                                 <span className="text-primary font-bold mt-0.5">•</span>
-                                <span><span className="text-foreground font-medium">Format:</span> Served from Cloudflare R2 in compressed format (.spz). Free API key required for rate limiting.</span>
+                                <span><span className="text-foreground font-medium">Format:</span> Served from Cloudflare R2 in compressed format (.1pz). Free API key required for rate limiting.</span>
                             </li>
                         </ul>
                     </div>

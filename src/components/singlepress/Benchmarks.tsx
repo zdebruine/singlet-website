@@ -1,5 +1,5 @@
 const benchmarkRows = [
-  { format: "SinglePress (.spz)", size: "1.2 GB", readTime: "3.1s", gpuLoad: "0.8s", ratio: "10×", highlight: true },
+  { format: "SinglePress (.1pz)", size: "0.9 GB", readTime: "2.4s", gpuLoad: "0.6s", ratio: "13×", highlight: true },
   { format: "H5AD (.h5ad)", size: "12.4 GB", readTime: "28s", gpuLoad: "14s", ratio: "1× (baseline)", highlight: false },
   { format: "MTX.gz", size: "8.1 GB", readTime: "45s", gpuLoad: "N/A", ratio: "1.5×", highlight: false },
   { format: "BPCells", size: "3.2 GB", readTime: "8.4s", gpuLoad: "N/A", ratio: "3–5×", highlight: false },

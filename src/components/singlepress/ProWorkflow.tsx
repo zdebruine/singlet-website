@@ -23,13 +23,13 @@ const workflowSteps = [
     icon: Bot,
     step: "2",
     title: "MCP tools",
-    desc: "Connect via MCP and use natural language to query for single-cell data directly from your IDE or agent. Results are delivered in .spz format, ready for downstream analysis.",
+    desc: "Connect via MCP and use natural language to query for single-cell data directly from your IDE or agent. Results are delivered in .1pz format, ready for downstream analysis.",
   },
   {
     icon: RefreshCw,
     step: "3",
     title: "Convert with one line",
-    desc: "Convert .spz to AnnData, SingleCellExperiment, Seurat, or any other format with a single line of code using the singlet package. No pipelines, no boilerplate.",
+    desc: "Convert .1pz to AnnData, SingleCellExperiment, Seurat, or any other format with a single line of code using the singlet package. No pipelines, no boilerplate.",
   },
   {
     icon: Filter,
@@ -41,7 +41,7 @@ const workflowSteps = [
     icon: Database,
     step: "5",
     title: "Verify & request",
-    desc: "Preview your selection. Confirm cell counts, metadata coverage, and annotation quality. When you're ready, request your .spz file — we'll package it up and send it your way.",
+    desc: "Preview your selection. Confirm cell counts, metadata coverage, and annotation quality. When you're ready, request your .1pz file — we'll package it up and send it your way.",
   },
   {
     icon: Package,
@@ -63,7 +63,7 @@ const SinglePressProWorkflow = () => (
         From atlas to cluster in minutes
       </h2>
       <p className="text-sm text-muted-foreground text-center mb-12 max-w-2xl mx-auto leading-relaxed">
-        The Pro version ships with rich annotations across every cell in the atlas. Set your filters, verify what you want, and we'll deliver a ready-to-train <span className="font-mono text-foreground">.spz</span> file to your infrastructure.
+        The Pro version ships with rich annotations across every cell in the atlas. Set your filters, verify what you want, and we'll deliver a ready-to-train <span className="font-mono text-foreground">.1pz</span> file to your infrastructure.
       </p>
 
       {/* Annotation tags */}

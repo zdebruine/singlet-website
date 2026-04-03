@@ -34,7 +34,7 @@ const SinglePress = () => {
             GPU-native compression for single-cell omics. Zero-copy. Compute-bound. Open source.
           </p>
           <p className="text-sm text-muted-foreground max-w-xl mx-auto leading-relaxed mb-8">
-            The <span className="font-mono text-foreground font-medium">.spz</span> format ships inside the <span className="text-foreground font-medium">singlet</span> package. PyTorch DataLoaders, CuSPARSE integration, and on-the-fly normalization — designed to keep your GPUs saturated, not waiting on I/O.
+            The <span className="font-mono text-foreground font-medium">.1pz</span> format ships inside the <span className="text-foreground font-medium">singlet</span> package. PyTorch DataLoaders, CuSPARSE integration, and on-the-fly normalization — designed to keep your GPUs saturated, not waiting on I/O.
           </p>
           <div className="flex flex-wrap gap-4 justify-center">
             <a

@@ -237,7 +237,7 @@ const DevProgress = () => {
             <Detail title="1.2.4 Final Model Training">
               <p>Train definitive NMF on 100M cells (spliced counts). CUDA streaming engine features:</p>
               <ul className="list-disc list-inside space-y-1 ml-2">
-                <li><strong>Out-of-core:</strong> Data streams from disk (StreamPress <code>.spz</code> format, ~10× compression) in column blocks</li>
+                <li><strong>Out-of-core:</strong> Data streams from disk (SinglePress <code>.1pz</code> format, ~13× compression) in column blocks</li>
                 <li><strong>Multiplicative updates:</strong> Lee & Seung (1999) — guaranteed non-negativity at every iteration</li>
                 <li><strong>CUDA acceleration:</strong> Double-buffered streaming I/O overlapped with GPU compute</li>
                 <li><strong>Deep NMF:</strong> Alternating block coordinate descent for hierarchical models</li>

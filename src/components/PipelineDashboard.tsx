@@ -141,7 +141,7 @@ export const CorpusSection = ({ data }: { data: PipelineMetrics }) => {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
                 <Stat value={formatNumber(corpus.total_cells)} label="Total cells" sub="Exact count from manifests" />
                 <Stat value={corpus.total_samples.toLocaleString()} label="GEO samples" sub="GSM accessions cataloged" />
-                <Stat value={corpus.samples_quantified.toLocaleString()} label="Samples quantified" sub="FASTQ → counts.spz" />
+                <Stat value={corpus.samples_quantified.toLocaleString()} label="Samples quantified" sub="FASTQ → counts.1pz" />
                 <Stat value={corpus.total_series.toLocaleString()} label="GEO series" sub="GSE accessions" />
             </div>
 
@@ -425,7 +425,7 @@ export const ComputeSection = ({ data }: { data: PipelineMetrics }) => {
                             Processing runs on the GVSU HPC cluster and NSF ACCESS allocations — no cloud compute bill.
                             The pipeline is fully automated: FASTQ download, reference indexing, salmon/alevin quantification,
                             quality control, and compression to our{" "}
-                            <span className="font-mono text-foreground">.spz</span> format.
+                            <span className="font-mono text-foreground">.1pz</span> format.
                             Metrics on this page update hourly.
                         </p>
                     </div>
