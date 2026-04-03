@@ -196,7 +196,7 @@ const Invest = () => {
           </h1>
 
           <p className="text-lg text-muted-foreground max-w-2xl leading-relaxed mb-8">
-            We built the largest uniformly reprocessed single-cell atlas and designed a generative model that will predict gene expression with <span className="text-foreground font-semibold">named biological programs — not black-box embeddings</span>. NMF published in <em className="text-foreground">Bioinformatics</em>. Validated by CZI. Atlas and engine built on university compute by one person.
+            We built the largest uniformly reprocessed single-cell atlas and designed a generative model that will predict gene expression with <span className="text-foreground font-semibold">named biological programs — not black-box embeddings</span>. Validated by CZI. Atlas and engine built on university compute by one person.
           </p>
 
           <div className="grid grid-cols-3 gap-4 mb-8">
