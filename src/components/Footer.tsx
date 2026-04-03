@@ -41,11 +41,8 @@ const footerCols = [
 const Footer = () => (
   <footer className="border-t border-border relative overflow-hidden">
     {/* Brand watermark */}
-    <svg className="absolute bottom-4 right-4 opacity-[0.025] pointer-events-none" width="200" height="200" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="5" cy="5" r="2" fill="hsl(174 84% 32%)" />
-      <circle cx="15" cy="5" r="2" fill="hsl(174 84% 32%)" />
-      <circle cx="5" cy="15" r="2" fill="hsl(174 84% 32%)" />
-      <text x="15" y="15" textAnchor="middle" dominantBaseline="central" fontFamily="monospace" fontSize="10" fontWeight="700" fill="hsl(174 84% 32%)">1</text>
+    <svg className="absolute bottom-4 right-4 opacity-[0.025] pointer-events-none" width="200" height="200" viewBox="0 0 10 10" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="5" cy="5" r="5" fill="hsl(174 84% 32%)" />
     </svg>
     <div className="max-w-7xl mx-auto px-6 py-14 relative">
       {/* Columns */}
@@ -77,14 +74,14 @@ const Footer = () => (
         <div className="flex flex-col md:flex-row items-center justify-between gap-6">
           {/* Left — logo + legal */}
           <div className="flex flex-col items-center md:items-start gap-2">
-            <div className="flex items-center gap-2">
-              <svg className="self-center" style={{ height: '1.1em', width: '1.1em' }} viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <circle cx="5" cy="5" r="2" fill="hsl(174 84% 32%)" />
-                <circle cx="15" cy="5" r="2" fill="hsl(174 84% 32%)" />
-                <circle cx="5" cy="15" r="2" fill="hsl(174 84% 32%)" />
-                <text x="15" y="15" textAnchor="middle" dominantBaseline="central" fontFamily="'JetBrains Mono', monospace" fontSize="10" fontWeight="700" fill="hsl(174 84% 32%)">1</text>
-              </svg>
-              <span className="font-display font-bold text-sm tracking-tightest text-foreground">Singlet Bio</span>
+            <div className="flex items-center gap-0">
+              <span className="font-display font-bold text-sm tracking-tightest text-foreground">singlet</span>
+              <span className="inline-block mx-[0.2em]">
+                <svg className="inline-block" style={{ height: '0.55em', width: '0.55em' }} viewBox="0 0 10 10" xmlns="http://www.w3.org/2000/svg">
+                  <circle cx="5" cy="5" r="5" fill="hsl(174 84% 32%)" />
+                </svg>
+              </span>
+              <span className="font-display font-bold text-sm tracking-tightest text-primary">bio</span>
             </div>
             <p className="text-xs text-muted-foreground/60 text-center md:text-left max-w-md">
               Free for academic research. Singlet is open source under MIT license.

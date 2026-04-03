@@ -25,24 +25,14 @@ const Navbar = () => {
     <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled ? "glass-dark" : "bg-transparent"}`}>
       <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
         {/* Logo */}
-        <Link to="/" className="flex items-baseline gap-2">
-          <svg
-            className="self-center"
-            style={{ height: '1.1em', width: '1.1em' }}
-            viewBox="0 0 20 20"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            {/* Top-left – small dot */}
-            <circle cx="5" cy="5" r="2" fill="hsl(174 84% 32%)" />
-            {/* Top-right – small dot */}
-            <circle cx="15" cy="5" r="2" fill="hsl(174 84% 32%)" />
-            {/* Bottom-left – small dot */}
-            <circle cx="5" cy="15" r="2" fill="hsl(174 84% 32%)" />
-            {/* Bottom-right – "1" in mono font */}
-            <text x="15" y="15" textAnchor="middle" dominantBaseline="central" fontFamily="'JetBrains Mono', monospace" fontSize="10" fontWeight="700" fill="hsl(174 84% 32%)">1</text>
-          </svg>
-          <span className="font-display font-bold text-[1.45rem] tracking-tightest text-foreground">Singlet Bio</span>
+        <Link to="/" className="flex items-center gap-0">
+          <span className="font-display font-bold text-[1.45rem] tracking-tightest text-foreground">singlet</span>
+          <span className="inline-block mx-[0.3em]">
+            <svg className="inline-block" style={{ height: '0.65em', width: '0.65em' }} viewBox="0 0 10 10" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="5" cy="5" r="5" fill="hsl(174 84% 32%)" />
+            </svg>
+          </span>
+          <span className="font-display font-bold text-[1.45rem] tracking-tightest text-primary">bio</span>
         </Link>
 
         {/* Desktop Nav */}
