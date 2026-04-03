@@ -120,12 +120,12 @@ const QA = ({ q, a }: { q: string; a: string }) => (
 
 /* ── Use of Funds data ── */
 const fundsData = [
-  { name: "ML Engineer (18 mo)", value: 180, color: "hsl(174, 84%, 32%)" },
-  { name: "Infrastructure", value: 120, color: "hsl(200, 70%, 55%)" },
-  { name: "Complete Atlas", value: 46.5, color: "hsl(152, 60%, 45%)" },
-  { name: "Ops + Legal", value: 50, color: "hsl(38, 80%, 55%)" },
-  { name: "Web + API", value: 30, color: "hsl(265, 50%, 55%)" },
-  { name: "Buffer", value: 73.5, color: "hsl(0, 0%, 65%)" },
+  { name: "ML Engineer", value: 36, color: "hsl(174, 84%, 32%)" },
+  { name: "Infrastructure", value: 24, color: "hsl(200, 70%, 55%)" },
+  { name: "Complete Atlas", value: 9, color: "hsl(152, 60%, 45%)" },
+  { name: "Ops + Legal", value: 10, color: "hsl(38, 80%, 55%)" },
+  { name: "Web + API", value: 6, color: "hsl(265, 50%, 55%)" },
+  { name: "Buffer", value: 15, color: "hsl(0, 0%, 65%)" },
 ];
 
 const Invest = () => {
@@ -201,8 +201,8 @@ const Invest = () => {
 
           <div className="grid grid-cols-3 gap-4 mb-8">
             {[
-              { value: "$500K", label: "Pre-seed raise" },
-              { value: "18 mo", label: "Runway" },
+              { value: "TBD", label: "Pre-seed raise" },
+              { value: "TBD", label: "Runway" },
               { value: "90%+", label: "Target gross margin" },
             ].map((m) => (
               <div key={m.label} className="text-center">
@@ -311,8 +311,8 @@ const Invest = () => {
                   { cap: "Output", us: "Named programs", a: "Embeddings", b: "Embeddings", c: "Latent z" },
                   { cap: "Interpretable", us: "Yes \u2014 per-program", a: "No", b: "No", c: "No" },
                   { cap: "Generative", us: "Any condition", a: "Fine-tune only", b: "Yes", c: "Yes" },
-                  { cap: "Inference", us: "Blisteringly Fast", a: "~500ms", b: "~200ms", c: "~50ms" },
-                  { cap: "Training data", us: "Atlas-scale", a: "104M cells", b: "33M cells", c: "Per-dataset" },
+                  { cap: "Inference", us: "<1ms", a: "~500ms", b: "~200ms", c: "~50ms" },
+                  { cap: "Training data", us: "1.9B cells", a: "104M cells", b: "33M cells", c: "Per-dataset" },
                   { cap: "Perturbation", us: "Built-in", a: "Fine-tune", b: "Fine-tune", c: "Extension" },
                   { cap: "Cross-species", us: "Yes (bridges)", a: "No", b: "No", c: "No" },
                 ].map((row) => (
@@ -371,10 +371,10 @@ const Invest = () => {
             {[
               { value: "Largest", label: "Uniformly reprocessed single-cell atlas", sub: "From FASTQ, one pipeline" },
               { value: "200+", label: "Species covered", sub: "vs CZI's 5" },
-              { value: "319K+", label: "CRAN downloads", sub: "RcppML NMF engine" },
+              { value: "323K+", label: "CRAN downloads", sub: "RcppML NMF engine" },
               { value: "~$400K", label: "CZI grants funded", sub: "Cycles 1 & 3" },
               { value: "CZI", label: "NMF hosted on CELLxGENE Census", sub: "Alongside Geneformer & scGPT" },
-              { value: "Blisteringly Fast", label: "Inference speed", sub: "Single matrix multiply" },
+              { value: "<1ms", label: "Inference speed", sub: "Single matrix multiply" },
             ].map((m) => (
               <div key={m.label} className="rounded-lg border border-border bg-card p-4">
                 <div className="font-mono text-xl font-bold text-foreground mb-1">{m.value}</div>
@@ -504,8 +504,8 @@ const Invest = () => {
           <Accordion type="multiple" className="space-y-2">
             <QA q="How do you get to paying customers from 0?"
               a="Academics use the model free. They publish papers citing our gene programs. Their industry counterparts see results described in our vocabulary. When a pharma comp bio team needs bulk perturbation screening or commercial licensing, they cannot get it from the free tier. This is the Benchling playbook \u2014 free for academia, paid for industry. Benchling grew to 1,300+ paying biotech companies and a $6B+ valuation this way." />
-            <QA q="How does a $500K company get to Tempus-scale?"
-              a="We do not claim Tempus-scale within this raise. We claim: ship inference API, get first paying customers, demonstrate product-market fit, raise a proper seed. The Tempus comparison illustrates the market opportunity, not our 18-month plan." />
+            <QA q="How does a pre-seed company get to Tempus-scale?"
+              a="We do not claim Tempus-scale within this raise. We claim: ship inference API, get first paying customers, demonstrate product-market fit, raise a proper seed. The Tempus comparison illustrates the market opportunity, not our near-term plan." />
           </Accordion>
         </Section>
 
@@ -625,7 +625,7 @@ const Invest = () => {
 
           <Accordion type="multiple" className="space-y-2">
             <QA q="Solo founder is the #1 risk for early-stage companies. How do you address it?"
-              a="Three ways: (1) Faculty salary provides living expenses \u2014 the $500K goes to product, not the founder. (2) First hire is a senior ML engineer (month 1), making us a two-person team immediately. (3) The advisor bench covers business, ops, clinical genetics, and science. Solo founder risk is real, and the mitigation is that the capital directly buys a team." />
+              a="Three ways: (1) Faculty salary provides living expenses \u2014 the capital goes to product, not the founder. (2) First hire is a senior ML engineer (month 1), making us a two-person team immediately. (3) The advisor bench covers business, ops, clinical genetics, and science. Solo founder risk is real, and the mitigation is that the capital directly buys a team." />
             <QA q="Why not just stay in academia?"
               a="The atlas and gene programs are academic outputs \u2014 they will be published open-source regardless. The CPM inference API, commercial licensing, and enterprise deployment need a company. The differentiation is in productizing the intelligence layer, which academia does not do." />
           </Accordion>
@@ -636,8 +636,8 @@ const Invest = () => {
           <p className="font-mono text-xs text-primary uppercase tracking-widest mb-4">The Ask</p>
 
           <div className="rounded-lg border-2 border-primary/30 bg-primary/[0.04] p-8 text-center mb-10">
-            <h2 className="font-display text-3xl md:text-4xl font-bold text-foreground tracking-tightest mb-2">$500K Pre-Seed</h2>
-            <p className="font-mono text-sm text-primary mb-2">18 months runway</p>
+            <h2 className="font-display text-3xl md:text-4xl font-bold text-foreground tracking-tightest mb-2">Pre-Seed Round</h2>
+            <p className="font-mono text-sm text-primary mb-2">Raise amount and runway TBD</p>
             <p className="text-xs text-muted-foreground max-w-md mx-auto">Faculty salary covers founder living expenses. Capital goes to product.</p>
           </div>
 
@@ -655,7 +655,7 @@ const Invest = () => {
                     <Tooltip content={({ active, payload }) => active && payload && payload.length ? (
                       <div className="rounded-lg border border-border bg-card px-3 py-2 shadow-lg">
                         <p className="text-xs text-foreground font-semibold">{payload[0].name}</p>
-                        <p className="text-xs text-muted-foreground font-mono">${payload[0].value}K ({Math.round(((payload[0].value as number) / 500) * 100)}%)</p>
+                        <p className="text-xs text-muted-foreground font-mono">{payload[0].value}%</p>
                       </div>
                     ) : null} />
                   </PieChart>
@@ -666,7 +666,7 @@ const Invest = () => {
                   <div key={item.name} className="flex items-center gap-3">
                     <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: item.color }} />
                     <span className="text-xs text-foreground flex-1">{item.name}</span>
-                    <span className="font-mono text-xs text-muted-foreground">${item.value}K</span>
+                    <span className="font-mono text-xs text-muted-foreground">{item.value}%</span>
                   </div>
                 ))}
               </div>
@@ -674,7 +674,7 @@ const Invest = () => {
           </div>
 
           <div className="rounded-lg border border-border bg-card p-6 mb-8">
-            <h3 className="font-display text-sm font-semibold text-foreground mb-4">18-month milestones</h3>
+            <h3 className="font-display text-sm font-semibold text-foreground mb-4">Milestones</h3>
             <div className="space-y-3">
               {[
                 { time: "Month 1\u20133", milestone: "Hire ML engineer. Train CPM encoder on human atlas.", status: "next" },
