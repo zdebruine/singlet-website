@@ -41,11 +41,8 @@ const footerCols = [
 const Footer = () => (
   <footer className="border-t border-border relative overflow-hidden">
     {/* Brand watermark */}
-    <svg className="absolute bottom-4 right-4 opacity-[0.025] pointer-events-none" width="200" height="200" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="5" cy="5" r="2" fill="hsl(174 84% 32%)" />
-      <circle cx="15" cy="5" r="2" fill="hsl(174 84% 32%)" />
-      <circle cx="5" cy="15" r="2" fill="hsl(174 84% 32%)" />
-      <text x="15" y="15" textAnchor="middle" dominantBaseline="central" fontFamily="monospace" fontSize="10" fontWeight="700" fill="hsl(174 84% 32%)">1</text>
+    <svg className="absolute bottom-4 right-4 opacity-[0.025] pointer-events-none" width="200" height="200" viewBox="0 0 10 10" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="5" cy="5" r="5" fill="hsl(174 84% 32%)" />
     </svg>
     <div className="max-w-7xl mx-auto px-6 py-14 relative">
       {/* Columns */}
