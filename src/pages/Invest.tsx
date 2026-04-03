@@ -430,25 +430,25 @@ const Invest = () => {
               a="We contributed NMF embeddings to CELLxGENE Census in 2023. CZI selected it alongside Geneformer, scGPT, UCE, and TranscriptFormer \u2014 the only non-transformer approach on the platform. This is not a partnership in the corporate sense \u2014 it is open-science data sharing. But it validates that our approach is taken seriously by the most important institution in the space." />
             <QA q="What are splicing layers and why do they matter?"
               a="When we process raw FASTQ, we quantify not just total gene expression but spliced, unspliced, and ambiguous RNA (S/U/A). These layers enable RNA velocity analysis \u2014 predicting where cells are going in developmental or disease trajectories. CZI cannot add this because they take pre-processed counts. It is a structural advantage that requires FASTQ-level reprocessing." />
-          </AccorDATA CORPUS */}
-          {pipelineData && (
-            <Section id="corpus" n="05">
-              <CorpusSection data={pipelineData} />
-            </Section>
-          )}
+          </Accordion>
+        </Section>
 
-          {/* 06 — LIVE COMPUTE */}
-          {pipelineData && (
-            <Section id="compute" n="06">
-              <ComputeSection data={pipelineData} />
-            </Section>
-          )}
+        {/* 05 — DATA CORPUS */}
+        {pipelineData && (
+          <Section id="corpus" n="05">
+            <CorpusSection data={pipelineData} />
+          </Section>
+        )}
 
-          {/* 07 — MARKET */}
-          <Section id="market" n="07
+        {/* 06 — LIVE COMPUTE */}
+        {pipelineData && (
+          <Section id="compute" n="06">
+            <ComputeSection data={pipelineData} />
+          </Section>
+        )}
 
-        {/* 05 — MARKET */}
-        <Section id="market" n="05">
+        {/* 07 — MARKET */}
+        <Section id="market" n="07">
           <p className="font-mono text-xs text-primary uppercase tracking-widest mb-4">Market</p>
           <h2 className="font-display text-3xl md:text-4xl font-bold text-foreground tracking-tightest mb-6">
             $4.9B market, 19% CAGR, no interpretable model.
