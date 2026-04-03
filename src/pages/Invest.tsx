@@ -390,7 +390,7 @@ const Invest = () => {
               <ul className="space-y-2 text-xs text-muted-foreground">
                 {[
                   "Atlas-scale FASTQ reprocessing pipeline",
-                  "NMF engine (Bioinformatics pub, CRAN package)",
+                  "NMF engine (CRAN package)",
                   "~10x compression with GPU streaming",
                   "CZI validation — NMF on CELLxGENE Census",
                   "CPM architecture designed",
