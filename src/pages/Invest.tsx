@@ -312,7 +312,7 @@ const Invest = () => {
                   { cap: "Interpretable", us: "Yes — per-program", a: "No", b: "No", c: "No" },
                   { cap: "Generative", us: "Any condition", a: "Fine-tune only", b: "Yes", c: "Yes" },
                   { cap: "Inference", us: "<1ms", a: "~500ms", b: "~200ms", c: "~50ms" },
-                  { cap: "Training data", us: "20K+ samples", a: "104M cells", b: "33M cells", c: "Per-dataset" },
+                  { cap: "Training data", us: "21K+ samples (354M cells)", a: "104M cells", b: "33M cells", c: "Per-dataset" },
                   { cap: "Perturbation", us: "Built-in", a: "Fine-tune", b: "Fine-tune", c: "Extension" },
                   { cap: "Cross-species", us: "Yes (bridges)", a: "No", b: "No", c: "No" },
                 ].map((row) => (

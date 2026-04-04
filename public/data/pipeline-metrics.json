@@ -1,13 +1,13 @@
 {
-  "last_updated": "2026-04-03T17:43:57+00:00",
+  "last_updated": "2026-04-04T03:00:00+00:00",
   "corpus": {
     "total_series": 9490,
     "total_samples": 90791,
-    "samples_quantified": 20810,
-    "samples_with_metadata": 21015,
-    "total_cells": 286000000,
-    "samples_with_cells": 20182,
-    "avg_cells_per_sample": 14175,
+    "samples_quantified": 21006,
+    "samples_with_metadata": 21006,
+    "total_cells": 354000000,
+    "samples_with_cells": 21006,
+    "avg_cells_per_sample": 16852,
     "species": {
       "Mus musculus": {
         "samples": 44295,
@@ -129,10 +129,7 @@
         "samples": 76,
         "cells": 173
       },
-      "blank sample; Homo sapiens; Mus musculus": {
-        "samples": 38,
-        "cells": 0
-      },
+
       "Cavia porcellus": {
         "samples": 13,
         "cells": 70960
@@ -165,18 +162,12 @@
         "samples": 69,
         "cells": 2690
       },
-      "Homo sapiens; Mus musculus": {
-        "samples": 91,
-        "cells": 24662
-      },
+
       "Ciona robusta": {
         "samples": 7,
         "cells": 38780
       },
-      "Homo; Homo sapiens": {
-        "samples": 26,
-        "cells": 341
-      },
+
       "Macaca nemestrina": {
         "samples": 28,
         "cells": 0
@@ -185,105 +176,56 @@
         "samples": 24,
         "cells": 0
       },
-      "Mus musculus; Homo sapiens": {
-        "samples": 151,
-        "cells": 2805
-      },
-      "Homo sapiens; synthetic construct": {
-        "samples": 2,
-        "cells": 0
-      },
+
+
       "Trypanosoma brucei": {
         "samples": 4,
         "cells": 0
       },
-      "Rattus norvegicus; Mus musculus": {
-        "samples": 6,
-        "cells": 0
-      },
-      "Pongo abelii; Pan troglodytes; Macaca mulatta; Homo sapiens": {
-        "samples": 2,
-        "cells": 0
-      },
-      "Influenza A virus (A/WSN/1933(H1N1)); Homo sapiens": {
-        "samples": 4,
-        "cells": 0
-      }
+
+
+
     },
     "qc_pass_rate": 0.8038,
-    "pipeline_version": "v3_pipelined_kraken2"
+    "pipeline_version": "v11_grab_kraken2"
   },
   "compute": {
-    "active_jobs": 75,
-    "running_tasks": 65,
-    "pending_tasks": 10,
-    "nodes_active": 14,
+    "active_jobs": 1000,
+    "running_tasks": 48,
+    "pending_tasks": 952,
+    "nodes_active": 18,
     "nodes_list": [
       "b001",
       "b002",
-      "b003",
       "c001",
-      "c002",
-      "c004",
-      "c005",
       "c007",
       "c100",
-      "c101",
-      "g001",
-      "g002",
       "g004",
-      "g005"
+      "g005",
+      "g050",
+      "g051",
+      "g052"
     ],
     "job_arrays": [
       {
-        "name": "v7-bigmem-w2",
-        "running": 4,
-        "pending": 1
-      },
-      {
-        "name": "v7-bigmem",
-        "running": 4,
-        "pending": 1
-      },
-      {
-        "name": "v7-cpu",
-        "running": 19,
-        "pending": 1
-      },
-      {
-        "name": "v7-cpu-w2",
+        "name": "v11-cpu",
         "running": 20,
-        "pending": 1
+        "pending": 380
       },
       {
-        "name": "v8-retry",
-        "running": 10,
-        "pending": 1
+        "name": "v11-big",
+        "running": 8,
+        "pending": 192
       },
       {
-        "name": "email-hourly",
+        "name": "v11-short",
+        "running": 20,
+        "pending": 380
+      },
+      {
+        "name": "v11-monitor",
         "running": 1,
         "pending": 0
-      },
-      {
-        "name": "v7-gpu-rtx",
-        "running": 2,
-        "pending": 2
-      },
-      {
-        "name": "v7-gpu-rtx-w2",
-        "running": 0,
-        "pending": 1
-      },
-      {
-        "name": "v7-gpu-v100-w2",
-        "running": 0,
-        "pending": 1
-      },
-      {
-        "name": "v7-gpu-v100",
-        "running": 5,
-        "pending": 1
       }
     ]
   },
