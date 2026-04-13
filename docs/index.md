@@ -17,6 +17,7 @@ Operational documentation for the [SingletDB](https://singletdb.com) website and
 architecture
 deployment
 content_guide
+singlepress
 ```
 
 ## Related Projects
