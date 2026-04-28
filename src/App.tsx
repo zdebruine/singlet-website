@@ -27,6 +27,10 @@ import SampleDetail from "./pages/SampleDetail.tsx";
 import Validation from "./pages/Validation.tsx";
 import Benchmarks from "./pages/Benchmarks.tsx";
 import Pipeline from "./pages/Pipeline.tsx";
+import Blog from "./pages/Blog.tsx";
+import BlogPost from "./pages/BlogPost.tsx";
+import SeriesDetail from "./pages/SeriesDetail.tsx";
+import Notebooks from "./pages/Notebooks.tsx";
 
 const queryClient = new QueryClient();
 
@@ -52,9 +56,13 @@ const App = () => (
           <Route path="/dev-progress" element={<DevProgress />} />
           <Route path="/browse" element={<Browse />} />
           <Route path="/sample/:gsmId" element={<SampleDetail />} />
+          <Route path="/series/:gseId" element={<SeriesDetail />} />
           <Route path="/validation" element={<Validation />} />
           <Route path="/benchmarks" element={<Benchmarks />} />
           <Route path="/pipeline" element={<Pipeline />} />
+          <Route path="/blog" element={<Blog />} />
+          <Route path="/blog/:slug" element={<BlogPost />} />
+          <Route path="/notebooks" element={<Notebooks />} />
           <Route path="/terms" element={<Terms />} />
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/auth" element={<Auth />} />

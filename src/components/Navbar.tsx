@@ -4,12 +4,12 @@ import { Menu, X, Github } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 
 const navLinks = [
-  { to: "/gene-programs", label: "Technology" },
   { to: "/browse", label: "Database" },
+  { to: "/notebooks", label: "Notebooks" },
+  { to: "/docs", label: "Docs" },
   { to: "/pipeline", label: "Pipeline" },
   { to: "/benchmarks", label: "Benchmarks" },
-  { to: "/docs", label: "Docs" },
-  { to: "/pricing", label: "Pricing" },
+  { to: "/blog", label: "Blog" },
 ];
 
 const Navbar = () => {
@@ -50,7 +50,7 @@ const Navbar = () => {
             </Link>
           ))}
           <a
-            href="https://github.com/singletdb"
+            href="https://github.com/Singlet-Bio/singlet"
             target="_blank"
             rel="noopener noreferrer"
             className="text-muted-foreground hover:text-foreground transition-colors"
