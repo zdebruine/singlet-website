@@ -1,239 +1,26 @@
-export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]
+export type Json =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: Json | undefined }
+  | Json[]
 
 export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "14.4"
+  }
   public: {
     Tables: {
-      samples: {
-        Row: {
-          gsm_id: string
-          gse_id: string
-          srr_ids: string[]
-          organism: string
-          taxon_id: number | null
-          protocol: string | null
-          modality: string | null
-          status: string
-          failure_category: string | null
-          mapping_rate: number | null
-          cells_called: number | null
-          median_genes: number | null
-          median_umis: number | null
-          mt_pct: number | null
-          doublet_rate: number | null
-          ambient_pct: number | null
-          saturation: number | null
-          singlet_version: string | null
-          singlet_commit: string | null
-          wall_time_s: number | null
-          download_path: string | null
-          pipeline_date: string | null
-          pz_path: string | null
-          pz_size_bytes: number | null
-          title: string | null
-          source: string | null
-          characteristics: Json | null
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          gsm_id: string
-          gse_id: string
-          srr_ids?: string[]
-          organism?: string
-          taxon_id?: number | null
-          protocol?: string | null
-          modality?: string | null
-          status?: string
-          failure_category?: string | null
-          mapping_rate?: number | null
-          cells_called?: number | null
-          median_genes?: number | null
-          median_umis?: number | null
-          mt_pct?: number | null
-          doublet_rate?: number | null
-          ambient_pct?: number | null
-          saturation?: number | null
-          singlet_version?: string | null
-          singlet_commit?: string | null
-          wall_time_s?: number | null
-          download_path?: string | null
-          pipeline_date?: string | null
-          pz_path?: string | null
-          pz_size_bytes?: number | null
-          title?: string | null
-          source?: string | null
-          characteristics?: Json | null
-        }
-        Update: {
-          gsm_id?: string
-          gse_id?: string
-          srr_ids?: string[]
-          organism?: string
-          taxon_id?: number | null
-          protocol?: string | null
-          modality?: string | null
-          status?: string
-          failure_category?: string | null
-          mapping_rate?: number | null
-          cells_called?: number | null
-          median_genes?: number | null
-          median_umis?: number | null
-          mt_pct?: number | null
-          doublet_rate?: number | null
-          ambient_pct?: number | null
-          saturation?: number | null
-          singlet_version?: string | null
-          singlet_commit?: string | null
-          wall_time_s?: number | null
-          download_path?: string | null
-          pipeline_date?: string | null
-          pz_path?: string | null
-          pz_size_bytes?: number | null
-          title?: string | null
-          source?: string | null
-          characteristics?: Json | null
-        }
-        Relationships: []
-      }
-      e2e_results: {
-        Row: {
-          id: number
-          panel: string
-          sample_srr: string
-          singlet_commit: string
-          external_tool: string
-          metric_name: string
-          metric_value: number
-          threshold: number
-          status: string
-          run_date: string
-        }
-        Insert: {
-          panel: string
-          sample_srr: string
-          singlet_commit: string
-          external_tool: string
-          metric_name: string
-          metric_value: number
-          threshold: number
-          status: string
-          run_date?: string
-        }
-        Update: {
-          panel?: string
-          sample_srr?: string
-          singlet_commit?: string
-          external_tool?: string
-          metric_name?: string
-          metric_value?: number
-          threshold?: number
-          status?: string
-          run_date?: string
-        }
-        Relationships: []
-      }
-      gpu_frontier: {
-        Row: {
-          id: number
-          feature: string
-          scale: string
-          wall_ms: number | null
-          memory_mb: number | null
-          sota_tool: string | null
-          sota_wall_ms: number | null
-          speedup: number | null
-          correctness_r: number | null
-          correctness_ref: string | null
-          cycle_number: number | null
-          commit_hash: string | null
-          measured_date: string
-        }
-        Insert: {
-          feature: string
-          scale: string
-          wall_ms?: number | null
-          memory_mb?: number | null
-          sota_tool?: string | null
-          sota_wall_ms?: number | null
-          speedup?: number | null
-          correctness_r?: number | null
-          correctness_ref?: string | null
-          cycle_number?: number | null
-          commit_hash?: string | null
-        }
-        Update: {
-          feature?: string
-          scale?: string
-          wall_ms?: number | null
-          memory_mb?: number | null
-          sota_tool?: string | null
-          sota_wall_ms?: number | null
-          speedup?: number | null
-          correctness_r?: number | null
-          correctness_ref?: string | null
-          cycle_number?: number | null
-          commit_hash?: string | null
-        }
-        Relationships: []
-      }
-      pipeline_batches: {
-        Row: {
-          id: number
-          batch_name: string
-          slurm_job_id: string | null
-          samples_total: number
-          samples_success: number
-          samples_failed: number
-          submitted_at: string
-          completed_at: string | null
-        }
-        Insert: {
-          batch_name: string
-          slurm_job_id?: string | null
-          samples_total?: number
-          samples_success?: number
-          samples_failed?: number
-          completed_at?: string | null
-        }
-        Update: {
-          batch_name?: string
-          slurm_job_id?: string | null
-          samples_total?: number
-          samples_success?: number
-          samples_failed?: number
-          completed_at?: string | null
-        }
-        Relationships: []
-      }
+      [_ in never]: never
     }
     Views: {
-      corpus_stats: {
-        Row: {
-          total_samples: number | null
-          success_samples: number | null
-          total_cells: number | null
-          species_count: number | null
-          series_count: number | null
-          avg_mapping_rate: number | null
-          avg_median_genes: number | null
-          success_rate: number | null
-        }
-      }
-      species_stats: {
-        Row: {
-          organism: string | null
-          sample_count: number | null
-          total_cells: number | null
-          avg_mapping_rate: number | null
-          avg_median_genes: number | null
-        }
-      }
+      [_ in never]: never
     }
     Functions: {
-      refresh_corpus_stats: {
-        Args: Record<string, never>
-        Returns: undefined
-      }
+      [_ in never]: never
     }
     Enums: {
       [_ in never]: never
@@ -244,9 +31,125 @@ export type Database = {
   }
 }
 
-type PublicSchema = Database["public"]
+type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
 
-export type Tables<T extends keyof PublicSchema["Tables"]> = PublicSchema["Tables"][T]["Row"]
-export type Insertable<T extends keyof PublicSchema["Tables"]> = PublicSchema["Tables"][T]["Insert"]
-export type Updatable<T extends keyof PublicSchema["Tables"]> = PublicSchema["Tables"][T]["Update"]
-export type Views<T extends keyof PublicSchema["Views"]> = PublicSchema["Views"][T]["Row"]
+type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
+
+export type Tables<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+      Row: infer R
+    }
+    ? R
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])
+    ? (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
+        Row: infer R
+      }
+      ? R
+      : never
+    : never
+
+export type TablesInsert<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Insert: infer I
+    }
+    ? I
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Insert: infer I
+      }
+      ? I
+      : never
+    : never
+
+export type TablesUpdate<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Update: infer U
+    }
+    ? U
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Update: infer U
+      }
+      ? U
+      : never
+    : never
+
+export type Enums<
+  DefaultSchemaEnumNameOrOptions extends
+    | keyof DefaultSchema["Enums"]
+    | { schema: keyof DatabaseWithoutInternals },
+  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+    : never = never,
+> = DefaultSchemaEnumNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
+  : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
+    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
+    : never
+
+export type CompositeTypes<
+  PublicCompositeTypeNameOrOptions extends
+    | keyof DefaultSchema["CompositeTypes"]
+    | { schema: keyof DatabaseWithoutInternals },
+  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    : never = never,
+> = PublicCompositeTypeNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
+  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
+    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
+    : never
+
+export const Constants = {
+  public: {
+    Enums: {},
+  },
+} as const
