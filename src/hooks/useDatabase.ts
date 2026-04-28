@@ -148,16 +148,17 @@ export function useFilterOptions() {
     queryKey: ["filter-options"],
     queryFn: async () => {
       const [organisms, protocols, modalities] = await Promise.all([
-        supabase.from("species_stats").select("organism").order("total_cells", { ascending: false }).limit(30),
+        supabase.from("samples").select("organism").not("organism", "is", null),
         supabase.from("samples").select("protocol").not("protocol", "is", null),
         supabase.from("samples").select("modality").not("modality", "is", null),
       ]);
 
+      const uniqueOrganisms = [...new Set((organisms.data ?? []).map((r) => r.organism))].filter(Boolean);
       const uniqueProtocols = [...new Set((protocols.data ?? []).map((r) => r.protocol))].filter(Boolean);
       const uniqueModalities = [...new Set((modalities.data ?? []).map((r) => r.modality))].filter(Boolean);
 
       return {
-        organisms: (organisms.data ?? []).map((r) => r.organism).filter(Boolean) as string[],
+        organisms: uniqueOrganisms as string[],
         protocols: uniqueProtocols as string[],
         modalities: uniqueModalities as string[],
       };
