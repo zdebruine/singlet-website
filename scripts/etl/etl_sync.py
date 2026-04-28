@@ -30,7 +30,7 @@ except ImportError:
 
 RESULTS_ROOT = Path("/mnt/projects/debruinz_project/singlify_pipeline/results")
 QUANT_ROOT = Path("/mnt/projects/debruinz_project/singlify_pipeline/quant")
-STATE_FILE = Path("/mnt/home/debruinz/Singlet-AI/singlify/state/etl-state.json")
+STATE_FILE = Path("/mnt/home/debruinz/Singlet-AI/singletai-website/scripts/etl/.etl-state.json")
 BATCH_SIZE = 100  # upsert in batches
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
