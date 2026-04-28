@@ -1,19 +1,53 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import type { Tables, Views } from "@/integrations/supabase/types";
+import type { Tables } from "@/integrations/supabase/types";
 
-// ─── Corpus Stats ────────────────────────────────────────────────────────────
+export interface CorpusStats {
+  total_samples: number;
+  success_samples: number;
+  total_cells: number;
+  species_count: number;
+  series_count: number;
+  avg_mapping_rate: number | null;
+  avg_median_genes: number | null;
+  success_rate: number | null;
+}
+
+export interface SpeciesStat {
+  organism: string;
+  sample_count: number;
+  total_cells: number;
+  avg_mapping_rate: number | null;
+  avg_median_genes: number | null;
+}
+
+// ─── Corpus Stats (computed from samples) ────────────────────────────────────
 
 export function useCorpusStats() {
   return useQuery({
     queryKey: ["corpus-stats"],
-    queryFn: async () => {
+    queryFn: async (): Promise<CorpusStats> => {
       const { data, error } = await supabase
-        .from("corpus_stats")
-        .select("*")
-        .single();
+        .from("samples")
+        .select("status, cells_called, organism, gse_id, mapping_rate, median_genes");
       if (error) throw error;
-      return data as Views<"corpus_stats">;
+      const rows = data ?? [];
+      const success = rows.filter((r) => r.status === "SUCCESS");
+      const terminal = rows.filter((r) => ["SUCCESS", "SOFT_FAIL", "HARD_FAIL"].includes(r.status));
+      const avg = (vals: (number | null)[]) => {
+        const nums = vals.filter((v): v is number => v != null);
+        return nums.length ? nums.reduce((a, b) => a + b, 0) / nums.length : null;
+      };
+      return {
+        total_samples: rows.length,
+        success_samples: success.length,
+        total_cells: success.reduce((a, r) => a + (r.cells_called ?? 0), 0),
+        species_count: new Set(rows.map((r) => r.organism)).size,
+        series_count: new Set(rows.map((r) => r.gse_id)).size,
+        avg_mapping_rate: avg(success.map((r) => r.mapping_rate)),
+        avg_median_genes: avg(success.map((r) => r.median_genes)),
+        success_rate: terminal.length ? success.length / terminal.length : null,
+      };
     },
     staleTime: 60_000,
   });
@@ -22,14 +56,32 @@ export function useCorpusStats() {
 export function useSpeciesStats() {
   return useQuery({
     queryKey: ["species-stats"],
-    queryFn: async () => {
+    queryFn: async (): Promise<SpeciesStat[]> => {
       const { data, error } = await supabase
-        .from("species_stats")
-        .select("*")
-        .order("total_cells", { ascending: false })
-        .limit(20);
+        .from("samples")
+        .select("organism, cells_called, mapping_rate, median_genes")
+        .eq("status", "SUCCESS");
       if (error) throw error;
-      return data as Views<"species_stats">[];
+      const groups = new Map<string, { cells: number; mr: number[]; mg: number[]; n: number }>();
+      for (const r of data ?? []) {
+        const g = groups.get(r.organism) ?? { cells: 0, mr: [], mg: [], n: 0 };
+        g.n += 1;
+        g.cells += r.cells_called ?? 0;
+        if (r.mapping_rate != null) g.mr.push(r.mapping_rate);
+        if (r.median_genes != null) g.mg.push(r.median_genes);
+        groups.set(r.organism, g);
+      }
+      const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
+      return [...groups.entries()]
+        .map(([organism, g]) => ({
+          organism,
+          sample_count: g.n,
+          total_cells: g.cells,
+          avg_mapping_rate: avg(g.mr),
+          avg_median_genes: avg(g.mg),
+        }))
+        .sort((a, b) => b.total_cells - a.total_cells)
+        .slice(0, 20);
     },
     staleTime: 60_000,
   });
