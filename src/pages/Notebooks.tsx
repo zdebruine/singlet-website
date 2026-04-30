@@ -22,7 +22,7 @@ const NOTEBOOKS: Notebook[] = [
     id: "quickstart",
     title: "Atlas Quickstart",
     description:
-      "Browse the 2,358-sample catalog, filter by species/status/quality, explore datasets and series — all with the singlet-bio Python package.",
+      "Browse the 2,398-sample catalog, filter by species/status/quality, explore datasets and series — all with the singlet-bio Python package.",
     icon: <BookOpen size={20} />,
     tags: ["beginner", "python", "catalog"],
     githubUrl: `${BASE}/quickstart.ipynb`,
@@ -72,7 +72,7 @@ const NOTEBOOKS: Notebook[] = [
     id: "corpus_analytics",
     title: "Corpus Analytics",
     description:
-      "Atlas-wide quality distributions: mapping rates, cells/sample, genes/cell across 924 successful samples and 7 species.",
+      "Atlas-wide quality distributions: mapping rates, cells/sample, genes/cell across 998 successful samples and 7 species.",
     icon: <BarChart3 size={20} />,
     tags: ["analytics", "dashboard", "corpus"],
     githubUrl: `${BASE}/corpus_analytics.ipynb`,
@@ -237,7 +237,7 @@ const Notebooks = () => (
 
 import singlet
 
-# Browse the 2,358-sample atlas
+# Browse the 2,398-sample atlas
 singlet.summary()
 df = singlet.samples(organism="Homo sapiens", status="SUCCESS")
 print(f"{len(df)} successful human samples")
