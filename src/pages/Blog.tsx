@@ -16,6 +16,15 @@ interface BlogPost {
 // Static blog posts until Supabase blog_posts table is live
 const POSTS: BlogPost[] = [
   {
+    slug: "atlas-3m-cells-9-species",
+    title: "3.1 Million Cells Across 9 Species: Atlas Quality Update",
+    date: "2026-05-06",
+    summary:
+      "The singlet atlas now contains 2,547 samples, 1,071 successful, producing 3.1M cells across 9 species. Homo sapiens leads with 679 samples and 2.0M cells. Quality metrics: 77.5% mean mapping rate, 574 median genes/cell.",
+    tags: ["milestone", "corpus", "atlas", "quality"],
+    author: "singlet-product",
+  },
+  {
     slug: "mitochondrial-variant-analysis",
     title: "Mitochondrial Variant Analysis: Clonal Tracking from scRNA-seq",
     date: "2026-04-30",

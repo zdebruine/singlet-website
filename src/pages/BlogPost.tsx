@@ -5,6 +5,92 @@ import Footer from "@/components/Footer";
 
 // Blog post content (will move to Supabase/MDX later)
 const POST_CONTENT: Record<string, { title: string; date: string; tags: string[]; content: string }> = {
+  "atlas-3m-cells-9-species": {
+    title: "3.1 Million Cells Across 9 Species: Atlas Quality Update",
+    date: "2026-05-06",
+    tags: ["milestone", "corpus", "atlas", "quality"],
+    content: `
+## The Atlas at 2,547 Samples
+
+The singlet atlas has grown to **2,547 GEO samples** processed by singlify, with **1,071 passing QC** — producing **3.1 million cells** available for analysis. Organism annotation now covers 9 species.
+
+## Current Statistics
+
+| Metric | Value |
+|--------|-------|
+| **Total samples processed** | 2,547 |
+| **Successful (QC pass)** | 1,071 |
+| **Total cells** | 3,101,272 |
+| **GEO series** | 1,222 |
+| **Species** | 9 |
+| **Mean mapping rate** | 77.5% |
+| **Median genes/cell** | 574 |
+| **Success rate** | 42.1% |
+
+## Species Breakdown
+
+| Species | Samples | Cells | % of Atlas |
+|---------|---------|-------|-----------|
+| Homo sapiens | 679 | 1,984,222 | 64.0% |
+| Mus musculus | 191 | 416,998 | 13.4% |
+| Homo sapiens + Mus musculus (mixed) | 53 | 91,762 | 3.0% |
+| Macaca mulatta | 29 | 41,779 | 1.3% |
+| Drosophila melanogaster | 13 | 27,450 | 0.9% |
+| Gallus gallus | 8 | 9,849 | 0.3% |
+| Unknown (not in GDS) | 98 | 529,212 | 17.1% |
+
+Human samples dominate with 64% of cells — expected given GEO submission patterns. The "unknown" category contains samples too new or restricted for NCBI GDS lookup.
+
+## Quality Distribution
+
+Across 1,071 successful samples:
+
+- **Mapping rate**: mean 77.5%, median ~80% (range 10–98%)
+- **Cells per sample**: median ~1,200 (range 1–78,000)
+- **Genes per cell**: median 574 (range 50–5,000+)
+- **Doublet rate**: typically 2–8% for high-cell samples
+
+## What Changed Since 1,000 Samples
+
+| Metric | 1K Milestone | Now | Change |
+|--------|-------------|-----|--------|
+| Successful samples | 1,001 | 1,071 | +7% |
+| Total cells | 2.94M | 3.1M | +5.4% |
+| Species | 5 | 9 | +4 |
+| Series | 506 | 1,222 | +141% |
+| Organism annotation | ~50% | 91% | +41pp |
+
+The biggest improvement is **organism annotation coverage** — from ~50% known species to 91%, achieved via NCBI E-utilities lookup and series-level inference.
+
+## Access the Data
+
+\`\`\`python
+import singlet
+
+# Browse all successful samples
+df = singlet.samples(status="SUCCESS")
+print(f"{len(df)} samples, {df['cells_called'].sum():,.0f} cells")
+
+# Filter by species
+human = singlet.samples(organism="Homo sapiens")
+print(f"{len(human)} human samples")
+
+# Load a sample as AnnData
+adata = singlet.load("GSM5911120")
+\`\`\`
+
+## Pipeline Analytics
+
+View real-time atlas statistics on the [Pipeline page →](/pipeline), including species distribution charts, protocol breakdown, and quality metrics — all powered by live Supabase queries.
+
+## What's Next
+
+- **2,000 successful samples** — 1,476 samples are in FAIL status, many recoverable with protocol fixes
+- **Non-host transcriptomics** — viral/bacterial detection module in development
+- **Multi-modal** — CITE-seq ADT, ATAC fragments joining the atlas
+- **PyPI release** — \`pip install singlet-bio\` from PyPI (currently GitHub-only)
+    `,
+  },
   "mitochondrial-variant-analysis": {
     title: "Mitochondrial Variant Analysis: Clonal Tracking from scRNA-seq",
     date: "2026-04-30",
