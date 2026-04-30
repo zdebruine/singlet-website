@@ -16,6 +16,15 @@ interface BlogPost {
 // Static blog posts until Supabase blog_posts table is live
 const POSTS: BlogPost[] = [
   {
+    slug: "load-dir-feature",
+    title: "New: singlet.load_dir() — Pipeline Output → AnnData in One Call",
+    date: "2026-05-03",
+    summary:
+      "Load a full singlify output directory into AnnData with gene names, barcodes, QC metrics, and doublet scores in a single function call.",
+    tags: ["python", "feature", "anndata", "load"],
+    author: "singlet-product",
+  },
+  {
     slug: "doublet-detection-live",
     title: "Doublet Detection: Separating Singlets from Multiplets",
     date: "2026-05-03",

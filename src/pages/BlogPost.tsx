@@ -5,6 +5,86 @@ import Footer from "@/components/Footer";
 
 // Blog post content (will move to Supabase/MDX later)
 const POST_CONTENT: Record<string, { title: string; date: string; tags: string[]; content: string }> = {
+  "load-dir-feature": {
+    title: "New: singlet.load_dir() — Pipeline Output → AnnData in One Call",
+    date: "2026-05-03",
+    tags: ["python", "feature", "anndata", "load"],
+    content: `
+## The Problem
+
+singlify produces a rich output directory per sample: count matrices (.1pz), QC metrics, doublet scores, gene annotations, and barcodes. Loading all of this into a standard analysis framework required reading multiple files and manually joining them.
+
+## The Solution
+
+\`\`\`python
+import singlet
+
+adata = singlet.load_dir("/path/to/quant/GSM3573650")
+# → AnnData: 75,420 cells × 38,606 genes
+#   obs: total_umis, total_genes, mt_pct, ribo_pct, intronic_pct, doublet_score, is_doublet
+#   var: gene_id (Ensembl IDs)
+#   uns: singlify_dir
+\`\`\`
+
+One function call reads:
+- **gene_counts.1pz** — sparse count matrix (CSR)
+- **gene_expression.tsv** — gene names + Ensembl IDs
+- **auto_barcodes.tsv** — cell barcodes
+- **cell_qc_metrics.tsv** — per-cell QC (UMIs, genes, MT%, ribo%, intronic%)
+- **doublet_scores.tsv** — doublet score + is_doublet flag
+
+## Parameters
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| \`path\` | required | singlify output directory |
+| \`layer\` | "gene_counts" | Which .1pz to load (also: exon_counts, intron_counts, gene_counts_em) |
+| \`with_qc\` | True | Merge cell_qc_metrics.tsv into obs |
+| \`with_doublets\` | True | Merge doublet_scores.tsv into obs |
+
+## Downstream: Immediate scanpy Workflow
+
+\`\`\`python
+import scanpy as sc
+
+# Filter doublets (pre-computed by singlify)
+adata = adata[~adata.obs['is_doublet'].astype(bool)]
+
+# Standard pipeline
+sc.pp.filter_cells(adata, min_genes=200)
+sc.pp.normalize_total(adata, target_sum=1e4)
+sc.pp.log1p(adata)
+sc.pp.highly_variable_genes(adata)
+sc.tl.pca(adata)
+sc.pp.neighbors(adata)
+sc.tl.umap(adata)
+sc.tl.leiden(adata)
+sc.pl.umap(adata, color='leiden')
+\`\`\`
+
+## Test Coverage
+
+10 dedicated tests verify load_dir behavior:
+- Correct dimensions (75,420 × 38,606)
+- Gene names attached (TSPAN6, TNMD, ...)
+- Barcodes attached (16-mer 10x format)
+- QC metrics merged (total_umis, mt_pct, ...)
+- Doublet scores merged (is_doublet, doublet_score)
+- Optional disable of QC/doublet merge
+- Alternative layers (exon_counts)
+- Error handling (missing dir, missing .1pz)
+
+Full test suite: 109 passed, 9 skipped.
+
+## Try It
+
+\`\`\`bash
+pip install singlet-bio
+\`\`\`
+
+See the [Load and Explore notebook](https://github.com/Singlet-Bio/singlet/blob/main/notebooks/01_load_and_explore.ipynb) for a complete walkthrough with UMAP clustering.
+`,
+  },
   "doublet-detection-live": {
     title: "Doublet Detection: Separating Singlets from Multiplets",
     date: "2026-05-03",
