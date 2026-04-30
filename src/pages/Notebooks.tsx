@@ -118,6 +118,16 @@ const NOTEBOOKS: Notebook[] = [
     githubUrl: `${BASE}/saturation_curve.ipynb`,
     status: "ready",
   },
+  {
+    id: "ancestry_calling",
+    title: "Genetic Ancestry Inference",
+    description:
+      "Corpus-wide ancestry analysis: 605 samples profiled, 5 super-populations (EUR/EAS/AFR/AMR/SAS). Confidence distributions and population bias assessment.",
+    icon: <Dna size={20} />,
+    tags: ["ancestry", "snp", "corpus"],
+    githubUrl: `${BASE}/ancestry_calling.ipynb`,
+    status: "ready",
+  },
   // ── Coming Soon ──────────────────────────────────────────────────
   {
     id: "02_gpu_analysis",
