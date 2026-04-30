@@ -575,29 +575,29 @@ for batch in loader:
 {
   "servers": {
     "singlet": {
-      "type": "http",
-      "url": "https://mcp.singletdb.com"
+      "type": "stdio",
+      "command": "python",
+      "args": ["-m", "singlet.mcp.server"]
     }
   }
 }`}
-                title="VS Code / Cursor"
+                title="VS Code / Cursor (local)"
               />
               <CodeBlock
-                code={`# CLI
+                code={`# CLI (local stdio)
 $ claude mcp add singlet \\
-    --transport http \\
-    https://mcp.singletdb.com
+    -- python -m singlet.mcp.server
 
 # Or .mcp.json
 {
   "mcpServers": {
     "singlet": {
-      "type": "url",
-      "url": "https://mcp.singletdb.com"
+      "command": "python",
+      "args": ["-m", "singlet.mcp.server"]
     }
   }
 }`}
-                title="Claude Code"
+                title="Claude Code (local)"
               />
             </div>
 
@@ -627,7 +627,7 @@ $ claude mcp add singlet \\
                     ["Cursor", ".cursor/mcp.json"],
                     ["Claude Desktop", "claude_desktop_config.json"],
                     ["ChatGPT (OpenAI)", "Working Connections"],
-                    ["Any MCP client", "HTTP transport"],
+                    ["Any MCP client", "stdio transport (python -m singlet.mcp.server)"],
                   ].map((row) => (
                     <tr key={row[0]} className="border-b border-border/50">
                       <td className="px-4 py-2 font-medium text-foreground">{row[0]}</td>
