@@ -16,6 +16,15 @@ interface BlogPost {
 // Static blog posts until Supabase blog_posts table is live
 const POSTS: BlogPost[] = [
   {
+    slug: "1pz-format-benchmark",
+    title: ".1pz Format: 8.7× Smaller Than h5ad, Faster Reads",
+    date: "2026-05-04",
+    summary:
+      "The .1pz compressed sparse matrix format stores 678K cells × 38K genes in 15 MB (vs 133 MB h5ad). Benchmarks show faster reads and near-perfect lossless compression for single-cell count data.",
+    tags: ["format", "benchmark", "compression", "1pz"],
+    author: "singlet-product",
+  },
+  {
     slug: "17-notebooks-catalog",
     title: "17 Notebooks + Bundled Catalog: singlet-bio Is Self-Contained",
     date: "2026-05-04",
