@@ -16,6 +16,15 @@ interface BlogPost {
 // Static blog posts until Supabase blog_posts table is live
 const POSTS: BlogPost[] = [
   {
+    slug: "sample-qc-report",
+    title: "Sample QC Report: Everything in One Function Call",
+    date: "2026-05-03",
+    summary:
+      "load_dir() now reads cell cycle phases, ancestry, sex call, and pipeline summary — giving you complete sample metadata without parsing a single file.",
+    tags: ["python", "load_dir", "qc", "notebooks"],
+    author: "singlet-product",
+  },
+  {
     slug: "load-dir-feature",
     title: "New: singlet.load_dir() — Pipeline Output → AnnData in One Call",
     date: "2026-05-03",

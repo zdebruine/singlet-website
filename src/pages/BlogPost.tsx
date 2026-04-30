@@ -1315,6 +1315,78 @@ If you've validated results with STARsolo, you can trust singlify's gene counts.
 [View the Notebook →](https://github.com/Singlet-Bio/singlet/blob/main/notebooks/gene_counting.ipynb) | [Browse Processed Samples →](/browse)
     `,
   },
+  "sample-qc-report": {
+    title: "Sample QC Report: Everything in One Function Call",
+    date: "2026-05-03",
+    tags: ["python", "load_dir", "qc", "notebooks"],
+    content: `
+## One Call, Complete QC
+
+\`singlet.load_dir()\` now reads **every** metadata file singlify produces — giving you a complete, analysis-ready AnnData with zero manual file parsing.
+
+\`\`\`python
+import singlet
+
+adata = singlet.load_dir("/path/to/sample")
+# → AnnData: 75,420 cells × 38,606 genes
+#   obs: total_umis, total_genes, mt_pct, ribo_pct, intronic_pct,
+#        doublet_score, is_doublet, phase, s_score, g2m_score
+#   uns: ancestry, sex_call, summary, singlify_dir
+\`\`\`
+
+## What Gets Loaded
+
+| Data | Source File | Location in AnnData |
+|------|------------|---------------------|
+| Count matrix | gene_counts.1pz | adata.X |
+| Gene names + IDs | gene_expression.tsv | adata.var |
+| Cell barcodes | auto_barcodes.tsv | adata.obs_names |
+| UMI/gene counts | cell_qc_metrics.tsv | adata.obs |
+| MT/ribo/intronic % | cell_qc_metrics.tsv | adata.obs |
+| Doublet detection | doublet_scores.tsv | adata.obs |
+| Cell cycle phases | cell_cycle_scores.tsv | adata.obs |
+| Genetic ancestry | ancestry_call.json | adata.uns['ancestry'] |
+| Sex/karyotype | sex_call.json | adata.uns['sex_call'] |
+| Pipeline summary | summary.json | adata.uns['summary'] |
+
+## Quick QC Report
+
+\`\`\`python
+# One-liner QC summary
+s = adata.uns['summary']
+print(f"Protocol: {s['protocol']}")
+print(f"Cells: {adata.n_obs:,}")
+print(f"Mapping rate: {s['mapping_rate']:.1%}")
+print(f"Median genes/cell: {adata.obs['total_genes'].median():,.0f}")
+print(f"Doublet rate: {adata.obs['is_doublet'].mean():.1%}")
+print(f"Cell cycle: G1={adata.obs['phase'].eq('G1').mean():.0%}")
+print(f"Ancestry: {adata.uns['ancestry']['ancestry']}")
+\`\`\`
+
+## Immediate Filtering Pipeline
+
+With everything pre-computed, filtering is trivial:
+
+\`\`\`python
+# Remove doublets (singlify pre-computed)
+clean = adata[~adata.obs['is_doublet'].astype(bool)]
+
+# Remove high-MT cells
+clean = clean[clean.obs['mt_pct'] < 20]
+
+# Remove low-quality cells
+clean = clean[clean.obs['total_genes'] >= 200]
+
+# Result: analysis-ready cells, zero ambiguity
+\`\`\`
+
+## 14 Tests, Full Coverage
+
+The test suite verifies all metadata loading paths: dimensions, gene names, barcodes, QC metrics, doublets, cell cycle, ancestry, sex call, summary, and error handling.
+
+[View the Notebook →](https://github.com/Singlet-Bio/singlet/blob/main/notebooks/sample_qc_report.ipynb) | [Install: pip install singlet-bio →](https://github.com/Singlet-Bio/singlet)
+    `,
+  },
 };
 
 const BlogPost = () => {
