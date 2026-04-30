@@ -203,11 +203,11 @@ const NOTEBOOKS: Notebook[] = [
     id: "protocol_detection",
     title: "Protocol Auto-Detection",
     description:
-      "Corpus-wide analysis of singlify's protocol auto-detection across 29 protocols and 2,250 samples.",
+      "Corpus-wide protocol detection: 15+ protocols across 600+ samples. QC metrics by protocol, mapping rates, cell recovery. Fully automated.",
     icon: <Search size={20} />,
     tags: ["protocol", "autodetect"],
     githubUrl: `${BASE}/protocol_detection.ipynb`,
-    status: "blocked",
+    status: "ready",
   },
 ];
 
