@@ -138,6 +138,16 @@ const NOTEBOOKS: Notebook[] = [
     githubUrl: `${BASE}/mt_variants.ipynb`,
     status: "ready",
   },
+  {
+    id: "splicing",
+    title: "Alternative Splicing",
+    description:
+      "37,909 splicing events detected per sample: alt donor/acceptor sites, junction counts, per-cell PSI matrices for isoform analysis.",
+    icon: <Dna size={20} />,
+    tags: ["splicing", "isoforms", "rna"],
+    githubUrl: `${BASE}/splicing.ipynb`,
+    status: "ready",
+  },
   // ── Coming Soon ──────────────────────────────────────────────────
   {
     id: "02_gpu_analysis",
