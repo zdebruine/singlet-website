@@ -98,6 +98,16 @@ const NOTEBOOKS: Notebook[] = [
     githubUrl: `${BASE}/cell_cycle.ipynb`,
     status: "ready",
   },
+  {
+    id: "sample_qc_report",
+    title: "Sample QC Report",
+    description:
+      "One-call QC: load_dir() returns 75K cells with UMIs, genes, MT%, doublets, cell cycle, and ancestry — complete report from a single function.",
+    icon: <BarChart3 size={20} />,
+    tags: ["qc", "load_dir", "tutorial"],
+    githubUrl: `${BASE}/sample_qc_report.ipynb`,
+    status: "ready",
+  },
   // ── Coming Soon ──────────────────────────────────────────────────
   {
     id: "02_gpu_analysis",
