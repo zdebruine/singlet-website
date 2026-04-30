@@ -336,6 +336,23 @@ adata = singlet.load_sample("GSM3308814")`}
               </ol>
             </div>
 
+            <h3 className="font-display text-base font-semibold text-foreground mb-3 mt-8">Load a singlify output directory</h3>
+            <CodeBlock
+              code={`# Load a full singlify pipeline output directory
+adata = singlet.load_dir("/path/to/quant/GSM3573650")
+# → 75,420 cells × 38,606 genes
+# obs: total_umis, total_genes, mt_pct, ribo_pct, intronic_pct,
+#      doublet_score, is_doublet
+# var: gene_id (Ensembl)
+
+# Load only the count matrix (skip QC/doublets)
+adata = singlet.load_dir(path, with_qc=False, with_doublets=False)
+
+# Load exon-only counts
+adata = singlet.load_dir(path, layer="exon_counts")`}
+              title="singlet.load_dir()"
+            />
+
             <h3 className="font-display text-base font-semibold text-foreground mb-3 mt-8">AnnData structure</h3>
             <CodeBlock
               code={`adata = singlet.load("GSM4037316")
