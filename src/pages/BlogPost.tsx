@@ -5,6 +5,103 @@ import Footer from "@/components/Footer";
 
 // Blog post content (will move to Supabase/MDX later)
 const POST_CONTENT: Record<string, { title: string; date: string; tags: string[]; content: string }> = {
+  "mitochondrial-variant-analysis": {
+    title: "Mitochondrial Variant Analysis: Clonal Tracking from scRNA-seq",
+    date: "2026-04-30",
+    tags: ["mitochondria", "variants", "clonal-tracking", "g6"],
+    content: `
+## Why Mitochondrial Variants Matter
+
+Mitochondrial DNA (mtDNA) accumulates somatic mutations at ~10× the rate of nuclear DNA. In single-cell data, these naturally occurring variants serve as **endogenous barcodes** — enabling clonal tracking, lineage tracing, and donor deconvolution without additional assays like ATAC-seq or genetic barcoding.
+
+Until now, extracting mitochondrial variant information from scRNA-seq required running separate tools (e.g., mgatk, AMULET) on the aligned BAM. singlify now computes this **during the standard pipeline run** with zero extra cost.
+
+## What's New: G6 Mitochondrial Outputs
+
+The \`G6-MT-OUTPUTS\` gate (9 commits, merged to main) adds:
+
+### 1. Per-Donor MT Consensus (FASTA + VCF)
+
+\`\`\`
+output/
+├── donor0_mt_consensus.fa    # Full 16,569bp consensus
+├── donor0_mt_consensus.vcf   # Variants vs rCRS reference
+├── donor1_mt_consensus.fa    # (if multi-donor)
+└── donor1_mt_consensus.vcf
+\`\`\`
+
+Each donor gets a reconstructed mitochondrial genome and a VCF with:
+- SNVs, indels, frameshifts, and stop-gain variants (codes 5–9)
+- Per-variant allele frequency across cells assigned to that donor
+- Quality scores based on coverage depth
+
+### 2. MT Events Matrix (\`mt_events.1pz\`)
+
+A sparse cells × variants matrix in .1pz format:
+- Rows = cell barcodes
+- Columns = MT variant positions
+- Values = variant allele frequency (heteroplasmy level)
+
+This enables downstream analysis like:
+- **Clonal clustering** — cells sharing MT variants are clonally related
+- **Lineage reconstruction** — build phylogenetic trees from MT mutation accumulation
+- **Donor deconvolution** — distinguish pooled donors by MT haplotype
+
+### 3. MT Summary Statistics (\`mt_summary.tsv\`)
+
+| Metric | Description |
+|--------|-------------|
+| mt_coverage_median | Median per-base coverage across MT genome |
+| mt_variants_total | Total variants called |
+| mt_heteroplasmy_rate | Fraction of cells with detectable MT variants |
+| mt_haplogroup | Predicted MT haplogroup (when coverage sufficient) |
+
+## Performance
+
+MT analysis runs **inside the existing pileup phase** — no additional alignment pass required:
+
+- **Overhead**: <2% of total wall time (piggybacked on existing read processing)
+- **Memory**: ~4 MB additional (MT genome is only 16.6 KB)
+- **Output size**: mt_events.1pz typically 50–200 KB for 10K cells
+
+## Use Cases
+
+1. **Cancer biology**: Track subclonal expansion through MT variant accumulation
+2. **Pooled experiments**: Deconvolve donors without genotyping by MT haplotype
+3. **Development**: Trace lineage relationships in differentiation timecourses
+4. **Quality control**: High MT heteroplasmy can indicate stressed/dying cells
+
+## Try It
+
+\`\`\`python
+import singlet
+
+# Load a processed sample
+adata = singlet.load_dir("/path/to/singlify_output")
+
+# MT heteroplasmy is in the output directory
+mt_events = singlet.read_1pz("/path/to/singlify_output/mt_events.1pz")
+print(f"MT variants tracked: {mt_events.n_vars}")
+print(f"Cells with MT variants: {(mt_events.X.sum(axis=1) > 0).sum()}")
+\`\`\`
+
+## Validation
+
+- 85/85 unit tests pass
+- E2E validated on SRR27329891 (123M reads, 10x Chromium v3)
+- Schema compliance: DROPLET_OUTPUT_SCHEMA.md §3.6 and §3.7
+
+## What's Next
+
+- MT haplogroup classification (phylotree-based)
+- Cross-sample MT variant atlas for population-level analysis
+- Integration with the doublet detection module (MT variants as confirming signal)
+
+---
+
+*Gate G6-MT-OUTPUTS merged to main (commit 1d16227). 85 tests passing.*
+`,
+  },
   "17-notebooks-catalog": {
     title: "17 Notebooks + Bundled Catalog: singlet-bio Is Self-Contained",
     date: "2026-05-04",

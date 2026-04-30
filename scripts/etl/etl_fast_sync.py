@@ -55,8 +55,8 @@ def result_to_row(data: dict) -> dict[str, Any] | None:
     }
 
     # Remove None values to avoid overwriting existing data
-    # Also exclude "unknown" organism to preserve enriched values
-    return {k: v for k, v in row.items() if v is not None and not (k == "organism" and v == "unknown")}
+    # Keep "unknown" organism to satisfy NOT NULL constraint
+    return {k: v for k, v in row.items() if v is not None}
 
 
 def main():

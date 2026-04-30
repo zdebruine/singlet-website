@@ -16,6 +16,15 @@ interface BlogPost {
 // Static blog posts until Supabase blog_posts table is live
 const POSTS: BlogPost[] = [
   {
+    slug: "mitochondrial-variant-analysis",
+    title: "Mitochondrial Variant Analysis: Clonal Tracking from scRNA-seq",
+    date: "2026-04-30",
+    summary:
+      "singlify now outputs per-donor mitochondrial consensus sequences (FASTA + VCF), mt_events.1pz sparse matrices, and mt_summary.tsv — enabling clonal tracking, lineage tracing, and donor deconvolution from standard scRNA-seq data without additional assays.",
+    tags: ["mitochondria", "variants", "clonal-tracking", "g6"],
+    author: "singlet-product",
+  },
+  {
     slug: "1000-samples-milestone",
     title: "1,000 Samples: The Singlet Atlas Crosses a Milestone",
     date: "2026-04-30",
