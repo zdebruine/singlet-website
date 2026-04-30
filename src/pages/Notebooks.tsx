@@ -15,6 +15,7 @@ interface Notebook {
 }
 
 const BASE = "https://github.com/Singlet-Bio/singlet/blob/main/notebooks";
+const COLAB = "https://colab.research.google.com/github/Singlet-Bio/singlet/blob/main/notebooks";
 
 const NOTEBOOKS: Notebook[] = [
   // ── Ready (executed, committed) ──────────────────────────────────
@@ -26,6 +27,7 @@ const NOTEBOOKS: Notebook[] = [
     icon: <BookOpen size={20} />,
     tags: ["beginner", "python", "catalog"],
     githubUrl: `${BASE}/quickstart.ipynb`,
+    colabUrl: `${COLAB}/quickstart.ipynb`,
     status: "ready",
   },
   {
@@ -36,6 +38,7 @@ const NOTEBOOKS: Notebook[] = [
     icon: <Dna size={20} />,
     tags: ["equivalence", "starsolo", "panel-a"],
     githubUrl: `${BASE}/gene_counting.ipynb`,
+    colabUrl: `${COLAB}/gene_counting.ipynb`,
     status: "ready",
   },
   {
@@ -46,6 +49,7 @@ const NOTEBOOKS: Notebook[] = [
     icon: <TestTube size={20} />,
     tags: ["sex-calling", "panel-f", "validation"],
     githubUrl: `${BASE}/sex_calling.ipynb`,
+    colabUrl: `${COLAB}/sex_calling.ipynb`,
     status: "ready",
   },
   {
@@ -56,6 +60,7 @@ const NOTEBOOKS: Notebook[] = [
     icon: <FlaskConical size={20} />,
     tags: ["ambient-rna", "panel-g", "qc"],
     githubUrl: `${BASE}/ambient_rna.ipynb`,
+    colabUrl: `${COLAB}/ambient_rna.ipynb`,
     status: "ready",
   },
   {
@@ -66,6 +71,7 @@ const NOTEBOOKS: Notebook[] = [
     icon: <FlaskConical size={20} />,
     tags: ["doublets", "panel-h", "qc"],
     githubUrl: `${BASE}/doublet_detection.ipynb`,
+    colabUrl: `${COLAB}/doublet_detection.ipynb`,
     status: "ready",
   },
   {
@@ -76,6 +82,7 @@ const NOTEBOOKS: Notebook[] = [
     icon: <BarChart3 size={20} />,
     tags: ["analytics", "dashboard", "corpus"],
     githubUrl: `${BASE}/corpus_analytics.ipynb`,
+    colabUrl: `${COLAB}/corpus_analytics.ipynb`,
     status: "ready",
   },
   {
@@ -86,6 +93,7 @@ const NOTEBOOKS: Notebook[] = [
     icon: <BookOpen size={20} />,
     tags: ["beginner", "scanpy", "clustering"],
     githubUrl: `${BASE}/01_load_and_explore.ipynb`,
+    colabUrl: `${COLAB}/01_load_and_explore.ipynb`,
     status: "ready",
   },
   {
@@ -96,6 +104,7 @@ const NOTEBOOKS: Notebook[] = [
     icon: <TestTube size={20} />,
     tags: ["cell-cycle", "qc", "proliferation"],
     githubUrl: `${BASE}/cell_cycle.ipynb`,
+    colabUrl: `${COLAB}/cell_cycle.ipynb`,
     status: "ready",
   },
   {
@@ -106,6 +115,7 @@ const NOTEBOOKS: Notebook[] = [
     icon: <BarChart3 size={20} />,
     tags: ["qc", "load_dir", "tutorial"],
     githubUrl: `${BASE}/sample_qc_report.ipynb`,
+    colabUrl: `${COLAB}/sample_qc_report.ipynb`,
     status: "ready",
   },
   {
@@ -116,6 +126,7 @@ const NOTEBOOKS: Notebook[] = [
     icon: <BarChart3 size={20} />,
     tags: ["saturation", "qc", "sequencing"],
     githubUrl: `${BASE}/saturation_curve.ipynb`,
+    colabUrl: `${COLAB}/saturation_curve.ipynb`,
     status: "ready",
   },
   {
@@ -126,6 +137,7 @@ const NOTEBOOKS: Notebook[] = [
     icon: <Dna size={20} />,
     tags: ["ancestry", "snp", "corpus"],
     githubUrl: `${BASE}/ancestry_calling.ipynb`,
+    colabUrl: `${COLAB}/ancestry_calling.ipynb`,
     status: "ready",
   },
   {
@@ -136,6 +148,7 @@ const NOTEBOOKS: Notebook[] = [
     icon: <Dna size={20} />,
     tags: ["mitochondrial", "variants", "lineage"],
     githubUrl: `${BASE}/mt_variants.ipynb`,
+    colabUrl: `${COLAB}/mt_variants.ipynb`,
     status: "ready",
   },
   {
@@ -146,6 +159,7 @@ const NOTEBOOKS: Notebook[] = [
     icon: <Dna size={20} />,
     tags: ["splicing", "isoforms", "rna"],
     githubUrl: `${BASE}/splicing.ipynb`,
+    colabUrl: `${COLAB}/splicing.ipynb`,
     status: "ready",
   },
   {
@@ -156,6 +170,7 @@ const NOTEBOOKS: Notebook[] = [
     icon: <Play size={20} />,
     tags: ["velocity", "scvelo", "spliced"],
     githubUrl: `${BASE}/rna_velocity.ipynb`,
+    colabUrl: `${COLAB}/rna_velocity.ipynb`,
     status: "ready",
   },
   {
@@ -166,6 +181,7 @@ const NOTEBOOKS: Notebook[] = [
     icon: <FileCode size={20} />,
     tags: ["reference", "outputs", "guide"],
     githubUrl: `${BASE}/pipeline_outputs.ipynb`,
+    colabUrl: `${COLAB}/pipeline_outputs.ipynb`,
     status: "ready",
   },
   // ── Coming Soon ──────────────────────────────────────────────────
@@ -187,6 +203,7 @@ const NOTEBOOKS: Notebook[] = [
     icon: <FlaskConical size={20} />,
     tags: ["cell-calling", "emptydrops"],
     githubUrl: `${BASE}/cell_calling.ipynb`,
+    colabUrl: `${COLAB}/cell_calling.ipynb`,
     status: "ready",
   },
   {
@@ -197,6 +214,7 @@ const NOTEBOOKS: Notebook[] = [
     icon: <FileCode size={20} />,
     tags: ["format", "compression", "1pz", "benchmark"],
     githubUrl: `${BASE}/1pz_format.ipynb`,
+    colabUrl: `${COLAB}/1pz_format.ipynb`,
     status: "ready",
   },
   {
@@ -207,6 +225,7 @@ const NOTEBOOKS: Notebook[] = [
     icon: <Search size={20} />,
     tags: ["protocol", "autodetect"],
     githubUrl: `${BASE}/protocol_detection.ipynb`,
+    colabUrl: `${COLAB}/protocol_detection.ipynb`,
     status: "ready",
   },
 ];
