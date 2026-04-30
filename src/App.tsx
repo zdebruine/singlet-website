@@ -31,6 +31,7 @@ import Blog from "./pages/Blog.tsx";
 import BlogPost from "./pages/BlogPost.tsx";
 import SeriesDetail from "./pages/SeriesDetail.tsx";
 import Notebooks from "./pages/Notebooks.tsx";
+import AtlasDocs from "./pages/AtlasDocs.tsx";
 
 const queryClient = new QueryClient();
 
@@ -63,6 +64,7 @@ const App = () => (
           <Route path="/blog" element={<Blog />} />
           <Route path="/blog/:slug" element={<BlogPost />} />
           <Route path="/notebooks" element={<Notebooks />} />
+          <Route path="/atlas-docs" element={<AtlasDocs />} />
           <Route path="/terms" element={<Terms />} />
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/auth" element={<Auth />} />

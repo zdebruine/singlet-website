@@ -11,14 +11,18 @@ const footerCols = [
       { label: "Enterprise", to: "/enterprise" },
       { label: "Pricing", to: "/pricing" },
       { label: "Docs", to: "/docs" },
+      { label: "Atlas API", to: "/atlas-docs" },
     ],
   },
   {
     title: "Resources",
     links: [
-      { label: "GitHub", href: "https://github.com/singletdb" },
-      { label: "RcppML (CRAN)", href: "https://cran.r-project.org/package=RcppML" },
-      { label: "CZI CELLxGENE", href: "https://cellxgene.cziscience.com/" },
+      { label: "Browse Database", to: "/browse" },
+      { label: "Notebooks", to: "/notebooks" },
+      { label: "Validation", to: "/validation" },
+      { label: "Blog", to: "/blog" },
+      { label: "Pipeline", to: "/pipeline" },
+      { label: "GitHub", href: "https://github.com/Singlet-Bio/singlet" },
     ],
   },
   {

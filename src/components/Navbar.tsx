@@ -6,8 +6,10 @@ import { useAuth } from "@/hooks/useAuth";
 const navLinks = [
   { to: "/browse", label: "Database" },
   { to: "/notebooks", label: "Notebooks" },
+  { to: "/atlas-docs", label: "Atlas API" },
   { to: "/docs", label: "Docs" },
   { to: "/pipeline", label: "Pipeline" },
+  { to: "/validation", label: "Validation" },
   { to: "/benchmarks", label: "Benchmarks" },
   { to: "/blog", label: "Blog" },
 ];

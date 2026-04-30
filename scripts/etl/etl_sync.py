@@ -13,6 +13,8 @@ Required env vars:
     SUPABASE_SERVICE_KEY - Service role key (for writes)
 """
 
+from __future__ import annotations
+
 import json
 import os
 import sys
@@ -149,7 +151,7 @@ def enrich_result(result_path: Path) -> dict[str, Any] | None:
     row = {
         "gsm_id": gsm_id,
         "gse_id": data.get("gse_id", ""),
-        "srr_ids": [data["srr_id"]] if data.get("srr_id") else [],
+        "srr_ids": "{" + data["srr_id"] + "}" if data.get("srr_id") else None,
         "organism": data.get("organism", "unknown"),
         "protocol": data.get("autodetect_protocol"),
         "modality": data.get("modality", "scrna"),
@@ -171,7 +173,8 @@ def enrich_result(result_path: Path) -> dict[str, Any] | None:
     }
 
     # Remove None values to avoid overwriting existing data
-    return {k: v for k, v in row.items() if v is not None}
+    # Also exclude "unknown" organism to preserve enriched values
+    return {k: v for k, v in row.items() if v is not None and not (k == "organism" and v == "unknown")}
 
 
 def sync_results(client: Client, results: list[Path]) -> tuple[int, int]:

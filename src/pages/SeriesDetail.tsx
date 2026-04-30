@@ -18,6 +18,34 @@ function StatusBadge({ status }: { status: string }) {
   return <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full"><AlertCircle size={12} /> {status}</span>;
 }
 
+function QCSummaryBar({ samples }: { samples: { mapping_rate: number | null; median_genes: number | null; cells_called: number | null; status: string }[] }) {
+  const success = samples.filter(s => s.status === "SUCCESS");
+  if (success.length === 0) return null;
+
+  const gold = success.filter(s => (s.mapping_rate ?? 0) >= 0.7 && (s.median_genes ?? 0) >= 500 && (s.cells_called ?? 0) >= 500).length;
+  const silver = success.filter(s => {
+    const mr = s.mapping_rate ?? 0; const mg = s.median_genes ?? 0; const cells = s.cells_called ?? 0;
+    return !(mr >= 0.7 && mg >= 500 && cells >= 500) && (mr >= 0.5 && mg >= 200 && cells >= 100);
+  }).length;
+  const bronze = success.length - gold - silver;
+
+  return (
+    <div className="mb-8">
+      <h2 className="font-display text-sm font-bold text-foreground mb-3 uppercase tracking-wider">Quality Distribution</h2>
+      <div className="flex h-4 rounded-full overflow-hidden border border-border">
+        {gold > 0 && <div className="bg-yellow-400" style={{ width: `${(gold / success.length) * 100}%` }} title={`Gold: ${gold}`} />}
+        {silver > 0 && <div className="bg-slate-300" style={{ width: `${(silver / success.length) * 100}%` }} title={`Silver: ${silver}`} />}
+        {bronze > 0 && <div className="bg-orange-300" style={{ width: `${(bronze / success.length) * 100}%` }} title={`Bronze: ${bronze}`} />}
+      </div>
+      <div className="flex gap-4 mt-2 text-xs text-muted-foreground">
+        {gold > 0 && <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-yellow-400 inline-block" /> Gold: {gold}</span>}
+        {silver > 0 && <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-slate-300 inline-block" /> Silver: {silver}</span>}
+        {bronze > 0 && <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-orange-300 inline-block" /> Bronze: {bronze}</span>}
+      </div>
+    </div>
+  );
+}
+
 function useSeriesSamples(gseId: string) {
   return useQuery({
     queryKey: ["series", gseId],
@@ -132,11 +160,14 @@ const SeriesDetail = () => {
             </div>
           )}
 
+          {/* Quality Distribution */}
+          <QCSummaryBar samples={samples} />
+
           {/* Load code */}
           <div className="rounded-lg border border-border bg-muted/30 p-4 mb-8">
             <div className="text-xs font-medium text-muted-foreground mb-2">Load this series in Python</div>
             <pre className="font-mono text-xs text-foreground overflow-x-auto">
-              <code>{`import singlet\n\n# Load all samples in ${gseId}\nsamples = singlet.datasets(gse_id="${gseId}")\nfor gsm_id in samples.index:\n    adata = singlet.load(gsm_id)\n    print(f"{gsm_id}: {adata.n_obs} cells")`}</code>
+              <code>{`import singlet\n\n# List all samples in ${gseId}\ndf = singlet.samples(gse_id="${gseId}")\nprint(df[["gsm_id", "organism", "status", "n_cells"]])\n\n# Load a successful sample\nadata = singlet.load(df.loc[0, "gsm_id"])\nprint(f"{adata.n_obs} cells × {adata.n_vars} genes")`}</code>
             </pre>
           </div>
 

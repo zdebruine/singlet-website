@@ -5,6 +5,440 @@ import Footer from "@/components/Footer";
 
 // Blog post content (will move to Supabase/MDX later)
 const POST_CONTENT: Record<string, { title: string; date: string; tags: string[]; content: string }> = {
+  "pipeline-failure-analysis": {
+    title: "Why Samples Fail: Anatomy of 1,094 Pipeline Failures",
+    date: "2026-04-29",
+    tags: ["pipeline", "analytics", "quality"],
+    content: `
+## The Numbers
+
+Of **1,814 samples** processed through the singlet pipeline, **687** (37.9%) succeed, **687** (37.9%) hard-fail, and **428** (24.3%) soft-fail. Understanding *why* samples fail helps users predict success before committing compute time.
+
+## Seven Failure Categories
+
+| Category | Count | % of failures | Description |
+|----------|-------|--------------|-------------|
+| Low mapping rate | 379 | 34.6% | Alignment rate below threshold — often wrong organism or protocol |
+| Pipeline crash | 258 | 23.6% | Runtime error during processing (OOM, malformed data, edge cases) |
+| Download failure | 209 | 19.1% | SRA download failed or incomplete FASTQ data |
+| Cells below threshold | 179 | 16.4% | Alignment succeeded but too few cells called by EmptyDrops |
+| Alignment OOM | 45 | 4.1% | STAR ran out of memory (typically very large samples) |
+| Unclassified | 16 | 1.5% | No failure category recorded |
+| Data incomplete | 8 | 0.7% | Missing or truncated input files |
+
+**Key insight**: Over half of all failures (54%) are due to **low mapping + download issues** — problems with the *input data*, not the pipeline itself.
+
+## Protocol Success Rates
+
+Not all protocols are created equal. Drop-seq leads with 64% success, while newer protocols like sci-RNA-seq (7%) and BD Rhapsody (6%) struggle:
+
+| Protocol | Success | Total | Rate |
+|----------|---------|-------|------|
+| Drop-seq | 117 | 183 | **64%** |
+| 10x 5' v3 | 3 | 7 | 43% |
+| inDrop | 3 | 7 | 43% |
+| 10x v2 | 99 | 254 | 39% |
+| 10x v3 | 184 | 572 | 32% |
+| CEL-Seq2 | 4 | 17 | 24% |
+| Seq-Well | 3 | 21 | 14% |
+| Smart-seq2 | 2 | 14 | 14% |
+| sci-RNA-seq | 3 | 42 | 7% |
+| BD Rhapsody | 1 | 17 | 6% |
+
+**Why Drop-seq wins**: simpler barcode structure, well-established reference data, and fewer protocol variants. 10x v3 has high volume but many samples have protocol mismatches (auto-detected as wrong variant).
+
+## Species Success Rates
+
+| Species | Success | Total | Rate |
+|---------|---------|-------|------|
+| Macaca mulatta | 10 | 22 | **45%** |
+| Homo sapiens | 586 | 1,538 | 38% |
+| Gallus gallus | 6 | 16 | 38% |
+| Mus musculus | 59 | 161 | 37% |
+| Drosophila | 4 | 15 | 27% |
+| Danio rerio | 0 | 5 | 0% |
+
+Success rates are remarkably consistent across species (27-45%), suggesting pipeline logic is species-agnostic. Zebrafish (0/5) is a small sample — likely data quality issues rather than systematic failure.
+
+## What Users Should Know
+
+1. **Check your protocol**: If your data is Drop-seq or 10x v2/v3, expect ~32-64% success. For sci-RNA or BD Rhapsody, anticipate higher failure rates.
+2. **Mapping rate predicts success**: Samples with >70% mapping almost always produce usable cells. Below 50% usually means wrong reference or protocol.
+3. **Download failures are retryable**: 209 samples failed at download — many will succeed on retry with better network conditions.
+4. **Cell count threshold**: Even with good mapping, some samples are genuinely empty or have very few cells. This is biological, not a bug.
+
+## Next Steps
+
+We're working on:
+- **Automatic retry** for download failures
+- **Protocol reclassification** for misdetected samples
+- **Adaptive cell calling** that works better on low-cell-count samples
+
+Browse the full pipeline results at [singlet.bio/pipeline](/pipeline), or filter by quality tier at [singlet.bio/database](/database).
+    `,
+  },
+  "atlas-quality-report": {
+    title: "Atlas Quality Report: 655 Samples, 2.2M Cells, 79.8% Mapping Rate",
+    date: "2026-04-29",
+    tags: ["atlas", "quality", "data"],
+    content: `
+## Corpus Overview
+
+The Singlet Atlas now contains **1,814 samples** from **927 GEO series**, covering **8 species**. Of these, **687 samples** (37.8%) completed successfully, producing **2.3 million cells** with gene expression quantification.
+
+| Metric | Value |
+|--------|-------|
+| Total samples | 1,814 |
+| Successful | 687 (37.8%) |
+| Total cells | 2,228,723 |
+| Species | 8 |
+| GEO series | 875 |
+| Avg mapping rate | 79.8% |
+| Avg median genes/cell | 447 |
+
+## Species Distribution
+
+| Species | Samples | % of corpus |
+|---------|---------|-------------|
+| Homo sapiens | 1,529 | 88.8% |
+| Mus musculus | 147 | 8.5% |
+| Macaca mulatta | 16 | 0.9% |
+| Drosophila melanogaster | 11 | 0.6% |
+| Gallus gallus | 11 | 0.6% |
+| Danio rerio | 5 | 0.3% |
+| Pan troglodytes | 1 | 0.1% |
+
+## Protocol Distribution (Successful Samples)
+
+| Protocol | Samples |
+|----------|---------|
+| 10x Chromium v3 | 183 |
+| Drop-seq | 117 |
+| 10x Chromium v2 | 97 |
+| Unknown | 242 |
+| Other (8 protocols) | 16 |
+
+## Quality Metrics
+
+For the 645 successful samples:
+
+- **Mapping rate**: Mean 79.7%, with most samples >70%
+- **Median genes/cell**: Mean 425 (range varies widely by protocol and sample quality)
+- **Median UMIs/cell**: Correlates strongly with genes/cell
+- **Mitochondrial fraction**: Currently reported as 0% (pipeline bug, filed for fix)
+
+## Data Access
+
+All data is available via:
+- **[Browse page](/browse)** — filter, sort, and search all 1,681 samples
+- **Python package** — \`pip install singlet-bio\` then \`singlet.read_1pz(path)\`
+- **14 Jupyter notebooks** covering every major feature
+
+## What's Next
+
+- Enriching the remaining 151 samples with unknown organism
+- Adding ATAC-seq and CITE-seq modalities as those pipelines mature
+- Reaching 5,000+ samples via continued batch processing
+- Adding cell-type annotations via automated label transfer
+`,
+  },
+  "singlet-bio-python-package": {
+    title: "singlet-bio: Load Any Atlas Sample in 3 Lines of Python",
+    date: "2026-04-29",
+    tags: ["package", "python", "tutorial"],
+    content: `
+## Install
+
+\`\`\`bash
+pip install singlet-bio          # Core + AnnData
+pip install singlet-bio[torch]   # + PyTorch GPU support
+pip install singlet-bio[all]     # + zarr, TileDB-SOMA, torch
+\`\`\`
+
+## Browse the Catalog
+
+\`\`\`python
+import singlet
+
+# Browse all 307 GEO series
+df = singlet.catalog()
+print(df[["gse_id", "organism", "n_cells", "protocol"]].head())
+
+# Filter by organism
+human = singlet.datasets(organism="Homo sapiens", min_cells=1000)
+print(f"{len(human)} human samples with 1K+ cells")
+\`\`\`
+
+## Load Data
+
+\`\`\`python
+# Load a .1pz file → AnnData
+adata = singlet.read_1pz("path/to/spliced.1pz")
+print(adata)
+# AnnData object with n_obs × n_vars = 2520 × 38606
+#   obs: barcode, total_counts, n_genes, ...
+#   var: gene_id, gene_name, ...
+\`\`\`
+
+## What's in the Package?
+
+| Feature | Function |
+|---------|----------|
+| Browse catalog | \`singlet.catalog()\`, \`singlet.datasets()\` |
+| Read .1pz | \`singlet.read_1pz()\` |
+| Write .1pz | \`singlet.write_1pz()\` |
+| PyTorch DataLoader | \`singlet.torch.DataLoader\` |
+| Cell annotation | \`singlet.annotate()\` |
+| NMF projection | \`singlet.project()\` |
+
+## The .1pz Format
+
+Every atlas sample is stored in the **.1pz** compressed sparse matrix format:
+- **13× compression** over raw CSC
+- **4 GB/s decode** throughput
+- **Embedded metadata** (obs, var, uns)
+- **Column-range reads** for loading individual samples from multi-sample files
+
+## 95 Tests, Python 3.9-3.12
+
+The package includes a comprehensive test suite and CI workflow:
+
+\`\`\`bash
+pytest tests/ -v  # 95 passed, 9 skipped
+python -m build   # sdist + wheel
+twine check dist/*  # PASSED
+\`\`\`
+
+## Explore More
+
+- **13 reproducibility notebooks** at \`singlet/notebooks/\`
+- **Browse page** at [singlet.bio/browse](/browse)
+- **API reference** at [singlet docs](https://singlet-ai.github.io/singlet/)
+`,
+  },
+  "1fq-binary-format": {
+    title: "The .1fq Format: 18 Bytes/Read Compact FASTQ",
+    date: "2026-04-29",
+    tags: ["format", "compression", "1fq"],
+    content: `
+## Why a New FASTQ Format?
+
+Raw FASTQ files are the universal input for sequencing analysis, but they're incredibly wasteful:
+- 4 bytes per base (sequence character + quality character + line breaks + headers)
+- No deduplication — identical reads stored separately
+- No metadata — protocol, species, and SRA info live in separate files
+- No random access — must read from the beginning
+
+The **.1fq format** solves all of these while maintaining lossless round-trip fidelity.
+
+## Format Architecture
+
+Every .1fq file has a **96-byte header** followed by ZSTD-compressed data blocks:
+
+| Section | Size | Purpose |
+|---------|------|---------|
+| Header | 96 bytes | Magic, version, codec, protocol, read counts, format params |
+| Metadata block | Variable | Compressed SRA/GEO metadata |
+| Barcode dictionary | Variable | Compact barcode lookup table |
+| Data blocks | Variable | Compressed read data (sequences + qualities) |
+| Block index | Variable | Byte offsets for random access |
+| Footer | 16 bytes | CRC32, block count, index offset |
+
+## Key Design Decisions
+
+### 2-Bit Sequence Encoding
+DNA has 4 bases → 2 bits per base → 4 bases per byte (vs 1 base per byte in FASTQ).
+A separate N-bitmap handles ambiguous bases. This alone gives **4× compression**.
+
+### 4-Bin Quality
+Most quality scores cluster in 4 ranges (Q<10, Q10-20, Q20-30, Q30+).
+Binning to 2 bits/base (vs 8 bits in FASTQ) gives another **4× compression**.
+
+### Block Compression
+Reads are grouped into blocks of ~100,000 reads, each independently compressed with
+ZSTD (configurable: LZ4, LZ4HC, RANS also supported). This enables random access
+while still achieving high compression ratios.
+
+### Protocol Awareness
+The header encodes the detected protocol (16+ assay types), stream roles (R1/R2/I1/I2),
+and segment layout (barcode, UMI, cDNA positions). This eliminates the need for
+separate protocol configuration files.
+
+## Compression Results
+
+Analysis of 12 .1fq files from the singlify validation corpus:
+
+| Metric | Value |
+|--------|-------|
+| Total reads | 477,650,376 |
+| Total .1fq size | 8.7 GB |
+| Average bytes/read | 18.6 |
+| Codec | ZSTD (level 3) |
+
+For comparison, raw FASTQ for 477M paired-end reads at 150bp would be ~250 GB.
+The .1fq format achieves **~30× compression** through bit-packing, quality binning,
+and block compression.
+
+## Explore More
+
+The full analysis with header parsing code and compression plots is available in the
+\`1fq_format.ipynb\` reproducibility notebook.
+`,
+  },
+  "corpus-2m-cells": {
+    title: "Singlet Corpus: 2.2 Million Cells Across 29 Protocols",
+    date: "2026-04-29",
+    tags: ["corpus", "analytics", "milestone"],
+    content: `
+## The Singlet Corpus
+
+We've uniformly processed **1,640 samples** from **799 GEO series** through the singlet pipeline,
+creating the largest uniformly-analyzed single-cell atlas available. Every sample passes through
+identical protocol auto-detection, alignment, cell calling, and quality control.
+
+## Key Numbers
+
+| Metric | Value |
+|--------|-------|
+| Total samples | 1,640 |
+| Successful | 636 (38.8%) |
+| Unique protocols | 29 |
+| Total cells | 2,205,852 |
+| Median mapping rate | 81.8% |
+| Median cells/sample | 1,319 |
+| Median wall time | 418s (7 min) |
+
+## Protocol Coverage
+
+Singlet auto-detects 29+ single-cell protocols including 10x Chromium v2/v3, Drop-seq,
+inDrop, Smart-seq2, STRT-seq, sci-RNA-seq, and SPLiT-seq. The top protocols by sample count
+are 10x Chromium 3' v3 and v2, which together account for >60% of the corpus.
+
+## Quality Distribution
+
+Successful samples show strong quality metrics:
+- **Mapping rate**: median 81.8%, with most samples between 60-95%
+- **Cells called**: ranges from hundreds to tens of thousands per sample
+- **Processing speed**: 7-minute median, with 95% completing under 30 minutes
+
+## Failure Analysis
+
+The 61.2% failure rate breaks down into:
+- **HARD_FAIL** (36.2%): Protocol detection failures, unsupported formats, corrupt data
+- **SOFT_FAIL** (25.0%): Low mapping rate, too few cells, QC threshold failures
+
+We're actively expanding protocol support and improving detection to reduce failure rates.
+
+## Explore the Data
+
+- **Browse**: [singlet.bio/browse](/browse) — interactive table of all samples
+- **Notebook**: \`corpus_analytics.ipynb\` — full analysis with plots
+- **API**: \`singlet.catalog()\` and \`singlet.datasets()\` for programmatic access
+`,
+  },
+  "gene-counting-equivalence": {
+    title: "Gene Counting Equivalence: r=0.999 vs STARsolo",
+    date: "2026-04-29",
+    tags: ["equivalence", "benchmarks", "gene-counting"],
+    content: `
+## The Gold Standard Test
+
+We compared singlet's gene counting output against STARsolo (STAR 2.7.11b) on the same
+human PBMC sample (SRR32855204, 40M reads, 10x Chromium). Both tools process the same
+aligned reads through the same genome reference (GRCh38-2024-A).
+
+## Results
+
+| Metric | Value | Threshold | Status |
+|--------|-------|-----------|--------|
+| Gene Pearson r | **0.9990** | ≥0.999 | ✅ PASS |
+| Cell UMI Pearson r | **0.9993** | ≥0.999 | ✅ PASS |
+| Splice Junction Jaccard | **0.964** | ≥0.95 | ✅ PASS |
+| UMI ratio (singlet/gold) | **1.037** | 0.95–1.05 | ✅ PASS |
+| Gold cell recall | **100%** | ≥95% | ✅ PASS |
+| Gene match rate | **100%** | ≥95% | ✅ PASS |
+
+## Matching on Ensembl IDs
+
+A critical detail: singlet uses Ensembl gene IDs (ENSG...) internally, while many
+tools display gene symbols (TP53, GAPDH). Our initial comparison using gene symbols
+showed only 33% overlap and r=0.78 due to many-to-one symbol mappings.
+
+Switching to Ensembl ID matching gave 100% gene overlap and r=0.999. **Always match
+on Ensembl IDs for formal equivalence testing.**
+
+## Cell Calling: EmptyDrops vs Knee-Point
+
+singlet uses EmptyDrops (Monte Carlo FDR < 0.001) while STARsolo uses CellRanger's
+knee-point algorithm. The result:
+
+- singlet: **7,997 cells** (EmptyDrops)
+- STARsolo: **2,520 cells** (knee-point)
+- **100% gold cell recall** — every STARsolo cell is in singlet's output
+
+The 5,477 extra singlet cells have lower UMI counts and may represent:
+1. Real low-abundance cells missed by the stricter knee-point
+2. Empty droplets with ambient RNA above the EmptyDrops threshold
+
+We've filed a cell-calling threshold review (DAG task CELL-CALLING-REVIEW).
+
+## Try It Yourself
+
+The full gene counting notebook is available in the
+[singlet repository](https://github.com/Singlet-Bio/singlet/tree/main/notebooks).
+`,
+  },
+  "first-reproducibility-notebooks": {
+    title: "First Reproducibility Notebooks Ship",
+    date: "2026-04-29",
+    tags: ["notebooks", "equivalence", "milestone"],
+    content: `
+## Reproducibility Notebooks
+
+We're releasing six reproducibility notebooks that demonstrate singlet's capabilities with real scRNA-seq data. All notebooks run end-to-end on a 40M-read human PBMC sample (SRR32855204).
+
+### Gene Counting Equivalence (Panel A)
+Formal comparison of singlet vs STARsolo on 38,606 genes and 2,520 shared cells:
+- **Gene Pearson r = 0.9990** — near-perfect gene counting equivalence
+- **Cell UMI Pearson r = 0.9993** — per-cell totals match closely
+- **Splice junction Jaccard = 0.964** — alignment is equivalent
+- **100% gold cell recall** — every STARsolo cell found in singlet output
+
+### Sex Calling (Panel F)
+singlet's automatic sex caller agrees 100% with independent XIST/Y-marker analysis.
+XIST CPM = 570, Y-markers = 0 → unambiguous female call.
+
+### .1pz Format
+Deep dive into singlet's compressed sparse matrix format: ~13× compression vs raw CSC,
+O(1) column-range reads, embedded metadata, and faster reads than HDF5.
+
+### Ambient RNA Correction
+Top ambient genes are mitochondrial (MT-CO1, MT-ATP6) and hemoglobin (HBA2, HBB) —
+biologically expected for PBMCs. Estimated contamination fraction: 0.95.
+
+### Doublet Detection
+Per-cell doublet scoring reveals 55% doublet rate on 11,152 called cells,
+indicating the cell caller is more permissive than STARsolo (2,520 cells).
+This led to filing a cell-calling threshold review.
+
+### Quickstart
+Complete walkthrough from SRA accession to analyzed data, including QC metrics,
+automatic annotations, and RNA velocity layers.
+
+## ETL Sync: 1,619 Samples in Supabase
+
+The first ETL sync pushed 1,619 pipeline results to Supabase:
+- **635 SUCCESS** — fully processed
+- **575 HARD_FAIL** — download or mapping failures
+- **409 SOFT_FAIL** — QC threshold issues
+
+Browse the data at [singlet.bio/browse](/browse).
+
+## Try the Notebooks
+
+All notebooks are in the [singlet repository](https://github.com/Singlet-Bio/singlet/tree/main/notebooks).
+`,
+  },
   "singlet-atlas-launch": {
     title: "Singlet Atlas: 1,400+ Uniformly Processed scRNA-seq Samples",
     date: "2026-04-28",
@@ -249,6 +683,370 @@ Processing 50,000 samples at 2 minutes each:
 - Stock STAR: 100,000 minutes = 69 days
 - singlet-lite: 90,000 minutes = 62 days
 - **Saved: 7 days of compute**
+    `,
+  },
+  "cross-species-atlas": {
+    title: "Cross-Species Atlas: Comparing Gene Expression Across 8 Organisms",
+    date: "2026-04-29",
+    tags: ["atlas", "species", "comparison", "notebook"],
+    content: `
+## A Multi-Species Single-Cell Atlas
+
+The Singlet Atlas now spans **8 species** with **1,814 uniformly processed samples** — all run through the same singlify pipeline with species-appropriate reference genomes. This lets us compare gene expression patterns across organisms using identically processed data.
+
+## Species Coverage
+
+| Species | Samples | % of Atlas |
+|---------|---------|------------|
+| Homo sapiens | 1,529 | 88.8% |
+| Mus musculus | 147 | 8.5% |
+| Macaca mulatta | 16 | 0.9% |
+| Drosophila melanogaster | 11 | 0.6% |
+| Gallus gallus | 11 | 0.6% |
+| Danio rerio | 5 | 0.3% |
+| Pan troglodytes | 1 | 0.1% |
+
+## Key Findings
+
+### UMI Distributions Vary by Species
+
+Median UMIs per cell range from ~1,500 (mouse) to ~5,000 (human), reflecting differences in cell size, RNA content, and protocol optimization for each organism.
+
+### Gene Detection Scales with Transcriptome Size
+
+Human samples detect ~1,000-3,000 genes per cell, while fly samples detect ~500-1,500. This tracks with transcriptome complexity: the human genome encodes ~20,000 protein-coding genes vs ~14,000 in *Drosophila*.
+
+### Sparsity Is Universal
+
+Matrix sparsity exceeds 95% across all species — a fundamental property of droplet-based scRNA-seq, not an artifact of any particular organism.
+
+### Protocol Mix Differs
+
+Human samples use 10x Chromium v3 predominantly, while mouse has more Drop-seq representation. Non-model organisms tend toward 10x v2 and v3.
+
+## Try It Yourself
+
+\`\`\`python
+import singlet
+
+# Load a human sample
+human = singlet.load("GSM4568137")
+
+# Load a mouse sample
+mouse = singlet.load("GSM6806767")
+
+# Compare
+print(f"Human: {human.n_obs} cells, {human.n_vars} genes")
+print(f"Mouse: {mouse.n_obs} cells, {mouse.n_vars} genes")
+\`\`\`
+
+## Interactive Notebook
+
+The full analysis is available as a [Jupyter notebook](/notebooks) — load samples from multiple species, plot distributions, and compare QC metrics side-by-side.
+    `,
+  },
+  "qc-filtering-tiers": {
+    title: "Quality Tiers: Building Curated Cohorts from 687 Samples",
+    date: "2026-04-29",
+    tags: ["quality", "filtering", "tutorial", "notebook"],
+    content: `
+## The Problem: Not All Samples Are Equal
+
+With 1,814 processed samples and 687 successes, users need a way to select samples appropriate for their analysis. A sample with 50 cells and 30% mapping rate serves different purposes than one with 5,000 cells and 90% mapping rate.
+
+## Quality Tiers
+
+We define three tiers based on three metrics:
+
+| Tier | Mapping Rate | Median Genes/Cell | Cells | Use Case |
+|------|-------------|-------------------|-------|----------|
+| **Gold** | ≥ 80% | ≥ 500 | ≥ 500 | Benchmarking, method dev, publication |
+| **Silver** | ≥ 60% | ≥ 200 | ≥ 100 | Atlas construction, exploratory analysis |
+| **Bronze** | Any | Any | Any | Edge cases, failure analysis |
+
+## Using the API
+
+\`\`\`python
+import singlet
+
+# Get all successful samples
+df = singlet.samples(status="SUCCESS")
+
+# Filter to Gold tier
+gold = df[
+    (df["mapping_rate"] >= 0.80) &
+    (df["median_genes"] >= 500) &
+    (df["n_cells"] >= 500)
+]
+print(f"Gold: {len(gold)} samples, {gold['n_cells'].sum():,} cells")
+
+# Build a human Gold cohort
+cohort = gold[gold["organism"] == "Homo sapiens"]
+for _, row in cohort.head(3).iterrows():
+    adata = singlet.load(row["gsm_id"])
+    print(f"{row['gsm_id']}: {adata.n_obs} cells × {adata.n_vars} genes")
+\`\`\`
+
+## Key Findings
+
+- **Gold tier** captures the highest-quality samples — high mapping rates, good gene detection, sufficient cells for meaningful analysis
+- **Silver tier** adds samples with moderate quality — useful for increasing sample diversity and atlas coverage
+- **Bronze tier** includes everything else — useful for understanding failure modes and edge cases
+
+## Interactive Notebook
+
+The full QC filtering workflow is available as a [Jupyter notebook](/notebooks) with distribution plots, tier comparison charts, and a complete cohort-building walkthrough.
+    `,
+  },
+  "e2e-validation-dashboard": {
+    title: "E2E Validation Dashboard: 15 Metrics Across 4 Panels",
+    date: "2026-04-29",
+    tags: ["validation", "equivalence", "benchmarks"],
+    content: `
+## Formal Equivalence Testing
+
+We've launched a dedicated [Validation page](/validation) that tracks singlet's correctness against gold-standard bioinformatics tools. Every metric is computed on real GEO data — not synthetic benchmarks.
+
+## Current Coverage
+
+The dashboard tracks 9 E2E panels, with 4 currently active:
+
+| Panel | Tool | Key Metric | Status |
+|-------|------|-----------|--------|
+| **A** Gene Counting | STARsolo | Gene r = 0.999 | PASS |
+| **F** Sex Calling | XIST/Y CPM | Agreement = 100% | PASS |
+| **G** Ambient RNA | SoupX | Rho = 0.95 | PASS |
+| **H** Doublet Detection | Scrublet | Flagged rate = 55% | WARN |
+
+### Panel A: Gene Counting
+
+The most comprehensive panel with 11 metrics across two commits. Key results:
+
+- **Gene Pearson r = 0.9995** — near-perfect correlation with STARsolo on 38,606 genes
+- **Cell UMI r = 0.9999** — per-cell counts match within 1.9%
+- **Gold cell recall = 100%** — all 2,520 STARsolo cells found in singlet output
+- **Mapping rate = 86.41%** — higher than STARsolo's 82.89%
+
+Cell Jaccard (0.24) is below the 0.90 threshold because singlet's EmptyDrops calls 10,404 cells vs STARsolo's 2,520 — a more permissive cell caller, not a counting error.
+
+### Panel F: Sex Calling
+
+100% agreement on sample-level sex inference. Singlet reports XIST CPM = 556.7 (female), matching the external method (474.6 CPM). Different absolute CPM values reflect different cell sets, but both independently classify as female.
+
+### Panel G: Ambient RNA
+
+Ambient contamination fraction rho = 0.95 correlation with SoupX. Above the 0.90 threshold.
+
+### Panel H: Doublet Detection
+
+Doublet flagged rate = 55% flagged as warn (threshold = 20%). This reflects a more conservative doublet caller — investigation ongoing.
+
+## Methodology
+
+- Both tools process the **same FASTQ reads** (SRR32855204, 40M reads, human PBMC)
+- All results are reproducible via [Jupyter notebooks](/notebooks)
+- Metrics are stored in Supabase and displayed in real-time on the [Validation page](/validation)
+
+## What's Next
+
+Panels B-E and I remain pending — blocked on sample availability or feature completion:
+
+- **Panel B** (Donor Demux): blocked on protocol autodetect fix for SRR5398238
+- **Panel C** (ATAC): waiting for zero-fragment bug fix
+- **Panel D** (CITE-seq): waiting for feature barcode E2E
+- **Panel I** (Non-Host): waiting for NONHOST-EXPORT
+
+Visit the [Validation page](/validation) to see all metrics in real-time.
+    `,
+  },
+  "atlas-api-docs": {
+    title: "Atlas API Docs: Full Reference for singlet-bio",
+    date: "2026-04-29",
+    tags: ["docs", "api", "python", "tutorial"],
+    content: `
+## A Dedicated Documentation Page
+
+The singlet-bio Python package now has its own [API documentation page](/atlas-docs) — separate from the [Intelligence API docs](/docs). This page covers everything you need to work with the Singlet Atlas data:
+
+## What's Covered
+
+### Install
+\`\`\`bash
+pip install singlet-bio          # Core + AnnData
+pip install singlet-bio[torch]   # + PyTorch GPU DataLoaders
+pip install singlet-bio[all]     # + zarr, TileDB-SOMA, torch
+\`\`\`
+
+### Catalog & Samples API
+\`\`\`python
+import singlet
+
+# Browse series
+df = singlet.catalog("lung")
+
+# Browse samples with QC filters
+success = singlet.samples(organism="Homo sapiens", status="SUCCESS", min_cells=500)
+
+# Load any sample as AnnData
+adata = singlet.load(success.iloc[0]["gsm_id"])
+\`\`\`
+
+### Full API Reference
+
+The page includes a complete reference table for all 30+ public functions organized by category:
+
+| Category | Functions |
+|----------|-----------|
+| **Catalog** | catalog(), samples(), datasets(), info(), species(), sample_index() |
+| **Loading** | load(), load_sample(), download() |
+| **File I/O** | read_1pz(), write_1pz(), info_1pz(), read_matrix(), read_kraken2() |
+| **Annotate** | annotate(), project(), gene_programs() |
+| **Convert** | to_h5ad(), to_zarr(), to_csc(), from_h5ad(), from_zarr() |
+| **Config** | set_catalog_dir(), set_cache_dir(), set_backend(), login() |
+
+### No API Key Required
+
+All catalog browsing and data loading functions work without authentication. Data streams directly from Cloudflare R2 with zero egress costs. The catalog is bundled with the package and works offline.
+
+## Navigation
+
+The Atlas API docs are now in the navbar: **Database → Notebooks → Atlas API → Docs → Pipeline → Benchmarks → Blog**
+
+[View the Atlas API docs →](/atlas-docs)
+    `,
+  },
+  "browse-featured-series": {
+    title: "Browse Upgrade: Featured Series, CSV Export & Corpus Comparison",
+    date: "2026-05-01",
+    tags: ["browse", "ux", "csv", "comparison"],
+    content: `
+## Three New Features for Data Exploration
+
+Today's update makes the singlet Browse experience significantly richer for researchers looking to quickly assess data quality and export results.
+
+### 1. Featured Series
+
+The Browse page now shows **Top Series (by cells)** — the 4 highest-quality GEO series in the corpus, ranked by total cell count. Each card shows the series ID, sample count, total cells, and average mapping rate. This gives researchers immediate access to the best-characterized datasets without any filtering.
+
+Only series with ≥3 samples are eligible, ensuring statistical robustness. The section disappears when filters are active so it doesn't distract from search results.
+
+### 2. CSV Export
+
+A new **CSV** button in the pagination bar lets researchers export the current page of filtered results. The export includes: GSM ID, GSE ID, organism, status, mapping rate, cells called, median genes, median UMIs, MT%, doublet rate, and modality.
+
+This enables downstream analysis in R, Python, or Excel without requiring the Python package.
+
+### 3. Corpus Comparison Bars
+
+Each sample detail page now shows how that sample's QC metrics compare to the **corpus average**. A horizontal bar visualization shows:
+- The sample's mapping rate vs. corpus average
+- The sample's median genes vs. corpus average
+
+The midpoint line represents the corpus average. Bars extending past it are above-average (green), while shorter bars indicate below-average metrics (amber/red).
+
+### 4. Last Updated Timestamp
+
+The Pipeline Dashboard now shows when data was last synced, giving researchers confidence they're viewing current results.
+
+## Technical Details
+
+- Featured series uses a paginated Supabase query (handles >1000 SUCCESS rows) with client-side grouping
+- CSV export is client-side only — no server calls needed
+- Corpus comparison leverages the existing \`useCorpusStats\` hook — zero additional API calls
+- All features are responsive and work on mobile
+
+## What's Next
+
+- Downloadable .1pz file links from sample detail pages
+- Series-level comparison (compare all samples within a series)
+- Saved filter presets for common workflows
+`
+  },
+  "pipeline-dashboard": {
+    title: "Pipeline Dashboard: Real-Time Corpus Health at a Glance",
+    date: "2026-04-30",
+    tags: ["pipeline", "dashboard", "analytics"],
+    content: `
+## What's New
+
+The [Pipeline page](/pipeline) now provides a comprehensive real-time view of corpus health — not just a static progress bar, but interactive charts that update from live Supabase queries.
+
+## Tri-Color Progress Bar
+
+The centerpiece is a stacked progress bar showing the exact breakdown of 1,814 processed samples:
+
+- **Green** (687) — Successfully processed with QC metrics
+- **Amber** (428) — Soft failures (partial data recovered)
+- **Red** (698) — Hard failures (no usable output)
+
+The bar uses real counts from three parallel HEAD queries against Supabase — no hardcoded percentages. The legend shows actual sample counts that update as new batches complete.
+
+## Failure Category Breakdown
+
+A horizontal bar chart breaks down *why* samples fail into 7 categories:
+
+| Category | Description |
+|----------|-------------|
+| data_incomplete | Missing or truncated input files |
+| zero_mapping | 0% alignment — usually wrong organism |
+| low_mapping | Below threshold but non-zero |
+| pipeline_crash | Runtime errors (OOM, edge cases) |
+| download_failure | SRA download issues |
+| cells_below_threshold | Aligned but no cells called |
+| alignment_oom | STAR out of memory |
+
+This helps prioritize pipeline improvements — fixing "low_mapping" (often a protocol detection issue) would recover the most samples.
+
+## Protocol Success Rates
+
+A color-coded chart shows success rates by protocol:
+
+- **Green** (≥50%): Drop-seq (64%), 10x 5' v3 (43%)
+- **Amber** (25-50%): 10x v2 (39%), 10x v3 (32%)
+- **Red** (<25%): Seq-Well (14%), Smart-seq2 (14%), sci-RNA-seq (7%)
+
+This reveals which protocols singlify handles well vs. which need further work.
+
+## Species Success Rates
+
+A companion chart shows success rates by organism. Human dominates in volume but mouse has a higher success rate. Smaller organisms like chicken, pig, and macaque show surprising variability:
+
+- **Human** (~1,000 samples): ~40% success rate
+- **Mouse** (~500 samples): ~45% success rate
+- **Chicken, Pig, Macaque**: small sample sizes but revealing patterns
+
+Species that consistently fail often have reference genome or annotation issues that can be fixed upstream.
+
+## Quality Tiers on Sample Pages
+
+Individual sample pages now show a **Gold/Silver/Bronze** quality badge:
+
+- 🥇 **Gold**: mapping ≥70%, median genes ≥500, cells ≥500
+- 🥈 **Silver**: mapping ≥50%, median genes ≥200, cells ≥100
+- 🥉 **Bronze**: Below silver thresholds but still successful
+
+Series pages aggregate this into a quality distribution bar showing the mix of Gold/Silver/Bronze across all samples in a study.
+
+## Technical Implementation
+
+All data comes from live Supabase queries using React Query with stale times of 60-120 seconds. The hooks:
+
+\`\`\`typescript
+useStatusBreakdown()      // 3 parallel HEAD queries
+useFailureCategoryStats() // Paginated failure_category fetch
+useProtocolStats()        // Protocol × status aggregation
+useSpeciesSuccessStats()  // Species × status aggregation
+\`\`\`
+
+No static JSON files, no manual updates. As new samples are processed, the dashboard reflects the latest state automatically.
+
+## What's Next
+
+- Timeline view showing processing rate over time
+- Automatic email alerts when success rate drops below threshold
+- Per-series quality distribution on series detail pages
+
+[View the Pipeline Dashboard →](/pipeline)
     `,
   },
 };

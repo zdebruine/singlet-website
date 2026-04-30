@@ -1,4 +1,5 @@
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
+import { Link } from "react-router-dom";
 import { Zap, Cpu, CheckCircle2 } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
@@ -152,6 +153,13 @@ const Benchmarks = () => {
             <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-blue-500" /> 10–100× SOTA</span>
             <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-violet-500" /> 2–10× SOTA</span>
             <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-gray-400" /> &lt;2× SOTA</span>
+          </div>
+
+          {/* Cross links */}
+          <div className="mt-6 flex flex-wrap gap-4 text-sm">
+            <Link to="/validation" className="text-emerald-500 hover:underline">E2E Validation →</Link>
+            <Link to="/pipeline" className="text-emerald-500 hover:underline">Pipeline Dashboard →</Link>
+            <Link to="/notebooks" className="text-emerald-500 hover:underline">Notebooks →</Link>
           </div>
         </div>
       </section>

@@ -1,8 +1,11 @@
+import { useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { ArrowLeft, ExternalLink, Download, CheckCircle2, XCircle, AlertCircle } from "lucide-react";
+import { ArrowLeft, ExternalLink, Download, CheckCircle2, XCircle, AlertCircle, Copy, Check } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import { useSample } from "@/hooks/useDatabase";
+import { useSample, useCorpusStats } from "@/hooks/useDatabase";
+import { supabase } from "@/integrations/supabase/client";
 
 function formatNumber(n: number | null | undefined): string {
   if (n == null) return "—";
@@ -41,9 +44,42 @@ function QCGauge({ label, value, unit, good, warn }: { label: string; value: num
   );
 }
 
+function QualityTier({ sample }: { sample: { mapping_rate: number | null; median_genes: number | null; cells_called: number | null; status: string } }) {
+  if (sample.status !== "SUCCESS") return null;
+  const mr = sample.mapping_rate ?? 0;
+  const mg = sample.median_genes ?? 0;
+  const cells = sample.cells_called ?? 0;
+
+  const isGold = mr >= 0.7 && mg >= 500 && cells >= 500;
+  const isSilver = mr >= 0.5 && mg >= 200 && cells >= 100;
+
+  if (isGold) return <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-yellow-50 text-yellow-700 border border-yellow-200">🥇 Gold</span>;
+  if (isSilver) return <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-slate-50 text-slate-600 border border-slate-200">🥈 Silver</span>;
+  return <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-orange-50 text-orange-700 border border-orange-200">🥉 Bronze</span>;
+}
+
 const SampleDetail = () => {
   const { gsmId } = useParams<{ gsmId: string }>();
   const { data: sample, isLoading, error } = useSample(gsmId ?? "");
+  const { data: corpusStats } = useCorpusStats();
+  const [copied, setCopied] = useState(false);
+
+  const { data: relatedSamples } = useQuery({
+    queryKey: ["related-samples", sample?.gse_id],
+    queryFn: async () => {
+      if (!sample?.gse_id) return [];
+      const { data } = await supabase
+        .from("samples")
+        .select("gsm_id, status, cells_called, title")
+        .eq("gse_id", sample.gse_id)
+        .neq("gsm_id", sample.gsm_id)
+        .order("gsm_id")
+        .limit(10);
+      return data ?? [];
+    },
+    enabled: !!sample?.gse_id,
+    staleTime: 60_000,
+  });
 
   if (isLoading) return (
     <div className="min-h-screen bg-background">
@@ -89,6 +125,7 @@ const SampleDetail = () => {
                 {sample.status === "SUCCESS" && <span className="inline-flex items-center gap-1 text-xs text-emerald-600"><CheckCircle2 size={12} /> Success</span>}
                 {sample.status === "HARD_FAIL" && <span className="inline-flex items-center gap-1 text-xs text-red-600"><XCircle size={12} /> Failed</span>}
                 {sample.status !== "SUCCESS" && sample.status !== "HARD_FAIL" && <span className="inline-flex items-center gap-1 text-xs text-amber-600"><AlertCircle size={12} /> {sample.status}</span>}
+                <QualityTier sample={sample} />
               </div>
             </div>
             <div className="flex gap-2">
@@ -101,13 +138,21 @@ const SampleDetail = () => {
                 GEO <ExternalLink size={12} />
               </a>
               {sample.gse_id && (
+                <Link
+                  to={`/series/${sample.gse_id}`}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium border border-border rounded-lg hover:bg-muted"
+                >
+                  {sample.gse_id} →
+                </Link>
+              )}
+              {sample.gse_id && (
                 <a
                   href={`https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=${sample.gse_id}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium border border-border rounded-lg hover:bg-muted"
                 >
-                  {sample.gse_id} <ExternalLink size={12} />
+                  GEO <ExternalLink size={12} />
                 </a>
               )}
             </div>
@@ -126,6 +171,35 @@ const SampleDetail = () => {
               <QCGauge label="Ambient %" value={sample.ambient_pct} unit="%" good={0} warn={0.15} />
               <QCGauge label="Saturation" value={sample.saturation} unit="%" good={0.5} warn={0.3} />
             </div>
+
+            {/* Corpus comparison */}
+            {sample.status === "SUCCESS" && corpusStats && (
+              <div className="mt-4 rounded-lg border border-border bg-card p-4">
+                <h3 className="text-xs font-medium text-muted-foreground mb-3 uppercase tracking-wider">vs. Corpus Average</h3>
+                <div className="space-y-2">
+                  {[
+                    { label: "Mapping Rate", value: sample.mapping_rate, avg: Number(corpusStats.avg_mapping_rate), format: (v: number) => `${(v * 100).toFixed(1)}%` },
+                    { label: "Median Genes", value: sample.median_genes, avg: Number(corpusStats.avg_median_genes), format: (v: number) => v.toLocaleString() },
+                  ].map(({ label, value, avg, format }) => {
+                    if (value == null || !avg) return null;
+                    const ratio = value / avg;
+                    const pct = Math.min(ratio * 50, 100); // 50% mark = average
+                    const color = ratio >= 1 ? "bg-emerald-500" : ratio >= 0.7 ? "bg-amber-500" : "bg-red-500";
+                    return (
+                      <div key={label} className="flex items-center gap-3">
+                        <span className="text-xs text-muted-foreground w-28 shrink-0">{label}</span>
+                        <div className="flex-1 h-2 rounded-full bg-muted relative overflow-hidden">
+                          <div className={`absolute left-0 top-0 h-full rounded-full ${color}`} style={{ width: `${pct}%` }} />
+                          <div className="absolute top-0 h-full w-px bg-muted-foreground/40" style={{ left: "50%" }} />
+                        </div>
+                        <span className="text-xs font-mono w-16 text-right text-foreground">{format(value)}</span>
+                        <span className="text-[10px] text-muted-foreground w-14 text-right">avg {format(avg)}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Processing Info */}
@@ -161,7 +235,9 @@ const SampleDetail = () => {
               <dl className="space-y-3 text-sm">
                 <div className="flex justify-between">
                   <dt className="text-muted-foreground">GEO Series</dt>
-                  <dd className="font-mono text-foreground">{sample.gse_id}</dd>
+                  <dd className="font-mono text-foreground">
+                    <Link to={`/series/${sample.gse_id}`} className="text-primary hover:underline">{sample.gse_id}</Link>
+                  </dd>
                 </div>
                 <div className="flex justify-between">
                   <dt className="text-muted-foreground">SRR Accessions</dt>
@@ -187,7 +263,19 @@ const SampleDetail = () => {
 
           {/* Code example */}
           <div className="rounded-xl border border-border bg-card p-6">
-            <h3 className="font-display text-sm font-bold text-foreground mb-4 uppercase tracking-wider">Load This Sample</h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-display text-sm font-bold text-foreground uppercase tracking-wider">Load This Sample</h3>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(`import singlet\nadata = singlet.load("${sample.gsm_id}")\nprint(adata)`);
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 2000);
+                }}
+                className="inline-flex items-center gap-1 px-2 py-1 text-xs text-muted-foreground hover:text-foreground border border-border rounded-md hover:bg-muted"
+              >
+                {copied ? <><Check size={12} /> Copied</> : <><Copy size={12} /> Copy</>}
+              </button>
+            </div>
             <div className="rounded-lg bg-background border border-border p-4">
               <pre className="font-mono text-xs text-muted-foreground leading-6 overflow-x-auto">{`import singlet
 
@@ -196,6 +284,36 @@ adata = singlet.load("${sample.gsm_id}")
 print(adata)  # ${formatNumber(sample.cells_called)} cells × ${formatNumber(sample.median_genes)} genes`}</pre>
             </div>
           </div>
+
+          {/* Related samples from same series */}
+          {relatedSamples && relatedSamples.length > 0 && (
+            <div className="mt-8 rounded-xl border border-border bg-card p-6">
+              <h3 className="font-display text-sm font-bold text-foreground mb-3 uppercase tracking-wider">
+                Other samples in {sample.gse_id}
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {relatedSamples.map((r) => (
+                  <Link
+                    key={r.gsm_id}
+                    to={`/sample/${r.gsm_id}`}
+                    className="flex items-center justify-between px-3 py-2 rounded-lg border border-border/50 hover:bg-muted/30 transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-xs text-primary">{r.gsm_id}</span>
+                      {r.status === "SUCCESS" && <CheckCircle2 size={10} className="text-emerald-500" />}
+                      {r.status === "HARD_FAIL" && <XCircle size={10} className="text-red-500" />}
+                    </div>
+                    <span className="text-[10px] text-muted-foreground truncate max-w-[120px]">{r.title ?? ""}</span>
+                  </Link>
+                ))}
+              </div>
+              {sample.gse_id && (
+                <Link to={`/series/${sample.gse_id}`} className="inline-block mt-3 text-xs text-primary hover:underline">
+                  View all samples in this series →
+                </Link>
+              )}
+            </div>
+          )}
         </div>
       </section>
       <Footer />

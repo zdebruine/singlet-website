@@ -578,6 +578,18 @@ profile <- gene_profile("TREM2")` : `// .vscode/mcp.json
               ))}
               <span className="px-2.5 py-1 rounded-full border border-primary/30 bg-primary/[0.08] font-mono text-[10px] text-primary font-semibold">10+ species</span>
             </div>
+
+            <div className="flex flex-wrap gap-3 justify-center mt-8">
+              <Link to="/browse" className="inline-flex items-center gap-2 px-5 py-2 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity">
+                Browse the atlas <ArrowRight size={14} />
+              </Link>
+              <Link to="/atlas-docs" className="inline-flex items-center gap-2 px-5 py-2 rounded-md border border-border text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+                Atlas API docs
+              </Link>
+              <Link to="/validation" className="inline-flex items-center gap-2 px-5 py-2 rounded-md border border-border text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+                Validation results
+              </Link>
+            </div>
           </div>
         </div>
       </section>

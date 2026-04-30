@@ -16,6 +16,87 @@ interface BlogPost {
 // Static blog posts until Supabase blog_posts table is live
 const POSTS: BlogPost[] = [
   {
+    slug: "browse-featured-series",
+    title: "Browse Upgrade: Featured Series, CSV Export & Corpus Comparison",
+    date: "2026-05-01",
+    summary:
+      "The Browse page now highlights top series by cell count, lets researchers export filtered results to CSV, and sample detail pages show QC metrics relative to corpus averages.",
+    tags: ["browse", "ux", "csv", "comparison"],
+    author: "singlet-product",
+  },
+  {
+    slug: "pipeline-dashboard",
+    title: "Pipeline Dashboard: Real-Time Corpus Health at a Glance",
+    date: "2026-04-30",
+    summary:
+      "Live charts showing sample status breakdown, failure categories, protocol success rates, and quality tiers — all powered by real-time Supabase queries.",
+    tags: ["pipeline", "dashboard", "analytics"],
+    author: "singlet-product",
+  },
+  {
+    slug: "pipeline-failure-analysis",
+    title: "Why Samples Fail: Anatomy of 1,094 Pipeline Failures",
+    date: "2026-04-29",
+    summary:
+      "Across 1,814 samples, 62% fail at some stage. We break down the seven failure categories, identify protocol-specific patterns, and show how users can predict success before running the pipeline.",
+    tags: ["pipeline", "analytics", "quality"],
+    author: "singlet-product",
+  },
+  {
+    slug: "atlas-quality-report",
+    title: "Atlas Quality Report: 687 Samples, 2.4M Cells, 79.7% Mapping Rate",
+    date: "2026-04-29",
+    summary:
+      "A detailed look at the quality metrics across the Singlet Atlas corpus — mapping rates, gene detection, protocol distribution, and species coverage across 894 GEO series.",
+    tags: ["atlas", "quality", "data"],
+    author: "singlet-product",
+  },
+  {
+    slug: "singlet-bio-python-package",
+    title: "singlet-bio: Load Any Atlas Sample in 3 Lines of Python",
+    date: "2026-04-29",
+    summary:
+      "The singlet-bio Python package provides instant access to 687 uniformly processed scRNA-seq samples across 894 GEO series. Browse the catalog, load AnnData objects from .1pz compressed files, and use PyTorch DataLoaders — all with a single pip install.",
+    tags: ["package", "python", "tutorial"],
+    author: "singlet-product",
+  },
+  {
+    slug: "1fq-binary-format",
+    title: "The .1fq Format: 18 Bytes/Read Compact FASTQ",
+    date: "2026-04-29",
+    summary:
+      "Deep dive into singlify's binary .1fq format: 96-byte header, 2-bit sequence encoding, 4-bin quality, ZSTD block compression, and embedded SRA metadata. Analysis of 12 .1fq files totaling 477M reads at 18.6 bytes/read average.",
+    tags: ["format", "compression", "1fq"],
+    author: "singlet-product",
+  },
+  {
+    slug: "corpus-2m-cells",
+    title: "Singlet Corpus: 2.2 Million Cells Across 29 Protocols",
+    date: "2026-04-29",
+    summary:
+      "The singlet corpus now spans 1,640 samples, 799 GEO series, and 29 auto-detected protocols. 636 successful samples yield 2.2M cells with 81.8% median mapping rate and 7-minute median processing time. Full analytics available in the new corpus_analytics notebook.",
+    tags: ["corpus", "analytics", "milestone"],
+    author: "singlet-product",
+  },
+  {
+    slug: "gene-counting-equivalence",
+    title: "Gene Counting Equivalence: r=0.999 vs STARsolo",
+    date: "2026-04-29",
+    summary:
+      "Formal comparison of singlet vs STARsolo gene counting on 38,606 genes and 2,520 shared cells. Gene Pearson r=0.9990, Cell UMI r=0.9993, splice junction Jaccard=0.964. 100% gold cell recall. Plus: cell calling comparison shows EmptyDrops calls 3.2× more cells.",
+    tags: ["equivalence", "benchmarks", "gene-counting"],
+    author: "singlet-product",
+  },
+  {
+    slug: "first-reproducibility-notebooks",
+    title: "First Reproducibility Notebooks Ship",
+    date: "2026-04-29",
+    summary:
+      "Four reproducibility notebooks demonstrating singlet's gene counting (r=0.999), sex calling (100% agreement), ambient RNA estimation, and .1pz format. All executed end-to-end on real data. Plus: 1,619 pipeline results synced to Supabase.",
+    tags: ["notebooks", "equivalence", "milestone"],
+    author: "singlet-product",
+  },
+  {
     slug: "singlet-atlas-launch",
     title: "Singlet Atlas: 1,400+ Uniformly Processed scRNA-seq Samples",
     date: "2026-04-28",
@@ -59,6 +140,42 @@ const POSTS: BlogPost[] = [
       "Our STAR fork with Profile-Guided Optimization, Link-Time Optimization, and suffix array performance patches achieves ~10% wall-time reduction for scRNA-seq alignment without any accuracy loss.",
     tags: ["star", "alignment", "performance"],
     author: "Singlet Team",
+  },
+  {
+    slug: "cross-species-atlas",
+    title: "Cross-Species Atlas: Comparing Gene Expression Across 8 Organisms",
+    date: "2026-04-29",
+    summary:
+      "Our atlas now spans 8 species from human to zebrafish. We compare UMI distributions, gene detection, and sparsity across species — all from uniformly processed data.",
+    tags: ["atlas", "species", "comparison", "notebook"],
+    author: "Singlet Team",
+  },
+  {
+    slug: "qc-filtering-tiers",
+    title: "Quality Tiers: Building Curated Cohorts from 687 Samples",
+    date: "2026-04-29",
+    summary:
+      "We introduce Gold, Silver, and Bronze quality tiers based on mapping rate, gene detection, and cell count. Filter 687 successful samples into publication-ready cohorts with a single API call.",
+    tags: ["quality", "filtering", "tutorial", "notebook"],
+    author: "Singlet Team",
+  },
+  {
+    slug: "e2e-validation-dashboard",
+    title: "E2E Validation Dashboard: 15 Metrics Across 4 Panels",
+    date: "2026-04-29",
+    summary:
+      "The new Validation page tracks formal equivalence across 9 E2E panels. Currently: gene counting r=0.999 (PASS), sex calling 100% (PASS), ambient rho=0.95 (PASS), plus doublet and mapping metrics. All verified on real GEO data.",
+    tags: ["validation", "equivalence", "benchmarks"],
+    author: "singlet-product",
+  },
+  {
+    slug: "atlas-api-docs",
+    title: "Atlas API Docs: Full Reference for singlet-bio",
+    date: "2026-04-29",
+    summary:
+      "The new /atlas-docs page provides a complete API reference for the singlet-bio Python package — from pip install to loading samples as AnnData. Catalog browsing, data loading, file I/O, annotation, and format conversion all in one place.",
+    tags: ["docs", "api", "python", "tutorial"],
+    author: "singlet-product",
   },
 ];
 
@@ -120,9 +237,22 @@ const Blog = () => {
             ))}
           </div>
 
+          {/* Featured latest post */}
+          {!selectedTag && filtered.length > 0 && (
+            <Link
+              to={`/blog/${filtered[0].slug}`}
+              className="block mb-8 rounded-xl border-2 border-primary/20 bg-gradient-to-br from-primary/5 to-transparent p-8 hover:border-primary/40 transition-colors"
+            >
+              <span className="text-[10px] font-mono uppercase tracking-widest text-primary mb-2 block">Latest</span>
+              <h2 className="font-display text-2xl font-bold text-foreground mb-2">{filtered[0].title}</h2>
+              <p className="text-sm text-muted-foreground leading-relaxed mb-3">{filtered[0].summary}</p>
+              <span className="text-xs text-primary font-medium">Read more →</span>
+            </Link>
+          )}
+
           {/* Posts */}
           <div className="space-y-6">
-            {filtered.map((post) => (
+            {(selectedTag ? filtered : filtered.slice(1)).map((post) => (
               <article
                 key={post.slug}
                 className="group rounded-xl border border-border bg-card p-6 hover:border-primary/30 transition-colors"
