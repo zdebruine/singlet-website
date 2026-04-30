@@ -107,10 +107,10 @@ const AtlasDocs = () => {
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
   }, []);
   const { data: stats } = useCorpusStats();
-  const totalSamples = stats?.total_samples?.toLocaleString() ?? "1,700+";
-  const successSamples = stats?.success_samples?.toLocaleString() ?? "650+";
-  const totalCells = stats?.total_cells ? (stats.total_cells / 1e6).toFixed(1) + "M" : "2.2M";
-  const seriesCount = stats?.series_count?.toLocaleString() ?? "870+";
+  const totalSamples = stats?.total_samples?.toLocaleString() ?? "2,370+";
+  const successSamples = stats?.success_samples?.toLocaleString() ?? "980+";
+  const totalCells = stats?.total_cells ? (stats.total_cells / 1e6).toFixed(1) + "M" : "2.9M";
+  const seriesCount = stats?.series_count?.toLocaleString() ?? "1,170+";
 
   return (
     <div className="min-h-screen bg-background">
@@ -263,15 +263,19 @@ df = singlet.samples()
 # Filter by organism, status, minimum cells
 success = singlet.samples(organism="Homo sapiens", status="SUCCESS", min_cells=500)
 
+# Text search across titles, organisms, protocols
+lung = singlet.samples(search="lung", status="SUCCESS")
+brain = singlet.samples(search="brain", organism="Homo sapiens", min_cells=1000)
+
 # Get samples from a specific series
-series_samples = singlet.samples(gse_id="GSE136831")
+series_samples = singlet.samples(gse_id="GSE174399")
 
 # Filter by quality tier: gold, silver, or bronze
-gold = singlet.samples(quality_tier="gold")   # MR≥70%, genes≥500, cells≥500
-silver = singlet.samples(quality_tier="silver") # MR≥50%, genes≥200, cells≥100
+gold = singlet.samples(quality_tier="gold")   # MR≥70%, cells≥500
+silver = singlet.samples(quality_tier="silver") # MR≥50%, cells≥100
 
-# Columns include: gsm_id, gse_id, organism, protocol, status,
-# mapping_rate, cells_called, median_genes, median_umis, pz_path`}
+# Columns: gsm_id, gse_id, organism, protocol, status, mapping_rate,
+# cells_called, median_genes, median_umis, mt_pct, doublet_rate, title`}
               title="singlet.samples()"
             />
 
