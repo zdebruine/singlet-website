@@ -128,6 +128,16 @@ const NOTEBOOKS: Notebook[] = [
     githubUrl: `${BASE}/ancestry_calling.ipynb`,
     status: "ready",
   },
+  {
+    id: "mt_variants",
+    title: "Mitochondrial Variants",
+    description:
+      "MT heteroplasmy calling from scRNA-seq: 3,717 variants, mutation spectrum, clonal lineage markers. Unique singlify capability for lineage tracing.",
+    icon: <Dna size={20} />,
+    tags: ["mitochondrial", "variants", "lineage"],
+    githubUrl: `${BASE}/mt_variants.ipynb`,
+    status: "ready",
+  },
   // ── Coming Soon ──────────────────────────────────────────────────
   {
     id: "02_gpu_analysis",
