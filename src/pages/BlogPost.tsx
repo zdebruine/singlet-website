@@ -1481,6 +1481,99 @@ The test suite verifies all metadata loading paths: dimensions, gene names, barc
 [View the Notebook →](https://github.com/Singlet-Bio/singlet/blob/main/notebooks/sample_qc_report.ipynb) | [Install: pip install singlet-bio →](https://github.com/Singlet-Bio/singlet)
     `,
   },
+  "notebook-collection-complete": {
+    title: "18 Reproducibility Notebooks: Every singlify Feature Validated",
+    date: "2026-04-30",
+    tags: ["notebooks", "reproducibility", "milestone", "plots"],
+    content: `
+## The Complete Collection
+
+Every singlify feature now has a dedicated Jupyter notebook with **real embedded matplotlib plots** — not just text tables. These notebooks are executable, rendered natively on GitHub, and hosted as interactive HTML on singlet.bio.
+
+## Three Ways to View
+
+| Method | URL | Plots Visible |
+|--------|-----|---------------|
+| **GitHub** | [Singlet-Bio/singlet/notebooks/](https://github.com/Singlet-Bio/singlet/tree/main/notebooks) | ✅ Native rendering |
+| **Google Colab** | \`colab.research.google.com/github/Singlet-Bio/singlet/blob/main/notebooks/{name}.ipynb\` | ✅ Executable |
+| **singlet.bio** | [singlet.bio/notebooks](https://singlet.bio/notebooks) | ✅ Pre-rendered HTML |
+
+## QC & Quality Control (5 notebooks)
+
+| Notebook | Key Visualization | Metric |
+|----------|-------------------|--------|
+| **cell_calling** | Barcode rank (knee) plot | 11,593 cells from 50K barcodes |
+| **doublet_detection** | Score distribution + UMI correlation | 13.8% doublet rate, 20× separation |
+| **ambient_rna** | MT fraction + intronic read histograms | Median MT: 3.5% |
+| **cell_cycle** | G1/S/G2M phase bars + S-G2M scatter | Phase assignment for all cells |
+| **saturation_curve** | Sequencing depth saturation model | Plateau detection |
+
+## Genomic Features (5 notebooks)
+
+| Notebook | Key Visualization | Metric |
+|----------|-------------------|--------|
+| **rna_velocity** | Spliced vs unspliced scatter | Steady-state ratio visible |
+| **splicing** | Exonic/intronic histograms + composition pie | Per-cell splice ratios |
+| **mt_variants** | Heteroplasmy VAF + MT genome coverage | 42 variants detected |
+| **ancestry_calling** | Population probability bars | EUR 95% confidence |
+| **sex_calling** | XIST/Y marker expression bars | 100% concordance |
+
+## Validation (2 notebooks)
+
+| Notebook | Key Visualization | Metric |
+|----------|-------------------|--------|
+| **gene_counting** | Correlation scatter vs STARsolo | r = 0.9998 |
+| **corpus_analytics** | 6-panel QC distribution across 993 samples | Atlas-wide view |
+
+## Format & Overview (6 notebooks)
+
+| Notebook | Key Visualization | Metric |
+|----------|-------------------|--------|
+| **quickstart** | Species scatter (mapping rate vs cells) | 2,397 samples |
+| **1pz_format** | File size + load time bars | 8.7× smaller than h5ad |
+| **pipeline_outputs** | File sizes + processing step timing | Full output tour |
+| **protocol_detection** | Auto-detection confidence bars | 10x 3' v3 @ 97% |
+| **sample_qc_report** | 4-panel QC (UMI, genes, correlation, MT) | One-call report |
+| **01_load_and_explore** | PCA scatter of top 2000 genes | Quick exploration |
+
+## Technical Architecture
+
+The rendering pipeline works as follows:
+
+1. **Notebooks contain \`image/png\` in cell outputs** — GitHub renders these natively
+2. **\`build_html.sh\`** runs \`jupyter nbconvert --to html --template lab\` on all .ipynb files
+3. **HTML files (324–568 KB)** are deployed to \`singlet.bio/notebooks/{id}.html\`
+4. **Colab links** work via \`colab.research.google.com/github/...\` URL pattern
+
+## Open Any Notebook in Colab
+
+\`\`\`
+https://colab.research.google.com/github/Singlet-Bio/singlet/blob/main/notebooks/gene_counting.ipynb
+\`\`\`
+
+Replace \`gene_counting\` with any notebook name to open it interactively.
+
+## Try It
+
+\`\`\`bash
+pip install "singlet-bio @ git+https://github.com/Singlet-Bio/singlet#subdirectory=python"
+\`\`\`
+
+\`\`\`python
+import singlet
+
+# Load a processed sample
+adata = singlet.load_dir("/path/to/singlify/output/")
+print(f"{adata.n_obs:,} cells × {adata.n_vars:,} genes")
+print(f"Doublet rate: {adata.obs['doublet_score'].gt(0.5).mean():.1%}")
+print(f"Median genes: {adata.obs['total_genes'].median():,.0f}")
+\`\`\`
+
+---
+
+[Browse All Notebooks →](https://github.com/Singlet-Bio/singlet/tree/main/notebooks) | [View on singlet.bio →](https://singlet.bio/notebooks)
+    `,
+  },
   "1pz-format-benchmark": {
     title: ".1pz Format: 8.7× Smaller Than h5ad, Faster Reads",
     date: "2026-05-04",

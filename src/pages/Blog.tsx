@@ -16,6 +16,15 @@ interface BlogPost {
 // Static blog posts until Supabase blog_posts table is live
 const POSTS: BlogPost[] = [
   {
+    slug: "notebook-collection-complete",
+    title: "18 Reproducibility Notebooks: Every singlify Feature Validated",
+    date: "2026-04-30",
+    summary:
+      "The complete notebook collection is live — 18 executed Jupyter notebooks with embedded matplotlib plots covering gene counting, QC, splicing, velocity, ancestry, and more. View on GitHub, Colab, or singlet.bio.",
+    tags: ["notebooks", "reproducibility", "milestone", "plots"],
+    author: "singlet-product",
+  },
+  {
     slug: "1pz-format-benchmark",
     title: ".1pz Format: 8.7× Smaller Than h5ad, Faster Reads",
     date: "2026-05-04",
