@@ -342,14 +342,21 @@ adata = singlet.load_sample("GSM3308814")`}
 adata = singlet.load_dir("/path/to/quant/GSM3573650")
 # → 75,420 cells × 38,606 genes
 # obs: total_umis, total_genes, mt_pct, ribo_pct, intronic_pct,
-#      doublet_score, is_doublet
-# var: gene_id (Ensembl)
+#      doublet_score, is_doublet, phase, s_score, g2m_score
+# uns: ancestry, sex_call, summary, saturation_curve, singlify_dir
+
+# Access sample-level metadata
+print(adata.uns['summary']['protocol'])   # → "10x-3p-v2"
+print(adata.uns['ancestry']['ancestry'])  # → "EUR"
+print(adata.uns['sex_call']['sex'])       # → "male"
 
 # Load only the count matrix (skip QC/doublets)
 adata = singlet.load_dir(path, with_qc=False, with_doublets=False)
 
-# Load exon-only counts
-adata = singlet.load_dir(path, layer="exon_counts")`}
+# Load exon-only or velocity matrices
+adata = singlet.load_dir(path, layer="exon_counts")
+spliced = singlet.read_1pz(path + "/spliced.1pz")
+unspliced = singlet.read_1pz(path + "/unspliced.1pz")`}
               title="singlet.load_dir()"
             />
 
