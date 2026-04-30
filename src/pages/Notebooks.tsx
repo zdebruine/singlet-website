@@ -157,13 +157,15 @@ const Notebooks = () => (
 
 import singlet
 
-# Browse available samples
+# Browse the 2,319-sample atlas
+singlet.summary()
 df = singlet.samples(organism="Homo sapiens", status="SUCCESS")
 print(f"{len(df)} successful human samples")
 
-# Load any sample as AnnData
-adata = singlet.load(df.iloc[0]["gsm_id"])
-print(f"{adata.n_obs} cells × {adata.n_vars} genes")`}</code>
+# Load a singlify output directory as AnnData
+adata = singlet.load_dir("/path/to/quant/GSM3573650")
+print(f"{adata.n_obs} cells × {adata.n_vars} genes")
+# → 75,420 cells × 38,606 genes with QC + doublet scores`}</code>
           </pre>
         </div>
 
