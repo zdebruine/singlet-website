@@ -183,11 +183,11 @@ const NOTEBOOKS: Notebook[] = [
     id: "cell_calling",
     title: "Cell Calling (EmptyDrops)",
     description:
-      "Compare singlify EmptyDrops cell calling vs STARsolo knee-point. Analyze overcalling behavior and threshold tuning.",
+      "Deviance-based cell calling: 74K cells identified via statistical testing against ambient. Barcode rank plots, low-UMI rescue analysis.",
     icon: <FlaskConical size={20} />,
     tags: ["cell-calling", "emptydrops"],
     githubUrl: `${BASE}/cell_calling.ipynb`,
-    status: "blocked",
+    status: "ready",
   },
   {
     id: "1pz_format",
