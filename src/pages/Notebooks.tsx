@@ -222,7 +222,7 @@ const Notebooks = () => (
             Notebooks & Tutorials
           </h1>
           <p className="text-muted-foreground max-w-2xl">
-            8 executed Jupyter notebooks covering data loading, catalog exploration, formal equivalence, QC profiling, doublet detection, cell cycle scoring, and corpus analytics — plus 1 more coming soon (GPU analysis).
+            18 executed Jupyter notebooks covering data loading, catalog exploration, formal equivalence, QC profiling, doublet detection, cell cycle scoring, .1pz format, and corpus analytics — plus 1 more coming soon (GPU analysis).
           </p>
         </div>
 
