@@ -108,6 +108,16 @@ const NOTEBOOKS: Notebook[] = [
     githubUrl: `${BASE}/sample_qc_report.ipynb`,
     status: "ready",
   },
+  {
+    id: "saturation_curve",
+    title: "Sequencing Saturation",
+    description:
+      "Visualize saturation curves to determine if samples are under/over-sequenced. UMI and gene discovery vs depth across multiple samples.",
+    icon: <BarChart3 size={20} />,
+    tags: ["saturation", "qc", "sequencing"],
+    githubUrl: `${BASE}/saturation_curve.ipynb`,
+    status: "ready",
+  },
   // ── Coming Soon ──────────────────────────────────────────────────
   {
     id: "02_gpu_analysis",
