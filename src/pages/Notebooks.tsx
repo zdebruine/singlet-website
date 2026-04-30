@@ -191,13 +191,13 @@ const NOTEBOOKS: Notebook[] = [
   },
   {
     id: "1pz_format",
-    title: ".1pz Format Deep Dive",
+    title: ".1pz Format: 8.7× Smaller Than h5ad",
     description:
-      "Explore the .1pz compressed sparse matrix format: 13× compression, 4 GB/s decode, embedded metadata.",
+      "Read/write .1pz sparse matrices: 678K cells × 38K genes in 15 MB (vs 133 MB h5ad). Benchmarks, format comparison, load_dir() with full metadata.",
     icon: <FileCode size={20} />,
-    tags: ["format", "compression", "1pz"],
+    tags: ["format", "compression", "1pz", "benchmark"],
     githubUrl: `${BASE}/1pz_format.ipynb`,
-    status: "blocked",
+    status: "ready",
   },
   {
     id: "protocol_detection",
@@ -222,7 +222,7 @@ const Notebooks = () => (
             Notebooks & Tutorials
           </h1>
           <p className="text-muted-foreground max-w-2xl">
-            8 executed Jupyter notebooks covering data loading, catalog exploration, formal equivalence, QC profiling, doublet detection, cell cycle scoring, and corpus analytics — plus 4 more coming soon.
+            8 executed Jupyter notebooks covering data loading, catalog exploration, formal equivalence, QC profiling, doublet detection, cell cycle scoring, and corpus analytics — plus 1 more coming soon (GPU analysis).
           </p>
         </div>
 
