@@ -16,6 +16,15 @@ interface BlogPost {
 // Static blog posts until Supabase blog_posts table is live
 const POSTS: BlogPost[] = [
   {
+    slug: "1000-samples-milestone",
+    title: "1,000 Samples: The Singlet Atlas Crosses a Milestone",
+    date: "2026-04-30",
+    summary:
+      "The singlet atlas has crossed 1,000 successfully processed samples — 2.94M cells, 506 GEO series, 5 species, 15+ protocols. All uniformly processed with singlify.",
+    tags: ["milestone", "corpus", "atlas", "1000"],
+    author: "singlet-product",
+  },
+  {
     slug: "notebook-collection-complete",
     title: "18 Reproducibility Notebooks: Every singlify Feature Validated",
     date: "2026-04-30",

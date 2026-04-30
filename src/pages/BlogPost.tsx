@@ -1481,6 +1481,85 @@ The test suite verifies all metadata loading paths: dimensions, gene names, barc
 [View the Notebook →](https://github.com/Singlet-Bio/singlet/blob/main/notebooks/sample_qc_report.ipynb) | [Install: pip install singlet-bio →](https://github.com/Singlet-Bio/singlet)
     `,
   },
+  "1000-samples-milestone": {
+    title: "1,000 Samples: The Singlet Atlas Crosses a Milestone",
+    date: "2026-04-30",
+    tags: ["milestone", "corpus", "atlas", "1000"],
+    content: `
+## 1,000 Successfully Processed Samples
+
+The singlet atlas has crossed a significant milestone: **1,000 single-cell samples** processed end-to-end by singlify, producing **2.94 million cells** ready for analysis.
+
+## By the Numbers
+
+| Metric | Value |
+|--------|-------|
+| **Successful samples** | 1,001 |
+| **Total cells** | 2,941,261 |
+| **GEO series** | 506 |
+| **Species** | 5 |
+| **Protocols detected** | 15+ |
+| **Median mapping rate** | 79.6% |
+| **Median cells/sample** | 1,188 |
+
+## Species Breakdown
+
+| Species | Samples | % |
+|---------|---------|---|
+| Homo sapiens | 256 | 25.6% |
+| Mus musculus | 163 | 16.3% |
+| Macaca mulatta | 24 | 2.4% |
+| Drosophila melanogaster | 11 | 1.1% |
+| Gallus gallus | 8 | 0.8% |
+| Mixed/other | — | — |
+
+## Protocol Distribution (top 5)
+
+| Protocol | Samples |
+|----------|---------|
+| 10x Chromium 3' v3 | 200 |
+| 10x Chromium 3' v2 | 83 |
+| 10x (auto-detected) | 71 |
+| CEL-Seq2 | 29 |
+| sci-RNA-seq | 28 |
+
+## What "1,000 Samples" Means
+
+Every sample has been:
+1. **Downloaded** from NCBI SRA
+2. **Aligned** with STAR (singlet-lite optimized build)
+3. **Quantified** — exon-level counts, splice junctions, UMI deduplication
+4. **QC'd** — mapping rate, saturation, cell calling (EmptyDrops)
+5. **Annotated** — doublet scores, cell cycle phases, sex calling, ancestry inference
+6. **Compressed** — .1pz format (8.7× smaller than h5ad)
+7. **Cataloged** — searchable via the singlet-bio Python package
+
+## What's Next
+
+- **2,000 samples** — 1,400 more samples are in the pipeline (FAIL status, many recoverable)
+- **Non-host transcriptomics** — viral/bacterial detection coming soon
+- **GPU analysis** — singlet-gpu will enable atlas-scale dimensionality reduction
+- **PyPI release** — \`pip install singlet-bio\` from PyPI (currently GitHub-only)
+
+## Try It
+
+\`\`\`python
+import singlet
+
+singlet.summary()
+# → 2,398 samples, 1,001 SUCCESS, 5 species, 2.94M cells
+
+# Browse the 1,000+ successful samples
+df = singlet.catalog()
+success = df[df['n_success'] > 0]
+print(f"{len(success)} series with successful samples")
+\`\`\`
+
+---
+
+[Browse the Atlas →](https://singlet.bio/browse) | [View Notebooks →](https://singlet.bio/notebooks) | [Install singlet-bio →](https://github.com/Singlet-Bio/singlet)
+    `,
+  },
   "notebook-collection-complete": {
     title: "18 Reproducibility Notebooks: Every singlify Feature Validated",
     date: "2026-04-30",
