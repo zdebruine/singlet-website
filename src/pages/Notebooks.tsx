@@ -158,6 +158,16 @@ const NOTEBOOKS: Notebook[] = [
     githubUrl: `${BASE}/rna_velocity.ipynb`,
     status: "ready",
   },
+  {
+    id: "pipeline_outputs",
+    title: "Pipeline Outputs Reference",
+    description:
+      "Complete catalog of all 40+ files singlify produces per sample: count matrices, velocity, splicing, variants, QC, metadata. Loading guide included.",
+    icon: <FileCode size={20} />,
+    tags: ["reference", "outputs", "guide"],
+    githubUrl: `${BASE}/pipeline_outputs.ipynb`,
+    status: "ready",
+  },
   // ── Coming Soon ──────────────────────────────────────────────────
   {
     id: "02_gpu_analysis",
