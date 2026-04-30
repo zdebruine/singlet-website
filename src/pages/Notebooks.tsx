@@ -88,6 +88,16 @@ const NOTEBOOKS: Notebook[] = [
     githubUrl: `${BASE}/01_load_and_explore.ipynb`,
     status: "ready",
   },
+  {
+    id: "cell_cycle",
+    title: "Cell Cycle Scoring",
+    description:
+      "Visualize cell cycle phase assignments (G1/S/G2M) from singlify output. 75K cells: 93% G1, 5% G2M, 2.5% S. Score distributions + QC correlations.",
+    icon: <TestTube size={20} />,
+    tags: ["cell-cycle", "qc", "proliferation"],
+    githubUrl: `${BASE}/cell_cycle.ipynb`,
+    status: "ready",
+  },
   // ── Coming Soon ──────────────────────────────────────────────────
   {
     id: "02_gpu_analysis",
@@ -142,7 +152,7 @@ const Notebooks = () => (
             Notebooks & Tutorials
           </h1>
           <p className="text-muted-foreground max-w-2xl">
-            7 executed Jupyter notebooks covering data loading, catalog exploration, formal equivalence, QC profiling, doublet detection, and corpus analytics — plus 4 more coming soon.
+            8 executed Jupyter notebooks covering data loading, catalog exploration, formal equivalence, QC profiling, doublet detection, cell cycle scoring, and corpus analytics — plus 4 more coming soon.
           </p>
         </div>
 
