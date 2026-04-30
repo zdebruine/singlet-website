@@ -282,6 +282,16 @@ print(f"{adata.n_obs} cells × {adata.n_vars} genes")
                   ))}
                 </div>
                 <div className="flex gap-3">
+                  {nb.status !== "blocked" && (
+                    <a
+                      href={`/notebooks/${nb.id}.html`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                    >
+                      <Play size={10} /> View
+                    </a>
+                  )}
                   <a
                     href={nb.githubUrl}
                     target="_blank"
