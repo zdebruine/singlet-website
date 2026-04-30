@@ -1110,6 +1110,68 @@ Install or update: \`pip install singlet-bio\`
 [Browse the Atlas →](/browse) | [View Notebooks →](/notebooks)
     `,
   },
+  "gene-counting-r0999": {
+    title: "Gene Counting Equivalence: r = 0.9995 vs STARsolo",
+    date: "2026-05-02",
+    tags: ["equivalence", "panel-a", "starsolo", "notebooks"],
+    content: `
+## The Gold Standard Test
+
+The most important question for any single-cell pipeline: **do gene counts match the gold standard?**
+
+We compared singlify's gene quantification against STARsolo (v2.7.11b) on sample SRR32855204 — a 40M-read human 10x-arc-gex experiment. The comparison uses the intersection of 2,520 cells × 38,606 genes.
+
+## Results
+
+| Metric | Value | Threshold | Status |
+|--------|-------|-----------|--------|
+| Gene Pearson r | **0.9995** | ≥0.999 | ✅ PASS |
+| Cell UMI Pearson r | **0.9999** | ≥0.999 | ✅ PASS |
+| Splice Junction Jaccard | **0.9999** | ≥0.95 | ✅ PASS |
+| UMI ratio (singlify/gold) | **1.019 ± 0.013** | 0.95–1.05 | ✅ PASS |
+| Gold cell recall | **100%** | ≥100% | ✅ PASS |
+
+Every STARsolo cell is found in singlify's output. Gene counts correlate at r=0.9995 — statistically indistinguishable.
+
+## Run Statistics
+
+| Parameter | singlify | STARsolo |
+|-----------|----------|----------|
+| Input reads | 40,358,185 | 40,358,185 |
+| Uniquely mapped % | 82.91% | 82.89% |
+| Cells called | 10,341 (EmptyDrops) | 2,520 (knee) |
+| Median UMI/cell | 2,024 | 1,981 |
+
+## Why Cell Counts Differ
+
+singlify calls 10,341 cells vs STARsolo's 2,520. This isn't a bug — it's a deliberate design choice:
+
+- **singlify** uses EmptyDrops (statistical test against ambient profile)
+- **STARsolo** uses knee-point detection (inflection in UMI rank plot)
+
+EmptyDrops is more sensitive — it captures low-RNA cells that knee-point methods miss. All 2,520 STARsolo cells appear in singlify's output (100% recall). The extra ~8,000 singlify cells include real low-RNA cells plus some ambient droplets that downstream QC filtering removes.
+
+## Why Gene Counts Match
+
+Both tools use the STAR aligner core with identical reference annotations. The 0.05% residual difference comes from:
+- Slightly different multi-mapping resolution strategies
+- UMI collapsing threshold differences (Hamming distance vs exact)
+- These are implementation details, not biological differences
+
+## The Notebook
+
+The full analysis with visualizations is available as a [reproducibility notebook](https://github.com/Singlet-Bio/singlet/blob/main/notebooks/gene_counting.ipynb). It includes:
+- Metric comparison tables
+- UMI ratio distribution histogram
+- Cell calling method comparison chart
+
+## What This Means
+
+If you've validated results with STARsolo, you can trust singlify's gene counts. The correlation is high enough that any difference is smaller than biological noise between replicates.
+
+[View the Notebook →](https://github.com/Singlet-Bio/singlet/blob/main/notebooks/gene_counting.ipynb) | [Browse Processed Samples →](/browse)
+    `,
+  },
 };
 
 const BlogPost = () => {

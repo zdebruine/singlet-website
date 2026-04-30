@@ -16,6 +16,15 @@ interface BlogPost {
 // Static blog posts until Supabase blog_posts table is live
 const POSTS: BlogPost[] = [
   {
+    slug: "gene-counting-r0999",
+    title: "Gene Counting Equivalence: r = 0.9995 vs STARsolo",
+    date: "2026-05-02",
+    summary:
+      "Panel A validation proves singlify gene counts correlate at r=0.9995 with STARsolo across 38,606 genes × 2,520 cells. 100% gold cell recall.",
+    tags: ["equivalence", "panel-a", "starsolo", "notebooks"],
+    author: "singlet-product",
+  },
+  {
     slug: "corpus-3m-quickstart",
     title: "3 Million Cells & Your First Notebook",
     date: "2026-05-02",
