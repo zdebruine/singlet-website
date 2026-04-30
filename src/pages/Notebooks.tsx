@@ -148,6 +148,16 @@ const NOTEBOOKS: Notebook[] = [
     githubUrl: `${BASE}/splicing.ipynb`,
     status: "ready",
   },
+  {
+    id: "rna_velocity",
+    title: "RNA Velocity Matrices",
+    description:
+      "Spliced + unspliced count matrices ready for scVelo. Per-cell intronic fraction analysis and velocity readiness assessment.",
+    icon: <Play size={20} />,
+    tags: ["velocity", "scvelo", "spliced"],
+    githubUrl: `${BASE}/rna_velocity.ipynb`,
+    status: "ready",
+  },
   // ── Coming Soon ──────────────────────────────────────────────────
   {
     id: "02_gpu_analysis",
