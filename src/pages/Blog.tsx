@@ -16,6 +16,15 @@ interface BlogPost {
 // Static blog posts until Supabase blog_posts table is live
 const POSTS: BlogPost[] = [
   {
+    slug: "doublet-detection-live",
+    title: "Doublet Detection: Separating Singlets from Multiplets",
+    date: "2026-05-03",
+    summary:
+      "singlify's UMI-based doublet detection achieves 20× score separation between singlets and doublets. 74K cells analyzed, 13.8% doublet rate, clean bimodal threshold.",
+    tags: ["doublets", "qc", "notebooks", "panel-h"],
+    author: "singlet-product",
+  },
+  {
     slug: "gene-counting-r0999",
     title: "Gene Counting Equivalence: r = 0.9995 vs STARsolo",
     date: "2026-05-02",

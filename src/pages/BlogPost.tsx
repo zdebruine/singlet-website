@@ -5,6 +5,69 @@ import Footer from "@/components/Footer";
 
 // Blog post content (will move to Supabase/MDX later)
 const POST_CONTENT: Record<string, { title: string; date: string; tags: string[]; content: string }> = {
+  "doublet-detection-live": {
+    title: "Doublet Detection: Separating Singlets from Multiplets",
+    date: "2026-05-03",
+    tags: ["doublets", "qc", "notebooks", "panel-h"],
+    content: `
+## The Problem
+
+In droplet-based single-cell experiments, ~5–15% of droplets capture two or more cells (doublets/multiplets). These create spurious intermediate cell types that confuse downstream clustering and differential expression.
+
+## singlify's Approach
+
+singlify uses a UMI-count heuristic with adaptive thresholding:
+
+1. Estimate expected UMI count per singlet from the population distribution
+2. Compute \`doublet_score = total_umis / expected_singlet_umis\` for each cell
+3. Apply bimodal mixture model to find the optimal singlet/doublet boundary
+
+## Real Results: GSM3573650 (74,236 cells)
+
+| Metric | Value |
+|--------|-------|
+| Singlets | 63,981 (86.2%) |
+| Doublets detected | 10,255 (13.8%) |
+| Singlet mean score | 1.0 |
+| Doublet mean score | 25.6 |
+| Score separation | >20× difference |
+| Score range (singlets) | 0.44 – 2.0 |
+| Score range (doublets) | 2.0 – 245.9 |
+
+## Clear Separation
+
+The doublet score produces a bimodal distribution with excellent separation:
+- **Singlets** cluster tightly around score = 1.0
+- **Doublets** have scores >> 2.0 (their UMI count is 2–250× the singlet expectation)
+
+The threshold at score = 2.0 cleanly separates the two populations with minimal ambiguity.
+
+## Practical Implications
+
+The 13.8% doublet rate is consistent with expectations for ~74K cells loaded (10x estimates ~0.8% per 1,000 cells, giving ~60% for this loading density when combined with EmptyDrops' liberal cell calling).
+
+Users should:
+1. Filter \`is_doublet == True\` cells before clustering
+2. Or use \`doublet_score\` as a continuous QC weight
+3. Note: some "doublets" may be large cells with high RNA content
+
+## Try It
+
+\`\`\`bash
+pip install singlet-bio matplotlib pandas
+\`\`\`
+
+The [doublet detection notebook](https://github.com/Singlet-Bio/singlet/blob/main/notebooks/doublet_detection.ipynb) walks through the full analysis with visualizations.
+
+## Corpus Update
+
+With batch c188 completing, the atlas now contains:
+- **2,319 samples** across **1,151 series**
+- **957 successful** (41.3% success rate)
+- **2.82M total cells**
+- **7 species**
+`,
+  },
   "pipeline-failure-analysis": {
     title: "Why Samples Fail: Anatomy of 1,094 Pipeline Failures",
     date: "2026-04-29",
