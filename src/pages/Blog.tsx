@@ -16,6 +16,15 @@ interface BlogPost {
 // Static blog posts until Supabase blog_posts table is live
 const POSTS: BlogPost[] = [
   {
+    slug: "corpus-3m-quickstart",
+    title: "3 Million Cells & Your First Notebook",
+    date: "2026-05-02",
+    summary:
+      "The singlet atlas crosses 3M cells across 2,250 samples and 1,131 GEO series. Plus: a new quickstart notebook demonstrating the full Python API.",
+    tags: ["milestone", "corpus", "notebooks", "python"],
+    author: "singlet-product",
+  },
+  {
     slug: "browse-featured-series",
     title: "Browse Upgrade: Featured Series, CSV Export & Corpus Comparison",
     date: "2026-05-01",

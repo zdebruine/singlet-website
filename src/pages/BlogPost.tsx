@@ -1049,6 +1049,67 @@ No static JSON files, no manual updates. As new samples are processed, the dashb
 [View the Pipeline Dashboard →](/pipeline)
     `,
   },
+  "corpus-3m-quickstart": {
+    title: "3 Million Cells & Your First Notebook",
+    date: "2026-05-02",
+    tags: ["milestone", "corpus", "notebooks", "python"],
+    content: `
+## Corpus Milestone: 3M Cells
+
+The singlet atlas has crossed **3 million cells** across 2,250 processed samples from 1,131 GEO series. Key stats:
+
+| Metric | Value |
+|--------|-------|
+| Total samples | 2,250 |
+| Successful | 924 (41%) |
+| GEO series | 1,131 |
+| Species | 7 |
+| Total cells | 3,027,103 |
+| Median cells/sample | 1,167 |
+| Median mapping rate | 80.4% |
+
+The corpus spans 7 species: human, mouse, macaque, zebrafish, fruit fly, chicken, and chimpanzee — covering the most commonly studied organisms in single-cell biology.
+
+## New: Quickstart Notebook
+
+We've published a [quickstart notebook](https://github.com/Singlet-Bio/singlet/blob/main/notebooks/quickstart.ipynb) that demonstrates the full singlet Python API in under 2 minutes:
+
+\`\`\`python
+import singlet
+
+# One-line summary
+singlet.summary()
+# → singlet atlas: 2,250 samples (924 SUCCESS) • 1,131 series • 7 species • 2.7M cells
+
+# Browse all species
+singlet.species()
+# → ['Danio rerio', 'Drosophila melanogaster', 'Homo sapiens', 'Mus musculus', ...]
+
+# Find the largest studies
+singlet.top_series(n=5)
+
+# Filter by organism + quality
+singlet.samples(organism='Mus musculus', status='SUCCESS', min_cells=1000)
+\`\`\`
+
+## Package Improvements
+
+This release also fixes two bugs in the catalog API:
+
+- \`species()\` now correctly parses multi-organism series
+- \`datasets()\` handles both legacy and current column naming
+
+Install or update: \`pip install singlet-bio\`
+
+## What's Next
+
+- Gene counting reproducibility notebook (Panel A: r=0.999 vs STARsolo)
+- .1pz format deep-dive notebook
+- Automatic catalog refresh from Supabase
+
+[Browse the Atlas →](/browse) | [View Notebooks →](/notebooks)
+    `,
+  },
 };
 
 const BlogPost = () => {

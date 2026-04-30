@@ -122,7 +122,7 @@ const NOTEBOOKS: Notebook[] = [
     id: "protocol_detection",
     title: "Protocol Auto-Detection",
     description:
-      "Corpus-wide analysis of singlify's protocol auto-detection across 29 protocols and 1,814 samples.",
+      "Corpus-wide analysis of singlify's protocol auto-detection across 29 protocols and 2,250 samples.",
     icon: <Search size={20} />,
     tags: ["protocol", "autodetect"],
     githubUrl: `${BASE}/protocol_detection.ipynb`,
@@ -140,7 +140,7 @@ const NOTEBOOKS: Notebook[] = [
     id: "corpus_analytics",
     title: "Corpus Analytics Dashboard",
     description:
-      "Full pipeline corpus analysis: 1,814 samples, 686 successes, 2.3M cells, protocol/species/quality distributions.",
+      "Full pipeline corpus analysis: 2,250 samples, 924 successes, 3M cells, protocol/species/quality distributions.",
     icon: <BarChart3 size={20} />,
     tags: ["analytics", "dashboard", "corpus"],
     githubUrl: `${BASE}/corpus_analytics.ipynb`,
