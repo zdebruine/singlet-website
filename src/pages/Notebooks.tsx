@@ -78,17 +78,17 @@ const NOTEBOOKS: Notebook[] = [
     githubUrl: `${BASE}/corpus_analytics.ipynb`,
     status: "ready",
   },
-  // ── Coming Soon ──────────────────────────────────────────────────
   {
     id: "01_load_and_explore",
     title: "Load and Explore",
     description:
-      "Load a pre-processed sample from the Singlet Atlas as AnnData, examine QC metrics, and run basic clustering.",
+      "Load 75K cells from a singlify output directory with singlet.load_dir(), filter doublets, run full scanpy pipeline (PCA → UMAP → Leiden).",
     icon: <BookOpen size={20} />,
-    tags: ["beginner", "scanpy", "qc"],
+    tags: ["beginner", "scanpy", "clustering"],
     githubUrl: `${BASE}/01_load_and_explore.ipynb`,
-    status: "blocked",
+    status: "ready",
   },
+  // ── Coming Soon ──────────────────────────────────────────────────
   {
     id: "02_gpu_analysis",
     title: "GPU-Accelerated Analysis",
@@ -142,7 +142,7 @@ const Notebooks = () => (
             Notebooks & Tutorials
           </h1>
           <p className="text-muted-foreground max-w-2xl">
-            6 executed Jupyter notebooks covering catalog exploration, formal equivalence benchmarks against STARsolo, QC profiling, doublet detection, and corpus analytics — plus 5 more coming soon.
+            7 executed Jupyter notebooks covering data loading, catalog exploration, formal equivalence, QC profiling, doublet detection, and corpus analytics — plus 4 more coming soon.
           </p>
         </div>
 
