@@ -16,6 +16,15 @@ interface BlogPost {
 // Static blog posts until Supabase blog_posts table is live
 const POSTS: BlogPost[] = [
   {
+    slug: "17-notebooks-catalog",
+    title: "17 Notebooks + Bundled Catalog: singlet-bio Is Self-Contained",
+    date: "2026-05-04",
+    summary:
+      "The singlet-bio package now ships with a 2,364-sample catalog (parquet) and 17 executed notebooks covering QC, genomic features, and validation.",
+    tags: ["milestone", "notebooks", "python", "catalog"],
+    author: "singlet-product",
+  },
+  {
     slug: "sample-qc-report",
     title: "Sample QC Report: Everything in One Function Call",
     date: "2026-05-03",

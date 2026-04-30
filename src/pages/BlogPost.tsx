@@ -5,6 +5,100 @@ import Footer from "@/components/Footer";
 
 // Blog post content (will move to Supabase/MDX later)
 const POST_CONTENT: Record<string, { title: string; date: string; tags: string[]; content: string }> = {
+  "17-notebooks-catalog": {
+    title: "17 Notebooks + Bundled Catalog: singlet-bio Is Self-Contained",
+    date: "2026-05-04",
+    tags: ["milestone", "notebooks", "python", "catalog"],
+    content: `
+## The Milestone
+
+The singlet-bio Python package now includes everything a researcher needs to explore 2,364 single-cell samples — no external downloads required.
+
+**Bundled catalog** (84 KB total):
+- \`catalog_v1.parquet\` — 1,169 GEO series with organism, cells, protocol, mapping rate
+- \`sample_index.parquet\` — 2,364 samples with status, QC metrics, timing
+
+**17 executed notebooks** covering every singlify capability:
+
+## Notebook Collection
+
+### Getting Started
+| Notebook | What It Shows |
+|----------|---------------|
+| quickstart | Browse the catalog — filters, statistics, species breakdown |
+| 01_load_and_explore | Load 75K cells, cluster with scanpy (PCA→UMAP→Leiden) |
+| sample_qc_report | One-call QC — UMIs, genes, doublets, cell cycle, ancestry |
+| pipeline_outputs | All 40+ files singlify produces per sample |
+
+### QC & Quality Control
+| Notebook | What It Shows |
+|----------|---------------|
+| cell_calling | EmptyDrops deviance testing — 74K cells called |
+| doublet_detection | UMI-based doublets (13.8% rate, 20× score separation) |
+| ambient_rna | Ambient RNA contamination profiling |
+| cell_cycle | G1/S/G2M phase scoring |
+| saturation_curve | Sequencing depth vs discovery |
+
+### Genomic Features
+| Notebook | What It Shows |
+|----------|---------------|
+| rna_velocity | Spliced + unspliced matrices for scVelo |
+| splicing | 37,909 alternative splicing events |
+| mt_variants | Mitochondrial heteroplasmy for lineage tracing |
+| ancestry_calling | 5 super-population inference |
+| sex_calling | 100% concordance with known sex |
+
+### Validation
+| Notebook | What It Shows |
+|----------|---------------|
+| gene_counting | r = 0.9995 vs STARsolo |
+| corpus_analytics | QC distributions across 975 samples |
+| protocol_detection | 15+ protocols auto-detected |
+
+## Install & Explore
+
+\`\`\`python
+pip install "singlet-bio @ git+https://github.com/Singlet-Bio/singlet#subdirectory=python"
+
+import singlet
+
+# Browse the bundled catalog (no downloads needed)
+catalog = singlet.catalog()
+print(f"{len(catalog)} series, {catalog['n_cells'].sum():,.0f} cells")
+# → 1,169 series, 2,895,233 cells
+
+# Filter by organism
+human = singlet.search(organism="Homo sapiens")
+print(f"{len(human)} human samples")
+
+# Load a processed sample
+adata = singlet.load_dir("/path/to/quant/GSM3573650")
+# obs: total_umis, total_genes, mt_pct, doublet_score, phase, s_score, g2m_score
+# uns: ancestry, sex_call, summary, saturation_curve
+\`\`\`
+
+## Atlas Stats
+
+| Metric | Value |
+|--------|-------|
+| Total samples | 2,364 |
+| Successful | 982 (42%) |
+| GEO series | 1,169 |
+| Species | 7 |
+| Total cells | 2,895,233 |
+| Notebooks | 17 (all executed) |
+| Package size | < 100 KB catalog + C extension |
+
+## What's Next
+
+- **PyPI publishing** — \`pip install singlet-bio\` without git URL
+- **Zenodo DOI** for catalog versioning
+- **More notebooks** as new features ship (cell calling, CITE-seq, non-host)
+- **MCP server** for AI-assistant access to the atlas
+
+[Browse Notebooks →](https://github.com/Singlet-Bio/singlet/tree/main/notebooks) | [Install →](https://github.com/Singlet-Bio/singlet)
+    `,
+  },
   "load-dir-feature": {
     title: "New: singlet.load_dir() — Pipeline Output → AnnData in One Call",
     date: "2026-05-03",
