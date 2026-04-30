@@ -65,7 +65,7 @@ const POSTS: BlogPost[] = [
     title: "3 Million Cells & Your First Notebook",
     date: "2026-05-02",
     summary:
-      "The singlet atlas crosses 3M cells across 2,250 samples and 1,131 GEO series. Plus: a new quickstart notebook demonstrating the full Python API.",
+      "The singlet atlas crosses 3M cells across 2,368 samples and 1,171 GEO series. Plus: a new quickstart notebook demonstrating the full Python API.",
     tags: ["milestone", "corpus", "notebooks", "python"],
     author: "singlet-product",
   },
