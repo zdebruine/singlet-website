@@ -350,7 +350,7 @@ const Browse = () => {
                   <button
                     onClick={() => {
                       if (!samples.length) return;
-                      const cols = ["gsm_id", "gse_id", "organism", "status", "mapping_rate", "cells_called", "median_genes", "median_umis", "mt_pct", "doublet_rate", "modality"];
+                      const cols = ["gsm_id", "gse_id", "organism", "protocol", "status", "source", "title", "mapping_rate", "cells_called", "median_genes", "median_umis", "mt_pct", "doublet_rate"];
                       const header = cols.join(",");
                       const rows = samples.map((s: Record<string, unknown>) => cols.map((c) => {
                         const v = s[c];
