@@ -638,7 +638,7 @@ python -m singlet.mcp.server
               code={`# These natural language queries get routed to MCP tools:
 
 "How many samples are in the singlet atlas?"
-# → singlet_stats → "3,188 samples (1,365 SUCCESS), 4.0M cells, 16 species"
+# → singlet_stats → "3,188 samples (1,365 SUCCESS), 4.0M cells, 8 species"
 
 "Find mouse brain scRNA-seq datasets"
 # → singlet_browse(organism="Mus musculus", tissue="brain")

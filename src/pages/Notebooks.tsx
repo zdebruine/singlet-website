@@ -78,7 +78,7 @@ const NOTEBOOKS: Notebook[] = [
     id: "corpus_analytics",
     title: "Corpus Analytics",
     description:
-      "Atlas-wide quality distributions: mapping rates, cells/sample, genes/cell across 1,365 successful samples and 16 species.",
+      "Atlas-wide quality distributions: mapping rates, cells/sample, genes/cell across 1,365 successful samples and 8 species.",
     icon: <BarChart3 size={20} />,
     tags: ["analytics", "dashboard", "corpus"],
     githubUrl: `${BASE}/corpus_analytics.ipynb`,
