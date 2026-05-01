@@ -37,9 +37,15 @@ def get_corpus_stats():
     success = [r for r in all_data if r["status"] == "SUCCESS"]
     n_success = len(success)
     total_cells = sum(r.get("cells_called") or 0 for r in success)
-    species = len(
-        set(r["organism"] for r in all_data if r.get("organism") and r["organism"] != "unknown")
-    )
+    # Deduplicate species (split combo organisms like "Homo sapiens; Mus musculus")
+    all_species = set()
+    for r in success:
+        org = r.get("organism") or ""
+        for s in org.replace(";", ",").split(","):
+            s = s.strip()
+            if s and s != "unknown":
+                all_species.add(s)
+    species = len(all_species)
     protocols = len(
         set(r["protocol"] for r in success if r.get("protocol") and r["protocol"].strip())
     )
