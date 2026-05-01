@@ -107,7 +107,7 @@ const AtlasDocs = () => {
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
   }, []);
   const { data: stats } = useCorpusStats();
-  const totalSamples = stats?.total_samples?.toLocaleString() ?? "2,711+";
+  const totalSamples = stats?.total_samples?.toLocaleString() ?? "2,712+";
   const successSamples = stats?.success_samples?.toLocaleString() ?? "1,139+";
   const totalCells = stats?.total_cells ? (stats.total_cells / 1e6).toFixed(1) + "M" : "3.3M";
   const seriesCount = stats?.series_count?.toLocaleString() ?? "1,300+";
