@@ -78,7 +78,7 @@ const NOTEBOOKS: Notebook[] = [
     id: "corpus_analytics",
     title: "Corpus Analytics",
     description:
-      "Atlas-wide quality distributions: mapping rates, cells/sample, genes/cell across 1,334 successful samples and 17 species.",
+      "Atlas-wide quality distributions: mapping rates, cells/sample, genes/cell across 1,349 successful samples and 16 species.",
     icon: <BarChart3 size={20} />,
     tags: ["analytics", "dashboard", "corpus"],
     githubUrl: `${BASE}/corpus_analytics.ipynb`,
@@ -221,7 +221,7 @@ const NOTEBOOKS: Notebook[] = [
     id: "protocol_detection",
     title: "Protocol Auto-Detection",
     description:
-      "Corpus-wide protocol detection: 28 protocols across 1,334+ samples. QC metrics by protocol, mapping rates, cell recovery. Fully automated.",
+      "Corpus-wide protocol detection: 28 protocols across 1,349+ samples. QC metrics by protocol, mapping rates, cell recovery. Fully automated.",
     icon: <Search size={20} />,
     tags: ["protocol", "autodetect"],
     githubUrl: `${BASE}/protocol_detection.ipynb`,

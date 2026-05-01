@@ -108,10 +108,10 @@ const AtlasDocs = () => {
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
   }, []);
   const { data: stats } = useCorpusStats();
-  const totalSamples = stats?.total_samples?.toLocaleString() ?? "3,139+";
-  const successSamples = stats?.success_samples?.toLocaleString() ?? "1,334+";
+  const totalSamples = stats?.total_samples?.toLocaleString() ?? "3,158+";
+  const successSamples = stats?.success_samples?.toLocaleString() ?? "1,349+";
   const totalCells = stats?.total_cells ? (stats.total_cells / 1e6).toFixed(1) + "M" : "3.9M";
-  const seriesCount = stats?.series_count?.toLocaleString() ?? "1,385+";
+  const seriesCount = stats?.series_count?.toLocaleString() ?? "1,392+";
 
   return (
     <div className="min-h-screen bg-background">
@@ -638,7 +638,7 @@ python -m singlet.mcp.server
               code={`# These natural language queries get routed to MCP tools:
 
 "How many samples are in the singlet atlas?"
-# → singlet_stats → "3,139 samples (1,334 SUCCESS), 3.9M cells, 17 species"
+# → singlet_stats → "3,158 samples (1,349 SUCCESS), 3.9M cells, 16 species"
 
 "Find mouse brain scRNA-seq datasets"
 # → singlet_browse(organism="Mus musculus", tissue="brain")
