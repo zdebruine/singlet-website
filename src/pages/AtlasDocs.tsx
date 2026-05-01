@@ -298,6 +298,24 @@ singlet.species()
 #  'Drosophila melanogaster', 'Gallus gallus', ...]`}
               title="singlet.species()"
             />
+
+            <h3 className="font-display text-base font-semibold text-foreground mb-3 mt-8">Tissue / source breakdown</h3>
+            <CodeBlock
+              code={`# See tissue distribution across SUCCESS samples
+tissues = singlet.tissues()
+print(tissues.head(10))
+#                  source  count
+# 0                 blood     94
+# 1            K562 cells     59
+# 2                  PBMC     38
+# 3                 brain     32
+# 4           bone marrow     29
+
+# Search samples by tissue
+brain = singlet.samples(status="SUCCESS")
+brain = brain[brain['source'].str.contains('brain', case=False, na=False)]`}
+              title="singlet.tissues()"
+            />
           </section>
 
           <div className="h-px bg-border/50 mx-auto my-6" />
