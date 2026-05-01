@@ -380,23 +380,23 @@ print(failures.to_string(index=False))
 
             <h3 className="font-display text-base font-semibold text-foreground mt-6 mb-3">Cell Type Distribution</h3>
             <p className="text-sm text-muted-foreground leading-relaxed mb-4">
-              Explore cell type annotations extracted from GEO metadata. Covers ~34% of SUCCESS samples with 41 normalized categories.
+              Explore cell type annotations extracted from GEO characteristics and source metadata. Covers 50% of SUCCESS samples with 42 normalized categories.
             </p>
             <CodeBlock
-              code={`# Cell type annotations from GEO source metadata
+              code={`# Cell type annotations from GEO characteristics metadata
 ct = singlet.cell_types()
 print(ct.head(10).to_string(index=False))
 #        cell_type  count
-#             PBMC    107
+#             PBMC    131
 # cell line (K562)     63
-#          T cells     30
-# stem cell (iPSC)     19
-# cell line (THP-1)    15
-#         organoid     14
-#      fibroblasts     14
-#      lymphocytes     13
-#     CD8+ T cells      8
-#     CD4+ T cells      8`}
+#      tumor cells     55
+#          T cells     51
+#     immune cells     38
+#     CD4+ T cells     35
+# stem cells (iPSC)    32
+#     CD8+ T cells     31
+#          B cells     25
+#      CAR-T cells     21`}
               title="singlet.cell_types()"
             />
           </section>
