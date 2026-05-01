@@ -107,8 +107,8 @@ const AtlasDocs = () => {
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
   }, []);
   const { data: stats } = useCorpusStats();
-  const totalSamples = stats?.total_samples?.toLocaleString() ?? "2,712+";
-  const successSamples = stats?.success_samples?.toLocaleString() ?? "1,139+";
+  const totalSamples = stats?.total_samples?.toLocaleString() ?? "2,724+";
+  const successSamples = stats?.success_samples?.toLocaleString() ?? "1,143+";
   const totalCells = stats?.total_cells ? (stats.total_cells / 1e6).toFixed(1) + "M" : "3.3M";
   const seriesCount = stats?.series_count?.toLocaleString() ?? "1,300+";
 
@@ -359,6 +359,23 @@ gold = gold[(gold['mapping_rate'] >= 0.7) & (gold['median_genes'] >= 500) & (gol
 print(f"{len(gold)} gold-tier samples")`}
               title="singlet.quality_tiers()"
             />
+
+            <h3 className="font-display text-base font-semibold text-foreground mb-3 mt-8">Failure categories</h3>
+            <p className="text-sm text-muted-foreground leading-relaxed mb-4">
+              Understand why non-SUCCESS samples failed. Shows breakdown by failure type for pipeline health monitoring.
+            </p>
+            <CodeBlock
+              code={`# Pipeline failure breakdown
+failures = singlet.failure_categories()
+print(failures.to_string(index=False))
+#            category  count   pct
+#       download_fail    746  47.3
+#       align_low_map    407  25.8
+# cells_below_threshold  319  20.2
+#             unknown     69   4.4
+#      pipeline_crash     35   2.2`}
+              title="singlet.failure_categories()"
+            />
           </section>
 
           <div className="h-px bg-border/50 mx-auto my-6" />
@@ -566,6 +583,7 @@ singlet.set_backend("local")  # Local files only`}
                 { fn: "singlet.tissues()", desc: "Normalized tissue distribution across SUCCESS samples (80 categories)." },
                 { fn: "singlet.protocols()", desc: "Protocol distribution across SUCCESS samples." },
                 { fn: "singlet.quality_tiers()", desc: "Quality tier breakdown (gold/silver/bronze) with metrics." },
+                { fn: "singlet.failure_categories()", desc: "Pipeline failure breakdown (download_fail, align_low_map, cells_below_threshold, etc.)." },
                 { fn: "singlet.sample_index(gse_id?)", desc: "Per-sample column offsets within .1pz files. Returns DataFrame." },
               ]}
             />
