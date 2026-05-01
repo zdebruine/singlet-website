@@ -68,6 +68,7 @@ const SECTIONS = [
   { id: "io", label: "File I/O" },
   { id: "annotate", label: "Annotate" },
   { id: "convert", label: "Convert" },
+  { id: "mcp", label: "MCP Tools" },
   { id: "config", label: "Configuration" },
   { id: "reference", label: "API Reference" },
 ] as const;
@@ -541,6 +542,90 @@ adata = singlet.from_zarr("input.zarr")
 # Convert sparse matrix format
 csc = singlet.to_csc(adata.X)  # CSR → CSC`}
               title="Format conversion"
+            />
+          </section>
+
+          <div className="h-px bg-border/50 mx-auto my-6" />
+
+          {/* ────────── MCP TOOLS ────────── */}
+          <section id="mcp" className="pt-16">
+            <h2 className="font-display text-2xl font-bold text-foreground tracking-tightest mb-6">MCP Tools</h2>
+
+            <p className="text-sm text-muted-foreground leading-relaxed mb-6">
+              The singlet MCP (Model Context Protocol) server exposes 10 tools to AI coding assistants —
+              Claude Desktop, VS Code Copilot, Cursor, and any MCP-compatible client. Query the atlas
+              with natural language through your IDE.
+            </p>
+
+            <h3 className="font-display text-base font-semibold text-foreground mb-3">Setup</h3>
+            <CodeBlock
+              code={`# Install with MCP dependencies
+pip install singlet-bio[mcp]
+
+# Run the MCP server (stdio transport)
+python -m singlet.mcp.server
+
+# Or add to your MCP client config (e.g. Claude Desktop):
+# {
+#   "mcpServers": {
+#     "singlet": {
+#       "command": "python",
+#       "args": ["-m", "singlet.mcp.server"]
+#     }
+#   }
+# }`}
+              title="MCP Server Setup"
+            />
+
+            <h3 className="font-display text-base font-semibold text-foreground mb-3 mt-8">Available Tools</h3>
+            <div className="rounded-lg border border-border bg-card overflow-hidden mb-6">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/50 border-b border-border">
+                  <tr>
+                    <th className="text-left px-4 py-2 font-medium text-foreground">Tool</th>
+                    <th className="text-left px-4 py-2 font-medium text-foreground">Description</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {[
+                    ["singlet_stats", "Corpus-wide statistics: total samples, cells, species, protocols"],
+                    ["singlet_search", "Search datasets by keyword, organism, or protocol"],
+                    ["singlet_qc", "Get QC metrics for a specific sample (GSM ID)"],
+                    ["singlet_load", "Get download/access info for a sample"],
+                    ["singlet_browse", "Browse samples with filters (organism, protocol, tissue, status)"],
+                    ["singlet_protocols", "Protocol distribution and success rates"],
+                    ["singlet_quality", "Quality tier breakdown (gold/silver/bronze)"],
+                    ["singlet_tissues", "Tissue distribution across samples (121 categories)"],
+                    ["singlet_failures", "Pipeline failure category breakdown"],
+                  ].map(([tool, desc]) => (
+                    <tr key={tool}>
+                      <td className="px-4 py-2 font-mono text-xs text-primary">{tool}</td>
+                      <td className="px-4 py-2 text-muted-foreground">{desc}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <h3 className="font-display text-base font-semibold text-foreground mb-3">Example Queries</h3>
+            <p className="text-sm text-muted-foreground leading-relaxed mb-4">
+              Once connected, ask your AI assistant natural language questions:
+            </p>
+            <CodeBlock
+              code={`# These natural language queries get routed to MCP tools:
+
+"How many samples are in the singlet atlas?"
+# → singlet_stats → "2,724 samples (1,143 SUCCESS), 3.3M cells, 16 species"
+
+"Find mouse brain scRNA-seq datasets"
+# → singlet_browse(organism="Mus musculus", tissue="brain")
+
+"What's the quality of GSM7026663?"
+# → singlet_qc(gsm_id="GSM7026663") → mapping_rate, genes/cell, etc.
+
+"Why do samples fail in the pipeline?"
+# → singlet_failures → 47% download, 26% alignment, 20% cell calling`}
+              title="Natural Language → MCP Tools"
             />
           </section>
 
