@@ -143,7 +143,7 @@ const Index = () => {
   const [codeTab, setCodeTab] = useState<"python" | "r" | "mcp">("python");
   const stats = [
     { end: 10, suffix: "K+", prefix: "", label: "biological programs" },
-    { end: 10, suffix: "+", prefix: "", label: "species supported" },
+    { end: 16, suffix: "+", prefix: "", label: "species supported" },
     { end: 5, suffix: "ms", prefix: "~", label: "inference latency" },
     { end: 319, suffix: "K+", prefix: "", label: "CRAN downloads" },
   ];
