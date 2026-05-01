@@ -1,5 +1,20 @@
 [
   {
+    "slug": "quality-tiers-gold-silver-bronze",
+    "title": "Quality Tiers: Classifying Atlas Samples into Gold, Silver, and Bronze",
+    "summary": "New quality_tiers() function classifies the 1,139 SUCCESS samples into three tiers based on mapping rate, gene detection, and cell count. 18% gold, 26% silver, 56% bronze.",
+    "tags": [
+      "quality",
+      "tiers",
+      "api",
+      "atlas"
+    ],
+    "content": "## Quality Tiers\n\nNot all single-cell samples are created equal. A high-depth 10x Chromium v3 run from a PBMC sample will have different quality characteristics than a shallow Drop-seq experiment. To help users quickly identify the best data for their use case, singlet now classifies all SUCCESS samples into three quality tiers.\n\n### Tier Definitions\n\n| Tier | Mapping Rate | Median Genes | Cells Called | Current Count |\n|------|-------------|--------------|--------------|---------------|\n| **Gold** | \u2265 70% | \u2265 500 | \u2265 500 | 205 (18%) |\n| **Silver** | \u2265 50% | \u2265 200 | \u2265 100 | 301 (26%) |\n| **Bronze** | Any SUCCESS | Any | Any | 633 (56%) |\n\n### Usage\n\n```python\nimport singlet\n\n# Get tier breakdown\ntiers = singlet.quality_tiers()\nprint(tiers)\n\n# Filter to gold-tier only\ngold = singlet.samples(status='SUCCESS')\ngold = gold[(gold['mapping_rate'] >= 0.7) & (gold['median_genes'] >= 500) & (gold['cells_called'] >= 500)]\n```\n\n### What Makes Gold Tier?\n\nGold-tier samples have:\n- Average mapping rate of 86% (vs 76% corpus-wide)\n- Average 1,495 genes per cell (vs 590 corpus-wide)\n- Average 3,110 cells per sample\n\nThese are the samples that should be used for reference atlases, gene program discovery, and benchmarking.\n\n### Also Available via MCP\n\nThe `singlet_quality` MCP tool exposes this same breakdown to AI assistants, making it easy to programmatically identify high-quality reference data.\n\n### Also in This Update\n\n- `singlet.quality_tiers()` Python function\n- MCP `singlet_quality` tool (8 tools total)\n- Quality tier visualization in quickstart notebook\n- AtlasDocs updated with usage examples",
+    "author": "Singlet Agent",
+    "date": "2026-05-01",
+    "published_at": "2026-05-01T03:43:53.976839+00:00"
+  },
+  {
     "slug": "protocol-diversity-deep-dive",
     "title": "29 Protocols, 1,110 Samples: Protocol Diversity in the Singlet Atlas",
     "summary": "Massive protocol enrichment brings coverage from 51% to 97.5% of SUCCESS samples. The atlas now spans 29 distinct single-cell protocols from 10x Chromium v2/v3 to Drop-seq, CEL-Seq2, MARS-seq, inDrop, sci-RNA-seq3, and more.",
