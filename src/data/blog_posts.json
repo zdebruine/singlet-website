@@ -1,5 +1,18 @@
 [
   {
+    "slug": "cell-type-annotations",
+    "title": "Cell Type Annotations: 41 Normalized Categories from GEO Metadata",
+    "date": "2026-05-15",
+    "summary": "We've extracted and normalized cell type annotations from GEO source metadata across 397 SUCCESS samples (34% coverage). Query cell types like PBMC, T cells, stem cells, cell lines, and organoids directly through the Python API and MCP server.",
+    "content": "## Cell Type Annotations Now Queryable\n\nThe singlet atlas now exposes **cell type annotations** extracted from GEO `source_name` metadata. This complements tissue annotations (91% coverage) with finer-grained cell-level information.\n\n### Coverage\n\n- **397 samples** annotated with cell types (34% of SUCCESS)\n- **41 normalized categories** (from 277 raw annotations)\n- Top categories: PBMC (107), cell line K562 (63), T cells (30), stem cells (28)\n\n### Normalization\n\nRaw GEO annotations are highly variable. We normalize:\n- \"PBMCs\", \"pbmc\", \"peripheral blood mononuclear cells\" \u2192 **PBMC**\n- \"K562\", \"k562 cells\" \u2192 **cell line (K562)**\n- \"T cells\", \"CD4 T cells\", \"CD8+ T cells\" \u2192 **T cells** / **CD4+ T cells** / **CD8+ T cells**\n- \"iPSC\", \"hESC\", \"pluripotent stem cells\" \u2192 **stem cell (iPSC)** / **stem cell (hESC)**\n- Tissue-only annotations (brain, blood, lung) are excluded\n\n### Python API\n\n```python\nimport singlet\n\n# Get cell type distribution\nct = singlet.cell_types()\nprint(ct.head(10))\n#         cell_type  count\n#              PBMC    107\n#  cell line (K562)     63\n#           T cells     30\n#  stem cell (iPSC)     19\n# cell line (THP-1)     15\n#          organoid     14\n#       fibroblasts     14\n#       lymphocytes     13\n#      CD8+ T cells      8\n#      CD4+ T cells      8\n```\n\n### MCP Server\n\nThe new `singlet_cell_types` tool (our 11th MCP tool) lets AI assistants query cell type distributions directly:\n\n```\n\"What cell types are most represented in the singlet atlas?\"\n\u2192 singlet_cell_types \u2192 PBMC (107), K562 (63), T cells (30)...\n```\n\n### What's Next\n\nCell type coverage will grow as we process more annotated datasets. Combined with tissue and protocol filters, users can now precisely locate samples by biological context \u2014 tissue, cell type, organism, and quality tier.",
+    "tags": [
+      "cell-types",
+      "metadata",
+      "python-api",
+      "mcp"
+    ]
+  },
+  {
     "slug": "10-mcp-tools-ai-single-cell",
     "title": "10 MCP Tools: AI Assistants Can Now Query Every Aspect of the Atlas",
     "summary": "The singlet MCP server now exposes 10 tools covering stats, search, browse, QC, load, protocols, quality tiers, tissues, and failure analysis. Any MCP-compatible AI assistant can query 2,700+ single-cell datasets.",

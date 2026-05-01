@@ -377,6 +377,28 @@ print(failures.to_string(index=False))
 #      pipeline_crash     35   2.2`}
               title="singlet.failure_categories()"
             />
+
+            <h3 className="font-display text-base font-semibold text-foreground mt-6 mb-3">Cell Type Distribution</h3>
+            <p className="text-sm text-muted-foreground leading-relaxed mb-4">
+              Explore cell type annotations extracted from GEO metadata. Covers ~34% of SUCCESS samples with 41 normalized categories.
+            </p>
+            <CodeBlock
+              code={`# Cell type annotations from GEO source metadata
+ct = singlet.cell_types()
+print(ct.head(10).to_string(index=False))
+#        cell_type  count
+#             PBMC    107
+# cell line (K562)     63
+#          T cells     30
+# stem cell (iPSC)     19
+# cell line (THP-1)    15
+#         organoid     14
+#      fibroblasts     14
+#      lymphocytes     13
+#     CD8+ T cells      8
+#     CD4+ T cells      8`}
+              title="singlet.cell_types()"
+            />
           </section>
 
           <div className="h-px bg-border/50 mx-auto my-6" />
@@ -595,8 +617,9 @@ python -m singlet.mcp.server
                     ["singlet_browse", "Browse samples with filters (organism, protocol, tissue, status)"],
                     ["singlet_protocols", "Protocol distribution and success rates"],
                     ["singlet_quality", "Quality tier breakdown (gold/silver/bronze)"],
-                    ["singlet_tissues", "Tissue distribution across samples (121 categories)"],
+                    ["singlet_tissues", "Tissue distribution across samples (32 categories)"],
                     ["singlet_failures", "Pipeline failure category breakdown"],
+                    ["singlet_cell_types", "Cell type distribution (PBMC, T cells, stem cells, etc.)"],
                   ].map(([tool, desc]) => (
                     <tr key={tool}>
                       <td className="px-4 py-2 font-mono text-xs text-primary">{tool}</td>
@@ -665,10 +688,11 @@ singlet.set_backend("local")  # Local files only`}
                 { fn: "singlet.datasets(gse_id?)", desc: "List datasets (alias for filtered catalog). Returns DataFrame." },
                 { fn: "singlet.info(gse_id)", desc: "Metadata for a specific GEO series. Returns dict." },
                 { fn: "singlet.species()", desc: "List all species in the atlas. Returns list of strings." },
-                { fn: "singlet.tissues()", desc: "Normalized tissue distribution across SUCCESS samples (80 categories)." },
+                { fn: "singlet.tissues()", desc: "Normalized tissue distribution across SUCCESS samples (32 categories)." },
                 { fn: "singlet.protocols()", desc: "Protocol distribution across SUCCESS samples." },
                 { fn: "singlet.quality_tiers()", desc: "Quality tier breakdown (gold/silver/bronze) with metrics." },
                 { fn: "singlet.failure_categories()", desc: "Pipeline failure breakdown (download_fail, align_low_map, cells_below_threshold, etc.)." },
+                { fn: "singlet.cell_types()", desc: "Cell type distribution from GEO annotations (PBMC, T cells, stem cells, cell lines, organoids)." },
                 { fn: "singlet.sample_index(gse_id?)", desc: "Per-sample column offsets within .1pz files. Returns DataFrame." },
               ]}
             />
