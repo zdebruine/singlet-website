@@ -160,6 +160,25 @@ const SeriesDetail = () => {
             </div>
           )}
 
+          {/* Tissue/Source Tags */}
+          {(() => {
+            const sources = [...new Set(samples.map((s) => s.source).filter(Boolean))];
+            if (sources.length === 0) return null;
+            return (
+              <div className="mb-6">
+                <h2 className="font-display text-sm font-bold text-foreground mb-2 uppercase tracking-wider">Tissues / Sources</h2>
+                <div className="flex gap-2 flex-wrap">
+                  {sources.slice(0, 15).map((src) => (
+                    <span key={src} className="px-3 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary">
+                      {src}
+                    </span>
+                  ))}
+                  {sources.length > 15 && <span className="px-3 py-1 text-xs text-muted-foreground">+{sources.length - 15} more</span>}
+                </div>
+              </div>
+            );
+          })()}
+
           {/* Quality Distribution */}
           <QCSummaryBar samples={samples} />
 
@@ -182,7 +201,7 @@ const SeriesDetail = () => {
                     <th className="px-4 py-3 text-right font-semibold text-foreground">Cells</th>
                     <th className="px-4 py-3 text-right font-semibold text-foreground">Mapping</th>
                     <th className="px-4 py-3 text-left font-semibold text-foreground">Protocol</th>
-                    <th className="px-4 py-3 text-left font-semibold text-foreground">Title</th>
+                    <th className="px-4 py-3 text-left font-semibold text-foreground">Source</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -199,7 +218,7 @@ const SeriesDetail = () => {
                         {s.mapping_rate ? `${(s.mapping_rate * 100).toFixed(1)}%` : "—"}
                       </td>
                       <td className="px-4 py-3 text-xs text-muted-foreground">{s.protocol ?? "—"}</td>
-                      <td className="px-4 py-3 text-xs text-muted-foreground max-w-[200px] truncate">{s.title ?? "—"}</td>
+                      <td className="px-4 py-3 text-xs text-muted-foreground max-w-[200px] truncate">{s.source ?? s.title ?? "—"}</td>
                     </tr>
                   ))}
                 </tbody>
