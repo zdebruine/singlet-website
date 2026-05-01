@@ -132,13 +132,25 @@ const Browse = () => {
           )}
 
           {/* Quick search chips */}
-          <div className="flex gap-2 flex-wrap mb-4">
-            <span className="text-xs text-muted-foreground self-center mr-1">Quick search:</span>
+          <div className="flex gap-2 flex-wrap mb-2">
+            <span className="text-xs text-muted-foreground self-center mr-1">Tissue:</span>
             {["PBMC", "tumor", "brain", "lung", "bone marrow", "liver", "skin", "blood", "K562", "organoid"].map((term) => (
               <button
                 key={term}
                 onClick={() => { setSearchInput(term); setFilters((f) => ({ ...f, search: term, page: 0 })); }}
                 className="px-3 py-1 rounded-full text-xs font-medium border border-border bg-background hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+              >
+                {term}
+              </button>
+            ))}
+          </div>
+          <div className="flex gap-2 flex-wrap mb-4">
+            <span className="text-xs text-muted-foreground self-center mr-1">Protocol:</span>
+            {["10xv3", "10xv2", "dropseq", "celseq2", "scirna", "marsseq"].map((term) => (
+              <button
+                key={term}
+                onClick={() => setFilters((f) => ({ ...f, protocol: f.protocol === term ? undefined : term, page: 0 }))}
+                className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${filters.protocol === term ? "border-primary bg-primary/10 text-primary" : "border-border bg-background hover:bg-muted text-muted-foreground hover:text-foreground"}`}
               >
                 {term}
               </button>
