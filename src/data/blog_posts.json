@@ -1,5 +1,18 @@
 [
   {
+    "slug": "3000-samples-milestone",
+    "title": "3,000 Samples Processed: The Atlas Crosses a New Threshold",
+    "date": "2026-05-01",
+    "summary": "The singlet atlas now contains 3,099 processed samples with 1,318 passing QC \u2014 totaling 3.7 million cells across 16 species. With 643 GEO series represented and automated batch processing running continuously, we're accelerating toward comprehensive coverage.",
+    "content": "## 3,000 Samples Milestone\n\nThe singlet pipeline has now processed **3,099 samples** from the Gene Expression Omnibus, with **1,318 passing quality control** \u2014 a significant expansion from our previous 2,728 total (1,143 SUCCESS).\n\n### By the Numbers\n\n| Metric | Value |\n|--------|-------|\n| Total processed | 3,099 |\n| Passing QC (SUCCESS) | 1,318 |\n| Total cells | 3.7 million |\n| GEO series | 643 (SUCCESS only) |\n| Species | 16 |\n| Protocols | 29 |\n| Tissues | 36 normalized categories |\n| Cell types | 20 normalized categories |\n\n### Growth Since Last Update\n\n- **+372 new samples** synced in this cycle\n- **+175 new SUCCESS** samples (from 1,143 \u2192 1,318)\n- **+390K new cells** (from 3.3M \u2192 3.7M)\n- **+67 new series** (from 576 \u2192 643)\n\n### Processing Pipeline\n\nBatches c192 and c193 are actively running on the Clipper HPC cluster, each processing 200 samples. The pipeline automatically:\n\n1. Downloads FASTQ from SRA\n2. Detects protocol (10x v2/v3, Drop-seq, etc.)\n3. Aligns with STAR\n4. Calls cells (EmptyDrops algorithm)\n5. Computes QC metrics (mapping rate, genes/cell, doublet rate)\n6. Exports to .1pz format for the atlas\n\n### Failure Analysis\n\nOf the 1,781 non-SUCCESS samples:\n- 47% failed at download (SRA unavailable or corrupted)\n- 26% had low mapping rates (<10%)\n- 20% had too few cells called (<50)\n- 4% unknown failures\n- 2% pipeline crashes\n\n### What's Next\n\nWith batch c193 processing 200 more samples and the pipeline running continuously, we expect to cross **4,000 total samples** within the coming cycles. Coverage of rare tissues and species continues to expand with each batch.\n\n### Query the Atlas\n\n```python\nimport singlet\n\n# See the full atlas summary\nprint(singlet.summary())\n# \u2192 singlet atlas: 3,099 samples (1,318 SUCCESS) \u2022 1,377 series \u2022 16 species \u2022 29 protocols \u2022 36 tissues \u2022 20 cell types \u2022 3.7M cells\n\n# Browse successful human lung samples\nlung = singlet.samples(tissue=\"lung\", organism=\"Homo sapiens\")\nprint(f\"Human lung samples: {len(lung)}\")\n```",
+    "tags": [
+      "milestone",
+      "corpus",
+      "pipeline",
+      "atlas"
+    ]
+  },
+  {
     "slug": "cell-type-annotations",
     "title": "Cell Type Annotations: 41 Normalized Categories from GEO Metadata",
     "date": "2026-05-15",
