@@ -60,6 +60,57 @@ def save_state(state: dict):
     STATE_FILE.write_text(json.dumps(state, indent=2))
 
 
+def enrich_geo_metadata(client: Client, max_samples: int = 20):
+    """Fetch title/source from NCBI for samples missing them. Rate-limited."""
+    import urllib.request
+    import time as _time
+
+    r = client.table("samples").select("gsm_id,gse_id").is_("title", "null").limit(max_samples).execute()
+    if not r.data:
+        return 0
+
+    enriched = 0
+    for row in r.data:
+        gsm_id = row["gsm_id"]
+        try:
+            url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=gds&term={gsm_id}[ACCN]&retmode=json"
+            with urllib.request.urlopen(url, timeout=10) as resp:
+                data = json.loads(resp.read())
+
+            ids = data.get("esearchresult", {}).get("idlist", [])
+            if not ids:
+                _time.sleep(0.35)
+                continue
+
+            uid = ids[0]
+            url2 = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=gds&id={uid}&retmode=json"
+            with urllib.request.urlopen(url2, timeout=10) as resp:
+                summary = json.loads(resp.read())
+
+            doc = summary.get("result", {}).get(uid, {})
+            title = doc.get("title", "")
+            source = ""
+            for s in doc.get("samples", []):
+                if s.get("accession") == gsm_id:
+                    source = s.get("title", "")
+                    break
+
+            if title or source:
+                update: dict[str, str] = {}
+                if title:
+                    update["title"] = title[:500]
+                if source:
+                    update["source"] = source[:500]
+                client.table("samples").update(update).eq("gsm_id", gsm_id).execute()
+                enriched += 1
+
+            _time.sleep(0.35)
+        except Exception:
+            _time.sleep(1)
+
+    return enriched
+
+
 def build_batch_metadata_index() -> dict[str, dict]:
     """Build GSM → metadata dict from all batch JSONs (organism, protocol, taxon_id)."""
     index: dict[str, dict] = {}
@@ -261,6 +312,11 @@ def main():
     if success > 0:
         refresh_views(client)
         print("  Materialized views refreshed")
+
+    # Enrich GEO metadata for samples missing title/source
+    geo_enriched = enrich_geo_metadata(client)
+    if geo_enriched:
+        print(f"  GEO metadata enriched: {geo_enriched} samples")
 
     # Update state
     state = load_state()
