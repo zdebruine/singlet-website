@@ -23,7 +23,7 @@ const NOTEBOOKS: Notebook[] = [
     id: "quickstart",
     title: "Atlas Quickstart",
     description:
-      "Browse the 2,547-sample catalog, filter by species/status/quality, explore datasets and series — all with the singlet-bio Python package.",
+      "Browse the 2,568-sample catalog, filter by species/status/quality, explore datasets and series — all with the singlet-bio Python package.",
     icon: <BookOpen size={20} />,
     tags: ["beginner", "python", "catalog"],
     githubUrl: `${BASE}/quickstart.ipynb`,
@@ -256,7 +256,7 @@ const Notebooks = () => (
 
 import singlet
 
-# Browse the 2,547-sample atlas
+# Browse the 2,568-sample atlas
 singlet.summary()
 df = singlet.samples(organism="Homo sapiens", status="SUCCESS")
 print(f"{len(df)} successful human samples")
