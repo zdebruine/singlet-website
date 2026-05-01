@@ -839,7 +839,7 @@ twine check dist/*  # PASSED
 
 - **13 reproducibility notebooks** at \`singlet/notebooks/\`
 - **Browse page** at [singlet.bio/browse](/browse)
-- **API reference** at [singlet docs](https://singlet-ai.github.io/singlet/)
+- **API reference** at [singlet docs](https://github.com/Singlet-Bio/singlet/blob/main/python/docs/API.md)
 `,
   },
   "1fq-binary-format": {
