@@ -156,6 +156,18 @@ const Browse = () => {
               </button>
             ))}
           </div>
+          <div className="flex gap-2 flex-wrap mb-4">
+            <span className="text-xs text-muted-foreground self-center mr-1">Quality:</span>
+            {([["gold", "🥇"], ["silver", "🥈"], ["bronze", "🥉"]] as const).map(([tier, emoji]) => (
+              <button
+                key={tier}
+                onClick={() => setFilters((f) => ({ ...f, qualityTier: f.qualityTier === tier ? undefined : tier, page: 0 }))}
+                className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${filters.qualityTier === tier ? "border-primary bg-primary/10 text-primary" : "border-border bg-background hover:bg-muted text-muted-foreground hover:text-foreground"}`}
+              >
+                {emoji} {tier}
+              </button>
+            ))}
+          </div>
 
           {/* Featured series */}
           {featuredSeries && featuredSeries.length > 0 && !filters.search && !filters.organism && !filters.qualityTier && (
