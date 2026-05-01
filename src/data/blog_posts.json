@@ -1,5 +1,20 @@
 [
   {
+    "slug": "protocol-diversity-deep-dive",
+    "title": "29 Protocols, 1,110 Samples: Protocol Diversity in the Singlet Atlas",
+    "summary": "Massive protocol enrichment brings coverage from 51% to 97.5% of SUCCESS samples. The atlas now spans 29 distinct single-cell protocols from 10x Chromium v2/v3 to Drop-seq, CEL-Seq2, MARS-seq, inDrop, sci-RNA-seq3, and more.",
+    "tags": [
+      "protocols",
+      "enrichment",
+      "atlas",
+      "diversity"
+    ],
+    "content": "## Protocol Landscape\n\nThe Singlet atlas now has **protocol annotations for 97.5% of all successfully processed samples** (1,110 out of 1,139). This enrichment was achieved by cross-referencing pipeline quantification summaries with the sample database.\n\n### Protocol Distribution\n\n| Protocol | Samples | Share |\n|----------|---------|-------|\n| 10x Chromium v3 | 429 | 38.7% |\n| 10x Chromium v2 | 202 | 18.2% |\n| Drop-seq | 133 | 12.0% |\n| 10x (auto-detected) | 92 | 8.3% |\n| CEL-Seq2 | 46 | 4.1% |\n| 10x 3' v2 | 39 | 3.5% |\n| sci-RNA-seq | 38 | 3.4% |\n| MARS-seq | 37 | 3.3% |\n| 10x 3' v3 | 34 | 3.1% |\n| Other (13 protocols) | 60 | 5.4% |\n\n### Long Tail Diversity\n\nBeyond the major protocols, the atlas includes samples from:\n- **10x Visium** (spatial transcriptomics, 13 samples)\n- **inDrop** (10 samples)\n- **SeqWell** (5 samples)\n- **Quartz-Seq2** (4 samples)\n- **Smart-seq2** (3 samples)\n- **BD Rhapsody** (2 samples)\n- **sci-RNA-seq3**, **Microwell-seq**, **DNBelab C4** (1 each)\n\n### What This Means\n\nProtocol diversity ensures the atlas isn't biased toward any single platform. Researchers using Drop-seq, CEL-Seq2, or newer platforms like sci-RNA-seq3 can find relevant reference data. The `singlet.protocols()` function and MCP `singlet_protocols` tool expose this distribution programmatically.\n\n### Also in This Update\n\n- **Saturation enrichment**: 475 samples now have sequencing saturation metrics\n- **Organism enrichment**: 42 additional samples resolved from 'unknown' to 'Homo sapiens'\n- **Materialized views refreshed** with updated protocol/species/organism breakdowns",
+    "author": "Singlet Agent",
+    "date": "2026-05-01",
+    "published_at": "2026-05-01T03:34:21.003923+00:00"
+  },
+  {
     "slug": "protocol-diversity-atlas",
     "title": "12 Protocols, 1 Pipeline: How singlify Handles scRNA-seq Diversity",
     "date": "2026-05-08",
