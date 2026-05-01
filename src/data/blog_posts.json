@@ -1,5 +1,21 @@
 [
   {
+    "slug": "failure-categories-pipeline-health",
+    "title": "Pipeline Failure Analysis: Why 1,576 Samples Didn't Make It",
+    "summary": "New failure_categories() function reveals why samples fail: 47% download failures, 26% low mapping, 20% too few cells. Plus MCP singlet_failures tool for AI-queryable pipeline health.",
+    "tags": [
+      "failures",
+      "pipeline",
+      "health",
+      "api",
+      "mcp"
+    ],
+    "content": "## Understanding Pipeline Failures\n\nOf the 2,716 samples in the singlet atlas, 1,140 (42%) succeeded. What happened to the other 1,576? The new `failure_categories()` function provides transparent breakdown.\n\n### Failure Categories\n\n| Category | Count | Share | What It Means |\n|----------|-------|-------|---------------|\n| **download_fail** | 746 | 47.3% | SRA download failed or produced empty files |\n| **align_low_map** | 407 | 25.8% | STAR alignment mapped <10% of reads |\n| **cells_below_threshold** | 319 | 20.2% | Mapped OK but called <50 cells |\n| **unknown** | 69 | 4.4% | Unclassified pipeline errors |\n| **pipeline_crash** | 35 | 2.2% | singlify crashed (OOM, segfault, etc.) |\n\n### Key Insights\n\n**Download failures dominate** \u2014 nearly half of all failures are data access issues, not pipeline limitations. Many GEO deposits have restricted access, expired links, or corrupted archives.\n\n**Low mapping rate** (26%) indicates reference mismatch, poor library quality, or non-standard protocols the pipeline hasn't adapted for yet.\n\n**Cells below threshold** (20%) means the pipeline ran correctly but the biological sample simply had too few cells \u2014 often from non-10x protocols or degraded tissue.\n\n**Pipeline crashes are rare** (2.2%) \u2014 singlify is stable. Only 35 out of 2,716 samples caused an actual crash.\n\n### Usage\n\n```python\nimport singlet\n\n# Get failure breakdown\nfailures = singlet.failure_categories()\nprint(failures)\n#   category              count   pct\n# 0 download_fail           746  47.3\n# 1 align_low_map           407  25.8\n# 2 cells_below_threshold   319  20.2\n# 3 unknown                  69   4.4\n# 4 pipeline_crash           35   2.2\n```\n\n### MCP Integration\n\nThe new `singlet_failures` MCP tool exposes this data to AI assistants \u2014 the 10th tool in the singlet MCP server. AI coding assistants can now query pipeline health programmatically.\n\n### What's Next\n\n- Retry `download_fail` samples with updated SRA toolkit\n- Investigate `align_low_map` for reference genome mismatches\n- Consider lowering cell threshold for certain protocol types",
+    "author": "singlet-product",
+    "date": "2026-05-15",
+    "published_at": "2026-05-01T04:18:46.617312+00:00"
+  },
+  {
     "slug": "quality-tiers-gold-silver-bronze",
     "title": "Quality Tiers: Classifying Atlas Samples into Gold, Silver, and Bronze",
     "summary": "New quality_tiers() function classifies the 1,139 SUCCESS samples into three tiers based on mapping rate, gene detection, and cell count. 18% gold, 26% silver, 56% bronze.",
