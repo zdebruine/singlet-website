@@ -65,7 +65,11 @@ def enrich_geo_metadata(client: Client, max_samples: int = 20):
     import urllib.request
     import time as _time
 
+    # Check NULL titles first, then empty-string titles
     r = client.table("samples").select("gsm_id,gse_id").is_("title", "null").limit(max_samples).execute()
+    if len(r.data) < max_samples:
+        r2 = client.table("samples").select("gsm_id,gse_id").eq("title", "").limit(max_samples - len(r.data)).execute()
+        r.data.extend(r2.data)
     if not r.data:
         return 0
 
@@ -299,7 +303,10 @@ def main():
 
     if not results:
         print("  Nothing to sync.")
-        # Still update state timestamp
+        # Still enrich GEO metadata and update state
+        geo_enriched = enrich_geo_metadata(client)
+        if geo_enriched:
+            print(f"  GEO metadata enriched: {geo_enriched} samples")
         state = load_state()
         state["last_sync"] = datetime.now(timezone.utc).isoformat()
         save_state(state)
