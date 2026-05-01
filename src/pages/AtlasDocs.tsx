@@ -107,8 +107,8 @@ const AtlasDocs = () => {
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
   }, []);
   const { data: stats } = useCorpusStats();
-  const totalSamples = stats?.total_samples?.toLocaleString() ?? "2,708+";
-  const successSamples = stats?.success_samples?.toLocaleString() ?? "1,138+";
+  const totalSamples = stats?.total_samples?.toLocaleString() ?? "2,711+";
+  const successSamples = stats?.success_samples?.toLocaleString() ?? "1,139+";
   const totalCells = stats?.total_cells ? (stats.total_cells / 1e6).toFixed(1) + "M" : "3.3M";
   const seriesCount = stats?.series_count?.toLocaleString() ?? "1,300+";
 
@@ -318,6 +318,25 @@ print(tissues.head(10))
 brain = singlet.samples(tissue="brain", status="SUCCESS")
 print(f"{len(brain)} brain samples, {brain['cells_called'].sum():,.0f} cells")`}
               title="singlet.tissues()"
+            />
+
+            <h3 className="font-display text-base font-semibold text-foreground mb-3 mt-8">Protocol breakdown</h3>
+            <CodeBlock
+              code={`# See protocol distribution across SUCCESS samples
+protocols = singlet.protocols()
+print(protocols)
+#       protocol  count
+# 0        10xv3    268
+# 1      dropseq     98
+# 2        10xv2     97
+# 3  10x_suspect     57
+# 4      celseq2     22
+# 5       scirna     19
+
+# Filter samples by protocol
+dropseq = singlet.samples(protocol="dropseq", status="SUCCESS")
+print(f"{len(dropseq)} Drop-seq samples, {dropseq['cells_called'].sum():,.0f} cells")`}
+              title="singlet.protocols()"
             />
           </section>
 
