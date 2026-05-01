@@ -261,6 +261,21 @@ const SampleDetail = () => {
             </div>
           </div>
 
+          {/* GEO Characteristics */}
+          {sample.characteristics && typeof sample.characteristics === "object" && Object.keys(sample.characteristics).length > 0 && (
+            <div className="rounded-xl border border-border bg-card p-6">
+              <h3 className="font-display text-sm font-bold text-foreground uppercase tracking-wider mb-4">Sample Characteristics</h3>
+              <dl className="space-y-2 text-sm">
+                {Object.entries(sample.characteristics as Record<string, string>).map(([key, value]) => (
+                  <div key={key} className="flex justify-between">
+                    <dt className="text-muted-foreground capitalize">{key}</dt>
+                    <dd className="text-foreground text-right max-w-[200px] truncate">{value}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+          )}
+
           {/* Code example */}
           <div className="rounded-xl border border-border bg-card p-6">
             <div className="flex items-center justify-between mb-4">

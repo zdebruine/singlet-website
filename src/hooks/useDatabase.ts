@@ -176,7 +176,7 @@ export function useSamples(filters: SampleFilters = {}) {
         // Sanitize search input to prevent PostgREST filter injection
         const sanitized = search.replace(/[%(),]/g, "");
         if (sanitized) {
-          query = query.or(`gsm_id.ilike.%${sanitized}%,gse_id.ilike.%${sanitized}%,title.ilike.%${sanitized}%`);
+          query = query.or(`gsm_id.ilike.%${sanitized}%,gse_id.ilike.%${sanitized}%,title.ilike.%${sanitized}%,source.ilike.%${sanitized}%`);
         }
       }
 

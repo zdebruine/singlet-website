@@ -174,7 +174,7 @@ const Browse = () => {
                 <input
                   ref={searchRef}
                   type="text"
-                  placeholder="Search by GSM, GSE, or title... (press / to focus)"
+                  placeholder="Search by GSM, GSE, title, or tissue... (press / to focus)"
                   value={searchInput}
                   onChange={(e) => setSearchInput(e.target.value)}
                   className="w-full pl-10 pr-4 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
@@ -306,6 +306,7 @@ const Browse = () => {
                             {s.gsm_id}
                           </Link>
                           {s.title && <div className="text-xs text-muted-foreground mt-0.5 truncate max-w-[240px]">{s.title}</div>}
+                          {s.source && <div className="text-[10px] text-muted-foreground/70 mt-0.5 truncate max-w-[200px]">{s.source}</div>}
                           {s.gse_id && <Link to={`/series/${s.gse_id}`} className="text-[10px] text-muted-foreground/60 hover:text-primary font-mono">{s.gse_id}</Link>}
                         </td>
                         <td className="px-4 py-3 text-xs text-muted-foreground italic">{s.organism}</td>
