@@ -5,6 +5,71 @@ import Footer from "@/components/Footer";
 
 // Blog post content (will move to Supabase/MDX later)
 const POST_CONTENT: Record<string, { title: string; date: string; tags: string[]; content: string }> = {
+  "4-million-cells-milestone": {
+    title: "4 Million Cells: The Singlet Atlas Passes a Major Milestone",
+    date: "2026-05-08",
+    tags: ["milestone", "corpus", "cells", "atlas", "scale"],
+    content: `
+## 4 Million Cells
+
+The singlet atlas has crossed **4 million cells** — a milestone that demonstrates the scale and reliability of our automated processing pipeline.
+
+### By the Numbers
+
+| Metric | Value |
+|--------|-------|
+| Total processed | 3,244 |
+| Passing QC (SUCCESS) | 1,386 |
+| Total cells | 4.00 million |
+| Avg cells/sample | 2,886 |
+| Species | 8 |
+| Protocols | 29 |
+| Median mapping rate | 78.3% |
+
+### Species Diversity
+
+| Species | Samples | Cells |
+|---------|---------|-------|
+| Homo sapiens | 853 | 2.6M |
+| Mus musculus | 394 | 1.1M |
+| Macaca mulatta | 13 | 45K |
+| Drosophila melanogaster | 5 | 12K |
+| Sus scrofa | 3 | 8K |
+| Others | 5 | 15K |
+
+### Quality Profile
+
+The atlas maintains strict quality control:
+- **Gold tier** (MR≥70%, genes≥500, cells≥500): ~275 samples
+- **Silver tier** (MR≥50%, genes≥200, cells≥200): ~373 samples
+- **Bronze tier** (all others): ~717 samples
+
+### Growth Trajectory
+
+| Milestone | Samples (SUCCESS) | Date |
+|-----------|-------------------|------|
+| 1 million cells | ~350 | 2026-04 |
+| 2 million cells | ~700 | 2026-04 |
+| 3 million cells | ~1,100 | 2026-04 |
+| **4 million cells** | **1,386** | **2026-05** |
+
+### Access the Atlas
+
+\`\`\`python
+import singlet
+
+singlet.summary()
+# → 3,244 samples (1,386 SUCCESS) • 8 species • 4.0M cells
+
+# Browse by tissue, cell type, or organism
+singlet.samples(tissue="brain", status="SUCCESS")
+singlet.species()
+singlet.tissues()
+\`\`\`
+
+The full atlas is browsable at [singlet.bio/browse](https://singlet.bio/browse) and accessible via the MCP server (11 tools) for AI assistants.
+`,
+  },
   "protocol-diversity-atlas": {
     title: "12 Protocols, 1 Pipeline: How singlify Handles scRNA-seq Diversity",
     date: "2026-05-08",

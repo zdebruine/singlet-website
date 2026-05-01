@@ -16,6 +16,15 @@ interface BlogPost {
 // Static blog posts until Supabase blog_posts table is live
 const POSTS: BlogPost[] = [
   {
+    slug: "4-million-cells-milestone",
+    title: "4 Million Cells: The Singlet Atlas Passes a Major Milestone",
+    date: "2026-05-08",
+    summary:
+      "The singlet atlas now contains 4.0 million cells across 1,386 samples from 8 species. With 29 protocols represented and a median mapping rate of 78.3%, the atlas continues to grow in both scale and quality.",
+    tags: ["milestone", "corpus", "cells", "atlas", "scale"],
+    author: "singlet-product",
+  },
+  {
     slug: "tissue-metadata-browse",
     title: "Search by Tissue: 2,568 Samples Now Enriched with GEO Characteristics",
     date: "2026-05-07",
