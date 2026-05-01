@@ -338,6 +338,26 @@ dropseq = singlet.samples(protocol="dropseq", status="SUCCESS")
 print(f"{len(dropseq)} Drop-seq samples, {dropseq['cells_called'].sum():,.0f} cells")`}
               title="singlet.protocols()"
             />
+
+            <h3 className="font-display text-base font-semibold text-foreground mb-3 mt-8">Quality tiers</h3>
+            <p className="text-sm text-muted-foreground leading-relaxed mb-4">
+              Classify SUCCESS samples into gold/silver/bronze tiers based on mapping rate, gene detection, and cell count.
+            </p>
+            <CodeBlock
+              code={`# Quality tier breakdown
+tiers = singlet.quality_tiers()
+print(tiers.to_string(index=False))
+#   tier  count   pct  avg_mapping_rate  avg_median_genes  avg_cells
+#   gold    205  18.0            0.8621            1495.0     3110.0
+# silver    301  26.4            0.7434             610.3     2515.0
+# bronze    633  55.6            0.7574             284.4     3165.0
+
+# Filter to gold-tier samples only
+gold = singlet.samples(status="SUCCESS")
+gold = gold[(gold['mapping_rate'] >= 0.7) & (gold['median_genes'] >= 500) & (gold['cells_called'] >= 500)]
+print(f"{len(gold)} gold-tier samples")`}
+              title="singlet.quality_tiers()"
+            />
           </section>
 
           <div className="h-px bg-border/50 mx-auto my-6" />
