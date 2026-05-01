@@ -1,5 +1,21 @@
 [
   {
+    "slug": "10-mcp-tools-ai-single-cell",
+    "title": "10 MCP Tools: AI Assistants Can Now Query Every Aspect of the Atlas",
+    "summary": "The singlet MCP server now exposes 10 tools covering stats, search, browse, QC, load, protocols, quality tiers, tissues, and failure analysis. Any MCP-compatible AI assistant can query 2,700+ single-cell datasets.",
+    "tags": [
+      "mcp",
+      "ai",
+      "tools",
+      "api",
+      "milestone"
+    ],
+    "content": "## 10 MCP Tools\n\nThe singlet MCP (Model Context Protocol) server has reached **10 tools**, making it the most comprehensive AI-queryable interface for single-cell genomics data.\n\n### Tool Inventory\n\n| # | Tool | What It Does |\n|---|------|-------------|\n| 1 | `singlet_stats` | Corpus-wide statistics (samples, cells, species, protocols) |\n| 2 | `singlet_search` | Keyword search across datasets |\n| 3 | `singlet_qc` | QC metrics for any sample by GSM ID |\n| 4 | `singlet_load` | Download/access info for a sample |\n| 5 | `singlet_browse` | Filter by organism, protocol, tissue, status |\n| 6 | `singlet_protocols` | Protocol distribution and success rates |\n| 7 | `singlet_quality` | Quality tier breakdown (gold/silver/bronze) |\n| 8 | `singlet_tissues` | Tissue distribution (121 categories, 89% coverage) |\n| 9 | `singlet_failures` | Pipeline failure breakdown (5 categories) |\n\n### Setup\n\n```bash\npip install singlet-bio[mcp]\npython -m singlet.mcp.server\n```\n\nAdd to Claude Desktop, VS Code Copilot, or Cursor:\n```json\n{\n  \"mcpServers\": {\n    \"singlet\": {\n      \"command\": \"python\",\n      \"args\": [\"-m\", \"singlet.mcp.server\"]\n    }\n  }\n}\n```\n\n### What You Can Ask\n\nOnce connected, natural language queries route to the right tool:\n\n- \"How many single-cell samples are available?\" \u2192 `singlet_stats`\n- \"Find human PBMC datasets with >1000 cells\" \u2192 `singlet_browse`\n- \"What protocols are most common?\" \u2192 `singlet_protocols`\n- \"Show me QC for GSM7026663\" \u2192 `singlet_qc`\n- \"What tissues are covered?\" \u2192 `singlet_tissues`\n- \"Why do pipeline samples fail?\" \u2192 `singlet_failures`\n\n### Why MCP Matters for Single-Cell\n\nSingle-cell researchers increasingly use AI assistants for coding. MCP makes atlas data **available in context** \u2014 no switching to a browser, no manual data wrangling. The AI can discover relevant datasets, check quality, and help write analysis code all in one flow.\n\n### Documentation\n\nFull MCP documentation is now live on the [Atlas Docs](/docs) page.",
+    "author": "singlet-product",
+    "date": "2026-05-15",
+    "published_at": "2026-05-01T04:26:29.795117+00:00"
+  },
+  {
     "slug": "failure-categories-pipeline-health",
     "title": "Pipeline Failure Analysis: Why 1,576 Samples Didn't Make It",
     "summary": "New failure_categories() function reveals why samples fail: 47% download failures, 26% low mapping, 20% too few cells. Plus MCP singlet_failures tool for AI-queryable pipeline health.",
