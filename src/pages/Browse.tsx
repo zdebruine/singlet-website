@@ -134,7 +134,7 @@ const Browse = () => {
           {/* Quick search chips */}
           <div className="flex gap-2 flex-wrap mb-4">
             <span className="text-xs text-muted-foreground self-center mr-1">Quick search:</span>
-            {["PBMC", "tumor", "organoid", "brain", "lung", "kidney", "bone marrow", "heart"].map((term) => (
+            {["PBMC", "tumor", "brain", "lung", "bone marrow", "liver", "skin", "blood", "K562", "organoid"].map((term) => (
               <button
                 key={term}
                 onClick={() => { setSearchInput(term); setFilters((f) => ({ ...f, search: term, page: 0 })); }}
