@@ -3,10 +3,11 @@
 ETL: Sync singlet pipeline results to Supabase.
 
 Scans /mnt/projects/debruinz_project/singlify_pipeline/results/ for new result JSONs,
-enriches them with .1pz metadata and QC metrics, and upserts to Supabase `samples` table.
+enriches them with batch metadata (organism, protocol), QC metrics from quant dirs,
+and upserts to Supabase `samples` table.
 
 Run via cron every 15 minutes:
-    */15 * * * * /mnt/home/debruinz/.conda/envs/cellarium/bin/python /mnt/home/debruinz/Singlet-AI/scripts/etl/etl_sync.py >> /mnt/projects/debruinz_project/singlify_pipeline/logs/etl_sync.log 2>&1
+    */15 * * * * /mnt/home/debruinz/.conda/envs/cellarium/bin/python /mnt/home/debruinz/Singlet-AI/singletai-website/scripts/etl/etl_sync.py >> /mnt/projects/debruinz_project/singlify_pipeline/logs/etl_sync.log 2>&1
 
 Required env vars:
     SUPABASE_URL        - Supabase project URL
@@ -15,6 +16,7 @@ Required env vars:
 
 from __future__ import annotations
 
+import glob
 import json
 import os
 import sys
@@ -32,8 +34,9 @@ except ImportError:
 
 RESULTS_ROOT = Path("/mnt/projects/debruinz_project/singlify_pipeline/results")
 QUANT_ROOT = Path("/mnt/projects/debruinz_project/singlify_pipeline/quant")
+PIPELINE_ROOT = Path("/mnt/projects/debruinz_project/singlify_pipeline")
 STATE_FILE = Path("/mnt/home/debruinz/Singlet-AI/singletai-website/scripts/etl/.etl-state.json")
-BATCH_SIZE = 100  # upsert in batches
+BATCH_SIZE = 50  # upsert in batches (smaller to avoid single-row failures killing whole batch)
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
@@ -57,78 +60,77 @@ def save_state(state: dict):
     STATE_FILE.write_text(json.dumps(state, indent=2))
 
 
-def find_new_results(since: str) -> list[Path]:
-    """Find all result JSONs modified after the given timestamp."""
-    since_ts = datetime.fromisoformat(since.replace("Z", "+00:00")).timestamp()
+def build_batch_metadata_index() -> dict[str, dict]:
+    """Build GSM → metadata dict from all batch JSONs (organism, protocol, taxon_id)."""
+    index: dict[str, dict] = {}
+    for batch_file in sorted(PIPELINE_ROOT.glob("c*_batch.json")):
+        try:
+            entries = json.loads(batch_file.read_text())
+            for entry in entries:
+                gsm = entry.get("gsm_id")
+                if gsm:
+                    index[gsm] = {
+                        "organism": entry.get("organism", "unknown"),
+                        "protocol": entry.get("protocol", ""),
+                        "taxon_id": entry.get("taxon_id"),
+                    }
+        except (json.JSONDecodeError, OSError):
+            continue
+    return index
+
+
+def get_existing_gsm_ids(client: Client) -> set[str]:
+    """Get all GSM IDs already in Supabase."""
+    existing = set()
+    offset = 0
+    while True:
+        r = client.table("samples").select("gsm_id").range(offset, offset + 999).execute()
+        existing.update(row["gsm_id"] for row in r.data)
+        if len(r.data) < 1000:
+            break
+        offset += 1000
+    return existing
+
+
+def find_new_results(existing_gsms: set[str]) -> list[Path]:
+    """Find result JSONs not yet in Supabase."""
     results = []
     for month_dir in sorted(RESULTS_ROOT.iterdir()):
         if not month_dir.is_dir():
             continue
-        for f in month_dir.glob("*.json"):
-            if f.stat().st_mtime > since_ts:
+        for f in month_dir.glob("GSM*.json"):
+            gsm_id = f.stem
+            if gsm_id not in existing_gsms:
                 results.append(f)
     return results
 
 
-def find_pz_path(gsm_id: str) -> str | None:
-    """Find the .1pz file path for a given GSM ID."""
-    for modality in ["scrna", "cite", "multiome", "visium", "atac"]:
-        modality_dir = QUANT_ROOT / modality
-        if not modality_dir.exists():
-            continue
-        # Pattern: modality/GSE{shard}/GSE{id}/GSM{id}/
-        for gse_shard in modality_dir.iterdir():
-            if not gse_shard.is_dir():
-                continue
-            for gse_dir in gse_shard.iterdir():
-                gsm_dir = gse_dir / gsm_id
-                if gsm_dir.exists():
-                    # Find the primary .1pz file
-                    for pz in gsm_dir.glob("*.1pz"):
-                        return str(pz)
-    return None
-
-
-def read_qc_metrics(gsm_id: str, pz_path: str | None) -> dict[str, Any]:
-    """Read additional QC metrics from cell_qc_metrics.tsv if available."""
-    metrics: dict[str, Any] = {}
-    if not pz_path:
-        return metrics
-
-    qc_file = Path(pz_path).parent / "cell_qc_metrics.tsv"
-    if not qc_file.exists():
-        return metrics
-
+def read_summary_json(gsm_id: str) -> dict[str, Any]:
+    """Read QC metrics from quant summary.json if available."""
+    pattern = f"{QUANT_ROOT}/scrna/*/*/{gsm_id}/summary.json"
+    matches = glob.glob(pattern)
+    if not matches:
+        return {}
     try:
-        import csv
-        with open(qc_file) as f:
-            reader = csv.DictReader(f, delimiter="\t")
-            rows = list(reader)
-
-        if not rows:
-            return metrics
-
-        # Compute medians from per-cell data
-        def median_of(col: str) -> float | None:
-            vals = sorted(float(r[col]) for r in rows if r.get(col) and r[col] != "NA")
-            if not vals:
-                return None
-            mid = len(vals) // 2
-            return vals[mid] if len(vals) % 2 else (vals[mid - 1] + vals[mid]) / 2
-
-        metrics["median_genes"] = int(median_of("n_genes") or 0) or None
-        metrics["median_umis"] = int(median_of("total_counts") or 0) or None
-        mt = median_of("pct_counts_mt")
-        if mt is not None:
-            metrics["mt_pct"] = round(mt, 2)
-    except Exception:
-        pass
-
-    return metrics
+        data = json.loads(Path(matches[0]).read_text())
+        metrics = {}
+        if data.get("median_genes_per_cell"):
+            metrics["median_genes"] = int(data["median_genes_per_cell"])
+        if data.get("median_umis_per_cell"):
+            metrics["median_umis"] = int(data["median_umis_per_cell"])
+        if data.get("mt_pct") is not None:
+            metrics["mt_pct"] = round(float(data["mt_pct"]), 4)
+        if data.get("doublet_rate") is not None:
+            metrics["doublet_rate"] = round(float(data["doublet_rate"]), 4)
+        if data.get("cells_called"):
+            metrics["cells_called"] = int(data["cells_called"])
+        return metrics
+    except (json.JSONDecodeError, OSError, ValueError):
+        return {}
 
 
-def enrich_result(result_path: Path) -> dict[str, Any] | None:
-    """Read a result JSON and enrich with additional metadata."""
+def enrich_result(result_path: Path, batch_index: dict[str, dict]) -> dict[str, Any] | None:
+    """Read a result JSON and enrich with batch metadata + QC."""
     try:
         data = json.loads(result_path.read_text())
     except (json.JSONDecodeError, OSError):
@@ -138,53 +140,50 @@ def enrich_result(result_path: Path) -> dict[str, Any] | None:
     if not gsm_id:
         return None
 
-    # Find .1pz file
-    pz_path = find_pz_path(gsm_id)
-    pz_size = None
-    if pz_path and Path(pz_path).exists():
-        pz_size = Path(pz_path).stat().st_size
+    # Get organism from batch metadata (result JSONs often lack it)
+    batch_meta = batch_index.get(gsm_id, {})
+    organism = data.get("organism") or batch_meta.get("organism", "unknown")
 
-    # Read QC metrics
-    qc = read_qc_metrics(gsm_id, pz_path)
+    # Get protocol (try multiple field names used across batch versions)
+    protocol = (
+        data.get("autodetect_protocol")
+        or data.get("detected_protocol")
+        or data.get("catalog_protocol")
+        or batch_meta.get("protocol", "")
+    )
+
+    # Read QC metrics from summary.json
+    qc = read_summary_json(gsm_id) if data.get("status") == "SUCCESS" else {}
 
     # Build the row for Supabase
-    row = {
+    row: dict[str, Any] = {
         "gsm_id": gsm_id,
         "gse_id": data.get("gse_id", ""),
-        "srr_ids": "{" + data["srr_id"] + "}" if data.get("srr_id") else None,
-        "organism": data.get("organism", "unknown"),
-        "protocol": data.get("autodetect_protocol"),
-        "modality": data.get("modality", "scrna"),
+        "organism": organism,
         "status": data.get("status", "UNKNOWN"),
-        "failure_category": data.get("failure_category") or None,
+        "protocol": protocol,
         "mapping_rate": data.get("mapping_rate"),
         "cells_called": data.get("cells_called"),
-        "wall_time_s": data.get("wall_time_s"),
-        "download_path": data.get("download_path_used"),
-        "singlet_version": data.get("singlify_version") or data.get("singlet_version"),
-        "singlet_commit": data.get("singlify_commit") or data.get("singlet_commit"),
-        "pipeline_date": data.get("pipeline_date"),
-        "pz_path": pz_path,
-        "pz_size_bytes": pz_size,
-        "title": data.get("geo_title"),
-        "source": data.get("geo_source"),
-        "characteristics": data.get("geo_characteristics") or {},
-        **qc,
+        "wall_time_s": int(data["wall_time_s"]) if data.get("wall_time_s") else None,
+        "failure_category": data.get("failure_category") or None,
     }
 
-    # Remove None values to avoid overwriting existing data
-    # Also exclude "unknown" organism to preserve enriched values
-    return {k: v for k, v in row.items() if v is not None and not (k == "organism" and v == "unknown")}
+    # Add QC metrics (from summary.json or result JSON)
+    if qc:
+        row.update(qc)
+
+    # Remove None values and empty strings for optional fields
+    return {k: v for k, v in row.items() if v is not None and v != ""}
 
 
-def sync_results(client: Client, results: list[Path]) -> tuple[int, int]:
+def sync_results(client: Client, results: list[Path], batch_index: dict[str, dict]) -> tuple[int, int]:
     """Upsert results to Supabase in batches. Returns (success, errors)."""
     success = 0
     errors = 0
 
     batch: list[dict] = []
     for path in results:
-        row = enrich_result(path)
+        row = enrich_result(path, batch_index)
         if row:
             batch.append(row)
 
@@ -204,16 +203,22 @@ def sync_results(client: Client, results: list[Path]) -> tuple[int, int]:
 
 
 def upsert_batch(client: Client, batch: list[dict]) -> tuple[int, int]:
-    """Upsert a batch of rows to the samples table."""
+    """Upsert a batch of rows. Falls back to row-by-row on failure."""
     try:
-        client.table("samples").upsert(
-            batch,
-            on_conflict="gsm_id",
-        ).execute()
+        client.table("samples").upsert(batch, on_conflict="gsm_id").execute()
         return len(batch), 0
     except Exception as e:
-        print(f"  [ERROR] Batch upsert failed: {e}", file=sys.stderr)
-        return 0, len(batch)
+        # Fall back to row-by-row to isolate bad rows
+        ok = 0
+        bad = 0
+        for row in batch:
+            try:
+                client.table("samples").upsert(row, on_conflict="gsm_id").execute()
+                ok += 1
+            except Exception as row_err:
+                print(f"  [ERROR] {row.get('gsm_id')}: {row_err}", file=sys.stderr)
+                bad += 1
+        return ok, bad
 
 
 def refresh_views(client: Client):
@@ -228,16 +233,28 @@ def main():
     start = time.time()
     print(f"[{datetime.now(timezone.utc).isoformat()}] ETL sync starting...")
 
-    state = load_state()
-    results = find_new_results(state["last_sync"])
-    print(f"  Found {len(results)} new/updated result files since {state['last_sync']}")
+    client = get_supabase_client()
+
+    # Build metadata index from batch JSONs
+    batch_index = build_batch_metadata_index()
+    print(f"  Batch metadata index: {len(batch_index)} GSMs")
+
+    # Find new results (not yet in Supabase)
+    existing = get_existing_gsm_ids(client)
+    print(f"  Existing in Supabase: {len(existing)}")
+
+    results = find_new_results(existing)
+    print(f"  New results to sync: {len(results)}")
 
     if not results:
         print("  Nothing to sync.")
+        # Still update state timestamp
+        state = load_state()
+        state["last_sync"] = datetime.now(timezone.utc).isoformat()
+        save_state(state)
         return
 
-    client = get_supabase_client()
-    success, errors = sync_results(client, results)
+    success, errors = sync_results(client, results, batch_index)
     print(f"  Synced: {success} success, {errors} errors")
 
     # Refresh materialized views
@@ -246,6 +263,7 @@ def main():
         print("  Materialized views refreshed")
 
     # Update state
+    state = load_state()
     state["last_sync"] = datetime.now(timezone.utc).isoformat()
     state["total_synced"] = state.get("total_synced", 0) + success
     save_state(state)
