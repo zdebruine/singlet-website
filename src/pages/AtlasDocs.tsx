@@ -107,10 +107,10 @@ const AtlasDocs = () => {
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
   }, []);
   const { data: stats } = useCorpusStats();
-  const totalSamples = stats?.total_samples?.toLocaleString() ?? "2,568+";
-  const successSamples = stats?.success_samples?.toLocaleString() ?? "1,080+";
-  const totalCells = stats?.total_cells ? (stats.total_cells / 1e6).toFixed(1) + "M" : "3.1M";
-  const seriesCount = stats?.series_count?.toLocaleString() ?? "1,227+";
+  const totalSamples = stats?.total_samples?.toLocaleString() ?? "2,708+";
+  const successSamples = stats?.success_samples?.toLocaleString() ?? "1,138+";
+  const totalCells = stats?.total_cells ? (stats.total_cells / 1e6).toFixed(1) + "M" : "3.3M";
+  const seriesCount = stats?.series_count?.toLocaleString() ?? "1,300+";
 
   return (
     <div className="min-h-screen bg-background">
