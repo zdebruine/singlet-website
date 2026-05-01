@@ -574,7 +574,7 @@ csc = singlet.to_csc(adata.X)  # CSR → CSC`}
             <h2 className="font-display text-2xl font-bold text-foreground tracking-tightest mb-6">MCP Tools</h2>
 
             <p className="text-sm text-muted-foreground leading-relaxed mb-6">
-              The singlet MCP (Model Context Protocol) server exposes 10 tools to AI coding assistants —
+              The singlet MCP (Model Context Protocol) server exposes 11 tools to AI coding assistants —
               Claude Desktop, VS Code Copilot, Cursor, and any MCP-compatible client. Query the atlas
               with natural language through your IDE.
             </p>
@@ -617,9 +617,10 @@ python -m singlet.mcp.server
                     ["singlet_browse", "Browse samples with filters (organism, protocol, tissue, status)"],
                     ["singlet_protocols", "Protocol distribution and success rates"],
                     ["singlet_quality", "Quality tier breakdown (gold/silver/bronze)"],
-                    ["singlet_tissues", "Tissue distribution across samples (32 categories)"],
+                    ["singlet_tissues", "Tissue distribution across samples (36 categories)"],
                     ["singlet_failures", "Pipeline failure category breakdown"],
                     ["singlet_cell_types", "Cell type distribution (PBMC, T cells, stem cells, etc.)"],
+                    ["singlet_species", "Species list with sample counts (8 deduplicated species)"],
                   ].map(([tool, desc]) => (
                     <tr key={tool}>
                       <td className="px-4 py-2 font-mono text-xs text-primary">{tool}</td>
