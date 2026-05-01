@@ -302,17 +302,18 @@ singlet.species()
               title="singlet.species()"
             />
 
-            <h3 className="font-display text-base font-semibold text-foreground mb-3 mt-8">Tissue / source breakdown</h3>
+            <h3 className="font-display text-base font-semibold text-foreground mb-3 mt-8">Tissue breakdown</h3>
             <CodeBlock
-              code={`# See tissue distribution across SUCCESS samples
+              code={`# See normalized tissue distribution across SUCCESS samples
 tissues = singlet.tissues()
 print(tissues.head(10))
-#                  source  count
-# 0                 blood     94
-# 1            K562 cells     59
-# 2                  PBMC     38
-# 3                 brain     32
-# 4           bone marrow     29
+#          tissue  count
+# 0         blood     54
+# 1         brain     41
+# 2   bone marrow     21
+# 3          lung     17
+# 4         tumor     16
+# 5          pbmc     13
 
 # Filter samples by tissue directly
 brain = singlet.samples(tissue="brain", status="SUCCESS")
@@ -562,6 +563,9 @@ singlet.set_backend("local")  # Local files only`}
                 { fn: "singlet.datasets(gse_id?)", desc: "List datasets (alias for filtered catalog). Returns DataFrame." },
                 { fn: "singlet.info(gse_id)", desc: "Metadata for a specific GEO series. Returns dict." },
                 { fn: "singlet.species()", desc: "List all species in the atlas. Returns list of strings." },
+                { fn: "singlet.tissues()", desc: "Normalized tissue distribution across SUCCESS samples (80 categories)." },
+                { fn: "singlet.protocols()", desc: "Protocol distribution across SUCCESS samples." },
+                { fn: "singlet.quality_tiers()", desc: "Quality tier breakdown (gold/silver/bronze) with metrics." },
                 { fn: "singlet.sample_index(gse_id?)", desc: "Per-sample column offsets within .1pz files. Returns DataFrame." },
               ]}
             />
