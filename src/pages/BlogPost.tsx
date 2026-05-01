@@ -5,6 +5,76 @@ import Footer from "@/components/Footer";
 
 // Blog post content (will move to Supabase/MDX later)
 const POST_CONTENT: Record<string, { title: string; date: string; tags: string[]; content: string }> = {
+  "protocol-diversity-atlas": {
+    title: "12 Protocols, 1 Pipeline: How singlify Handles scRNA-seq Diversity",
+    date: "2026-05-08",
+    tags: ["protocols", "atlas", "diversity", "api"],
+    content: `
+## The Protocol Landscape
+
+Single-cell RNA-seq isn't one technology — it's a family of protocols with different chemistry, barcode structures, and read layouts. The singlet atlas now includes data from **12 distinct protocols**, all processed through a single pipeline:
+
+| Protocol | Samples | Success Rate |
+|----------|---------|-------------|
+| 10x Chromium v3 | 267 | 56% |
+| Drop-seq | 98 | 83% |
+| 10x Chromium v2 | 97 | 60% |
+| 10x (suspect/ambiguous) | 57 | 63% |
+| CEL-Seq2 | 22 | 47% |
+| sci-RNA-seq | 19 | 27% |
+| MARS-seq | 18 | 51% |
+| Plate-based | 2 | 67% |
+
+Drop-seq leads in success rate (83%) thanks to its simpler barcode structure. 10x v2/v3 account for the bulk of the atlas. Plate-based and Smart-seq2 are emerging categories.
+
+## Query by Protocol
+
+The Python package now has \`singlet.protocols()\` for instant protocol breakdown:
+
+\`\`\`python
+import singlet
+
+# Protocol distribution
+singlet.protocols()
+#   protocol     count
+# 0    10xv3       267
+# 1  dropseq        98
+# 2    10xv2        97
+# ...
+
+# Filter samples by protocol
+dropseq = singlet.samples(protocol="dropseq", status="SUCCESS")
+print(f"{len(dropseq)} Drop-seq samples, {dropseq['cells_called'].sum():,} cells")
+\`\`\`
+
+## Why Protocol Diversity Matters
+
+1. **Benchmark fairness** — comparisons against STAR/Cell Ranger are only valid when the protocol is correctly identified
+2. **Auto-detection validation** — singlify auto-detects protocol from read structure; diverse protocols stress-test this
+3. **User discoverability** — researchers can find atlas data matching their own lab's protocol
+
+## Pipeline Architecture
+
+singlify handles protocol diversity through a modular barcode extraction layer:
+- **10x v2/v3**: 16bp CB + 10/12bp UMI from R1
+- **Drop-seq**: variable-length CB + UMI from R1
+- **CEL-Seq2**: 6bp CB + 6bp UMI from R1
+- **sci-RNA-seq**: combinatorial indexing from R1 + R2
+- **MARS-seq**: plate-based pooling with 7bp barcode
+
+All paths converge at the same STAR aligner and gene counting engine, ensuring consistent quantification regardless of protocol.
+
+## What's Next
+
+Priority areas for protocol expansion:
+- **10x Multiome** (ATAC + GEX) — in progress
+- **Visium** spatial transcriptomics — in progress
+- **Parse Biosciences** — evaluating
+- **Scale Bio** — evaluating
+
+The pipeline page on singlet.bio shows real-time protocol distribution from the live corpus.
+`,
+  },
   "tissue-metadata-browse": {
     title: "Search by Tissue: 2,568 Samples Now Enriched with GEO Characteristics",
     date: "2026-05-07",
