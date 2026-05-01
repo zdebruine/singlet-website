@@ -16,6 +16,15 @@ interface BlogPost {
 // Static blog posts until Supabase blog_posts table is live
 const POSTS: BlogPost[] = [
   {
+    slug: "tissue-metadata-browse",
+    title: "Search by Tissue: 2,568 Samples Now Enriched with GEO Characteristics",
+    date: "2026-05-07",
+    summary:
+      "Every sample in the atlas now has structured GEO metadata — tissue type, cell type, disease state, age, and more. The Browse page is searchable by tissue (blood, brain, lung, PBMC, etc.) and sample detail pages show full characteristics.",
+    tags: ["metadata", "browse", "enrichment", "usability"],
+    author: "singlet-product",
+  },
+  {
     slug: "atlas-3m-cells-9-species",
     title: "3.1 Million Cells Across 9 Species: Atlas Quality Update",
     date: "2026-05-06",

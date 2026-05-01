@@ -5,6 +5,77 @@ import Footer from "@/components/Footer";
 
 // Blog post content (will move to Supabase/MDX later)
 const POST_CONTENT: Record<string, { title: string; date: string; tags: string[]; content: string }> = {
+  "tissue-metadata-browse": {
+    title: "Search by Tissue: 2,568 Samples Now Enriched with GEO Characteristics",
+    date: "2026-05-07",
+    tags: ["metadata", "browse", "enrichment", "usability"],
+    content: `
+## Every Sample Now Has Structured Metadata
+
+We've enriched all **2,568 samples** in the singlet atlas with detailed metadata from GEO, including tissue/cell source, structured characteristics, and experimental annotations. This makes the Browse page dramatically more useful.
+
+## What's New
+
+### Searchable by Tissue
+The Browse page search now matches against **tissue/cell source** in addition to GSM IDs, GSE IDs, and titles. Search for "brain", "lung", "PBMC", or "tumor" and instantly find relevant samples.
+
+### Structured Characteristics
+Each sample detail page now shows a **Characteristics** section with key-value pairs extracted from GEO:
+
+| Characteristic | Coverage |
+|---------------|----------|
+| **Tissue** | 678 samples |
+| **Cell type** | 501 samples |
+| **Cell line** | 207 samples |
+| **Treatment** | 200 samples |
+| **Age** | 150 samples |
+| **Genotype** | 112 samples |
+| **Strain** | 104 samples |
+| **Sex** | 92 samples |
+| **Disease state** | 72 samples |
+| **Developmental stage** | 61 samples |
+
+### Source Tissue in Table View
+The Browse table now shows the sample source (e.g., "blood", "brain", "K562 cells") directly beneath each sample's title.
+
+## Top Tissue Types
+
+| Source | Samples |
+|--------|---------|
+| Blood | 94 |
+| K562 cells | 59 |
+| PBMC/PBMCs | 68 |
+| Brain | 32 |
+| Bone marrow | 29 |
+| Lung | 24 |
+| Peripheral blood | 18 |
+| Tumor | 15 |
+| Dorsal root ganglion | 14 |
+| Skin | 11 |
+
+## Python API
+
+The \`singlet\` package now includes a \`tissues()\` function:
+
+\`\`\`python
+import singlet
+
+# See all tissue types
+tissues = singlet.tissues()
+print(tissues.head(10))
+
+# Search samples by tissue
+brain_samples = singlet.samples(status="SUCCESS")
+brain_samples = brain_samples[brain_samples['source'].str.contains('brain', case=False, na=False)]
+\`\`\`
+
+## Technical Details
+
+Metadata was extracted from GEO SOFT format records (\`!Sample_characteristics_ch1\` and \`!Sample_source_name_ch1\` fields). The structured characteristics are stored as JSON objects in Supabase, enabling future faceted search.
+
+All 2,568 samples (not just SUCCESS) have been enriched, so even samples that failed processing have their biological context preserved for triage and re-processing decisions.
+`,
+  },
   "atlas-3m-cells-9-species": {
     title: "3.1 Million Cells Across 9 Species: Atlas Quality Update",
     date: "2026-05-06",
