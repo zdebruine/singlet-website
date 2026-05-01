@@ -263,9 +263,12 @@ df = singlet.samples()
 # Filter by organism, status, minimum cells
 success = singlet.samples(organism="Homo sapiens", status="SUCCESS", min_cells=500)
 
-# Text search across titles, organisms, protocols
-lung = singlet.samples(search="lung", status="SUCCESS")
-brain = singlet.samples(search="brain", organism="Homo sapiens", min_cells=1000)
+# Filter by tissue/source directly
+brain = singlet.samples(tissue="brain", status="SUCCESS")
+lung = singlet.samples(tissue="lung", organism="Homo sapiens")
+
+# Text search across titles, organisms, protocols, sources
+cardiac = singlet.samples(search="cardiac", min_cells=1000)
 
 # Get samples from a specific series
 series_samples = singlet.samples(gse_id="GSE174399")
@@ -275,7 +278,7 @@ gold = singlet.samples(quality_tier="gold")   # MR≥70%, cells≥500
 silver = singlet.samples(quality_tier="silver") # MR≥50%, cells≥100
 
 # Columns: gsm_id, gse_id, organism, protocol, status, mapping_rate,
-# cells_called, median_genes, median_umis, mt_pct, doublet_rate, title`}
+# cells_called, median_genes, median_umis, mt_pct, doublet_rate, title, source`}
               title="singlet.samples()"
             />
 
@@ -311,9 +314,9 @@ print(tissues.head(10))
 # 3                 brain     32
 # 4           bone marrow     29
 
-# Search samples by tissue
-brain = singlet.samples(status="SUCCESS")
-brain = brain[brain['source'].str.contains('brain', case=False, na=False)]`}
+# Filter samples by tissue directly
+brain = singlet.samples(tissue="brain", status="SUCCESS")
+print(f"{len(brain)} brain samples, {brain['cells_called'].sum():,.0f} cells")`}
               title="singlet.tissues()"
             />
           </section>
