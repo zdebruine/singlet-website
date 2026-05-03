@@ -16,6 +16,15 @@ interface BlogPost {
 // Static blog posts until Supabase blog_posts table is live
 const POSTS: BlogPost[] = [
   {
+    slug: "5-million-cells-milestone",
+    title: "5 Million Cells: The Singlet Atlas Accelerates",
+    date: "2026-05-09",
+    summary:
+      "The singlet atlas has surpassed 5.2 million cells across 1,899 successful samples from 8 species. Processing throughput has accelerated dramatically — adding 1.2M cells in a single day.",
+    tags: ["milestone", "corpus", "cells", "atlas", "scale", "acceleration"],
+    author: "singlet-product",
+  },
+  {
     slug: "4-million-cells-milestone",
     title: "4 Million Cells: The Singlet Atlas Passes a Major Milestone",
     date: "2026-05-08",

@@ -5,6 +5,90 @@ import Footer from "@/components/Footer";
 
 // Blog post content (will move to Supabase/MDX later)
 const POST_CONTENT: Record<string, { title: string; date: string; tags: string[]; content: string }> = {
+  "5-million-cells-milestone": {
+    title: "5 Million Cells: The Singlet Atlas Accelerates",
+    date: "2026-05-09",
+    tags: ["milestone", "corpus", "cells", "atlas", "scale", "acceleration"],
+    content: `## 5 Million Cells
+
+Just one day after crossing the 4 million cell milestone, the singlet atlas has blown past **5 million cells** — reaching 5.26 million across 1,899 successful samples.
+
+### By the Numbers
+
+| Metric | Value |
+|--------|-------|
+| Total processed | 4,345 |
+| Passing QC (SUCCESS) | 1,899 |
+| Total cells | 5.26 million |
+| Avg cells/sample | 2,772 |
+| Species | 8 |
+| Protocols | 29 |
+| GEO series | 827 |
+| Median mapping rate | 77.2% |
+| Success rate | 43.7% |
+
+### Growth Trajectory
+
+| Milestone | Samples (SUCCESS) | Date |
+|-----------|-------------------|------|
+| 1 million cells | ~350 | 2026-04 |
+| 2 million cells | ~700 | 2026-04 |
+| 3 million cells | ~1,050 | 2026-04 |
+| 4 million cells | 1,386 | 2026-05-01 |
+| **5 million cells** | **1,899** | **2026-05-02** |
+
+### Acceleration
+
+The pipeline is now processing samples faster than ever. Batches c199 and c200 (200 samples each) are running simultaneously, with results flowing in continuously. The jump from 4M to 5M took **less than 24 hours**.
+
+Key factors:
+- **Parallel batch processing** on Clipper HPC (multiple compute nodes)
+- **Optimized ETL** syncing results to Supabase in real-time
+- **Robust protocol detection** handling 29 distinct single-cell protocols
+
+### Species Breakdown
+
+| Species | Samples | % |
+|---------|---------|---|
+| Homo sapiens | 1,256 | 66.1% |
+| Mus musculus | 478 | 25.2% |
+| Macaca mulatta | 74 | 3.9% |
+| Drosophila melanogaster | 31 | 1.6% |
+| Gallus gallus | 8 | 0.4% |
+| Others (pig, cat, virus) | 10 | 0.5% |
+
+### What 5 Million Cells Enables
+
+At 5M+ cells, the atlas unlocks:
+
+- **Population-scale analyses** — enough human samples (1,256) for demographic comparisons
+- **Cross-species gene regulation** — 478 mouse + 74 macaque samples enable evolutionary comparisons
+- **Protocol benchmarking** at statistical power — 727 10xv3, 334 10xv2, 156 Drop-seq samples
+- **Rare cell type discovery** with increased statistical confidence
+
+### Query the Atlas
+
+\`\`\`python
+import singlet
+
+print(singlet.summary())
+# → singlet atlas: 4,345 samples (1,899 SUCCESS) • 8 species • 29 protocols • 5.2M cells
+
+# Filter by species
+human = singlet.samples(organism="Homo sapiens", status="SUCCESS")
+print(f"{len(human)} human samples")
+
+# Browse by tissue
+singlet.tissues()
+\`\`\`
+
+### What's Next
+
+- **10 million cells** is the next major target
+- Expanding non-human primate coverage
+- CITE-seq and multi-modal support
+- Automated nightly ETL cron for continuous sync`,
+  },
   "4-million-cells-milestone": {
     title: "4 Million Cells: The Singlet Atlas Passes a Major Milestone",
     date: "2026-05-08",
