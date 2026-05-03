@@ -108,8 +108,8 @@ const AtlasDocs = () => {
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
   }, []);
   const { data: stats } = useCorpusStats();
-  const totalSamples = stats?.total_samples?.toLocaleString() ?? "4,484+";
-  const successSamples = stats?.success_samples?.toLocaleString() ?? "1,968+";
+  const totalSamples = stats?.total_samples?.toLocaleString() ?? "4,493+";
+  const successSamples = stats?.success_samples?.toLocaleString() ?? "1,971+";
   const totalCells = stats?.total_cells ? (stats.total_cells / 1e6).toFixed(1) + "M" : "5.4M";
   const seriesCount = stats?.series_count?.toLocaleString() ?? "1,647+";
 
@@ -617,9 +617,9 @@ python -m singlet.mcp.server
                     ["singlet_browse", "Browse samples with filters (organism, protocol, tissue, status)"],
                     ["singlet_protocols", "Protocol distribution and success rates"],
                     ["singlet_quality", "Quality tier breakdown (gold/silver/bronze)"],
-                    ["singlet_tissues", "Tissue distribution across samples (230+ categories)"],
+                    ["singlet_tissues", "Tissue distribution across samples (37 normalized categories)"],
                     ["singlet_failures", "Pipeline failure category breakdown"],
-                    ["singlet_cell_types", "Cell type distribution (230+ categories from GEO metadata)"],
+                    ["singlet_cell_types", "Cell type distribution (40 normalized categories)"],
                     ["singlet_species", "Species list with sample counts (8 deduplicated species)"],
                   ].map(([tool, desc]) => (
                     <tr key={tool}>
@@ -639,7 +639,7 @@ python -m singlet.mcp.server
               code={`# These natural language queries get routed to MCP tools:
 
 "How many samples are in the singlet atlas?"
-# → singlet_stats → "4,484 samples (1,968 SUCCESS), 5.4M cells, 8 species"
+# → singlet_stats → "4,493 samples (1,971 SUCCESS), 5.4M cells, 8 species"
 
 "Find mouse brain scRNA-seq datasets"
 # → singlet_browse(organism="Mus musculus", tissue="brain")
