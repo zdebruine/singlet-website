@@ -343,7 +343,15 @@ const Browse = () => {
                           </Link>
                           {s.title && <div className="text-xs text-muted-foreground mt-0.5 truncate max-w-[240px]">{s.title}</div>}
                           {s.source && <div className="text-[10px] text-muted-foreground/70 mt-0.5 truncate max-w-[200px]">{s.source}</div>}
-                          {s.gse_id && <Link to={`/series/${s.gse_id}`} className="text-[10px] text-muted-foreground/60 hover:text-primary font-mono">{s.gse_id}</Link>}
+                          <div className="flex items-center gap-1 mt-0.5">
+                            {s.gse_id && <Link to={`/series/${s.gse_id}`} className="text-[10px] text-muted-foreground/60 hover:text-primary font-mono">{s.gse_id}</Link>}
+                            {(s.characteristics as Record<string, string> | null)?.tissue && (
+                              <span className="text-[10px] bg-primary/10 text-primary px-1 rounded">{(s.characteristics as Record<string, string>).tissue}</span>
+                            )}
+                            {(s.characteristics as Record<string, string> | null)?.["cell type"] && (
+                              <span className="text-[10px] bg-accent/50 text-accent-foreground px-1 rounded">{(s.characteristics as Record<string, string>)["cell type"]}</span>
+                            )}
+                          </div>
                         </td>
                         <td className="px-4 py-3 text-xs text-muted-foreground italic">{s.organism}</td>
                         <td className="px-4 py-3">
