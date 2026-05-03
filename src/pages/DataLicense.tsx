@@ -222,7 +222,7 @@ const DataLicense = () => (
                         For commercial licensing, Enterprise terms, or specific questions about data reuse.
                     </p>
                     <a
-                        href="mailto:hello@singletdb.com?subject=Data%20License%20Inquiry"
+                        href="mailto:hello@singlet.bio?subject=Data%20License%20Inquiry"
                         className="inline-flex items-center gap-2 px-6 py-2.5 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity"
                     >
                         Contact Us <ArrowRight size={14} />

@@ -81,7 +81,7 @@ const Privacy = () => (
             <h2 className="font-display text-lg font-bold text-foreground mb-3">9. Contact</h2>
             <p className="text-sm leading-relaxed">
               For privacy-related questions, email{" "}
-              <a href="mailto:hello@singletdb.com" className="text-primary hover:underline">hello@singletdb.com</a>.
+              <a href="mailto:hello@singlet.bio" className="text-primary hover:underline">hello@singlet.bio</a>.
             </p>
           </section>
         </div>
