@@ -1,4 +1,5 @@
 import { useAuth } from "@/hooks/useAuth";
+import { useCorpusStats } from "@/hooks/useDatabase";
 import { Link } from "react-router-dom";
 import { Database, Download, Filter, LogOut, ArrowRight, Search, Bot } from "lucide-react";
 import Navbar from "@/components/Navbar";
@@ -6,6 +7,7 @@ import Footer from "@/components/Footer";
 
 const Dashboard = () => {
   const { user, signOut } = useAuth();
+  const { data: stats } = useCorpusStats();
 
   return (
     <div className="min-h-screen bg-background">
@@ -30,6 +32,21 @@ const Dashboard = () => {
           </div>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+            {stats && (
+              <div className="col-span-full grid grid-cols-2 md:grid-cols-4 gap-4 rounded-xl border border-primary/20 bg-primary/5 p-4 mb-2">
+                {[
+                  { label: "Samples", value: stats.total_samples?.toLocaleString() },
+                  { label: "Successful", value: stats.success_samples?.toLocaleString() },
+                  { label: "Total Cells", value: stats.total_cells ? `${(stats.total_cells / 1e6).toFixed(1)}M` : "—" },
+                  { label: "Species", value: stats.species_count },
+                ].map((s) => (
+                  <div key={s.label} className="text-center">
+                    <div className="font-mono text-lg font-bold text-primary">{s.value}</div>
+                    <div className="text-[11px] text-muted-foreground uppercase tracking-wide">{s.label}</div>
+                  </div>
+                ))}
+              </div>
+            )}
             {[
               {
                 icon: Search,
