@@ -210,7 +210,7 @@ const Browse = () => {
                 <input
                   ref={searchRef}
                   type="text"
-                  placeholder="Search by GSM, GSE, title, tissue, or cell type... (press / to focus)"
+                  placeholder="Search by GSM, GSE, title, or tissue... (press / to focus)"
                   value={searchInput}
                   onChange={(e) => setSearchInput(e.target.value)}
                   className="w-full pl-10 pr-4 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
@@ -343,15 +343,7 @@ const Browse = () => {
                           </Link>
                           {s.title && <div className="text-xs text-muted-foreground mt-0.5 truncate max-w-[240px]">{s.title}</div>}
                           {s.source && <div className="text-[10px] text-muted-foreground/70 mt-0.5 truncate max-w-[200px]">{s.source}</div>}
-                          <div className="flex items-center gap-1 mt-0.5">
-                            {s.gse_id && <Link to={`/series/${s.gse_id}`} className="text-[10px] text-muted-foreground/60 hover:text-primary font-mono">{s.gse_id}</Link>}
-                            {(s.characteristics as Record<string, string> | null)?.tissue && (
-                              <span className="text-[10px] bg-primary/10 text-primary px-1 rounded">{(s.characteristics as Record<string, string>).tissue}</span>
-                            )}
-                            {(s.characteristics as Record<string, string> | null)?.["cell type"] && (
-                              <span className="text-[10px] bg-accent/50 text-accent-foreground px-1 rounded">{(s.characteristics as Record<string, string>)["cell type"]}</span>
-                            )}
-                          </div>
+                          {s.gse_id && <Link to={`/series/${s.gse_id}`} className="text-[10px] text-muted-foreground/60 hover:text-primary font-mono">{s.gse_id}</Link>}
                         </td>
                         <td className="px-4 py-3 text-xs text-muted-foreground italic">{s.organism}</td>
                         <td className="px-4 py-3">
@@ -394,10 +386,14 @@ const Browse = () => {
                   <button
                     onClick={() => {
                       if (!samples.length) return;
-                      const cols = ["gsm_id", "gse_id", "organism", "protocol", "status", "source", "title", "mapping_rate", "cells_called", "median_genes", "median_umis", "mt_pct", "doublet_rate"];
+                      const cols = ["gsm_id", "gse_id", "organism", "protocol", "status", "source", "title", "tissue", "cell_type", "mapping_rate", "cells_called", "median_genes", "median_umis", "mt_pct", "doublet_rate"];
                       const header = cols.join(",");
                       const rows = samples.map((s: Record<string, unknown>) => cols.map((c) => {
-                        const v = s[c];
+                        let v = s[c];
+                        if (v == null && (c === "tissue" || c === "cell_type")) {
+                          const chars = s["characteristics"] as Record<string, string> | null;
+                          v = chars?.[c === "cell_type" ? "cell type" : c] ?? "";
+                        }
                         if (v == null) return "";
                         const str = String(v);
                         return str.includes(",") ? `"${str}"` : str;
