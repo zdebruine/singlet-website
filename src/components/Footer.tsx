@@ -94,7 +94,7 @@ const Footer = () => (
 
           {/* Right — socials + copyright */}
           <div className="flex items-center gap-5">
-            <a href="https://github.com/singletdb" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground transition-colors">
+            <a href="https://github.com/Singlet-Bio" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground transition-colors">
               <Github size={18} />
             </a>
             <a href="https://x.com/singletdb" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground transition-colors">

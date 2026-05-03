@@ -99,7 +99,7 @@ const Navbar = () => {
               {link.label}
             </Link>
           ))}
-          <a href="https://github.com/singletdb" target="_blank" rel="noopener noreferrer" className="text-sm text-muted-foreground py-1">
+          <a href="https://github.com/Singlet-Bio" target="_blank" rel="noopener noreferrer" className="text-sm text-muted-foreground py-1">
             GitHub
           </a>
           <div className="border-t border-border pt-3 mt-1 flex flex-col gap-3">

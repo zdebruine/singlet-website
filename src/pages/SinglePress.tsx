@@ -38,7 +38,7 @@ const SinglePress = () => {
           </p>
           <div className="flex flex-wrap gap-4 justify-center">
             <a
-              href="https://github.com/singletdb/singlepress"
+              href="https://github.com/Singlet-Bio/singlepress"
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 px-7 py-3 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity"

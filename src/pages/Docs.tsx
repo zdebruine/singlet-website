@@ -178,7 +178,7 @@ const Docs = () => {
             <div className="inline-flex items-center gap-2 px-4 py-2.5 rounded-md bg-muted border border-border font-mono text-sm text-foreground">
               pip install singlet
             </div>
-            <a href="https://github.com/singletdb/singlet" target="_blank" rel="noopener noreferrer"
+            <a href="https://github.com/Singlet-Bio/singlet" target="_blank" rel="noopener noreferrer"
               className="inline-flex items-center gap-2 px-4 py-2.5 rounded-md border border-border text-sm text-muted-foreground hover:text-foreground transition-colors">
               <Github size={16} /> GitHub
             </a>

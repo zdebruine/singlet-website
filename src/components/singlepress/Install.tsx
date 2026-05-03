@@ -35,7 +35,7 @@ const SinglePressInstall = () => {
         </div>
         <div className="flex flex-wrap justify-center gap-4">
           <a
-            href="https://github.com/singletdb/singlepress"
+            href="https://github.com/Singlet-Bio/singlepress"
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-2 px-5 py-2.5 rounded-md border border-border bg-secondary text-secondary-foreground text-sm font-medium hover:bg-muted transition-colors"
