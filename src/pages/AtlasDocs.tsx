@@ -617,9 +617,9 @@ python -m singlet.mcp.server
                     ["singlet_browse", "Browse samples with filters (organism, protocol, tissue, status)"],
                     ["singlet_protocols", "Protocol distribution and success rates"],
                     ["singlet_quality", "Quality tier breakdown (gold/silver/bronze)"],
-                    ["singlet_tissues", "Tissue distribution across samples (36 categories)"],
+                    ["singlet_tissues", "Tissue distribution across samples (230+ categories)"],
                     ["singlet_failures", "Pipeline failure category breakdown"],
-                    ["singlet_cell_types", "Cell type distribution (PBMC, T cells, stem cells, etc.)"],
+                    ["singlet_cell_types", "Cell type distribution (230+ categories from GEO metadata)"],
                     ["singlet_species", "Species list with sample counts (8 deduplicated species)"],
                   ].map(([tool, desc]) => (
                     <tr key={tool}>
