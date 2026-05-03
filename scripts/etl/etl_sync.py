@@ -60,7 +60,7 @@ def save_state(state: dict):
     STATE_FILE.write_text(json.dumps(state, indent=2))
 
 
-def enrich_geo_metadata(client: Client, max_samples: int = 20):
+def enrich_geo_metadata(client: Client, max_samples: int = 50):
     """Fetch title/source from NCBI for samples missing them. Rate-limited."""
     import urllib.request
     import time as _time
