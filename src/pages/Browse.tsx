@@ -343,6 +343,18 @@ const Browse = () => {
                           </Link>
                           {s.title && <div className="text-xs text-muted-foreground mt-0.5 truncate max-w-[240px]">{s.title}</div>}
                           {s.source && <div className="text-[10px] text-muted-foreground/70 mt-0.5 truncate max-w-[200px]">{s.source}</div>}
+                          {(() => {
+                            const chars = (s as Record<string, unknown>).characteristics as Record<string, string> | null;
+                            const tissue = chars?.tissue;
+                            const cellType = chars?.["cell type"];
+                            if (!tissue && !cellType) return null;
+                            return (
+                              <div className="flex gap-1 mt-0.5 flex-wrap">
+                                {tissue && <span className="text-[10px] px-1.5 py-0 rounded bg-primary/10 text-primary/80">{tissue}</span>}
+                                {cellType && <span className="text-[10px] px-1.5 py-0 rounded bg-violet-500/10 text-violet-600/80">{cellType}</span>}
+                              </div>
+                            );
+                          })()}
                           {s.gse_id && <Link to={`/series/${s.gse_id}`} className="text-[10px] text-muted-foreground/60 hover:text-primary font-mono">{s.gse_id}</Link>}
                         </td>
                         <td className="px-4 py-3 text-xs text-muted-foreground italic">{s.organism}</td>
