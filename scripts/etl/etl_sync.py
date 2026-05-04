@@ -221,6 +221,7 @@ def enrich_result(result_path: Path, batch_index: dict[str, dict]) -> dict[str, 
         "cells_called": data.get("cells_called") or data.get("cells"),
         "wall_time_s": int(data["wall_time_s"]) if data.get("wall_time_s") else None,
         "failure_category": data.get("failure_category") or None,
+        "pipeline_date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
     }
 
     # Add QC metrics (from summary.json or result JSON)
