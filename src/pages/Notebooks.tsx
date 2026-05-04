@@ -23,7 +23,7 @@ const NOTEBOOKS: Notebook[] = [
     id: "quickstart",
     title: "Atlas Quickstart",
     description:
-      "Browse the 3,100+ sample catalog, filter by species/tissue/cell type/protocol/quality tier, explore datasets and series — all with the singlet-bio Python package.",
+      "Browse the 4,500+ sample catalog, filter by species/tissue/cell type/protocol/quality tier, explore datasets and series — all with the singlet-bio Python package.",
     icon: <BookOpen size={20} />,
     tags: ["beginner", "python", "catalog"],
     githubUrl: `${BASE}/quickstart.ipynb`,
@@ -78,7 +78,7 @@ const NOTEBOOKS: Notebook[] = [
     id: "corpus_analytics",
     title: "Corpus Analytics",
     description:
-      "Atlas-wide quality distributions: mapping rates, cells/sample, genes/cell across 1,960+ successful samples and 8 species.",
+      "Atlas-wide quality distributions: mapping rates, cells/sample, genes/cell across 1,899 successful samples and 8 species.",
     icon: <BarChart3 size={20} />,
     tags: ["analytics", "dashboard", "corpus"],
     githubUrl: `${BASE}/corpus_analytics.ipynb`,
@@ -221,7 +221,7 @@ const NOTEBOOKS: Notebook[] = [
     id: "protocol_detection",
     title: "Protocol Auto-Detection",
     description:
-      "Corpus-wide protocol detection: 29 protocols across 1,960+ samples. QC metrics by protocol, mapping rates, cell recovery. Fully automated.",
+      "Corpus-wide protocol detection: 29 protocols across 1,899+ samples. QC metrics by protocol, mapping rates, cell recovery. Fully automated.",
     icon: <Search size={20} />,
     tags: ["protocol", "autodetect"],
     githubUrl: `${BASE}/protocol_detection.ipynb`,
