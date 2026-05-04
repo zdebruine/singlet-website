@@ -111,7 +111,7 @@ const AtlasDocs = () => {
   const totalSamples = stats?.total_samples?.toLocaleString() ?? "4,697";
   const successSamples = stats?.success_samples?.toLocaleString() ?? "2,072";
   const totalCells = stats?.total_cells ? (stats.total_cells / 1e6).toFixed(1) + "M" : "5.7M";
-  const seriesCount = stats?.series_count?.toLocaleString() ?? "873";
+  const seriesCount = stats?.series_count?.toLocaleString() ?? "1,711";
 
   return (
     <div className="min-h-screen bg-background">
