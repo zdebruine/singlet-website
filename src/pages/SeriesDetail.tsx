@@ -162,19 +162,49 @@ const SeriesDetail = () => {
 
           {/* Tissue/Source Tags */}
           {(() => {
+            const tissues = [...new Set(samples.map((s) => {
+              const chars = (s as Record<string, unknown>).characteristics as Record<string, string> | null;
+              return chars?.tissue;
+            }).filter(Boolean))] as string[];
+            const cellTypes = [...new Set(samples.map((s) => {
+              const chars = (s as Record<string, unknown>).characteristics as Record<string, string> | null;
+              return chars?.["cell type"];
+            }).filter(Boolean))] as string[];
             const sources = [...new Set(samples.map((s) => s.source).filter(Boolean))];
-            if (sources.length === 0) return null;
+            if (tissues.length === 0 && cellTypes.length === 0 && sources.length === 0) return null;
             return (
               <div className="mb-6">
-                <h2 className="font-display text-sm font-bold text-foreground mb-2 uppercase tracking-wider">Tissues / Sources</h2>
-                <div className="flex gap-2 flex-wrap">
-                  {sources.slice(0, 15).map((src) => (
-                    <span key={src} className="px-3 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary">
-                      {src}
-                    </span>
-                  ))}
-                  {sources.length > 15 && <span className="px-3 py-1 text-xs text-muted-foreground">+{sources.length - 15} more</span>}
-                </div>
+                {tissues.length > 0 && (
+                  <>
+                    <h2 className="font-display text-sm font-bold text-foreground mb-2 uppercase tracking-wider">Tissues</h2>
+                    <div className="flex gap-2 flex-wrap mb-3">
+                      {tissues.slice(0, 15).map((t) => (
+                        <span key={t} className="px-3 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary">{t}</span>
+                      ))}
+                    </div>
+                  </>
+                )}
+                {cellTypes.length > 0 && (
+                  <>
+                    <h2 className="font-display text-sm font-bold text-foreground mb-2 uppercase tracking-wider">Cell Types</h2>
+                    <div className="flex gap-2 flex-wrap mb-3">
+                      {cellTypes.slice(0, 15).map((ct) => (
+                        <span key={ct} className="px-3 py-1 rounded-full text-xs font-medium bg-violet-500/10 text-violet-600">{ct}</span>
+                      ))}
+                    </div>
+                  </>
+                )}
+                {sources.length > 0 && tissues.length === 0 && (
+                  <>
+                    <h2 className="font-display text-sm font-bold text-foreground mb-2 uppercase tracking-wider">Sources</h2>
+                    <div className="flex gap-2 flex-wrap">
+                      {sources.slice(0, 15).map((src) => (
+                        <span key={src} className="px-3 py-1 rounded-full text-xs font-medium bg-muted text-muted-foreground">{src}</span>
+                      ))}
+                      {sources.length > 15 && <span className="px-3 py-1 text-xs text-muted-foreground">+{sources.length - 15} more</span>}
+                    </div>
+                  </>
+                )}
               </div>
             );
           })()}
