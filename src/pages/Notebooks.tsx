@@ -78,7 +78,7 @@ const NOTEBOOKS: Notebook[] = [
     id: "corpus_analytics",
     title: "Corpus Analytics",
     description:
-      "Atlas-wide quality distributions: mapping rates, cells/sample, genes/cell across 1,899 successful samples and 8 species.",
+      "Atlas-wide quality distributions: mapping rates, cells/sample, genes/cell across 2,072 successful samples and 8 species.",
     icon: <BarChart3 size={20} />,
     tags: ["analytics", "dashboard", "corpus"],
     githubUrl: `${BASE}/corpus_analytics.ipynb`,
@@ -221,7 +221,7 @@ const NOTEBOOKS: Notebook[] = [
     id: "protocol_detection",
     title: "Protocol Auto-Detection",
     description:
-      "Corpus-wide protocol detection: 29 protocols across 1,899+ samples. QC metrics by protocol, mapping rates, cell recovery. Fully automated.",
+      "Corpus-wide protocol detection: 29 protocols across 2,072+ samples. QC metrics by protocol, mapping rates, cell recovery. Fully automated.",
     icon: <Search size={20} />,
     tags: ["protocol", "autodetect"],
     githubUrl: `${BASE}/protocol_detection.ipynb`,
@@ -256,7 +256,7 @@ const Notebooks = () => (
 
 import singlet
 
-# Browse the 2,712-sample atlas
+# Browse the 4,697-sample atlas
 singlet.summary()
 df = singlet.samples(organism="Homo sapiens", status="SUCCESS")
 print(f"{len(df)} successful human samples")
