@@ -23,7 +23,7 @@ const NOTEBOOKS: Notebook[] = [
     id: "quickstart",
     title: "Atlas Quickstart",
     description:
-      "Browse the 4,500+ sample catalog, filter by species/tissue/cell type/protocol/quality tier, explore datasets and series — all with the singlet-bio Python package.",
+      "Browse the 4,600+ sample catalog, filter by species/tissue/cell type/protocol/quality tier, explore datasets and series — all with the singlet-bio Python package.",
     icon: <BookOpen size={20} />,
     tags: ["beginner", "python", "catalog"],
     githubUrl: `${BASE}/quickstart.ipynb`,
