@@ -170,9 +170,9 @@ const Index = () => {
             </span>
           </div>
 
-          <h1 className="font-display text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold text-foreground leading-[0.95] tracking-tightest mb-5">
-            We learned the transcriptional<br />
-            <span className="gradient-text">grammar of every human cell.</span>
+          <h1 className="font-display text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-foreground leading-[0.95] tracking-tightest mb-5">
+            <span className="block whitespace-nowrap">We learned the transcriptional</span>
+            <span className="block whitespace-nowrap gradient-text">grammar of every human cell.</span>
           </h1>
 
           <p className="text-base md:text-lg text-muted-foreground max-w-2xl mx-auto leading-relaxed">
