@@ -176,7 +176,7 @@ const Index = () => {
           </h1>
 
           <p className="text-base md:text-lg text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-            A completely harmonized human cell atlas distilled into over 10,000 biological programs. Predict gene expression for any condition, explain every result, and generate cells that have never been observed — in milliseconds.
+            Over 1 billion cells harmonized into one queryable atlas. Predict expression for any condition, explain every result, and generate profiles that have never been observed — in milliseconds.
           </p>
 
           <div className="flex flex-wrap gap-4 justify-center mt-8">
