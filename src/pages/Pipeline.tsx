@@ -67,6 +67,55 @@ const Pipeline = () => {
             )}
           </div>
 
+          {/* Run-it-yourself quickstart */}
+          <div className="mb-8 rounded-xl border border-border bg-card p-6">
+            <h2 className="font-display text-xl font-semibold text-foreground mb-2">
+              Run the pipeline yourself
+            </h2>
+            <p className="text-sm text-muted-foreground mb-4">
+              One call, from any SRA accession or URL to the canonical output layout.
+              Same entry point from the CLI and Python.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <div className="text-xs uppercase tracking-wider text-muted-foreground mb-1">CLI</div>
+                <pre className="text-xs rounded-md bg-muted/40 p-3 overflow-x-auto"><code>{`pip install singlet
+
+singlet-process SRR11537951 \\
+    --output-dir ./out \\
+    --organism human \\
+    --threads 8 --nonhost`}</code></pre>
+              </div>
+              <div>
+                <div className="text-xs uppercase tracking-wider text-muted-foreground mb-1">Python</div>
+                <pre className="text-xs rounded-md bg-muted/40 p-3 overflow-x-auto"><code>{`from singlet.pipeline import run
+from singlet.io import SingletSample
+from singlet.views import gene_counts, usa
+
+result = run("SRR11537951", "./out",
+             organism="human", threads=8)
+
+sample = SingletSample(result.output_dir)
+X = gene_counts(sample)         # genes × cells
+trio = usa(sample)              # spliced / unspliced / ambiguous`}</code></pre>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground mt-4">
+              Full reference:{" "}
+              <a href="https://singlet.bio/docs/pipeline.html" className="underline hover:text-foreground">
+                Running the pipeline
+              </a>{" "}
+              ·{" "}
+              <a href="https://singlet.bio/docs/CANONICAL_OUTPUT_FORMAT.html" className="underline hover:text-foreground">
+                Canonical output format
+              </a>{" "}
+              ·{" "}
+              <a href="https://github.com/Singlet-Bio/singlet/blob/main/notebooks/pipeline_quickstart.ipynb" className="underline hover:text-foreground">
+                Quickstart notebook
+              </a>
+            </p>
+          </div>
+
           {/* Primary stats */}
           {statsLoading ? (
             <div className="text-center text-muted-foreground py-12">Loading corpus stats...</div>

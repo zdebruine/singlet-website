@@ -31,6 +31,7 @@ import Blog from "./pages/Blog.tsx";
 import BlogPost from "./pages/BlogPost.tsx";
 import SeriesDetail from "./pages/SeriesDetail.tsx";
 import Notebooks from "./pages/Notebooks.tsx";
+import SplicePatternSpec from "./pages/SplicePatternSpec.tsx";
 
 
 const queryClient = new QueryClient();
@@ -64,6 +65,7 @@ const App = () => (
           <Route path="/blog" element={<Blog />} />
           <Route path="/blog/:slug" element={<BlogPost />} />
           <Route path="/notebooks" element={<Notebooks />} />
+          <Route path="/specs/splice-patterns" element={<SplicePatternSpec />} />
           
           <Route path="/terms" element={<Terms />} />
           <Route path="/privacy" element={<Privacy />} />
