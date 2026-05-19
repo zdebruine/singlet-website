@@ -115,6 +115,7 @@ const SECTIONS = [
   { id: "analyze", label: "Analyze" },
   { id: "mcp", label: "MCP Tools" },
   { id: "reference", label: "API Reference" },
+  { id: "specs", label: "Format Specs" },
   { id: "citation", label: "Citation" },
 ] as const;
 
@@ -718,7 +719,31 @@ $ claude mcp add singlet \\
 
           <div className="glow-line mx-auto" />
 
-          {/* ────────────────────────── CITATION ────────────────────────── */}
+          {/* ────────────────────────── FORMAT SPECS ────────────────────────── */}
+          <section id="specs" className="pt-20">
+            <h2 className="font-display text-2xl font-bold text-foreground tracking-tightest mb-6">Format Specifications</h2>
+            <p className="text-sm text-muted-foreground mb-6">
+              Canonical on-disk formats produced by the Singlet pipeline. These specs
+              define the atomic units of stored data — every downstream view (gene
+              counts, spliced/unspliced/ambiguous, junction usage) is derived from
+              them.
+            </p>
+            <div className="rounded-lg border border-border bg-card p-5">
+              <Link to="/specs/splice-patterns" className="block group">
+                <h3 className="font-display text-base font-semibold text-foreground mb-1 group-hover:text-primary transition-colors">
+                  Splice Pattern Format <span className="text-xs font-mono text-muted-foreground">v0.1 draft</span>
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  Atomic representation of mapped RNA-seq UMIs: per-gene structural
+                  paths encoded as token sequences, with a single dedup pass and
+                  no double-counting. Backed by an installable feature dictionary
+                  (SFD).
+                </p>
+              </Link>
+            </div>
+          </section>
+
+          <div className="glow-line mx-auto" />
           <section id="citation" className="pt-20">
             <h2 className="font-display text-2xl font-bold text-foreground tracking-tightest mb-6">Citation &amp; Licensing</h2>
 

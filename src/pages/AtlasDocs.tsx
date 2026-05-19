@@ -441,14 +441,14 @@ adata = singlet.load_sample("GSM3308814")`}
               </ol>
             </div>
 
-            <h3 className="font-display text-base font-semibold text-foreground mb-3 mt-8">Load a singlify output directory</h3>
+            <h3 className="font-display text-base font-semibold text-foreground mb-3 mt-8">Load a singlet output directory</h3>
             <CodeBlock
-              code={`# Load a full singlify pipeline output directory
+              code={`# Load a full singlet pipeline output directory
 adata = singlet.load_dir("/path/to/quant/GSM3573650")
 # → 75,420 cells × 38,606 genes
 # obs: total_umis, total_genes, mt_pct, ribo_pct, intronic_pct,
 #      doublet_score, is_doublet, phase, s_score, g2m_score
-# uns: ancestry, sex_call, summary, saturation_curve, singlify_dir
+# uns: ancestry, sex_call, summary, saturation_curve, singlet_dir
 
 # Access sample-level metadata
 print(adata.uns['summary']['protocol'])   # → "10x-3p-v2"

@@ -56,7 +56,7 @@ const POSTS: BlogPost[] = [
     title: "Mitochondrial Variant Analysis: Clonal Tracking from scRNA-seq",
     date: "2026-04-30",
     summary:
-      "singlify now outputs per-donor mitochondrial consensus sequences (FASTA + VCF), mt_events.1pz sparse matrices, and mt_summary.tsv — enabling clonal tracking, lineage tracing, and donor deconvolution from standard scRNA-seq data without additional assays.",
+      "singlet now outputs per-donor mitochondrial consensus sequences (FASTA + VCF), mt_events.1pz sparse matrices, and mt_summary.tsv — enabling clonal tracking, lineage tracing, and donor deconvolution from standard scRNA-seq data without additional assays.",
     tags: ["mitochondria", "variants", "clonal-tracking", "g6"],
     author: "singlet-product",
   },
@@ -65,13 +65,13 @@ const POSTS: BlogPost[] = [
     title: "1,000 Samples: The Singlet Atlas Crosses a Milestone",
     date: "2026-04-30",
     summary:
-      "The singlet atlas has crossed 1,000 successfully processed samples — 2.94M cells, 506 GEO series, 5 species, 15+ protocols. All uniformly processed with singlify.",
+      "The singlet atlas has crossed 1,000 successfully processed samples — 2.94M cells, 506 GEO series, 5 species, 15+ protocols. All uniformly processed with singlet.",
     tags: ["milestone", "corpus", "atlas", "1000"],
     author: "singlet-product",
   },
   {
     slug: "notebook-collection-complete",
-    title: "18 Reproducibility Notebooks: Every singlify Feature Validated",
+    title: "18 Reproducibility Notebooks: Every singlet Feature Validated",
     date: "2026-04-30",
     summary:
       "The complete notebook collection is live — 18 executed Jupyter notebooks with embedded matplotlib plots covering gene counting, QC, splicing, velocity, ancestry, and more. View on GitHub, Colab, or singlet.bio.",
@@ -110,7 +110,7 @@ const POSTS: BlogPost[] = [
     title: "New: singlet.load_dir() — Pipeline Output → AnnData in One Call",
     date: "2026-05-03",
     summary:
-      "Load a full singlify output directory into AnnData with gene names, barcodes, QC metrics, and doublet scores in a single function call.",
+      "Load a full singlet output directory into AnnData with gene names, barcodes, QC metrics, and doublet scores in a single function call.",
     tags: ["python", "feature", "anndata", "load"],
     author: "singlet-product",
   },
@@ -119,7 +119,7 @@ const POSTS: BlogPost[] = [
     title: "Doublet Detection: Separating Singlets from Multiplets",
     date: "2026-05-03",
     summary:
-      "singlify's UMI-based doublet detection achieves 20× score separation between singlets and doublets. 74K cells analyzed, 13.8% doublet rate, clean bimodal threshold.",
+      "singlet's UMI-based doublet detection achieves 20× score separation between singlets and doublets. 74K cells analyzed, 13.8% doublet rate, clean bimodal threshold.",
     tags: ["doublets", "qc", "notebooks", "panel-h"],
     author: "singlet-product",
   },
@@ -128,7 +128,7 @@ const POSTS: BlogPost[] = [
     title: "Gene Counting Equivalence: r = 0.9995 vs STARsolo",
     date: "2026-05-02",
     summary:
-      "Panel A validation proves singlify gene counts correlate at r=0.9995 with STARsolo across 38,606 genes × 2,520 cells. 100% gold cell recall.",
+      "Panel A validation proves singlet gene counts correlate at r=0.9995 with STARsolo across 38,606 genes × 2,520 cells. 100% gold cell recall.",
     tags: ["equivalence", "panel-a", "starsolo", "notebooks"],
     author: "singlet-product",
   },
@@ -191,7 +191,7 @@ const POSTS: BlogPost[] = [
     title: "The .1fq Format: 18 Bytes/Read Compact FASTQ",
     date: "2026-04-29",
     summary:
-      "Deep dive into singlify's binary .1fq format: 96-byte header, 2-bit sequence encoding, 4-bin quality, ZSTD block compression, and embedded SRA metadata. Analysis of 12 .1fq files totaling 477M reads at 18.6 bytes/read average.",
+      "Deep dive into singlet's binary .1fq format: 96-byte header, 2-bit sequence encoding, 4-bin quality, ZSTD block compression, and embedded SRA metadata. Analysis of 12 .1fq files totaling 477M reads at 18.6 bytes/read average.",
     tags: ["format", "compression", "1fq"],
     author: "singlet-product",
   },

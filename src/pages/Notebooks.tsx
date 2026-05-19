@@ -34,7 +34,7 @@ const NOTEBOOKS: Notebook[] = [
     id: "gene_counting",
     title: "Gene Counting vs STARsolo",
     description:
-      "Formal equivalence: singlify gene counting achieves r=0.9995 correlation against STARsolo on human PBMC 10x v3. Panel A validation.",
+      "Formal equivalence: singlet gene counting achieves r=0.9995 correlation against STARsolo on human PBMC 10x v3. Panel A validation.",
     icon: <Dna size={20} />,
     tags: ["equivalence", "starsolo", "panel-a"],
     githubUrl: `${BASE}/gene_counting.ipynb`,
@@ -45,7 +45,7 @@ const NOTEBOOKS: Notebook[] = [
     id: "sex_calling",
     title: "Sex / Karyotype Calling",
     description:
-      "Validate singlify's sex calling via XIST/SRY CPM markers. 100% agreement with reference across all tested samples. Panel F validation.",
+      "Validate singlet's sex calling via XIST/SRY CPM markers. 100% agreement with reference across all tested samples. Panel F validation.",
     icon: <TestTube size={20} />,
     tags: ["sex-calling", "panel-f", "validation"],
     githubUrl: `${BASE}/sex_calling.ipynb`,
@@ -67,7 +67,7 @@ const NOTEBOOKS: Notebook[] = [
     id: "doublet_detection",
     title: "Doublet Detection",
     description:
-      "Analyze singlify's UMI-based doublet detection: 74K cells, 13.8% doublet rate, clear score separation (singlet mean=1.0, doublet mean=25.6).",
+      "Analyze singlet's UMI-based doublet detection: 74K cells, 13.8% doublet rate, clear score separation (singlet mean=1.0, doublet mean=25.6).",
     icon: <FlaskConical size={20} />,
     tags: ["doublets", "panel-h", "qc"],
     githubUrl: `${BASE}/doublet_detection.ipynb`,
@@ -89,7 +89,7 @@ const NOTEBOOKS: Notebook[] = [
     id: "01_load_and_explore",
     title: "Load and Explore",
     description:
-      "Load 75K cells from a singlify output directory with singlet.load_dir(), filter doublets, run full scanpy pipeline (PCA → UMAP → Leiden).",
+      "Load 75K cells from a singlet output directory with singlet.load_dir(), filter doublets, run full scanpy pipeline (PCA → UMAP → Leiden).",
     icon: <BookOpen size={20} />,
     tags: ["beginner", "scanpy", "clustering"],
     githubUrl: `${BASE}/01_load_and_explore.ipynb`,
@@ -100,7 +100,7 @@ const NOTEBOOKS: Notebook[] = [
     id: "cell_cycle",
     title: "Cell Cycle Scoring",
     description:
-      "Visualize cell cycle phase assignments (G1/S/G2M) from singlify output. 75K cells: 93% G1, 5% G2M, 2.5% S. Score distributions + QC correlations.",
+      "Visualize cell cycle phase assignments (G1/S/G2M) from singlet output. 75K cells: 93% G1, 5% G2M, 2.5% S. Score distributions + QC correlations.",
     icon: <TestTube size={20} />,
     tags: ["cell-cycle", "qc", "proliferation"],
     githubUrl: `${BASE}/cell_cycle.ipynb`,
@@ -144,7 +144,7 @@ const NOTEBOOKS: Notebook[] = [
     id: "mt_variants",
     title: "Mitochondrial Variants",
     description:
-      "MT heteroplasmy calling from scRNA-seq: 3,717 variants, mutation spectrum, clonal lineage markers. Unique singlify capability for lineage tracing.",
+      "MT heteroplasmy calling from scRNA-seq: 3,717 variants, mutation spectrum, clonal lineage markers. Unique singlet capability for lineage tracing.",
     icon: <Dna size={20} />,
     tags: ["mitochondrial", "variants", "lineage"],
     githubUrl: `${BASE}/mt_variants.ipynb`,
@@ -177,7 +177,7 @@ const NOTEBOOKS: Notebook[] = [
     id: "pipeline_outputs",
     title: "Pipeline Outputs Reference",
     description:
-      "Complete catalog of all 40+ files singlify produces per sample: count matrices, velocity, splicing, variants, QC, metadata. Loading guide included.",
+      "Complete catalog of all 40+ files singlet produces per sample: count matrices, velocity, splicing, variants, QC, metadata. Loading guide included.",
     icon: <FileCode size={20} />,
     tags: ["reference", "outputs", "guide"],
     githubUrl: `${BASE}/pipeline_outputs.ipynb`,
@@ -261,7 +261,7 @@ singlet.summary()
 df = singlet.samples(organism="Homo sapiens", status="SUCCESS")
 print(f"{len(df)} successful human samples")
 
-# Load a singlify output directory as AnnData
+# Load a singlet output directory as AnnData
 adata = singlet.load_dir("/path/to/quant/GSM3573650")
 print(f"{adata.n_obs} cells × {adata.n_vars} genes")
 # → 75,420 cells × 38,606 genes with QC + doublet scores`}</code>

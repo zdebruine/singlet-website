@@ -155,7 +155,7 @@ The full atlas is browsable at [singlet.bio/browse](https://singlet.bio/browse) 
 `,
   },
   "protocol-diversity-atlas": {
-    title: "12 Protocols, 1 Pipeline: How singlify Handles scRNA-seq Diversity",
+    title: "12 Protocols, 1 Pipeline: How singlet Handles scRNA-seq Diversity",
     date: "2026-05-08",
     tags: ["protocols", "atlas", "diversity", "api"],
     content: `
@@ -199,12 +199,12 @@ print(f"{len(dropseq)} Drop-seq samples, {dropseq['cells_called'].sum():,} cells
 ## Why Protocol Diversity Matters
 
 1. **Benchmark fairness** — comparisons against STAR/Cell Ranger are only valid when the protocol is correctly identified
-2. **Auto-detection validation** — singlify auto-detects protocol from read structure; diverse protocols stress-test this
+2. **Auto-detection validation** — singlet auto-detects protocol from read structure; diverse protocols stress-test this
 3. **User discoverability** — researchers can find atlas data matching their own lab's protocol
 
 ## Pipeline Architecture
 
-singlify handles protocol diversity through a modular barcode extraction layer:
+singlet handles protocol diversity through a modular barcode extraction layer:
 - **10x v2/v3**: 16bp CB + 10/12bp UMI from R1
 - **Drop-seq**: variable-length CB + UMI from R1
 - **CEL-Seq2**: 6bp CB + 6bp UMI from R1
@@ -302,7 +302,7 @@ All 2,568 samples (not just SUCCESS) have been enriched, so even samples that fa
     content: `
 ## The Atlas at 2,547 Samples
 
-The singlet atlas has grown to **2,547 GEO samples** processed by singlify, with **1,071 passing QC** — producing **3.1 million cells** available for analysis. Organism annotation now covers 9 species.
+The singlet atlas has grown to **2,547 GEO samples** processed by singlet, with **1,071 passing QC** — producing **3.1 million cells** available for analysis. Organism annotation now covers 9 species.
 
 ## Current Statistics
 
@@ -390,7 +390,7 @@ View real-time atlas statistics on the [Pipeline page →](/pipeline), including
 
 Mitochondrial DNA (mtDNA) accumulates somatic mutations at ~10× the rate of nuclear DNA. In single-cell data, these naturally occurring variants serve as **endogenous barcodes** — enabling clonal tracking, lineage tracing, and donor deconvolution without additional assays like ATAC-seq or genetic barcoding.
 
-Until now, extracting mitochondrial variant information from scRNA-seq required running separate tools (e.g., mgatk, AMULET) on the aligned BAM. singlify now computes this **during the standard pipeline run** with zero extra cost.
+Until now, extracting mitochondrial variant information from scRNA-seq required running separate tools (e.g., mgatk, AMULET) on the aligned BAM. singlet now computes this **during the standard pipeline run** with zero extra cost.
 
 ## What's New: G6 Mitochondrial Outputs
 
@@ -453,10 +453,10 @@ MT analysis runs **inside the existing pileup phase** — no additional alignmen
 import singlet
 
 # Load a processed sample
-adata = singlet.load_dir("/path/to/singlify_output")
+adata = singlet.load_dir("/path/to/singlet_output")
 
 # MT heteroplasmy is in the output directory
-mt_events = singlet.read_1pz("/path/to/singlify_output/mt_events.1pz")
+mt_events = singlet.read_1pz("/path/to/singlet_output/mt_events.1pz")
 print(f"MT variants tracked: {mt_events.n_vars}")
 print(f"Cells with MT variants: {(mt_events.X.sum(axis=1) > 0).sum()}")
 \`\`\`
@@ -491,7 +491,7 @@ The singlet-bio Python package now includes everything a researcher needs to exp
 - \`catalog_v1.parquet\` — 1,169 GEO series with organism, cells, protocol, mapping rate
 - \`sample_index.parquet\` — 2,364 samples with status, QC metrics, timing
 
-**17 executed notebooks** covering every singlify capability:
+**17 executed notebooks** covering every singlet capability:
 
 ## Notebook Collection
 
@@ -501,7 +501,7 @@ The singlet-bio Python package now includes everything a researcher needs to exp
 | quickstart | Browse the catalog — filters, statistics, species breakdown |
 | 01_load_and_explore | Load 75K cells, cluster with scanpy (PCA→UMAP→Leiden) |
 | sample_qc_report | One-call QC — UMIs, genes, doublets, cell cycle, ancestry |
-| pipeline_outputs | All 40+ files singlify produces per sample |
+| pipeline_outputs | All 40+ files singlet produces per sample |
 
 ### QC & Quality Control
 | Notebook | What It Shows |
@@ -579,7 +579,7 @@ adata = singlet.load_dir("/path/to/quant/GSM3573650")
     content: `
 ## The Problem
 
-singlify produces a rich output directory per sample: count matrices (.1pz), QC metrics, doublet scores, gene annotations, and barcodes. Loading all of this into a standard analysis framework required reading multiple files and manually joining them.
+singlet produces a rich output directory per sample: count matrices (.1pz), QC metrics, doublet scores, gene annotations, and barcodes. Loading all of this into a standard analysis framework required reading multiple files and manually joining them.
 
 ## The Solution
 
@@ -590,7 +590,7 @@ adata = singlet.load_dir("/path/to/quant/GSM3573650")
 # → AnnData: 75,420 cells × 38,606 genes
 #   obs: total_umis, total_genes, mt_pct, ribo_pct, intronic_pct, doublet_score, is_doublet
 #   var: gene_id (Ensembl IDs)
-#   uns: singlify_dir
+#   uns: singlet_dir
 \`\`\`
 
 One function call reads:
@@ -604,7 +604,7 @@ One function call reads:
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| \`path\` | required | singlify output directory |
+| \`path\` | required | singlet output directory |
 | \`layer\` | "gene_counts" | Which .1pz to load (also: exon_counts, intron_counts, gene_counts_em) |
 | \`with_qc\` | True | Merge cell_qc_metrics.tsv into obs |
 | \`with_doublets\` | True | Merge doublet_scores.tsv into obs |
@@ -614,7 +614,7 @@ One function call reads:
 \`\`\`python
 import scanpy as sc
 
-# Filter doublets (pre-computed by singlify)
+# Filter doublets (pre-computed by singlet)
 adata = adata[~adata.obs['is_doublet'].astype(bool)]
 
 # Standard pipeline
@@ -661,9 +661,9 @@ See the [Load and Explore notebook](https://github.com/Singlet-Bio/singlet/blob/
 
 In droplet-based single-cell experiments, ~5–15% of droplets capture two or more cells (doublets/multiplets). These create spurious intermediate cell types that confuse downstream clustering and differential expression.
 
-## singlify's Approach
+## singlet's Approach
 
-singlify uses a UMI-count heuristic with adaptive thresholding:
+singlet uses a UMI-count heuristic with adaptive thresholding:
 
 1. Estimate expected UMI count per singlet from the population distribution
 2. Compute \`doublet_score = total_umis / expected_singlet_umis\` for each cell
@@ -976,7 +976,7 @@ separate protocol configuration files.
 
 ## Compression Results
 
-Analysis of 12 .1fq files from the singlify validation corpus:
+Analysis of 12 .1fq files from the singlet validation corpus:
 
 | Metric | Value |
 |--------|-------|
@@ -1402,7 +1402,7 @@ Processing 50,000 samples at 2 minutes each:
     content: `
 ## A Multi-Species Single-Cell Atlas
 
-The Singlet Atlas now spans **8 species** with **1,814 uniformly processed samples** — all run through the same singlify pipeline with species-appropriate reference genomes. This lets us compare gene expression patterns across organisms using identically processed data.
+The Singlet Atlas now spans **8 species** with **1,814 uniformly processed samples** — all run through the same singlet pipeline with species-appropriate reference genomes. This lets us compare gene expression patterns across organisms using identically processed data.
 
 ## Species Coverage
 
@@ -1715,7 +1715,7 @@ A color-coded chart shows success rates by protocol:
 - **Amber** (25-50%): 10x v2 (39%), 10x v3 (32%)
 - **Red** (<25%): Seq-Well (14%), Smart-seq2 (14%), sci-RNA-seq (7%)
 
-This reveals which protocols singlify handles well vs. which need further work.
+This reveals which protocols singlet handles well vs. which need further work.
 
 ## Species Success Rates
 
@@ -1829,7 +1829,7 @@ Install or update: \`pip install singlet-bio\`
 
 The most important question for any single-cell pipeline: **do gene counts match the gold standard?**
 
-We compared singlify's gene quantification against STARsolo (v2.7.11b) on sample SRR32855204 — a 40M-read human 10x-arc-gex experiment. The comparison uses the intersection of 2,520 cells × 38,606 genes.
+We compared singlet's gene quantification against STARsolo (v2.7.11b) on sample SRR32855204 — a 40M-read human 10x-arc-gex experiment. The comparison uses the intersection of 2,520 cells × 38,606 genes.
 
 ## Results
 
@@ -1838,14 +1838,14 @@ We compared singlify's gene quantification against STARsolo (v2.7.11b) on sample
 | Gene Pearson r | **0.9995** | ≥0.999 | ✅ PASS |
 | Cell UMI Pearson r | **0.9999** | ≥0.999 | ✅ PASS |
 | Splice Junction Jaccard | **0.9999** | ≥0.95 | ✅ PASS |
-| UMI ratio (singlify/gold) | **1.019 ± 0.013** | 0.95–1.05 | ✅ PASS |
+| UMI ratio (singlet/gold) | **1.019 ± 0.013** | 0.95–1.05 | ✅ PASS |
 | Gold cell recall | **100%** | ≥100% | ✅ PASS |
 
-Every STARsolo cell is found in singlify's output. Gene counts correlate at r=0.9995 — statistically indistinguishable.
+Every STARsolo cell is found in singlet's output. Gene counts correlate at r=0.9995 — statistically indistinguishable.
 
 ## Run Statistics
 
-| Parameter | singlify | STARsolo |
+| Parameter | singlet | STARsolo |
 |-----------|----------|----------|
 | Input reads | 40,358,185 | 40,358,185 |
 | Uniquely mapped % | 82.91% | 82.89% |
@@ -1854,12 +1854,12 @@ Every STARsolo cell is found in singlify's output. Gene counts correlate at r=0.
 
 ## Why Cell Counts Differ
 
-singlify calls 10,341 cells vs STARsolo's 2,520. This isn't a bug — it's a deliberate design choice:
+singlet calls 10,341 cells vs STARsolo's 2,520. This isn't a bug — it's a deliberate design choice:
 
-- **singlify** uses EmptyDrops (statistical test against ambient profile)
+- **singlet** uses EmptyDrops (statistical test against ambient profile)
 - **STARsolo** uses knee-point detection (inflection in UMI rank plot)
 
-EmptyDrops is more sensitive — it captures low-RNA cells that knee-point methods miss. All 2,520 STARsolo cells appear in singlify's output (100% recall). The extra ~8,000 singlify cells include real low-RNA cells plus some ambient droplets that downstream QC filtering removes.
+EmptyDrops is more sensitive — it captures low-RNA cells that knee-point methods miss. All 2,520 STARsolo cells appear in singlet's output (100% recall). The extra ~8,000 singlet cells include real low-RNA cells plus some ambient droplets that downstream QC filtering removes.
 
 ## Why Gene Counts Match
 
@@ -1877,7 +1877,7 @@ The full analysis with visualizations is available as a [reproducibility noteboo
 
 ## What This Means
 
-If you've validated results with STARsolo, you can trust singlify's gene counts. The correlation is high enough that any difference is smaller than biological noise between replicates.
+If you've validated results with STARsolo, you can trust singlet's gene counts. The correlation is high enough that any difference is smaller than biological noise between replicates.
 
 [View the Notebook →](https://github.com/Singlet-Bio/singlet/blob/main/notebooks/gene_counting.ipynb) | [Browse Processed Samples →](/browse)
     `,
@@ -1889,7 +1889,7 @@ If you've validated results with STARsolo, you can trust singlify's gene counts.
     content: `
 ## One Call, Complete QC
 
-\`singlet.load_dir()\` now reads **every** metadata file singlify produces — giving you a complete, analysis-ready AnnData with zero manual file parsing.
+\`singlet.load_dir()\` now reads **every** metadata file singlet produces — giving you a complete, analysis-ready AnnData with zero manual file parsing.
 
 \`\`\`python
 import singlet
@@ -1898,7 +1898,7 @@ adata = singlet.load_dir("/path/to/sample")
 # → AnnData: 75,420 cells × 38,606 genes
 #   obs: total_umis, total_genes, mt_pct, ribo_pct, intronic_pct,
 #        doublet_score, is_doublet, phase, s_score, g2m_score
-#   uns: ancestry, sex_call, summary, singlify_dir
+#   uns: ancestry, sex_call, summary, singlet_dir
 \`\`\`
 
 ## What Gets Loaded
@@ -1935,7 +1935,7 @@ print(f"Ancestry: {adata.uns['ancestry']['ancestry']}")
 With everything pre-computed, filtering is trivial:
 
 \`\`\`python
-# Remove doublets (singlify pre-computed)
+# Remove doublets (singlet pre-computed)
 clean = adata[~adata.obs['is_doublet'].astype(bool)]
 
 # Remove high-MT cells
@@ -1961,7 +1961,7 @@ The test suite verifies all metadata loading paths: dimensions, gene names, barc
     content: `
 ## 1,000 Successfully Processed Samples
 
-The singlet atlas has crossed a significant milestone: **1,000 single-cell samples** processed end-to-end by singlify, producing **2.94 million cells** ready for analysis.
+The singlet atlas has crossed a significant milestone: **1,000 single-cell samples** processed end-to-end by singlet, producing **2.94 million cells** ready for analysis.
 
 ## By the Numbers
 
@@ -2034,13 +2034,13 @@ print(f"{len(success)} series with successful samples")
     `,
   },
   "notebook-collection-complete": {
-    title: "18 Reproducibility Notebooks: Every singlify Feature Validated",
+    title: "18 Reproducibility Notebooks: Every singlet Feature Validated",
     date: "2026-04-30",
     tags: ["notebooks", "reproducibility", "milestone", "plots"],
     content: `
 ## The Complete Collection
 
-Every singlify feature now has a dedicated Jupyter notebook with **real embedded matplotlib plots** — not just text tables. These notebooks are executable, rendered natively on GitHub, and hosted as interactive HTML on singlet.bio.
+Every singlet feature now has a dedicated Jupyter notebook with **real embedded matplotlib plots** — not just text tables. These notebooks are executable, rendered natively on GitHub, and hosted as interactive HTML on singlet.bio.
 
 ## Three Ways to View
 
@@ -2115,7 +2115,7 @@ pip install "singlet-bio @ git+https://github.com/Singlet-Bio/singlet#subdirecto
 import singlet
 
 # Load a processed sample
-adata = singlet.load_dir("/path/to/singlify/output/")
+adata = singlet.load_dir("/path/to/singlet/output/")
 print(f"{adata.n_obs:,} cells × {adata.n_vars:,} genes")
 print(f"Doublet rate: {adata.obs['doublet_score'].gt(0.5).mean():.1%}")
 print(f"Median genes: {adata.obs['total_genes'].median():,.0f}")
@@ -2162,7 +2162,7 @@ import singlet
 mat, barcodes, genes = singlet.io.read_1pz("gene_counts.1pz")
 # → (678421, 38606) sparse matrix, 0.4s
 
-# Or load a full singlify output directory (includes all QC)
+# Or load a full singlet output directory (includes all QC)
 adata = singlet.load_dir("/path/to/sample/")
 # → AnnData with obs (QC metrics, doublets, cell cycle), var (gene info), uns (metadata)
 \`\`\`
