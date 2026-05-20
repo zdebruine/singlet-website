@@ -40,21 +40,64 @@ jobs:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
 
-      # `pages deploy` requires the project to exist. Try to create it; if it
-      # already exists (or the token lacks create perms — see deploy step), we
-      # continue regardless and let the deploy step surface any real error.
+      # Self-diagnostic: probe the Cloudflare API directly so error details
+      # surface as GitHub annotations (visible without log-read access).
+      - name: Verify Cloudflare credentials
+        run: |
+          set +e
+          echo "::group::token verify"
+          tok_resp=$(curl -sS -w "\nHTTP_STATUS:%{http_code}" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/user/tokens/verify")
+          echo "$tok_resp"
+          tok_code=$(echo "$tok_resp" | grep -oE 'HTTP_STATUS:[0-9]+' | cut -d: -f2)
+          if [ "$tok_code" != "200" ]; then
+            echo "::error title=Cloudflare token invalid::HTTP $tok_code from /user/tokens/verify"
+          fi
+          echo "::endgroup::"
+
+          echo "::group::list pages projects"
+          proj_resp=$(curl -sS -w "\nHTTP_STATUS:%{http_code}" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects")
+          echo "$proj_resp"
+          proj_code=$(echo "$proj_resp" | grep -oE 'HTTP_STATUS:[0-9]+' | cut -d: -f2)
+          if [ "$proj_code" != "200" ]; then
+            err=$(echo "$proj_resp" | python3 -c "import sys,json; d=json.loads(sys.stdin.read().split(chr(10)+'HTTP_STATUS')[0]); print('; '.join(f\"{e.get('code','?')}: {e.get('message','?')}\" for e in d.get('errors',[]))) " 2>/dev/null || echo "?")
+            echo "::error title=Cannot list Pages projects::HTTP $proj_code -- $err"
+          else
+            names=$(echo "$proj_resp" | python3 -c "import sys,json; d=json.loads(sys.stdin.read().split(chr(10)+'HTTP_STATUS')[0]); print(','.join(p['name'] for p in d.get('result',[])) or '(none)')" 2>/dev/null)
+            echo "Existing Pages projects: $names"
+          fi
+          echo "::endgroup::"
+
       - name: Ensure Pages project exists
         id: ensure_project
         continue-on-error: true
         run: |
-          npx --yes wrangler@3 pages project create singlet-website \
-            --production-branch=main 2>&1 | tee /tmp/create.log || true
-          if grep -qiE "already exists|conflict" /tmp/create.log; then
+          set +e
+          out=$(npx --yes wrangler@3 pages project create singlet-website \
+            --production-branch=main 2>&1)
+          echo "$out"
+          if echo "$out" | grep -qiE "already exists|conflict"; then
             echo "Project already exists — fine."
+            exit 0
           fi
+          if echo "$out" | grep -qiE "Successfully created"; then
+            exit 0
+          fi
+          # Surface first useful error line as annotation
+          echo "::warning title=pages project create failed::$(echo "$out" | grep -iE 'error|unauthor|forbid|not found' | head -3 | tr '\n' ' ')"
 
       - name: Deploy to Cloudflare Pages
         run: |
+          set -o pipefail
           npx --yes wrangler@3 pages deploy ./dist \
             --project-name=singlet-website \
-            --branch=main
+            --branch=main 2>&1 | tee /tmp/deploy.log
+          code=${PIPESTATUS[0]}
+          if [ "$code" != "0" ]; then
+            err=$(grep -iE 'error|unauthor|forbid|not found|missing' /tmp/deploy.log | head -5 | tr '\n' '|')
+            echo "::error title=wrangler pages deploy failed (exit $code)::$err"
+            exit "$code"
+          fi
