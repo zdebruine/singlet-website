@@ -17,6 +17,9 @@ jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
       - uses: actions/checkout@v4
 
@@ -37,13 +40,21 @@ jobs:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
 
+      # `pages deploy` requires the project to exist. Try to create it; if it
+      # already exists (or the token lacks create perms — see deploy step), we
+      # continue regardless and let the deploy step surface any real error.
+      - name: Ensure Pages project exists
+        id: ensure_project
+        continue-on-error: true
+        run: |
+          npx --yes wrangler@3 pages project create singlet-website \
+            --production-branch=main 2>&1 | tee /tmp/create.log || true
+          if grep -qiE "already exists|conflict" /tmp/create.log; then
+            echo "Project already exists — fine."
+          fi
+
       - name: Deploy to Cloudflare Pages
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          # `pages deploy` requires the project to exist. Create it on first
-          # run (idempotent — `|| true` swallows the "already exists" error).
-          command: |
-            pages project create singlet-website --production-branch=main || true
-            pages deploy ./dist --project-name=singlet-website --branch=main
+        run: |
+          npx --yes wrangler@3 pages deploy ./dist \
+            --project-name=singlet-website \
+            --branch=main
