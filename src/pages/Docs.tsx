@@ -115,6 +115,7 @@ const SECTIONS = [
   { id: "analyze", label: "Analyze" },
   { id: "mcp", label: "MCP Tools" },
   { id: "reference", label: "API Reference" },
+  { id: "data-objects", label: "Data Objects" },
   { id: "specs", label: "Format Specs" },
   { id: "citation", label: "Citation" },
 ] as const;
@@ -719,7 +720,30 @@ $ claude mcp add singlet \\
 
           <div className="glow-line mx-auto" />
 
-          {/* ────────────────────────── FORMAT SPECS ────────────────────────── */}
+          {/* ────────────────────────── DATA OBJECTS ────────────────────────── */}
+          <section id="data-objects" className="pt-20">
+            <h2 className="font-display text-2xl font-bold text-foreground tracking-tightest mb-6">Data Objects</h2>
+            <p className="text-sm text-muted-foreground mb-6">
+              Every processed sample is one <code className="font-mono text-[0.85em] bg-muted/60 px-1 rounded">SingletSample</code>{" "}
+              with typed accessors for every modality: counts, USA, PSI, mitochondrial
+              variants, donor SNPs, microbiome, CRISPR guides, antibodies, V(D)J. All
+              derived matrices compute on demand from canonical row blocks.
+            </p>
+            <div className="rounded-lg border border-border bg-card p-5">
+              <Link to="/docs/data-objects" className="block group">
+                <h3 className="font-display text-base font-semibold text-foreground mb-1 group-hover:text-primary transition-colors">
+                  Data Objects &amp; Fetch API
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  <code className="font-mono text-[0.85em] bg-muted/60 px-1 rounded">singlet.open("GSM3308814")</code> →
+                  one Sample, every matrix is a method call. Caching, manifests, parallel
+                  fetch — the whole user-facing surface in one page.
+                </p>
+              </Link>
+            </div>
+          </section>
+
+          <div className="glow-line mx-auto" />
           <section id="specs" className="pt-20">
             <h2 className="font-display text-2xl font-bold text-foreground tracking-tightest mb-6">Format Specifications</h2>
             <p className="text-sm text-muted-foreground mb-6">
