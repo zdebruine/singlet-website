@@ -33,6 +33,7 @@ import SeriesDetail from "./pages/SeriesDetail.tsx";
 import Notebooks from "./pages/Notebooks.tsx";
 import SplicePatternSpec from "./pages/SplicePatternSpec.tsx";
 import DataObjects from "./pages/DataObjects.tsx";
+import HpcDashboard from "./pages/HpcDashboard.tsx";
 
 
 const queryClient = new QueryClient();
@@ -57,6 +58,7 @@ const App = () => (
           <Route path="/enterprise" element={<Enterprise />} />
           <Route path="/intelligence" element={<IntelligenceLayers />} />
           <Route path="/dev-progress" element={<DevProgress />} />
+          <Route path="/hpc-dashboard" element={<HpcDashboard />} />
           <Route path="/browse" element={<Browse />} />
           <Route path="/sample/:gsmId" element={<SampleDetail />} />
           <Route path="/series/:gseId" element={<SeriesDetail />} />

@@ -1,0 +1,224 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-05-27T15:08:41Z",
+  "kpi": {
+    "samples_total": 1000,
+    "samples_success": 0,
+    "samples_failed_terminal": 2,
+    "samples_in_flight": 0,
+    "samples_pending": 0,
+    "samples_with_summary": 2,
+    "success_rate_pct": 0.0,
+    "cells_total": 0,
+    "reads_total": 0,
+    "umis_total": 0,
+    "nodes_in_use": 0,
+    "cpus_in_use": 0
+  },
+  "status_distribution": {
+    "align_low_map": 1,
+    "data_incomplete": 1
+  },
+  "partitions": [
+    {
+      "name": "bigmem",
+      "idle_cpus": 170,
+      "alloc_cpus": 22,
+      "total_cpus": 192,
+      "idle_nodes": 3,
+      "mixed_nodes": 1,
+      "alloc_nodes": 0,
+      "down_nodes": 0,
+      "mem_per_node_mb": 1545000,
+      "cpu_util_pct": 11.5
+    },
+    {
+      "name": "class",
+      "idle_cpus": 738,
+      "alloc_cpus": 70,
+      "total_cpus": 808,
+      "idle_nodes": 13,
+      "mixed_nodes": 4,
+      "alloc_nodes": 0,
+      "down_nodes": 0,
+      "mem_per_node_mb": 0,
+      "cpu_util_pct": 8.7
+    },
+    {
+      "name": "cpu",
+      "idle_cpus": 528,
+      "alloc_cpus": 48,
+      "total_cpus": 576,
+      "idle_nodes": 9,
+      "mixed_nodes": 3,
+      "alloc_nodes": 0,
+      "down_nodes": 0,
+      "mem_per_node_mb": 770000,
+      "cpu_util_pct": 8.3
+    },
+    {
+      "name": "short-bigmem",
+      "idle_cpus": 170,
+      "alloc_cpus": 22,
+      "total_cpus": 192,
+      "idle_nodes": 3,
+      "mixed_nodes": 1,
+      "alloc_nodes": 0,
+      "down_nodes": 0,
+      "mem_per_node_mb": 1545000,
+      "cpu_util_pct": 11.5
+    },
+    {
+      "name": "short-cpu",
+      "idle_cpus": 528,
+      "alloc_cpus": 48,
+      "total_cpus": 576,
+      "idle_nodes": 9,
+      "mixed_nodes": 3,
+      "alloc_nodes": 0,
+      "down_nodes": 0,
+      "mem_per_node_mb": 770000,
+      "cpu_util_pct": 8.3
+    }
+  ],
+  "tiers": [
+    {
+      "name": "tiny",
+      "partition": "short-cpu",
+      "n_total": 171,
+      "n_complete": 0,
+      "n_success": 0,
+      "n_failed": 0,
+      "success_rate_pct": null,
+      "mem_gb_req": 32,
+      "mem_gb_p50": 0.0,
+      "mem_gb_p95": 0.0,
+      "mem_eff_pct": 0.0,
+      "time_req_s": 3600,
+      "time_s_p50": 0,
+      "time_s_p95": 0,
+      "time_eff_pct": 0.0,
+      "cpus_req": 8,
+      "downsize_candidate": false
+    },
+    {
+      "name": "small",
+      "partition": "short-cpu",
+      "n_total": 293,
+      "n_complete": 0,
+      "n_success": 0,
+      "n_failed": 0,
+      "success_rate_pct": null,
+      "mem_gb_req": 64,
+      "mem_gb_p50": 0.0,
+      "mem_gb_p95": 0.0,
+      "mem_eff_pct": 0.0,
+      "time_req_s": 14400,
+      "time_s_p50": 0,
+      "time_s_p95": 0,
+      "time_eff_pct": 0.0,
+      "cpus_req": 16,
+      "downsize_candidate": false
+    },
+    {
+      "name": "medium",
+      "partition": "cpu",
+      "n_total": 361,
+      "n_complete": 0,
+      "n_success": 0,
+      "n_failed": 0,
+      "success_rate_pct": null,
+      "mem_gb_req": 96,
+      "mem_gb_p50": 0.0,
+      "mem_gb_p95": 0.0,
+      "mem_eff_pct": 0.0,
+      "time_req_s": 28800,
+      "time_s_p50": 0,
+      "time_s_p95": 0,
+      "time_eff_pct": 0.0,
+      "cpus_req": 16,
+      "downsize_candidate": false
+    },
+    {
+      "name": "large",
+      "partition": "cpu",
+      "n_total": 164,
+      "n_complete": 0,
+      "n_success": 0,
+      "n_failed": 0,
+      "success_rate_pct": null,
+      "mem_gb_req": 128,
+      "mem_gb_p50": 0.0,
+      "mem_gb_p95": 0.0,
+      "mem_eff_pct": 0.0,
+      "time_req_s": 64800,
+      "time_s_p50": 0,
+      "time_s_p95": 0,
+      "time_eff_pct": 0.0,
+      "cpus_req": 24,
+      "downsize_candidate": false
+    },
+    {
+      "name": "xlarge",
+      "partition": "cpu",
+      "n_total": 9,
+      "n_complete": 0,
+      "n_success": 0,
+      "n_failed": 0,
+      "success_rate_pct": null,
+      "mem_gb_req": 200,
+      "mem_gb_p50": 0.0,
+      "mem_gb_p95": 0.0,
+      "mem_eff_pct": 0.0,
+      "time_req_s": 86400,
+      "time_s_p50": 0,
+      "time_s_p95": 0,
+      "time_eff_pct": 0.0,
+      "cpus_req": 24,
+      "downsize_candidate": false
+    }
+  ],
+  "failure_modes": [
+    {
+      "kind": "FAILED",
+      "count": 1
+    },
+    {
+      "kind": "align_low_map",
+      "count": 1
+    },
+    {
+      "kind": "data_incomplete",
+      "count": 1
+    }
+  ],
+  "recent_failures": [
+    {
+      "jobid": "458351_2",
+      "gsm": null,
+      "state": "FAILED",
+      "tier": null,
+      "elapsed_s": 29,
+      "maxrss_gb": 0.0,
+      "timelimit_s": 14400,
+      "end": "2026-05-27T09:29:38",
+      "retries": 0
+    }
+  ],
+  "running_jobs": [],
+  "efficiency": {
+    "mem_p50_pct": 0.0,
+    "mem_p95_pct": 0.0,
+    "time_p50_pct": 0.4,
+    "time_p95_pct": 0.5,
+    "n_samples": 0
+  },
+  "downsize_proposals": [],
+  "policy_snapshot": {
+    "max_nodes_per_partition": 75,
+    "target_concurrency_jobs": 600,
+    "apply_actions": false,
+    "downsize_enabled": true,
+    "dashboard_cadence_minutes": 60
+  }
+}
