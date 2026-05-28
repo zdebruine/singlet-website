@@ -1,24 +1,24 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-05-28T15:00:52Z",
+  "generated_at": "2026-05-28T15:52:27Z",
   "kpi": {
     "samples_total": 1000,
-    "samples_success": 232,
-    "samples_failed_terminal": 161,
-    "samples_in_flight": 19,
-    "samples_pending": 87,
-    "samples_with_summary": 458,
-    "success_rate_pct": 59.0,
-    "cells_total": 0,
-    "reads_total": 0,
-    "umis_total": 0,
-    "nodes_in_use": 10,
-    "cpus_in_use": 400
+    "samples_success": 240,
+    "samples_failed_terminal": 228,
+    "samples_in_flight": 18,
+    "samples_pending": 88,
+    "samples_with_summary": 468,
+    "success_rate_pct": 51.3,
+    "cells_total": 718058,
+    "reads_total": 53345914068,
+    "umis_total": 1189147,
+    "nodes_in_use": 9,
+    "cpus_in_use": 376
   },
   "status_distribution": {
-    "align_low_map": 106,
-    "data_incomplete": 55,
-    "success": 232,
+    "align_low_map": 107,
+    "data_incomplete": 56,
+    "success": 240,
     "align_low_cells": 21,
     "align_zero_cells": 31,
     "align_low_genes": 13
@@ -26,15 +26,15 @@
   "partitions": [
     {
       "name": "bigmem",
-      "idle_cpus": 146,
-      "alloc_cpus": 46,
+      "idle_cpus": 170,
+      "alloc_cpus": 22,
       "total_cpus": 192,
       "idle_nodes": 3,
-      "mixed_nodes": 0,
-      "alloc_nodes": 1,
+      "mixed_nodes": 1,
+      "alloc_nodes": 0,
       "down_nodes": 0,
       "mem_per_node_mb": 1545000,
-      "cpu_util_pct": 24.0
+      "cpu_util_pct": 11.5
     },
     {
       "name": "class",
@@ -42,47 +42,47 @@
       "alloc_cpus": 442,
       "total_cpus": 808,
       "idle_nodes": 5,
-      "mixed_nodes": 11,
-      "alloc_nodes": 1,
+      "mixed_nodes": 12,
+      "alloc_nodes": 0,
       "down_nodes": 0,
-      "mem_per_node_mb": 1545000,
+      "mem_per_node_mb": 0,
       "cpu_util_pct": 54.7
     },
     {
       "name": "cpu",
-      "idle_cpus": 180,
-      "alloc_cpus": 396,
+      "idle_cpus": 156,
+      "alloc_cpus": 420,
       "total_cpus": 576,
       "idle_nodes": 1,
       "mixed_nodes": 11,
       "alloc_nodes": 0,
       "down_nodes": 0,
       "mem_per_node_mb": 770000,
-      "cpu_util_pct": 68.8
+      "cpu_util_pct": 72.9
     },
     {
       "name": "short-bigmem",
-      "idle_cpus": 146,
-      "alloc_cpus": 46,
+      "idle_cpus": 170,
+      "alloc_cpus": 22,
       "total_cpus": 192,
       "idle_nodes": 3,
-      "mixed_nodes": 0,
-      "alloc_nodes": 1,
+      "mixed_nodes": 1,
+      "alloc_nodes": 0,
       "down_nodes": 0,
       "mem_per_node_mb": 1545000,
-      "cpu_util_pct": 24.0
+      "cpu_util_pct": 11.5
     },
     {
       "name": "short-cpu",
-      "idle_cpus": 180,
-      "alloc_cpus": 396,
+      "idle_cpus": 156,
+      "alloc_cpus": 420,
       "total_cpus": 576,
       "idle_nodes": 1,
       "mixed_nodes": 11,
       "alloc_nodes": 0,
       "down_nodes": 0,
       "mem_per_node_mb": 770000,
-      "cpu_util_pct": 68.8
+      "cpu_util_pct": 72.9
     }
   ],
   "tiers": [
@@ -95,13 +95,13 @@
       "n_failed": 306,
       "success_rate_pct": 5.6,
       "mem_gb_req": 32,
-      "mem_gb_p50": 0.0,
-      "mem_gb_p95": 0.0,
-      "mem_eff_pct": 0.0,
+      "mem_gb_p50": 50.7,
+      "mem_gb_p95": 51.7,
+      "mem_eff_pct": 161.4,
       "time_req_s": 3600,
-      "time_s_p50": 9,
-      "time_s_p95": 941,
-      "time_eff_pct": 26.2,
+      "time_s_p50": 145,
+      "time_s_p95": 907,
+      "time_eff_pct": 25.2,
       "cpus_req": 8,
       "downsize_candidate": true
     },
@@ -114,13 +114,13 @@
       "n_failed": 411,
       "success_rate_pct": 44.4,
       "mem_gb_req": 64,
-      "mem_gb_p50": 0.0,
-      "mem_gb_p95": 0.0,
-      "mem_eff_pct": 0.0,
+      "mem_gb_p50": 51.7,
+      "mem_gb_p95": 56.4,
+      "mem_eff_pct": 88.1,
       "time_req_s": 14400,
-      "time_s_p50": 66,
-      "time_s_p95": 4965,
-      "time_eff_pct": 34.5,
+      "time_s_p50": 782,
+      "time_s_p95": 3770,
+      "time_eff_pct": 26.2,
       "cpus_req": 16,
       "downsize_candidate": true
     },
@@ -128,18 +128,18 @@
       "name": "medium",
       "partition": "cpu",
       "n_total": 361,
-      "n_complete": 72,
-      "n_success": 56,
-      "n_failed": 16,
-      "success_rate_pct": 77.8,
+      "n_complete": 77,
+      "n_success": 60,
+      "n_failed": 17,
+      "success_rate_pct": 77.9,
       "mem_gb_req": 96,
-      "mem_gb_p50": 0.0,
-      "mem_gb_p95": 0.0,
-      "mem_eff_pct": 0.0,
+      "mem_gb_p50": 54.7,
+      "mem_gb_p95": 63.5,
+      "mem_eff_pct": 66.1,
       "time_req_s": 28800,
-      "time_s_p50": 5328,
-      "time_s_p95": 11827,
-      "time_eff_pct": 41.1,
+      "time_s_p50": 1760,
+      "time_s_p95": 9709,
+      "time_eff_pct": 33.7,
       "cpus_req": 16,
       "downsize_candidate": true
     },
@@ -147,18 +147,18 @@
       "name": "large",
       "partition": "cpu",
       "n_total": 164,
-      "n_complete": 72,
-      "n_success": 52,
+      "n_complete": 77,
+      "n_success": 57,
       "n_failed": 20,
-      "success_rate_pct": 72.2,
+      "success_rate_pct": 74.0,
       "mem_gb_req": 128,
-      "mem_gb_p50": 0.0,
-      "mem_gb_p95": 0.0,
-      "mem_eff_pct": 0.0,
+      "mem_gb_p50": 55.4,
+      "mem_gb_p95": 97.9,
+      "mem_eff_pct": 76.5,
       "time_req_s": 64800,
-      "time_s_p50": 4907,
-      "time_s_p95": 17991,
-      "time_eff_pct": 27.8,
+      "time_s_p50": 1683,
+      "time_s_p95": 9831,
+      "time_eff_pct": 15.2,
       "cpus_req": 24,
       "downsize_candidate": true
     },
@@ -185,7 +185,7 @@
   "failure_modes": [
     {
       "kind": "FAILED",
-      "count": 635
+      "count": 636
     },
     {
       "kind": "OUT_OF_MEMORY",
@@ -193,11 +193,11 @@
     },
     {
       "kind": "align_low_map",
-      "count": 106
+      "count": 107
     },
     {
       "kind": "data_incomplete",
-      "count": 55
+      "count": 56
     },
     {
       "kind": "TIMEOUT",
@@ -215,7 +215,7 @@
       "state": "TIMEOUT",
       "tier": "small",
       "elapsed_s": 14425,
-      "maxrss_gb": 0.0,
+      "maxrss_gb": 64.0,
       "timelimit_s": 14400,
       "end": "2026-05-27T23:19:24",
       "retries": 0
@@ -226,7 +226,7 @@
       "state": "FAILED",
       "tier": "small",
       "elapsed_s": 4,
-      "maxrss_gb": 0.0,
+      "maxrss_gb": 0.1,
       "timelimit_s": 14400,
       "end": "2026-05-27T19:19:33",
       "retries": 0
@@ -237,7 +237,7 @@
       "state": "FAILED",
       "tier": "small",
       "elapsed_s": 9642,
-      "maxrss_gb": 0.0,
+      "maxrss_gb": 64.0,
       "timelimit_s": 14400,
       "end": "2026-05-27T22:01:41",
       "retries": 0
@@ -248,7 +248,7 @@
       "state": "FAILED",
       "tier": "small",
       "elapsed_s": 44,
-      "maxrss_gb": 0.0,
+      "maxrss_gb": 20.1,
       "timelimit_s": 14400,
       "end": "2026-05-27T19:21:43",
       "retries": 0
@@ -270,7 +270,7 @@
       "state": "FAILED",
       "tier": "small",
       "elapsed_s": 56,
-      "maxrss_gb": 0.0,
+      "maxrss_gb": 20.6,
       "timelimit_s": 14400,
       "end": "2026-05-27T19:22:56",
       "retries": 0
@@ -281,7 +281,7 @@
       "state": "FAILED",
       "tier": "small",
       "elapsed_s": 6,
-      "maxrss_gb": 0.0,
+      "maxrss_gb": 0.2,
       "timelimit_s": 14400,
       "end": "2026-05-27T19:22:35",
       "retries": 0
@@ -292,7 +292,7 @@
       "state": "FAILED",
       "tier": "small",
       "elapsed_s": 15,
-      "maxrss_gb": 0.0,
+      "maxrss_gb": 18.5,
       "timelimit_s": 14400,
       "end": "2026-05-27T19:25:14",
       "retries": 0
@@ -303,7 +303,7 @@
       "state": "FAILED",
       "tier": "small",
       "elapsed_s": 64,
-      "maxrss_gb": 0.0,
+      "maxrss_gb": 20.3,
       "timelimit_s": 14400,
       "end": "2026-05-27T19:26:34",
       "retries": 0
@@ -314,7 +314,7 @@
       "state": "FAILED",
       "tier": "small",
       "elapsed_s": 12,
-      "maxrss_gb": 0.0,
+      "maxrss_gb": 18.4,
       "timelimit_s": 14400,
       "end": "2026-05-27T19:25:42",
       "retries": 0
@@ -325,7 +325,7 @@
       "state": "FAILED",
       "tier": "small",
       "elapsed_s": 6,
-      "maxrss_gb": 0.0,
+      "maxrss_gb": 0.5,
       "timelimit_s": 14400,
       "end": "2026-05-27T19:25:42",
       "retries": 0
@@ -347,7 +347,7 @@
       "state": "FAILED",
       "tier": "small",
       "elapsed_s": 3,
-      "maxrss_gb": 0.0,
+      "maxrss_gb": 0.1,
       "timelimit_s": 14400,
       "end": "2026-05-27T19:26:03",
       "retries": 0
@@ -369,7 +369,7 @@
       "state": "FAILED",
       "tier": "small",
       "elapsed_s": 5,
-      "maxrss_gb": 0.0,
+      "maxrss_gb": 0.2,
       "timelimit_s": 14400,
       "end": "2026-05-27T19:29:29",
       "retries": 0
@@ -391,7 +391,7 @@
       "state": "FAILED",
       "tier": "small",
       "elapsed_s": 66,
-      "maxrss_gb": 0.0,
+      "maxrss_gb": 20.0,
       "timelimit_s": 14400,
       "end": "2026-05-27T19:32:06",
       "retries": 0
@@ -402,7 +402,7 @@
       "state": "TIMEOUT",
       "tier": "small",
       "elapsed_s": 14424,
-      "maxrss_gb": 0.0,
+      "maxrss_gb": 64.0,
       "timelimit_s": 14400,
       "end": "2026-05-27T23:31:24",
       "retries": 0
@@ -413,7 +413,7 @@
       "state": "FAILED",
       "tier": "small",
       "elapsed_s": 33,
-      "maxrss_gb": 0.0,
+      "maxrss_gb": 19.1,
       "timelimit_s": 14400,
       "end": "2026-05-27T19:32:03",
       "retries": 0
@@ -424,7 +424,7 @@
       "state": "FAILED",
       "tier": "small",
       "elapsed_s": 8,
-      "maxrss_gb": 0.0,
+      "maxrss_gb": 0.4,
       "timelimit_s": 14400,
       "end": "2026-05-27T19:32:38",
       "retries": 0
@@ -435,7 +435,7 @@
       "state": "FAILED",
       "tier": "small",
       "elapsed_s": 58,
-      "maxrss_gb": 0.0,
+      "maxrss_gb": 20.4,
       "timelimit_s": 14400,
       "end": "2026-05-27T19:33:58",
       "retries": 0
@@ -457,7 +457,7 @@
       "state": "FAILED",
       "tier": "small",
       "elapsed_s": 10,
-      "maxrss_gb": 0.0,
+      "maxrss_gb": 18.6,
       "timelimit_s": 14400,
       "end": "2026-05-27T19:35:40",
       "retries": 0
@@ -468,7 +468,7 @@
       "state": "FAILED",
       "tier": "small",
       "elapsed_s": 36,
-      "maxrss_gb": 0.0,
+      "maxrss_gb": 19.4,
       "timelimit_s": 14400,
       "end": "2026-05-27T19:36:36",
       "retries": 0
@@ -490,7 +490,7 @@
       "state": "FAILED",
       "tier": "small",
       "elapsed_s": 5,
-      "maxrss_gb": 0.0,
+      "maxrss_gb": 0.1,
       "timelimit_s": 14400,
       "end": "2026-05-27T19:37:36",
       "retries": 0
@@ -501,7 +501,7 @@
       "state": "FAILED",
       "tier": "small",
       "elapsed_s": 53,
-      "maxrss_gb": 0.0,
+      "maxrss_gb": 21.4,
       "timelimit_s": 14400,
       "end": "2026-05-27T19:38:34",
       "retries": 0
@@ -523,7 +523,7 @@
       "state": "FAILED",
       "tier": "small",
       "elapsed_s": 20,
-      "maxrss_gb": 0.0,
+      "maxrss_gb": 18.7,
       "timelimit_s": 14400,
       "end": "2026-05-27T19:41:21",
       "retries": 0
@@ -545,7 +545,7 @@
       "state": "FAILED",
       "tier": "small",
       "elapsed_s": 9,
-      "maxrss_gb": 0.0,
+      "maxrss_gb": 18.4,
       "timelimit_s": 14400,
       "end": "2026-05-27T19:44:40",
       "retries": 0
@@ -556,7 +556,7 @@
       "state": "FAILED",
       "tier": "small",
       "elapsed_s": 6,
-      "maxrss_gb": 0.0,
+      "maxrss_gb": 0.1,
       "timelimit_s": 14400,
       "end": "2026-05-27T19:46:37",
       "retries": 0
@@ -578,7 +578,7 @@
       "state": "FAILED",
       "tier": "small",
       "elapsed_s": 5,
-      "maxrss_gb": 0.0,
+      "maxrss_gb": 0.2,
       "timelimit_s": 14400,
       "end": "2026-05-27T19:46:36",
       "retries": 0
@@ -589,7 +589,7 @@
       "state": "TIMEOUT",
       "tier": "small",
       "elapsed_s": 14417,
-      "maxrss_gb": 0.0,
+      "maxrss_gb": 64.0,
       "timelimit_s": 14400,
       "end": "2026-05-27T23:46:54",
       "retries": 0
@@ -600,7 +600,7 @@
       "state": "FAILED",
       "tier": "small",
       "elapsed_s": 17,
-      "maxrss_gb": 0.0,
+      "maxrss_gb": 18.7,
       "timelimit_s": 14400,
       "end": "2026-05-27T19:48:18",
       "retries": 0
@@ -611,7 +611,7 @@
       "state": "FAILED",
       "tier": "small",
       "elapsed_s": 3,
-      "maxrss_gb": 0.0,
+      "maxrss_gb": 0.1,
       "timelimit_s": 14400,
       "end": "2026-05-27T19:48:26",
       "retries": 0
@@ -622,7 +622,7 @@
       "state": "FAILED",
       "tier": "small",
       "elapsed_s": 6,
-      "maxrss_gb": 0.0,
+      "maxrss_gb": 0.1,
       "timelimit_s": 14400,
       "end": "2026-05-28T05:43:14",
       "retries": 0
@@ -633,7 +633,7 @@
       "state": "FAILED",
       "tier": "small",
       "elapsed_s": 2,
-      "maxrss_gb": 0.0,
+      "maxrss_gb": 0.1,
       "timelimit_s": 14400,
       "end": "2026-05-28T05:43:39",
       "retries": 0
@@ -644,7 +644,7 @@
       "state": "FAILED",
       "tier": "bigmem_xlarge",
       "elapsed_s": 182,
-      "maxrss_gb": 0.0,
+      "maxrss_gb": 15.5,
       "timelimit_s": 129600,
       "end": "2026-05-27T20:47:33",
       "retries": 0
@@ -655,7 +655,7 @@
       "state": "FAILED",
       "tier": "bigmem_xlarge",
       "elapsed_s": 27,
-      "maxrss_gb": 0.0,
+      "maxrss_gb": 5.9,
       "timelimit_s": 129600,
       "end": "2026-05-28T01:45:24",
       "retries": 0
@@ -666,7 +666,7 @@
       "state": "FAILED",
       "tier": "bigmem_xlarge",
       "elapsed_s": 26,
-      "maxrss_gb": 0.0,
+      "maxrss_gb": 5.9,
       "timelimit_s": 129600,
       "end": "2026-05-28T02:45:29",
       "retries": 0
@@ -677,7 +677,7 @@
       "state": "FAILED",
       "tier": "bigmem_xlarge",
       "elapsed_s": 191,
-      "maxrss_gb": 0.0,
+      "maxrss_gb": 11.8,
       "timelimit_s": 129600,
       "end": "2026-05-28T03:18:17",
       "retries": 0
@@ -688,7 +688,7 @@
       "state": "FAILED",
       "tier": "bigmem_xlarge",
       "elapsed_s": 9,
-      "maxrss_gb": 0.0,
+      "maxrss_gb": 0.6,
       "timelimit_s": 129600,
       "end": "2026-05-28T06:45:33",
       "retries": 0
@@ -699,7 +699,7 @@
       "state": "FAILED",
       "tier": "bigmem_xlarge",
       "elapsed_s": 57,
-      "maxrss_gb": 0.0,
+      "maxrss_gb": 8.5,
       "timelimit_s": 129600,
       "end": "2026-05-28T07:01:22",
       "retries": 0
@@ -710,7 +710,7 @@
       "state": "FAILED",
       "tier": "bigmem_xlarge",
       "elapsed_s": 12,
-      "maxrss_gb": 0.0,
+      "maxrss_gb": 0.5,
       "timelimit_s": 129600,
       "end": "2026-05-28T07:00:37",
       "retries": 0
@@ -721,7 +721,7 @@
       "state": "FAILED",
       "tier": "bigmem_xlarge",
       "elapsed_s": 105,
-      "maxrss_gb": 0.0,
+      "maxrss_gb": 9.2,
       "timelimit_s": 129600,
       "end": "2026-05-28T07:17:12",
       "retries": 0
@@ -732,7 +732,7 @@
       "state": "FAILED",
       "tier": "bigmem_xlarge",
       "elapsed_s": 10,
-      "maxrss_gb": 0.0,
+      "maxrss_gb": 0.5,
       "timelimit_s": 129600,
       "end": "2026-05-28T08:00:39",
       "retries": 0
@@ -743,7 +743,7 @@
       "state": "FAILED",
       "tier": "bigmem_xlarge",
       "elapsed_s": 10,
-      "maxrss_gb": 0.0,
+      "maxrss_gb": 0.5,
       "timelimit_s": 129600,
       "end": "2026-05-28T09:30:52",
       "retries": 0
@@ -751,27 +751,81 @@
   ],
   "running_jobs": [
     {
-      "jobid": "460819",
-      "partition": "bigmem",
-      "node": "b001",
-      "cpus": 24,
-      "mem": "256G",
-      "time_limit": "1-12:00:00",
-      "tier": "bigmem_xlarge"
+      "jobid": "458603_83",
+      "partition": "cpu",
+      "node": "c004",
+      "cpus": 16,
+      "mem": "96G",
+      "time_limit": "8:00:00",
+      "tier": "medium"
     },
     {
-      "jobid": "458602_77",
+      "jobid": "458602_82",
       "partition": "cpu",
-      "node": "c007",
+      "node": "c100",
       "cpus": 24,
       "mem": "128G",
       "time_limit": "18:00:00",
       "tier": "large"
     },
     {
-      "jobid": "458602_76",
+      "jobid": "458603_82",
+      "partition": "cpu",
+      "node": "c004",
+      "cpus": 16,
+      "mem": "96G",
+      "time_limit": "8:00:00",
+      "tier": "medium"
+    },
+    {
+      "jobid": "458603_81",
+      "partition": "cpu",
+      "node": "c100",
+      "cpus": 16,
+      "mem": "96G",
+      "time_limit": "8:00:00",
+      "tier": "medium"
+    },
+    {
+      "jobid": "458602_81",
+      "partition": "cpu",
+      "node": "c101",
+      "cpus": 24,
+      "mem": "128G",
+      "time_limit": "18:00:00",
+      "tier": "large"
+    },
+    {
+      "jobid": "458602_80",
       "partition": "cpu",
       "node": "c010",
+      "cpus": 24,
+      "mem": "128G",
+      "time_limit": "18:00:00",
+      "tier": "large"
+    },
+    {
+      "jobid": "458603_80",
+      "partition": "cpu",
+      "node": "c009",
+      "cpus": 16,
+      "mem": "96G",
+      "time_limit": "8:00:00",
+      "tier": "medium"
+    },
+    {
+      "jobid": "458602_79",
+      "partition": "cpu",
+      "node": "c006",
+      "cpus": 24,
+      "mem": "128G",
+      "time_limit": "18:00:00",
+      "tier": "large"
+    },
+    {
+      "jobid": "458602_77",
+      "partition": "cpu",
+      "node": "c007",
       "cpus": 24,
       "mem": "128G",
       "time_limit": "18:00:00",
@@ -794,15 +848,6 @@
       "mem": "128G",
       "time_limit": "18:00:00",
       "tier": "large"
-    },
-    {
-      "jobid": "458603_78",
-      "partition": "cpu",
-      "node": "c004",
-      "cpus": 16,
-      "mem": "96G",
-      "time_limit": "8:00:00",
-      "tier": "medium"
     },
     {
       "jobid": "458602_73",
@@ -832,15 +877,6 @@
       "tier": "medium"
     },
     {
-      "jobid": "458603_74",
-      "partition": "cpu",
-      "node": "c009",
-      "cpus": 16,
-      "mem": "96G",
-      "time_limit": "8:00:00",
-      "tier": "medium"
-    },
-    {
       "jobid": "458603_73",
       "partition": "cpu",
       "node": "c101",
@@ -859,24 +895,6 @@
       "tier": "large"
     },
     {
-      "jobid": "458602_69",
-      "partition": "cpu",
-      "node": "c100",
-      "cpus": 24,
-      "mem": "128G",
-      "time_limit": "18:00:00",
-      "tier": "large"
-    },
-    {
-      "jobid": "458603_69",
-      "partition": "cpu",
-      "node": "c100",
-      "cpus": 16,
-      "mem": "96G",
-      "time_limit": "8:00:00",
-      "tier": "medium"
-    },
-    {
       "jobid": "458602_67",
       "partition": "cpu",
       "node": "c008",
@@ -893,48 +911,21 @@
       "mem": "128G",
       "time_limit": "18:00:00",
       "tier": "large"
-    },
-    {
-      "jobid": "458603_65",
-      "partition": "cpu",
-      "node": "c004",
-      "cpus": 16,
-      "mem": "96G",
-      "time_limit": "8:00:00",
-      "tier": "medium"
-    },
-    {
-      "jobid": "458602_65",
-      "partition": "cpu",
-      "node": "c006",
-      "cpus": 24,
-      "mem": "128G",
-      "time_limit": "18:00:00",
-      "tier": "large"
-    },
-    {
-      "jobid": "458602_63",
-      "partition": "cpu",
-      "node": "c101",
-      "cpus": 24,
-      "mem": "128G",
-      "time_limit": "18:00:00",
-      "tier": "large"
     }
   ],
   "efficiency": {
-    "mem_p50_pct": 0.0,
-    "mem_p95_pct": 0.0,
-    "time_p50_pct": 9.8,
-    "time_p95_pct": 42.6,
-    "n_samples": 0
+    "mem_p50_pct": 80.9,
+    "mem_p95_pct": 159.1,
+    "time_p50_pct": 4.8,
+    "time_p95_pct": 25.7,
+    "n_samples": 411
   },
   "downsize_proposals": [
     {
       "tier": "tiny",
       "current_mem_gb": 32,
       "current_time_s": 3600,
-      "proposed_mem_gb": 16,
+      "proposed_mem_gb": 32,
       "proposed_time_s": 1800,
       "n_samples": 324
     },
@@ -942,7 +933,7 @@
       "tier": "small",
       "current_mem_gb": 64,
       "current_time_s": 14400,
-      "proposed_mem_gb": 32,
+      "proposed_mem_gb": 64,
       "proposed_time_s": 7200,
       "n_samples": 739
     },
@@ -950,17 +941,17 @@
       "tier": "medium",
       "current_mem_gb": 96,
       "current_time_s": 28800,
-      "proposed_mem_gb": 48,
-      "proposed_time_s": 28800,
-      "n_samples": 72
+      "proposed_mem_gb": 96,
+      "proposed_time_s": 14400,
+      "n_samples": 77
     },
     {
       "tier": "large",
       "current_mem_gb": 128,
       "current_time_s": 64800,
-      "proposed_mem_gb": 64,
+      "proposed_mem_gb": 128,
       "proposed_time_s": 32400,
-      "n_samples": 72
+      "n_samples": 77
     }
   ],
   "policy_snapshot": {
