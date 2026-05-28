@@ -1,19 +1,19 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-05-28T12:00:29Z",
+  "generated_at": "2026-05-28T12:05:11Z",
   "kpi": {
     "samples_total": 1000,
     "samples_success": 223,
     "samples_failed_terminal": 151,
-    "samples_in_flight": 19,
+    "samples_in_flight": 18,
     "samples_pending": 83,
     "samples_with_summary": 437,
     "success_rate_pct": 59.6,
     "cells_total": 0,
     "reads_total": 0,
     "umis_total": 0,
-    "nodes_in_use": 10,
-    "cpus_in_use": 392
+    "nodes_in_use": 9,
+    "cpus_in_use": 368
   },
   "status_distribution": {
     "align_low_map": 99,
@@ -26,27 +26,27 @@
   "partitions": [
     {
       "name": "bigmem",
-      "idle_cpus": 146,
-      "alloc_cpus": 46,
+      "idle_cpus": 170,
+      "alloc_cpus": 22,
       "total_cpus": 192,
       "idle_nodes": 3,
-      "mixed_nodes": 0,
-      "alloc_nodes": 1,
+      "mixed_nodes": 1,
+      "alloc_nodes": 0,
       "down_nodes": 0,
       "mem_per_node_mb": 1545000,
-      "cpu_util_pct": 24.0
+      "cpu_util_pct": 11.5
     },
     {
       "name": "class",
-      "idle_cpus": 374,
-      "alloc_cpus": 434,
+      "idle_cpus": 398,
+      "alloc_cpus": 410,
       "total_cpus": 808,
       "idle_nodes": 6,
-      "mixed_nodes": 10,
-      "alloc_nodes": 1,
+      "mixed_nodes": 11,
+      "alloc_nodes": 0,
       "down_nodes": 0,
-      "mem_per_node_mb": 1545000,
-      "cpu_util_pct": 53.7
+      "mem_per_node_mb": 0,
+      "cpu_util_pct": 50.7
     },
     {
       "name": "cpu",
@@ -62,15 +62,15 @@
     },
     {
       "name": "short-bigmem",
-      "idle_cpus": 146,
-      "alloc_cpus": 46,
+      "idle_cpus": 170,
+      "alloc_cpus": 22,
       "total_cpus": 192,
       "idle_nodes": 3,
-      "mixed_nodes": 0,
-      "alloc_nodes": 1,
+      "mixed_nodes": 1,
+      "alloc_nodes": 0,
       "down_nodes": 0,
       "mem_per_node_mb": 1545000,
-      "cpu_util_pct": 24.0
+      "cpu_util_pct": 11.5
     },
     {
       "name": "short-cpu",
@@ -185,7 +185,7 @@
   "failure_modes": [
     {
       "kind": "FAILED",
-      "count": 629
+      "count": 630
     },
     {
       "kind": "OUT_OF_MEMORY",
@@ -747,18 +747,20 @@
       "timelimit_s": 129600,
       "end": "2026-05-28T07:17:12",
       "retries": 0
+    },
+    {
+      "jobid": "460799",
+      "gsm": null,
+      "state": "FAILED",
+      "tier": "bigmem_xlarge",
+      "elapsed_s": 10,
+      "maxrss_gb": 0.0,
+      "timelimit_s": 129600,
+      "end": "2026-05-28T08:00:39",
+      "retries": 0
     }
   ],
   "running_jobs": [
-    {
-      "jobid": "460799",
-      "partition": "bigmem",
-      "node": "b001",
-      "cpus": 24,
-      "mem": "256G",
-      "time_limit": "1-12:00:00",
-      "tier": "bigmem_xlarge"
-    },
     {
       "jobid": "458602_65",
       "partition": "cpu",
