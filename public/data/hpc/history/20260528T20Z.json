@@ -1,19 +1,19 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-05-28T20:01:34Z",
+  "generated_at": "2026-05-28T20:05:07Z",
   "kpi": {
     "samples_total": 1000,
     "samples_success": 251,
     "samples_failed_terminal": 240,
-    "samples_in_flight": 35,
-    "samples_pending": 262,
+    "samples_in_flight": 33,
+    "samples_pending": 293,
     "samples_with_summary": 491,
     "success_rate_pct": 51.1,
     "cells_total": 752556,
     "reads_total": 60586001387,
     "umis_total": 1244435,
     "nodes_in_use": 14,
-    "cpus_in_use": 504
+    "cpus_in_use": 488
   },
   "status_distribution": {
     "align_low_map": 113,
@@ -26,63 +26,63 @@
   "partitions": [
     {
       "name": "bigmem",
-      "idle_cpus": 61,
-      "alloc_cpus": 131,
+      "idle_cpus": 57,
+      "alloc_cpus": 135,
       "total_cpus": 192,
       "idle_nodes": 0,
       "mixed_nodes": 3,
       "alloc_nodes": 1,
       "down_nodes": 0,
       "mem_per_node_mb": 1545000,
-      "cpu_util_pct": 68.2
+      "cpu_util_pct": 70.3
     },
     {
       "name": "class",
-      "idle_cpus": 221,
-      "alloc_cpus": 587,
+      "idle_cpus": 233,
+      "alloc_cpus": 575,
       "total_cpus": 808,
       "idle_nodes": 0,
       "mixed_nodes": 5,
       "alloc_nodes": 1,
       "down_nodes": 11,
       "mem_per_node_mb": 1545000,
-      "cpu_util_pct": 72.6
+      "cpu_util_pct": 71.2
     },
     {
       "name": "cpu",
-      "idle_cpus": 122,
-      "alloc_cpus": 454,
+      "idle_cpus": 138,
+      "alloc_cpus": 438,
       "total_cpus": 576,
       "idle_nodes": 0,
       "mixed_nodes": 1,
       "alloc_nodes": 0,
       "down_nodes": 11,
       "mem_per_node_mb": 770000,
-      "cpu_util_pct": 78.8
+      "cpu_util_pct": 76.0
     },
     {
       "name": "short-bigmem",
-      "idle_cpus": 61,
-      "alloc_cpus": 131,
+      "idle_cpus": 57,
+      "alloc_cpus": 135,
       "total_cpus": 192,
       "idle_nodes": 0,
       "mixed_nodes": 3,
       "alloc_nodes": 1,
       "down_nodes": 0,
       "mem_per_node_mb": 1545000,
-      "cpu_util_pct": 68.2
+      "cpu_util_pct": 70.3
     },
     {
       "name": "short-cpu",
-      "idle_cpus": 122,
-      "alloc_cpus": 454,
+      "idle_cpus": 138,
+      "alloc_cpus": 438,
       "total_cpus": 576,
       "idle_nodes": 0,
       "mixed_nodes": 1,
       "alloc_nodes": 0,
       "down_nodes": 11,
       "mem_per_node_mb": 770000,
-      "cpu_util_pct": 78.8
+      "cpu_util_pct": 76.0
     }
   ],
   "tiers": [
@@ -90,16 +90,16 @@
       "name": "tiny",
       "partition": "short-cpu",
       "n_total": 49,
-      "n_complete": 195,
+      "n_complete": 197,
       "n_success": 18,
-      "n_failed": 177,
-      "success_rate_pct": 9.2,
+      "n_failed": 179,
+      "success_rate_pct": 9.1,
       "mem_gb_req": 64,
       "mem_gb_p50": 32.0,
       "mem_gb_p95": 32.0,
       "mem_eff_pct": 50.0,
       "time_req_s": 7200,
-      "time_s_p50": 229,
+      "time_s_p50": 227,
       "time_s_p95": 3600,
       "time_eff_pct": 50.0,
       "cpus_req": 8,
@@ -119,8 +119,8 @@
       "mem_eff_pct": 100.0,
       "time_req_s": 28800,
       "time_s_p50": 1099,
-      "time_s_p95": 7360,
-      "time_eff_pct": 25.6,
+      "time_s_p95": 7537,
+      "time_eff_pct": 26.2,
       "cpus_req": 16,
       "downsize_candidate": true
     },
@@ -157,8 +157,8 @@
       "mem_eff_pct": 100.0,
       "time_req_s": 64800,
       "time_s_p50": 9803,
-      "time_s_p95": 18977,
-      "time_eff_pct": 29.3,
+      "time_s_p95": 19191,
+      "time_eff_pct": 29.6,
       "cpus_req": 24,
       "downsize_candidate": true
     },
@@ -175,8 +175,8 @@
       "mem_gb_p95": 192.0,
       "mem_eff_pct": 100.0,
       "time_req_s": 86400,
-      "time_s_p50": 4701,
-      "time_s_p95": 7395,
+      "time_s_p50": 4808,
+      "time_s_p95": 7448,
       "time_eff_pct": 8.6,
       "cpus_req": 24,
       "downsize_candidate": false
@@ -204,7 +204,7 @@
   "failure_modes": [
     {
       "kind": "FAILED",
-      "count": 141
+      "count": 143
     },
     {
       "kind": "OUT_OF_MEMORY",
@@ -228,50 +228,6 @@
     }
   ],
   "recent_failures": [
-    {
-      "jobid": "461319_14",
-      "gsm": "GSM8704093",
-      "state": "FAILED",
-      "tier": "tiny",
-      "elapsed_s": 54,
-      "maxrss_gb": 18.2,
-      "timelimit_s": 7200,
-      "end": "2026-05-28T15:45:04",
-      "retries": 1
-    },
-    {
-      "jobid": "461319_28",
-      "gsm": "GSM7080147",
-      "state": "FAILED",
-      "tier": "tiny",
-      "elapsed_s": 54,
-      "maxrss_gb": 19.1,
-      "timelimit_s": 7200,
-      "end": "2026-05-28T15:45:45",
-      "retries": 1
-    },
-    {
-      "jobid": "461319_31",
-      "gsm": "GSM9266764",
-      "state": "FAILED",
-      "tier": "tiny",
-      "elapsed_s": 55,
-      "maxrss_gb": 19.4,
-      "timelimit_s": 7200,
-      "end": "2026-05-28T15:45:46",
-      "retries": 1
-    },
-    {
-      "jobid": "461319_34",
-      "gsm": "GSM8078414",
-      "state": "FAILED",
-      "tier": "tiny",
-      "elapsed_s": 54,
-      "maxrss_gb": 18.5,
-      "timelimit_s": 7200,
-      "end": "2026-05-28T15:46:04",
-      "retries": 1
-    },
     {
       "jobid": "461540_16",
       "gsm": "GSM5930658",
@@ -325,6 +281,28 @@
       "maxrss_gb": 19.7,
       "timelimit_s": 7200,
       "end": "2026-05-28T15:49:24",
+      "retries": 1
+    },
+    {
+      "jobid": "461649_14",
+      "gsm": "GSM8704093",
+      "state": "FAILED",
+      "tier": "tiny",
+      "elapsed_s": 40,
+      "maxrss_gb": 19.1,
+      "timelimit_s": 7200,
+      "end": "2026-05-28T16:02:51",
+      "retries": 1
+    },
+    {
+      "jobid": "461649_31",
+      "gsm": "GSM9266764",
+      "state": "FAILED",
+      "tier": "tiny",
+      "elapsed_s": 43,
+      "maxrss_gb": 19.4,
+      "timelimit_s": 7200,
+      "end": "2026-05-28T16:04:20",
       "retries": 1
     }
   ],
@@ -537,24 +515,6 @@
       "tier": "tiny"
     },
     {
-      "jobid": "461649_2",
-      "partition": "short-cpu",
-      "node": "c100",
-      "cpus": 8,
-      "mem": "64G",
-      "time_limit": "2:00:00",
-      "tier": "tiny"
-    },
-    {
-      "jobid": "461649_1",
-      "partition": "short-cpu",
-      "node": "c004",
-      "cpus": 8,
-      "mem": "64G",
-      "time_limit": "2:00:00",
-      "tier": "tiny"
-    },
-    {
       "jobid": "461540_39",
       "partition": "short-cpu",
       "node": "c100",
@@ -659,7 +619,7 @@
       "current_time_s": 7200,
       "proposed_mem_gb": 32,
       "proposed_time_s": 7200,
-      "n_samples": 195
+      "n_samples": 197
     },
     {
       "tier": "small",
