@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-05-28T14:00:47Z",
+  "generated_at": "2026-05-28T14:05:12Z",
   "kpi": {
     "samples_total": 1000,
     "samples_success": 229,
     "samples_failed_terminal": 157,
-    "samples_in_flight": 18,
+    "samples_in_flight": 19,
     "samples_pending": 86,
     "samples_with_summary": 450,
     "success_rate_pct": 59.3,
@@ -13,7 +13,7 @@
     "reads_total": 0,
     "umis_total": 0,
     "nodes_in_use": 10,
-    "cpus_in_use": 376
+    "cpus_in_use": 392
   },
   "status_distribution": {
     "align_low_map": 103,
@@ -38,27 +38,27 @@
     },
     {
       "name": "class",
-      "idle_cpus": 390,
-      "alloc_cpus": 418,
+      "idle_cpus": 374,
+      "alloc_cpus": 434,
       "total_cpus": 808,
       "idle_nodes": 5,
       "mixed_nodes": 11,
       "alloc_nodes": 1,
       "down_nodes": 0,
       "mem_per_node_mb": 1545000,
-      "cpu_util_pct": 51.7
+      "cpu_util_pct": 53.7
     },
     {
       "name": "cpu",
-      "idle_cpus": 204,
-      "alloc_cpus": 372,
+      "idle_cpus": 188,
+      "alloc_cpus": 388,
       "total_cpus": 576,
       "idle_nodes": 1,
       "mixed_nodes": 11,
       "alloc_nodes": 0,
       "down_nodes": 0,
       "mem_per_node_mb": 770000,
-      "cpu_util_pct": 64.6
+      "cpu_util_pct": 67.4
     },
     {
       "name": "short-bigmem",
@@ -74,15 +74,15 @@
     },
     {
       "name": "short-cpu",
-      "idle_cpus": 204,
-      "alloc_cpus": 372,
+      "idle_cpus": 188,
+      "alloc_cpus": 388,
       "total_cpus": 576,
       "idle_nodes": 1,
       "mixed_nodes": 11,
       "alloc_nodes": 0,
       "down_nodes": 0,
       "mem_per_node_mb": 770000,
-      "cpu_util_pct": 64.6
+      "cpu_util_pct": 67.4
     }
   ],
   "tiers": [
@@ -137,9 +137,9 @@
       "mem_gb_p95": 0.0,
       "mem_eff_pct": 0.0,
       "time_req_s": 28800,
-      "time_s_p50": 4677,
-      "time_s_p95": 11945,
-      "time_eff_pct": 41.5,
+      "time_s_p50": 4661,
+      "time_s_p95": 11921,
+      "time_eff_pct": 41.4,
       "cpus_req": 16,
       "downsize_candidate": true
     },
@@ -758,6 +758,15 @@
       "mem": "256G",
       "time_limit": "1-12:00:00",
       "tier": "bigmem_xlarge"
+    },
+    {
+      "jobid": "458603_74",
+      "partition": "cpu",
+      "node": "c009",
+      "cpus": 16,
+      "mem": "96G",
+      "time_limit": "8:00:00",
+      "tier": "medium"
     },
     {
       "jobid": "458602_72",
