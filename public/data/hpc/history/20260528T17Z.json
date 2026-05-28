@@ -1,23 +1,23 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-05-28T17:01:05Z",
+  "generated_at": "2026-05-28T17:05:08Z",
   "kpi": {
     "samples_total": 1000,
     "samples_success": 243,
-    "samples_failed_terminal": 232,
+    "samples_failed_terminal": 233,
     "samples_in_flight": 18,
     "samples_pending": 89,
-    "samples_with_summary": 475,
-    "success_rate_pct": 51.2,
+    "samples_with_summary": 476,
+    "success_rate_pct": 51.1,
     "cells_total": 728421,
-    "reads_total": 55214656162,
+    "reads_total": 55338595515,
     "umis_total": 1209591,
     "nodes_in_use": 9,
     "cpus_in_use": 376
   },
   "status_distribution": {
     "align_low_map": 109,
-    "data_incomplete": 58,
+    "data_incomplete": 59,
     "success": 243,
     "align_low_cells": 21,
     "align_zero_cells": 31,
@@ -147,17 +147,17 @@
       "name": "large",
       "partition": "cpu",
       "n_total": 164,
-      "n_complete": 79,
-      "n_success": 58,
+      "n_complete": 80,
+      "n_success": 59,
       "n_failed": 21,
-      "success_rate_pct": 73.4,
+      "success_rate_pct": 73.8,
       "mem_gb_req": 128,
       "mem_gb_p50": 55.4,
       "mem_gb_p95": 97.9,
       "mem_eff_pct": 76.5,
       "time_req_s": 64800,
-      "time_s_p50": 1602,
-      "time_s_p95": 9775,
+      "time_s_p50": 1462,
+      "time_s_p95": 9763,
       "time_eff_pct": 15.1,
       "cpus_req": 24,
       "downsize_candidate": true
@@ -197,7 +197,7 @@
     },
     {
       "kind": "data_incomplete",
-      "count": 58
+      "count": 59
     },
     {
       "kind": "TIMEOUT",
@@ -762,6 +762,15 @@
   ],
   "running_jobs": [
     {
+      "jobid": "458602_85",
+      "partition": "cpu",
+      "node": "c006",
+      "cpus": 24,
+      "mem": "128G",
+      "time_limit": "18:00:00",
+      "tier": "large"
+    },
+    {
       "jobid": "458603_90",
       "partition": "cpu",
       "node": "c101",
@@ -805,15 +814,6 @@
       "mem": "96G",
       "time_limit": "8:00:00",
       "tier": "medium"
-    },
-    {
-      "jobid": "458602_83",
-      "partition": "cpu",
-      "node": "c006",
-      "cpus": 24,
-      "mem": "128G",
-      "time_limit": "18:00:00",
-      "tier": "large"
     },
     {
       "jobid": "458603_86",
@@ -962,7 +962,7 @@
       "current_time_s": 64800,
       "proposed_mem_gb": 128,
       "proposed_time_s": 32400,
-      "n_samples": 79
+      "n_samples": 80
     }
   ],
   "policy_snapshot": {
