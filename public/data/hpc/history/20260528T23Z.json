@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-05-28T23:02:05Z",
+  "generated_at": "2026-05-28T23:05:07Z",
   "kpi": {
     "samples_total": 1000,
     "samples_success": 260,
     "samples_failed_terminal": 245,
-    "samples_in_flight": 21,
+    "samples_in_flight": 20,
     "samples_pending": 478,
     "samples_with_summary": 505,
     "success_rate_pct": 51.5,
@@ -13,7 +13,7 @@
     "reads_total": 62853277354,
     "umis_total": 1281046,
     "nodes_in_use": 12,
-    "cpus_in_use": 400
+    "cpus_in_use": 384
   },
   "status_distribution": {
     "align_low_map": 115,
@@ -26,63 +26,63 @@
   "partitions": [
     {
       "name": "bigmem",
-      "idle_cpus": 65,
-      "alloc_cpus": 127,
+      "idle_cpus": 73,
+      "alloc_cpus": 119,
       "total_cpus": 192,
       "idle_nodes": 0,
       "mixed_nodes": 3,
       "alloc_nodes": 1,
       "down_nodes": 0,
       "mem_per_node_mb": 1545000,
-      "cpu_util_pct": 66.1
+      "cpu_util_pct": 62.0
     },
     {
       "name": "class",
-      "idle_cpus": 331,
-      "alloc_cpus": 477,
+      "idle_cpus": 355,
+      "alloc_cpus": 453,
       "total_cpus": 808,
       "idle_nodes": 3,
       "mixed_nodes": 13,
       "alloc_nodes": 1,
       "down_nodes": 0,
       "mem_per_node_mb": 1545000,
-      "cpu_util_pct": 59.0
+      "cpu_util_pct": 56.1
     },
     {
       "name": "cpu",
-      "idle_cpus": 226,
-      "alloc_cpus": 350,
+      "idle_cpus": 242,
+      "alloc_cpus": 334,
       "total_cpus": 576,
       "idle_nodes": 2,
       "mixed_nodes": 10,
       "alloc_nodes": 0,
       "down_nodes": 0,
       "mem_per_node_mb": 0,
-      "cpu_util_pct": 60.8
+      "cpu_util_pct": 58.0
     },
     {
       "name": "short-bigmem",
-      "idle_cpus": 65,
-      "alloc_cpus": 127,
+      "idle_cpus": 73,
+      "alloc_cpus": 119,
       "total_cpus": 192,
       "idle_nodes": 0,
       "mixed_nodes": 3,
       "alloc_nodes": 1,
       "down_nodes": 0,
       "mem_per_node_mb": 1545000,
-      "cpu_util_pct": 66.1
+      "cpu_util_pct": 62.0
     },
     {
       "name": "short-cpu",
-      "idle_cpus": 226,
-      "alloc_cpus": 350,
+      "idle_cpus": 242,
+      "alloc_cpus": 334,
       "total_cpus": 576,
       "idle_nodes": 2,
       "mixed_nodes": 10,
       "alloc_nodes": 0,
       "down_nodes": 0,
       "mem_per_node_mb": 0,
-      "cpu_util_pct": 60.8
+      "cpu_util_pct": 58.0
     }
   ],
   "tiers": [
@@ -109,10 +109,10 @@
       "name": "small",
       "partition": "short-cpu",
       "n_total": 67,
-      "n_complete": 406,
+      "n_complete": 407,
       "n_success": 330,
-      "n_failed": 76,
-      "success_rate_pct": 81.3,
+      "n_failed": 77,
+      "success_rate_pct": 81.1,
       "mem_gb_req": 64,
       "mem_gb_p50": 79.9,
       "mem_gb_p95": 79.9,
@@ -194,9 +194,9 @@
       "mem_gb_p95": 0.0,
       "mem_eff_pct": 0.0,
       "time_req_s": 129600,
-      "time_s_p50": 3428,
-      "time_s_p95": 3482,
-      "time_eff_pct": 2.7,
+      "time_s_p50": 3610,
+      "time_s_p95": 3664,
+      "time_eff_pct": 2.8,
       "cpus_req": 24,
       "downsize_candidate": false
     }
@@ -220,7 +220,7 @@
     },
     {
       "kind": "TIMEOUT",
-      "count": 43
+      "count": 44
     },
     {
       "kind": "CANCELLED",
@@ -541,15 +541,6 @@
       "mem": "128G",
       "time_limit": "18:00:00",
       "tier": "large"
-    },
-    {
-      "jobid": "460900_61",
-      "partition": "short-cpu",
-      "node": "c007",
-      "cpus": 16,
-      "mem": "64G",
-      "time_limit": "4:00:00",
-      "tier": "small"
     }
   ],
   "efficiency": {
@@ -566,7 +557,7 @@
       "current_time_s": 28800,
       "proposed_mem_gb": 64,
       "proposed_time_s": 14400,
-      "n_samples": 406
+      "n_samples": 407
     },
     {
       "tier": "medium",
