@@ -1,14 +1,14 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-05-28T06:05:07Z",
+  "generated_at": "2026-05-28T06:14:59Z",
   "kpi": {
     "samples_total": 1000,
-    "samples_success": 194,
-    "samples_failed_terminal": 135,
+    "samples_success": 198,
+    "samples_failed_terminal": 136,
     "samples_in_flight": 19,
-    "samples_pending": 83,
-    "samples_with_summary": 389,
-    "success_rate_pct": 59.0,
+    "samples_pending": 85,
+    "samples_with_summary": 394,
+    "success_rate_pct": 59.3,
     "cells_total": 0,
     "reads_total": 0,
     "umis_total": 0,
@@ -17,8 +17,8 @@
   },
   "status_distribution": {
     "align_low_map": 89,
-    "data_incomplete": 46,
-    "success": 194,
+    "data_incomplete": 47,
+    "success": 198,
     "align_low_cells": 20,
     "align_zero_cells": 28,
     "align_low_genes": 12
@@ -128,18 +128,18 @@
       "name": "medium",
       "partition": "cpu",
       "n_total": 361,
-      "n_complete": 28,
-      "n_success": 22,
-      "n_failed": 6,
-      "success_rate_pct": 78.6,
+      "n_complete": 32,
+      "n_success": 24,
+      "n_failed": 8,
+      "success_rate_pct": 75.0,
       "mem_gb_req": 96,
       "mem_gb_p50": 0.0,
       "mem_gb_p95": 0.0,
       "mem_eff_pct": 0.0,
       "time_req_s": 28800,
       "time_s_p50": 4580,
-      "time_s_p95": 9416,
-      "time_eff_pct": 32.7,
+      "time_s_p95": 9728,
+      "time_eff_pct": 33.8,
       "cpus_req": 16,
       "downsize_candidate": true
     },
@@ -147,18 +147,18 @@
       "name": "large",
       "partition": "cpu",
       "n_total": 164,
-      "n_complete": 33,
-      "n_success": 22,
+      "n_complete": 36,
+      "n_success": 25,
       "n_failed": 11,
-      "success_rate_pct": 66.7,
+      "success_rate_pct": 69.4,
       "mem_gb_req": 128,
       "mem_gb_p50": 0.0,
       "mem_gb_p95": 0.0,
       "mem_eff_pct": 0.0,
       "time_req_s": 64800,
-      "time_s_p50": 4579,
-      "time_s_p95": 16399,
-      "time_eff_pct": 25.3,
+      "time_s_p50": 4698,
+      "time_s_p95": 16352,
+      "time_eff_pct": 25.2,
       "cpus_req": 24,
       "downsize_candidate": true
     },
@@ -185,7 +185,7 @@
   "failure_modes": [
     {
       "kind": "FAILED",
-      "count": 608
+      "count": 610
     },
     {
       "kind": "OUT_OF_MEMORY",
@@ -197,7 +197,7 @@
     },
     {
       "kind": "data_incomplete",
-      "count": 46
+      "count": 47
     },
     {
       "kind": "TIMEOUT",
@@ -694,6 +694,60 @@
       "tier": "bigmem_xlarge"
     },
     {
+      "jobid": "458602_39",
+      "partition": "cpu",
+      "node": "c008",
+      "cpus": 24,
+      "mem": "128G",
+      "time_limit": "18:00:00",
+      "tier": "large"
+    },
+    {
+      "jobid": "458602_40",
+      "partition": "cpu",
+      "node": "c006",
+      "cpus": 24,
+      "mem": "128G",
+      "time_limit": "18:00:00",
+      "tier": "large"
+    },
+    {
+      "jobid": "458602_38",
+      "partition": "cpu",
+      "node": "c008",
+      "cpus": 24,
+      "mem": "128G",
+      "time_limit": "18:00:00",
+      "tier": "large"
+    },
+    {
+      "jobid": "458603_39",
+      "partition": "cpu",
+      "node": "c004",
+      "cpus": 16,
+      "mem": "96G",
+      "time_limit": "8:00:00",
+      "tier": "medium"
+    },
+    {
+      "jobid": "458603_37",
+      "partition": "cpu",
+      "node": "c101",
+      "cpus": 16,
+      "mem": "96G",
+      "time_limit": "8:00:00",
+      "tier": "medium"
+    },
+    {
+      "jobid": "458603_36",
+      "partition": "cpu",
+      "node": "c101",
+      "cpus": 16,
+      "mem": "96G",
+      "time_limit": "8:00:00",
+      "tier": "medium"
+    },
+    {
       "jobid": "458602_37",
       "partition": "cpu",
       "node": "c005",
@@ -721,54 +775,9 @@
       "tier": "large"
     },
     {
-      "jobid": "458602_34",
-      "partition": "cpu",
-      "node": "c008",
-      "cpus": 24,
-      "mem": "128G",
-      "time_limit": "18:00:00",
-      "tier": "large"
-    },
-    {
-      "jobid": "458602_33",
-      "partition": "cpu",
-      "node": "c006",
-      "cpus": 24,
-      "mem": "128G",
-      "time_limit": "18:00:00",
-      "tier": "large"
-    },
-    {
-      "jobid": "458603_35",
-      "partition": "cpu",
-      "node": "c101",
-      "cpus": 16,
-      "mem": "96G",
-      "time_limit": "8:00:00",
-      "tier": "medium"
-    },
-    {
-      "jobid": "458602_31",
-      "partition": "cpu",
-      "node": "c008",
-      "cpus": 24,
-      "mem": "128G",
-      "time_limit": "18:00:00",
-      "tier": "large"
-    },
-    {
       "jobid": "458603_34",
       "partition": "cpu",
       "node": "c100",
-      "cpus": 16,
-      "mem": "96G",
-      "time_limit": "8:00:00",
-      "tier": "medium"
-    },
-    {
-      "jobid": "458603_33",
-      "partition": "cpu",
-      "node": "c004",
       "cpus": 16,
       "mem": "96G",
       "time_limit": "8:00:00",
@@ -829,15 +838,6 @@
       "tier": "large"
     },
     {
-      "jobid": "458603_25",
-      "partition": "cpu",
-      "node": "c101",
-      "cpus": 16,
-      "mem": "96G",
-      "time_limit": "8:00:00",
-      "tier": "medium"
-    },
-    {
       "jobid": "458603_23",
       "partition": "cpu",
       "node": "c007",
@@ -859,8 +859,8 @@
   "efficiency": {
     "mem_p50_pct": 0.0,
     "mem_p95_pct": 0.0,
-    "time_p50_pct": 9.2,
-    "time_p95_pct": 42.9,
+    "time_p50_pct": 9.1,
+    "time_p95_pct": 42.7,
     "n_samples": 0
   },
   "downsize_proposals": [
@@ -886,7 +886,7 @@
       "current_time_s": 28800,
       "proposed_mem_gb": 48,
       "proposed_time_s": 14400,
-      "n_samples": 28
+      "n_samples": 32
     },
     {
       "tier": "large",
@@ -894,7 +894,7 @@
       "current_time_s": 64800,
       "proposed_mem_gb": 64,
       "proposed_time_s": 32400,
-      "n_samples": 33
+      "n_samples": 36
     }
   ],
   "policy_snapshot": {
