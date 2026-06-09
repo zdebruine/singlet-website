@@ -19,13 +19,20 @@ interface Snapshot {
     samples_failed_terminal: number;
     samples_in_flight: number;
     samples_pending: number;
+    samples_claimed?: number;
     samples_with_summary: number;
+    samples_done_queue?: number;
+    samples_failed_queue?: number;
+    samples_deny_list?: number;
     success_rate_pct: number;
     cells_total: number;
     reads_total: number;
     umis_total: number;
     nodes_in_use: number;
     cpus_in_use: number;
+  };
+  queue_state?: {
+    pending: number; claimed: number; done: number; failed: number;
   };
   status_distribution: Record<string, number>;
   partitions: Array<{
@@ -73,13 +80,32 @@ const COLORS = {
 };
 
 const STATE_COLOR: Record<string, string> = {
+  // legacy SLURM-derived states
   OUT_OF_MEMORY: COLORS.danger,
   TIMEOUT: COLORS.warning,
   NODE_FAIL: COLORS.purple,
   FAILED: COLORS.danger,
   CANCELLED: COLORS.muted,
+  // biology-derived status
   align_low_map: COLORS.warning,
+  align_low_cells: COLORS.warning,
+  align_low_genes: COLORS.warning,
+  align_zero_cells: COLORS.danger,
   data_incomplete: COLORS.info,
+  success: COLORS.success,
+  qc_warn: COLORS.warning,
+  // pipeline-derived failure reasons
+  no_srr: COLORS.muted,
+  "precheck.no_srr": COLORS.muted,
+  no_sra_in_geo: COLORS.muted,
+  s3: COLORS.danger,
+  encode: COLORS.warning,
+  encode_empty: COLORS.warning,
+  protocol_undetected: COLORS.purple,
+  protocol_mismatch: COLORS.purple,
+  pipeline: COLORS.danger,
+  pipeline_timeout: COLORS.warning,
+  permanent_failure: COLORS.danger,
 };
 
 function fmtNum(n: number): string {
@@ -114,15 +140,53 @@ function KpiCard({ icon: Icon, label, value, sub, color = COLORS.info }: {
   );
 }
 
+function ClusterTabs({ cluster, onChange }: { cluster: ClusterKey; onChange: (k: ClusterKey) => void }) {
+  return (
+    <div className="flex gap-1 p-1 bg-muted rounded-lg w-fit">
+      {(Object.keys(CLUSTERS) as ClusterKey[]).map(key => (
+        <button
+          key={key}
+          onClick={() => onChange(key)}
+          className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
+            cluster === key
+              ? "bg-background text-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          {CLUSTERS[key].label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+type ClusterKey = "clipper" | "anvil";
+
+const CLUSTERS: Record<ClusterKey, { label: string; sub: string; url: string }> = {
+  clipper: {
+    label: "GVSU Clipper",
+    sub: "Human scRNA-seq reprocessing",
+    url: "/data/hpc/latest.json",
+  },
+  anvil: {
+    label: "Purdue ANVIL",
+    sub: "Mouse 10x scRNA-seq (NSF ACCESS)",
+    url: "/data/hpc/anvil/latest.json",
+  },
+};
+
 const HpcDashboard = () => {
+  const [cluster, setCluster] = useState<ClusterKey>("clipper");
   const [snap, setSnap] = useState<Snapshot | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [lastFetched, setLastFetched] = useState<Date | null>(null);
 
-  const load = () => {
+  const load = (key: ClusterKey = cluster) => {
     setLoading(true);
-    fetch(`/data/hpc/latest.json?t=${Date.now()}`)
+    setSnap(null);
+    setErr(null);
+    fetch(`${CLUSTERS[key].url}?t=${Date.now()}`)
       .then(r => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();
@@ -134,16 +198,17 @@ const HpcDashboard = () => {
 
   useEffect(() => {
     load();
-    const id = setInterval(load, 60_000); // refresh every minute
+    const id = setInterval(() => load(), 60_000);
     return () => clearInterval(id);
-  }, []);
+  }, [cluster]);
 
   if (loading && !snap) {
     return (
       <div className="min-h-screen bg-background">
         <Navbar />
         <div className="pt-32 px-6 max-w-5xl mx-auto">
-          <div className="text-muted-foreground">Loading HPC dashboard…</div>
+          <ClusterTabs cluster={cluster} onChange={k => { setCluster(k); }} />
+          <div className="text-muted-foreground mt-8">Loading HPC dashboard…</div>
         </div>
         <Footer />
       </div>
@@ -155,11 +220,12 @@ const HpcDashboard = () => {
       <div className="min-h-screen bg-background">
         <Navbar />
         <div className="pt-32 px-6 max-w-5xl mx-auto">
-          <div className="bg-card border border-border rounded-lg p-6">
+          <ClusterTabs cluster={cluster} onChange={k => { setCluster(k); }} />
+          <div className="bg-card border border-border rounded-lg p-6 mt-6">
             <h2 className="font-display text-xl font-bold mb-2">Dashboard data not yet available</h2>
             <p className="text-sm text-muted-foreground mb-2">
-              The job-orchestrator publishes <code>/data/hpc/latest.json</code> hourly. If you just
-              spun up the pilot, give it ~15 min for the first snapshot.
+              The job-orchestrator publishes snapshots hourly. If you just
+              spun up the campaign, give it ~15 min for the first snapshot.
             </p>
             <p className="text-xs text-muted-foreground font-mono">{err}</p>
           </div>
@@ -194,19 +260,22 @@ const HpcDashboard = () => {
       <section className="pt-32 pb-20 px-6">
         <div className="max-w-7xl mx-auto">
 
+          {/* Cluster tab selector */}
+          <ClusterTabs cluster={cluster} onChange={k => setCluster(k)} />
+
           {/* Header */}
-          <div className="flex items-end justify-between mb-8 flex-wrap gap-4">
+          <div className="flex items-end justify-between mt-6 mb-8 flex-wrap gap-4">
             <div>
               <h1 className="font-display text-3xl font-bold text-foreground tracking-tightest mb-1">
-                HPC Dashboard
+                HPC Dashboard — {CLUSTERS[cluster].label}
               </h1>
               <p className="text-sm text-muted-foreground">
-                Singlet pilot v0.3.0 reprocessing on Clipper HPC ·
+                {CLUSTERS[cluster].sub} ·
                 Snapshot: <span className="font-mono">{snap!.generated_at}</span> ·
                 Cadence: {snap!.policy_snapshot.dashboard_cadence_minutes} min
               </p>
             </div>
-            <button onClick={load} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md border border-border bg-secondary text-secondary-foreground text-xs font-medium hover:bg-muted">
+            <button onClick={() => load()} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md border border-border bg-secondary text-secondary-foreground text-xs font-medium hover:bg-muted">
               <RefreshCw size={12} className={loading ? "animate-spin" : ""} />
               Refresh {lastFetched && `· ${lastFetched.toLocaleTimeString()}`}
             </button>
@@ -215,18 +284,18 @@ const HpcDashboard = () => {
           {/* KPI grid */}
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 mb-6">
             <KpiCard icon={CheckCircle2} label="Success rate" value={`${k.success_rate_pct}%`}
-                     sub={`${k.samples_success}/${k.samples_with_summary} complete`}
+                     sub={`${k.samples_success}/${k.samples_with_summary} on disk`}
                      color={k.success_rate_pct >= 85 ? COLORS.success : COLORS.warning} />
             <KpiCard icon={Activity} label="In flight" value={k.samples_in_flight}
-                     sub={`${k.samples_pending} pending`} color={COLORS.info} />
+                     sub={`${k.samples_pending} pending · ${k.samples_claimed ?? 0} claimed`} color={COLORS.info} />
             <KpiCard icon={Server} label="Nodes" value={k.nodes_in_use}
                      sub={`${k.cpus_in_use} CPUs`} color={COLORS.purple} />
             <KpiCard icon={Database} label="Cells" value={fmtNum(k.cells_total)}
                      sub={`${fmtNum(k.umis_total)} UMIs`} color={COLORS.success} />
             <KpiCard icon={Zap} label="Reads" value={fmtNum(k.reads_total)}
-                     sub={`${k.samples_with_summary} samples`} color={COLORS.info} />
+                     sub={`${k.samples_with_summary} samples on disk`} color={COLORS.info} />
             <KpiCard icon={AlertTriangle} label="Failed terminal" value={k.samples_failed_terminal}
-                     sub={`of ${k.samples_total} total`} color={COLORS.danger} />
+                     sub={`${k.samples_deny_list ?? 0} on deny list`} color={COLORS.danger} />
           </div>
 
           {/* Partition utilization */}
