@@ -5,7 +5,8 @@ import {
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
-  PieChart, Pie, ScatterChart, Scatter, CartesianGrid, Legend
+  PieChart, Pie, ScatterChart, Scatter, CartesianGrid, Legend,
+  LineChart, Line
 } from "recharts";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
@@ -30,6 +31,7 @@ interface Snapshot {
     umis_total: number;
     nodes_in_use: number;
     cpus_in_use: number;
+    disk_usage_tb?: number;
   };
   queue_state?: {
     pending: number; claimed: number; done: number; failed: number;
@@ -115,6 +117,11 @@ function fmtNum(n: number): string {
   return n.toLocaleString();
 }
 
+function fmtDateTick(isoStr: string): string {
+  const d = new Date(isoStr);
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
 function fmtDuration(s: number): string {
   if (!s) return "—";
   const h = Math.floor(s / 3600);
@@ -162,16 +169,18 @@ function ClusterTabs({ cluster, onChange }: { cluster: ClusterKey; onChange: (k:
 
 type ClusterKey = "clipper" | "anvil";
 
-const CLUSTERS: Record<ClusterKey, { label: string; sub: string; url: string }> = {
+const CLUSTERS: Record<ClusterKey, { label: string; sub: string; url: string; timeseriesUrl: string }> = {
   clipper: {
     label: "GVSU Clipper",
     sub: "Human scRNA-seq reprocessing",
     url: "/data/hpc/latest.json",
+    timeseriesUrl: "/data/hpc/timeseries.json",
   },
   anvil: {
     label: "Purdue ANVIL",
     sub: "Mouse 10x scRNA-seq (NSF ACCESS)",
     url: "/data/hpc/anvil/latest.json",
+    timeseriesUrl: "/data/hpc/anvil/timeseries.json",
   },
 };
 
@@ -181,6 +190,14 @@ const HpcDashboard = () => {
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [lastFetched, setLastFetched] = useState<Date | null>(null);
+  const [timeseries, setTimeseries] = useState<any[]>([]);
+
+  const loadTimeseries = (key: ClusterKey = cluster) => {
+    fetch(`${CLUSTERS[key].timeseriesUrl}?t=${Date.now()}`)
+      .then(r => r.ok ? r.json() : [])
+      .then((d: any[]) => setTimeseries(Array.isArray(d) ? d : []))
+      .catch(() => setTimeseries([]));
+  };
 
   const load = (key: ClusterKey = cluster) => {
     setLoading(true);
@@ -198,7 +215,8 @@ const HpcDashboard = () => {
 
   useEffect(() => {
     load();
-    const id = setInterval(() => load(), 60_000);
+    loadTimeseries();
+    const id = setInterval(() => { load(); loadTimeseries(); }, 60_000);
     return () => clearInterval(id);
   }, [cluster]);
 
@@ -282,7 +300,7 @@ const HpcDashboard = () => {
           </div>
 
           {/* KPI grid */}
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 mb-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-6">
             <KpiCard icon={CheckCircle2} label="Success rate" value={`${k.success_rate_pct}%`}
                      sub={`${k.samples_success}/${k.samples_with_summary} on disk`}
                      color={k.success_rate_pct >= 85 ? COLORS.success : COLORS.warning} />
@@ -294,6 +312,9 @@ const HpcDashboard = () => {
                      sub={`${fmtNum(k.umis_total)} UMIs`} color={COLORS.success} />
             <KpiCard icon={Zap} label="Reads" value={fmtNum(k.reads_total)}
                      sub={`${k.samples_with_summary} samples on disk`} color={COLORS.info} />
+            <KpiCard icon={HardDrive} label="Disk usage"
+                     value={k.disk_usage_tb != null ? `${k.disk_usage_tb.toFixed(2)} TB` : "—"}
+                     sub="pipeline output" color={COLORS.muted} />
             <KpiCard icon={AlertTriangle} label="Failed terminal" value={k.samples_failed_terminal}
                      sub={`${k.samples_deny_list ?? 0} on deny list`} color={COLORS.danger} />
           </div>
@@ -396,6 +417,60 @@ const HpcDashboard = () => {
               </table>
             </div>
           </div>
+
+          {/* Time-series line charts */}
+          {timeseries.length > 0 && (
+            <div className="mb-6">
+
+              {/* Plot A: Cells Processed */}
+              <div className="bg-card border border-border rounded-lg p-5 mb-4">
+                <h3 className="font-display text-base font-bold mb-3">Total Cells Processed</h3>
+                <ResponsiveContainer width="100%" height={280}>
+                  <LineChart data={timeseries} margin={{ top: 5, right: 20, left: 20, bottom: 5 }}>
+                    <CartesianGrid stroke="#374151" strokeDasharray="3 3" />
+                    <XAxis dataKey="t" stroke="#9ca3af" fontSize={11} tickFormatter={fmtDateTick} />
+                    <YAxis stroke="#9ca3af" fontSize={11} tickFormatter={(v) => fmtNum(Number(v))} />
+                    <Tooltip contentStyle={{ background: "#1f2937", border: "1px solid #374151" }}
+                             formatter={(v: any) => [fmtNum(Number(v)), "Cells"]} />
+                    <Line type="monotone" dataKey="cells" stroke="#10b981" dot={false} connectNulls />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* Plot B: Samples Over Time */}
+              <div className="bg-card border border-border rounded-lg p-5 mb-4">
+                <h3 className="font-display text-base font-bold mb-3">Samples Over Time</h3>
+                <ResponsiveContainer width="100%" height={280}>
+                  <LineChart data={timeseries} margin={{ top: 5, right: 20, left: 20, bottom: 5 }}>
+                    <CartesianGrid stroke="#374151" strokeDasharray="3 3" />
+                    <XAxis dataKey="t" stroke="#9ca3af" fontSize={11} tickFormatter={fmtDateTick} />
+                    <YAxis stroke="#9ca3af" fontSize={11} tickFormatter={(v) => fmtNum(Number(v))} />
+                    <Tooltip contentStyle={{ background: "#1f2937", border: "1px solid #374151" }}
+                             formatter={(v: any, name: string) => [fmtNum(Number(v)), name]} />
+                    <Legend />
+                    <Line type="monotone" dataKey="samples" stroke="#10b981" dot={false} connectNulls name="Success" />
+                    <Line type="monotone" dataKey="failed" stroke="#ef4444" dot={false} connectNulls name="Failed" />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* Plot C: CPU Utilization */}
+              <div className="bg-card border border-border rounded-lg p-5 mb-4">
+                <h3 className="font-display text-base font-bold mb-3">CPU Utilization</h3>
+                <ResponsiveContainer width="100%" height={280}>
+                  <LineChart data={timeseries} margin={{ top: 5, right: 20, left: 20, bottom: 5 }}>
+                    <CartesianGrid stroke="#374151" strokeDasharray="3 3" />
+                    <XAxis dataKey="t" stroke="#9ca3af" fontSize={11} tickFormatter={fmtDateTick} />
+                    <YAxis stroke="#9ca3af" fontSize={11} domain={[0, 100]} tickFormatter={(v) => `${v}%`} />
+                    <Tooltip contentStyle={{ background: "#1f2937", border: "1px solid #374151" }}
+                             formatter={(v: any) => [`${Number(v).toFixed(1)}%`, "CPU"]} />
+                    <Line type="monotone" dataKey="cpu_pct" stroke="#3b82f6" dot={false} connectNulls />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+
+            </div>
+          )}
 
           {/* Charts row */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
