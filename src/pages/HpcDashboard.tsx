@@ -301,23 +301,48 @@ const HpcDashboard = () => {
 
           {/* KPI grid */}
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-6">
-            <KpiCard icon={CheckCircle2} label="Success rate" value={`${k.success_rate_pct}%`}
-                     sub={`${k.samples_success}/${k.samples_with_summary} on disk`}
+            <KpiCard icon={CheckCircle2} label="Bio QC pass rate" value={`${k.success_rate_pct}%`}
+                     sub={`${fmtNum(k.samples_success)} pass · ${fmtNum(k.samples_with_summary)} pipeline done`}
                      color={k.success_rate_pct >= 85 ? COLORS.success : COLORS.warning} />
-            <KpiCard icon={Activity} label="In flight" value={k.samples_in_flight}
-                     sub={`${k.samples_pending} pending · ${k.samples_claimed ?? 0} claimed`} color={COLORS.info} />
+            <KpiCard icon={Activity} label="In flight" value={fmtNum(k.samples_in_flight)}
+                     sub={`${fmtNum(k.samples_pending)} pending · ${fmtNum(k.samples_total)} total`} color={COLORS.info} />
             <KpiCard icon={Server} label="Nodes" value={k.nodes_in_use}
-                     sub={`${k.cpus_in_use} CPUs`} color={COLORS.purple} />
+                     sub={`${k.cpus_in_use} CPUs active`} color={COLORS.purple} />
             <KpiCard icon={Database} label="Cells" value={fmtNum(k.cells_total)}
-                     sub={`${fmtNum(k.umis_total)} UMIs`} color={COLORS.success} />
+                     sub={`${fmtNum(k.umis_total)} UMIs · ${fmtNum(Math.round(k.cells_total / Math.max(k.samples_success, 1)))} avg/sample`} color={COLORS.success} />
             <KpiCard icon={Zap} label="Reads" value={fmtNum(k.reads_total)}
-                     sub={`${k.samples_with_summary} samples on disk`} color={COLORS.info} />
+                     sub={`${fmtNum(k.samples_with_summary)} samples completed`} color={COLORS.info} />
             <KpiCard icon={HardDrive} label="Disk usage"
                      value={k.disk_usage_tb != null ? `${k.disk_usage_tb.toFixed(2)} TB` : "—"}
-                     sub="pipeline output" color={COLORS.muted} />
-            <KpiCard icon={AlertTriangle} label="Failed terminal" value={k.samples_failed_terminal}
-                     sub={`${k.samples_deny_list ?? 0} on deny list`} color={COLORS.danger} />
+                     sub={k.disk_usage_tb != null ? "pipeline output on disk" : "computing…"} color={COLORS.muted} />
+            <KpiCard icon={AlertTriangle} label="QC failed" value={fmtNum(k.samples_failed_terminal)}
+                     sub={`of ${fmtNum(k.samples_with_summary)} completed`} color={COLORS.danger} />
           </div>
+
+          {/* Campaign progress bar */}
+          {k.samples_total > 0 && (() => {
+            const donePct = Math.round((k.samples_with_summary / k.samples_total) * 100);
+            const passPct = Math.round((k.samples_success / k.samples_total) * 100);
+            return (
+              <div className="bg-card border border-border rounded-lg p-4 mb-6">
+                <div className="flex items-center justify-between mb-2 text-sm">
+                  <span className="font-medium text-foreground">Campaign progress</span>
+                  <span className="text-muted-foreground text-xs font-mono">
+                    {fmtNum(k.samples_with_summary)} / {fmtNum(k.samples_total)} completed ({donePct}%) · {fmtNum(k.samples_success)} bio-pass ({passPct}%)
+                  </span>
+                </div>
+                <div className="relative h-4 bg-muted rounded-full overflow-hidden">
+                  <div className="absolute h-full rounded-full transition-all" style={{ width: `${donePct}%`, backgroundColor: COLORS.info }} />
+                  <div className="absolute h-full rounded-full transition-all" style={{ width: `${passPct}%`, backgroundColor: COLORS.success }} />
+                </div>
+                <div className="flex gap-4 mt-1.5 text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-full" style={{backgroundColor: COLORS.success}} /> Bio QC pass</span>
+                  <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-full" style={{backgroundColor: COLORS.info}} /> Pipeline done</span>
+                  <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-full bg-muted-foreground/30" /> Remaining</span>
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Partition utilization */}
           <div className="bg-card border border-border rounded-lg p-5 mb-6">
