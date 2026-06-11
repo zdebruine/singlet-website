@@ -1,39 +1,39 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-06-11T11:11:26Z",
+  "generated_at": "2026-06-11T11:54:35Z",
   "kpi": {
     "samples_total": 93384,
-    "samples_success": 25405,
-    "samples_failed_terminal": 10378,
-    "samples_in_flight": 91,
-    "samples_pending": 47179,
+    "samples_success": 25484,
+    "samples_failed_terminal": 10391,
+    "samples_in_flight": 100,
+    "samples_pending": 47026,
     "samples_claimed": 0,
-    "samples_with_summary": 35736,
-    "samples_done_queue": 35736,
-    "samples_failed_queue": 10378,
-    "samples_deny_list": 9767,
+    "samples_with_summary": 35867,
+    "samples_done_queue": 35867,
+    "samples_failed_queue": 10391,
+    "samples_deny_list": 9778,
     "success_rate_pct": 71.1,
-    "samples_success_genic": 28501,
-    "genic_success_rate_pct": 79.8,
-    "cells_total": 155326632,
-    "reads_total": 978119315855,
-    "umis_total": 303769679151,
+    "samples_success_genic": 28594,
+    "genic_success_rate_pct": 79.7,
+    "cells_total": 155994608,
+    "reads_total": 981920219457,
+    "umis_total": 304504772686,
     "nodes_in_use": 17,
-    "cpus_in_use": 364
+    "cpus_in_use": 400
   },
   "queue_state": {
-    "pending": 208,
+    "pending": 200,
     "claimed": 0,
-    "done": 35736,
-    "failed": 10378
+    "done": 35867,
+    "failed": 10391
   },
   "status_distribution": {
-    "success": 25405,
-    "align_low_map": 6477,
-    "no_srr": 611,
-    "data_incomplete": 9767,
-    "qc_warn": 1983,
-    "align_low_cells": 1871
+    "success": 25484,
+    "align_low_map": 6521,
+    "no_srr": 613,
+    "data_incomplete": 9778,
+    "qc_warn": 1990,
+    "align_low_cells": 1872
   },
   "partitions": [
     {
@@ -42,7 +42,7 @@
       "alloc_cpus": 176,
       "total_cpus": 192,
       "idle_nodes": 0,
-      "mixed_nodes": 2,
+      "mixed_nodes": 0,
       "alloc_nodes": 0,
       "down_nodes": 0,
       "mem_per_node_mb": 1545000,
@@ -50,15 +50,15 @@
     },
     {
       "name": "cpu",
-      "idle_cpus": 332,
-      "alloc_cpus": 244,
+      "idle_cpus": 304,
+      "alloc_cpus": 272,
       "total_cpus": 576,
       "idle_nodes": 1,
-      "mixed_nodes": 4,
+      "mixed_nodes": 2,
       "alloc_nodes": 0,
       "down_nodes": 0,
-      "mem_per_node_mb": 770000,
-      "cpu_util_pct": 42.4
+      "mem_per_node_mb": 512000,
+      "cpu_util_pct": 47.2
     },
     {
       "name": "gpu",
@@ -66,7 +66,7 @@
       "alloc_cpus": 72,
       "total_cpus": 344,
       "idle_nodes": 3,
-      "mixed_nodes": 4,
+      "mixed_nodes": 6,
       "alloc_nodes": 0,
       "down_nodes": 0,
       "mem_per_node_mb": 384500,
@@ -78,7 +78,7 @@
       "alloc_cpus": 176,
       "total_cpus": 192,
       "idle_nodes": 0,
-      "mixed_nodes": 2,
+      "mixed_nodes": 0,
       "alloc_nodes": 0,
       "down_nodes": 0,
       "mem_per_node_mb": 1545000,
@@ -86,15 +86,15 @@
     },
     {
       "name": "short-cpu",
-      "idle_cpus": 332,
-      "alloc_cpus": 244,
+      "idle_cpus": 304,
+      "alloc_cpus": 272,
       "total_cpus": 576,
       "idle_nodes": 1,
-      "mixed_nodes": 4,
+      "mixed_nodes": 2,
       "alloc_nodes": 0,
       "down_nodes": 0,
-      "mem_per_node_mb": 770000,
-      "cpu_util_pct": 42.4
+      "mem_per_node_mb": 512000,
+      "cpu_util_pct": 47.2
     },
     {
       "name": "short-gpu",
@@ -102,7 +102,7 @@
       "alloc_cpus": 72,
       "total_cpus": 344,
       "idle_nodes": 3,
-      "mixed_nodes": 4,
+      "mixed_nodes": 6,
       "alloc_nodes": 0,
       "down_nodes": 0,
       "mem_per_node_mb": 384500,
@@ -113,15 +113,15 @@
   "failure_modes": [
     {
       "kind": "barcode_stripped",
-      "count": 9767
+      "count": 9778
     },
     {
       "kind": "download_fail",
-      "count": 611
+      "count": 613
     },
     {
       "kind": "TIMEOUT",
-      "count": 97
+      "count": 99
     },
     {
       "kind": "OUT_OF_MEMORY",
@@ -682,121 +682,94 @@
   ],
   "running_jobs": [
     {
-      "jobid": "563862",
-      "partition": "bigmem",
-      "node": "b003",
-      "cpus": 4,
-      "mem": "128G",
-      "time_limit": "1:30:00",
-      "tier": "GSM8983039"
-    },
-    {
-      "jobid": "563861",
-      "partition": "bigmem",
-      "node": "b003",
-      "cpus": 4,
-      "mem": "128G",
-      "time_limit": "1:30:00",
-      "tier": "GSM8983038"
-    },
-    {
-      "jobid": "563857",
-      "partition": "bigmem",
-      "node": "b001",
-      "cpus": 4,
-      "mem": "128G",
-      "time_limit": "1:30:00",
-      "tier": "GSM8983034"
-    },
-    {
-      "jobid": "563858",
+      "jobid": "563927",
       "partition": "bigmem",
       "node": "b004",
       "cpus": 4,
       "mem": "128G",
       "time_limit": "1:30:00",
-      "tier": "GSM8983035"
+      "tier": "GSM2914998"
     },
     {
-      "jobid": "563851",
-      "partition": "bigmem",
-      "node": "b001",
-      "cpus": 4,
-      "mem": "128G",
-      "time_limit": "1:30:00",
-      "tier": "GSM8980200"
-    },
-    {
-      "jobid": "563852",
-      "partition": "bigmem",
-      "node": "b001",
-      "cpus": 4,
-      "mem": "128G",
-      "time_limit": "1:30:00",
-      "tier": "GSM8980203"
-    },
-    {
-      "jobid": "563849",
+      "jobid": "563926",
       "partition": "bigmem",
       "node": "b004",
       "cpus": 4,
       "mem": "128G",
       "time_limit": "1:30:00",
-      "tier": "GSM8980195"
+      "tier": "GSM2914997"
     },
     {
-      "jobid": "563848",
-      "partition": "bigmem",
-      "node": "b001",
-      "cpus": 4,
-      "mem": "128G",
-      "time_limit": "1:30:00",
-      "tier": "GSM8980193"
-    },
-    {
-      "jobid": "563839",
-      "partition": "bigmem",
-      "node": "b003",
-      "cpus": 4,
-      "mem": "128G",
-      "time_limit": "1:30:00",
-      "tier": "GSM8980179"
-    },
-    {
-      "jobid": "563840",
-      "partition": "bigmem",
-      "node": "b003",
-      "cpus": 4,
-      "mem": "128G",
-      "time_limit": "1:30:00",
-      "tier": "GSM8980181"
-    },
-    {
-      "jobid": "563834",
-      "partition": "bigmem",
-      "node": "b001",
-      "cpus": 4,
-      "mem": "128G",
-      "time_limit": "1:30:00",
-      "tier": "GSM8980172"
-    },
-    {
-      "jobid": "563835",
-      "partition": "bigmem",
-      "node": "b003",
-      "cpus": 4,
-      "mem": "128G",
-      "time_limit": "1:30:00",
-      "tier": "GSM8980173"
-    },
-    {
-      "jobid": "563829",
+      "jobid": "563925",
       "partition": "bigmem",
       "node": "b004",
       "cpus": 4,
       "mem": "128G",
       "time_limit": "1:30:00",
-      "tier": "GSM8944338"
+      "tier": "GSM2914996"
+    },
+    {
+      "jobid": "563923",
+      "partition": "bigmem",
+      "node": "b004",
+      "cpus": 4,
+      "mem": "128G",
+      "time_limit": "1:30:00",
+      "tier": "GSM2914994"
+    },
+    {
+      "jobid": "563924",
+      "partition": "bigmem",
+      "node": "b004",
+      "cpus": 4,
+      "mem": "128G",
+      "time_limit": "1:30:00",
+      "tier": "GSM2914995"
+    },
+    {
+      "jobid": "563922",
+      "partition": "bigmem",
+      "node": "b004",
+      "cpus": 4,
+      "mem": "128G",
+      "time_limit": "1:30:00",
+      "tier": "GSM9307789"
+    },
+    {
+      "jobid": "563920",
+      "partition": "bigmem",
+      "node": "b004",
+      "cpus": 4,
+      "mem": "128G",
+      "time_limit": "1:30:00",
+      "tier": "GSM9307787"
+    },
+    {
+      "jobid": "563921",
+      "partition": "bigmem",
+      "node": "b004",
+      "cpus": 4,
+      "mem": "128G",
+      "time_limit": "1:30:00",
+      "tier": "GSM9307788"
+    },
+    {
+      "jobid": "563919",
+      "partition": "bigmem",
+      "node": "b004",
+      "cpus": 4,
+      "mem": "128G",
+      "time_limit": "1:30:00",
+      "tier": "GSM9307786"
+    },
+    {
+      "jobid": "563918",
+      "partition": "bigmem",
+      "node": "b004",
+      "cpus": 4,
+      "mem": "128G",
+      "time_limit": "1:30:00",
+      "tier": "GSM9307785"
     },
     {
       "jobid": "563827",
@@ -808,69 +781,6 @@
       "tier": "GSM8944326"
     },
     {
-      "jobid": "563822",
-      "partition": "bigmem",
-      "node": "b004",
-      "cpus": 4,
-      "mem": "128G",
-      "time_limit": "1:30:00",
-      "tier": "GSM8837511"
-    },
-    {
-      "jobid": "563823",
-      "partition": "bigmem",
-      "node": "b003",
-      "cpus": 4,
-      "mem": "128G",
-      "time_limit": "1:30:00",
-      "tier": "GSM8837512"
-    },
-    {
-      "jobid": "563824",
-      "partition": "bigmem",
-      "node": "b003",
-      "cpus": 4,
-      "mem": "128G",
-      "time_limit": "1:30:00",
-      "tier": "GSM8837513"
-    },
-    {
-      "jobid": "563916",
-      "partition": "bigmem",
-      "node": "b004",
-      "cpus": 4,
-      "mem": "128G",
-      "time_limit": "1:30:00",
-      "tier": "GSM9266385"
-    },
-    {
-      "jobid": "563915",
-      "partition": "bigmem",
-      "node": "b004",
-      "cpus": 4,
-      "mem": "128G",
-      "time_limit": "1:30:00",
-      "tier": "GSM9266384"
-    },
-    {
-      "jobid": "563913",
-      "partition": "bigmem",
-      "node": "b004",
-      "cpus": 4,
-      "mem": "128G",
-      "time_limit": "1:30:00",
-      "tier": "GSM9266382"
-    },
-    {
-      "jobid": "563914",
-      "partition": "bigmem",
-      "node": "b004",
-      "cpus": 4,
-      "mem": "128G",
-      "time_limit": "1:30:00",
-      "tier": "GSM9266383"
-    },
-    {
       "jobid": "563912",
       "partition": "bigmem",
       "node": "b004",
@@ -878,51 +788,6 @@
       "mem": "128G",
       "time_limit": "1:30:00",
       "tier": "GSM9162383"
-    },
-    {
-      "jobid": "563909",
-      "partition": "bigmem",
-      "node": "b004",
-      "cpus": 4,
-      "mem": "128G",
-      "time_limit": "1:30:00",
-      "tier": "GSM9055917"
-    },
-    {
-      "jobid": "563903",
-      "partition": "bigmem",
-      "node": "b003",
-      "cpus": 4,
-      "mem": "128G",
-      "time_limit": "1:30:00",
-      "tier": "GSM9010864"
-    },
-    {
-      "jobid": "563904",
-      "partition": "bigmem",
-      "node": "b004",
-      "cpus": 4,
-      "mem": "128G",
-      "time_limit": "1:30:00",
-      "tier": "GSM9010865"
-    },
-    {
-      "jobid": "563783",
-      "partition": "bigmem",
-      "node": "b001",
-      "cpus": 4,
-      "mem": "128G",
-      "time_limit": "1:30:00",
-      "tier": "GSM8366756"
-    },
-    {
-      "jobid": "563779",
-      "partition": "bigmem",
-      "node": "b003",
-      "cpus": 4,
-      "mem": "128G",
-      "time_limit": "1:30:00",
-      "tier": "GSM8274944"
     },
     {
       "jobid": "563764",
@@ -934,87 +799,6 @@
       "tier": "GSM8107931"
     },
     {
-      "jobid": "563490",
-      "partition": "bigmem",
-      "node": "b001",
-      "cpus": 4,
-      "mem": "128G",
-      "time_limit": "1:30:00",
-      "tier": "GSM3926541"
-    },
-    {
-      "jobid": "563865",
-      "partition": "cpu",
-      "node": "c004",
-      "cpus": 4,
-      "mem": "128G",
-      "time_limit": "1:30:00",
-      "tier": "GSM8983042"
-    },
-    {
-      "jobid": "563859",
-      "partition": "cpu",
-      "node": "c004",
-      "cpus": 4,
-      "mem": "128G",
-      "time_limit": "1:30:00",
-      "tier": "GSM8983036"
-    },
-    {
-      "jobid": "563860",
-      "partition": "cpu",
-      "node": "c007",
-      "cpus": 4,
-      "mem": "128G",
-      "time_limit": "1:30:00",
-      "tier": "GSM8983037"
-    },
-    {
-      "jobid": "563854",
-      "partition": "cpu",
-      "node": "c009",
-      "cpus": 4,
-      "mem": "128G",
-      "time_limit": "1:30:00",
-      "tier": "GSM8980208"
-    },
-    {
-      "jobid": "563855",
-      "partition": "cpu",
-      "node": "c010",
-      "cpus": 4,
-      "mem": "128G",
-      "time_limit": "1:30:00",
-      "tier": "GSM8980211"
-    },
-    {
-      "jobid": "563853",
-      "partition": "cpu",
-      "node": "c006",
-      "cpus": 4,
-      "mem": "128G",
-      "time_limit": "1:30:00",
-      "tier": "GSM8980206"
-    },
-    {
-      "jobid": "563850",
-      "partition": "cpu",
-      "node": "c006",
-      "cpus": 4,
-      "mem": "128G",
-      "time_limit": "1:30:00",
-      "tier": "GSM8980197"
-    },
-    {
-      "jobid": "563845",
-      "partition": "cpu",
-      "node": "c009",
-      "cpus": 4,
-      "mem": "128G",
-      "time_limit": "1:30:00",
-      "tier": "GSM8980189"
-    },
-    {
       "jobid": "563843",
       "partition": "cpu",
       "node": "c010",
@@ -1022,87 +806,6 @@
       "mem": "128G",
       "time_limit": "1:30:00",
       "tier": "GSM8980187"
-    },
-    {
-      "jobid": "563838",
-      "partition": "cpu",
-      "node": "c010",
-      "cpus": 4,
-      "mem": "128G",
-      "time_limit": "1:30:00",
-      "tier": "GSM8980178"
-    },
-    {
-      "jobid": "563820",
-      "partition": "cpu",
-      "node": "c006",
-      "cpus": 4,
-      "mem": "128G",
-      "time_limit": "1:30:00",
-      "tier": "GSM8837509"
-    },
-    {
-      "jobid": "563899",
-      "partition": "cpu",
-      "node": "c004",
-      "cpus": 4,
-      "mem": "128G",
-      "time_limit": "1:30:00",
-      "tier": "GSM9010860"
-    },
-    {
-      "jobid": "563900",
-      "partition": "cpu",
-      "node": "c004",
-      "cpus": 4,
-      "mem": "128G",
-      "time_limit": "1:30:00",
-      "tier": "GSM9010861"
-    },
-    {
-      "jobid": "563901",
-      "partition": "cpu",
-      "node": "c008",
-      "cpus": 4,
-      "mem": "128G",
-      "time_limit": "1:30:00",
-      "tier": "GSM9010862"
-    },
-    {
-      "jobid": "563902",
-      "partition": "cpu",
-      "node": "c007",
-      "cpus": 4,
-      "mem": "128G",
-      "time_limit": "1:30:00",
-      "tier": "GSM9010863"
-    },
-    {
-      "jobid": "563784",
-      "partition": "cpu",
-      "node": "c005",
-      "cpus": 4,
-      "mem": "128G",
-      "time_limit": "1:30:00",
-      "tier": "GSM8423481"
-    },
-    {
-      "jobid": "563778",
-      "partition": "cpu",
-      "node": "c007",
-      "cpus": 4,
-      "mem": "128G",
-      "time_limit": "1:30:00",
-      "tier": "GSM8246610"
-    },
-    {
-      "jobid": "563776",
-      "partition": "cpu",
-      "node": "c010",
-      "cpus": 4,
-      "mem": "128G",
-      "time_limit": "1:30:00",
-      "tier": "GSM8134125"
     },
     {
       "jobid": "563769",
@@ -1141,123 +844,6 @@
       "tier": "GSM8107932"
     },
     {
-      "jobid": "563762",
-      "partition": "cpu",
-      "node": "c008",
-      "cpus": 4,
-      "mem": "128G",
-      "time_limit": "1:30:00",
-      "tier": "GSM8023942"
-    },
-    {
-      "jobid": "563760",
-      "partition": "cpu",
-      "node": "c007",
-      "cpus": 4,
-      "mem": "128G",
-      "time_limit": "1:30:00",
-      "tier": "GSM8023940"
-    },
-    {
-      "jobid": "563641",
-      "partition": "cpu",
-      "node": "c004",
-      "cpus": 4,
-      "mem": "128G",
-      "time_limit": "1:30:00",
-      "tier": "GSM4950449"
-    },
-    {
-      "jobid": "563633",
-      "partition": "cpu",
-      "node": "c009",
-      "cpus": 4,
-      "mem": "128G",
-      "time_limit": "1:30:00",
-      "tier": "GSM4950441"
-    },
-    {
-      "jobid": "563863",
-      "partition": "gpu",
-      "node": "g002",
-      "cpus": 4,
-      "mem": "128G",
-      "time_limit": "1:30:00",
-      "tier": "GSM8983040"
-    },
-    {
-      "jobid": "563864",
-      "partition": "gpu",
-      "node": "g008",
-      "cpus": 4,
-      "mem": "128G",
-      "time_limit": "1:30:00",
-      "tier": "GSM8983041"
-    },
-    {
-      "jobid": "563847",
-      "partition": "gpu",
-      "node": "g003",
-      "cpus": 4,
-      "mem": "128G",
-      "time_limit": "1:30:00",
-      "tier": "GSM8980192"
-    },
-    {
-      "jobid": "563841",
-      "partition": "gpu",
-      "node": "g005",
-      "cpus": 4,
-      "mem": "128G",
-      "time_limit": "1:30:00",
-      "tier": "GSM8980182"
-    },
-    {
-      "jobid": "563825",
-      "partition": "gpu",
-      "node": "g002",
-      "cpus": 4,
-      "mem": "128G",
-      "time_limit": "1:30:00",
-      "tier": "GSM8837514"
-    },
-    {
-      "jobid": "563802",
-      "partition": "gpu",
-      "node": "g008",
-      "cpus": 4,
-      "mem": "128G",
-      "time_limit": "1:30:00",
-      "tier": "GSM8606171"
-    },
-    {
-      "jobid": "563905",
-      "partition": "gpu",
-      "node": "g001",
-      "cpus": 4,
-      "mem": "128G",
-      "time_limit": "1:30:00",
-      "tier": "GSM9010866"
-    },
-    {
-      "jobid": "563906",
-      "partition": "gpu",
-      "node": "g003",
-      "cpus": 4,
-      "mem": "128G",
-      "time_limit": "1:30:00",
-      "tier": "GSM9010867"
-    },
-    {
-      "jobid": "563907",
-      "partition": "gpu",
-      "node": "g004",
-      "cpus": 4,
-      "mem": "128G",
-      "time_limit": "1:30:00",
-      "tier": "GSM9055915"
-    },
-    {
       "jobid": "563782",
       "partition": "gpu",
       "node": "g004",
@@ -1276,237 +862,732 @@
       "tier": "GSM8107934"
     },
     {
-      "jobid": "564145",
-      "partition": "short-bigmem",
-      "node": "b003",
-      "cpus": 4,
-      "mem": "96G",
-      "time_limit": "1:30:00",
-      "tier": "GSM5387664"
-    },
-    {
-      "jobid": "564140",
+      "jobid": "564294",
       "partition": "short-bigmem",
       "node": "b001",
       "cpus": 4,
       "mem": "96G",
       "time_limit": "1:30:00",
-      "tier": "GSM5340857"
+      "tier": "GSM9014962"
     },
     {
-      "jobid": "564137",
+      "jobid": "564295",
       "partition": "short-bigmem",
-      "node": "b001",
+      "node": "b002",
       "cpus": 4,
       "mem": "96G",
       "time_limit": "1:30:00",
-      "tier": "GSM5340854"
+      "tier": "GSM9014963"
     },
     {
-      "jobid": "564136",
+      "jobid": "564296",
+      "partition": "short-bigmem",
+      "node": "b002",
+      "cpus": 4,
+      "mem": "96G",
+      "time_limit": "1:30:00",
+      "tier": "GSM9014964"
+    },
+    {
+      "jobid": "564297",
+      "partition": "short-bigmem",
+      "node": "b002",
+      "cpus": 4,
+      "mem": "96G",
+      "time_limit": "1:30:00",
+      "tier": "GSM9014965"
+    },
+    {
+      "jobid": "564292",
+      "partition": "short-bigmem",
+      "node": "b002",
+      "cpus": 4,
+      "mem": "96G",
+      "time_limit": "1:30:00",
+      "tier": "GSM8953638"
+    },
+    {
+      "jobid": "564293",
       "partition": "short-bigmem",
       "node": "b003",
       "cpus": 4,
       "mem": "96G",
       "time_limit": "1:30:00",
-      "tier": "GSM5340853"
+      "tier": "GSM8953640"
     },
     {
-      "jobid": "564129",
+      "jobid": "564291",
       "partition": "short-bigmem",
       "node": "b002",
       "cpus": 4,
       "mem": "96G",
       "time_limit": "1:30:00",
-      "tier": "GSM5340846"
+      "tier": "GSM8953637"
     },
     {
-      "jobid": "564126",
+      "jobid": "564282",
+      "partition": "short-bigmem",
+      "node": "b001",
+      "cpus": 4,
+      "mem": "96G",
+      "time_limit": "1:30:00",
+      "tier": "GSM8953626"
+    },
+    {
+      "jobid": "564283",
+      "partition": "short-bigmem",
+      "node": "b001",
+      "cpus": 4,
+      "mem": "96G",
+      "time_limit": "1:30:00",
+      "tier": "GSM8953628"
+    },
+    {
+      "jobid": "564279",
+      "partition": "short-bigmem",
+      "node": "b001",
+      "cpus": 4,
+      "mem": "96G",
+      "time_limit": "1:30:00",
+      "tier": "GSM8953623"
+    },
+    {
+      "jobid": "564266",
+      "partition": "short-bigmem",
+      "node": "b003",
+      "cpus": 4,
+      "mem": "96G",
+      "time_limit": "1:30:00",
+      "tier": "GSM8768257"
+    },
+    {
+      "jobid": "564263",
+      "partition": "short-bigmem",
+      "node": "b003",
+      "cpus": 4,
+      "mem": "96G",
+      "time_limit": "1:30:00",
+      "tier": "GSM8768254"
+    },
+    {
+      "jobid": "564261",
+      "partition": "short-bigmem",
+      "node": "b001",
+      "cpus": 4,
+      "mem": "96G",
+      "time_limit": "1:30:00",
+      "tier": "GSM8768253"
+    },
+    {
+      "jobid": "564259",
       "partition": "short-bigmem",
       "node": "b002",
       "cpus": 4,
       "mem": "96G",
       "time_limit": "1:30:00",
-      "tier": "GSM5340843"
+      "tier": "GSM8816809"
     },
     {
-      "jobid": "564127",
+      "jobid": "564255",
+      "partition": "short-bigmem",
+      "node": "b003",
+      "cpus": 4,
+      "mem": "96G",
+      "time_limit": "1:30:00",
+      "tier": "GSM8816806"
+    },
+    {
+      "jobid": "564247",
+      "partition": "short-bigmem",
+      "node": "b001",
+      "cpus": 4,
+      "mem": "96G",
+      "time_limit": "1:30:00",
+      "tier": "GSM8816799"
+    },
+    {
+      "jobid": "564239",
       "partition": "short-bigmem",
       "node": "b002",
       "cpus": 4,
       "mem": "96G",
       "time_limit": "1:30:00",
-      "tier": "GSM5340844"
+      "tier": "GSM8656016"
     },
     {
-      "jobid": "564118",
+      "jobid": "564235",
+      "partition": "short-bigmem",
+      "node": "b003",
+      "cpus": 4,
+      "mem": "96G",
+      "time_limit": "1:30:00",
+      "tier": "GSM8258680"
+    },
+    {
+      "jobid": "564230",
       "partition": "short-bigmem",
       "node": "b002",
       "cpus": 4,
       "mem": "96G",
       "time_limit": "1:30:00",
-      "tier": "GSM5340834"
+      "tier": "GSM8258673"
     },
     {
-      "jobid": "564119",
+      "jobid": "564229",
+      "partition": "short-bigmem",
+      "node": "b003",
+      "cpus": 4,
+      "mem": "96G",
+      "time_limit": "1:30:00",
+      "tier": "GSM8258672"
+    },
+    {
+      "jobid": "564228",
+      "partition": "short-bigmem",
+      "node": "b003",
+      "cpus": 4,
+      "mem": "96G",
+      "time_limit": "1:30:00",
+      "tier": "GSM8258671"
+    },
+    {
+      "jobid": "564211",
       "partition": "short-bigmem",
       "node": "b002",
       "cpus": 4,
       "mem": "96G",
       "time_limit": "1:30:00",
-      "tier": "GSM5340835"
+      "tier": "GSM8258654"
     },
     {
-      "jobid": "564120",
+      "jobid": "564209",
       "partition": "short-bigmem",
       "node": "b002",
       "cpus": 4,
       "mem": "96G",
       "time_limit": "1:30:00",
-      "tier": "GSM5340836"
+      "tier": "GSM8258652"
     },
     {
-      "jobid": "564121",
+      "jobid": "564210",
       "partition": "short-bigmem",
       "node": "b002",
       "cpus": 4,
       "mem": "96G",
       "time_limit": "1:30:00",
-      "tier": "GSM5340837"
+      "tier": "GSM8258653"
     },
     {
-      "jobid": "564122",
+      "jobid": "564201",
       "partition": "short-bigmem",
-      "node": "b002",
+      "node": "b003",
       "cpus": 4,
       "mem": "96G",
       "time_limit": "1:30:00",
-      "tier": "GSM5340839"
+      "tier": "GSM8254798"
     },
     {
-      "jobid": "564123",
+      "jobid": "564202",
       "partition": "short-bigmem",
-      "node": "b002",
+      "node": "b003",
       "cpus": 4,
       "mem": "96G",
       "time_limit": "1:30:00",
-      "tier": "GSM5340840"
+      "tier": "GSM8254799"
     },
     {
-      "jobid": "564124",
+      "jobid": "564188",
       "partition": "short-bigmem",
-      "node": "b002",
+      "node": "b003",
       "cpus": 4,
       "mem": "96G",
       "time_limit": "1:30:00",
-      "tier": "GSM5340841"
+      "tier": "GSM7966921"
     },
     {
-      "jobid": "564125",
+      "jobid": "564169",
       "partition": "short-bigmem",
-      "node": "b002",
+      "node": "b001",
       "cpus": 4,
       "mem": "96G",
       "time_limit": "1:30:00",
-      "tier": "GSM5340842"
+      "tier": "GSM6255907"
     },
     {
-      "jobid": "564143",
-      "partition": "short-cpu",
-      "node": "c009",
+      "jobid": "564150",
+      "partition": "short-bigmem",
+      "node": "b003",
       "cpus": 4,
       "mem": "96G",
       "time_limit": "1:30:00",
-      "tier": "GSM5387662"
+      "tier": "GSM5387669"
     },
     {
-      "jobid": "564139",
+      "jobid": "564148",
+      "partition": "short-bigmem",
+      "node": "b001",
+      "cpus": 4,
+      "mem": "96G",
+      "time_limit": "1:30:00",
+      "tier": "GSM5387667"
+    },
+    {
+      "jobid": "564146",
+      "partition": "short-bigmem",
+      "node": "b001",
+      "cpus": 4,
+      "mem": "96G",
+      "time_limit": "1:30:00",
+      "tier": "GSM5387665"
+    },
+    {
+      "jobid": "564288",
       "partition": "short-cpu",
       "node": "c006",
       "cpus": 4,
       "mem": "96G",
       "time_limit": "1:30:00",
-      "tier": "GSM5340856"
+      "tier": "GSM8953635"
     },
     {
-      "jobid": "564135",
+      "jobid": "564286",
       "partition": "short-cpu",
-      "node": "c005",
+      "node": "c008",
       "cpus": 4,
       "mem": "96G",
       "time_limit": "1:30:00",
-      "tier": "GSM5340852"
+      "tier": "GSM8953632"
     },
     {
-      "jobid": "564131",
-      "partition": "short-cpu",
-      "node": "c005",
-      "cpus": 4,
-      "mem": "96G",
-      "time_limit": "1:30:00",
-      "tier": "GSM5340848"
-    },
-    {
-      "jobid": "564132",
-      "partition": "short-cpu",
-      "node": "c005",
-      "cpus": 4,
-      "mem": "96G",
-      "time_limit": "1:30:00",
-      "tier": "GSM5340849"
-    },
-    {
-      "jobid": "564133",
-      "partition": "short-cpu",
-      "node": "c005",
-      "cpus": 4,
-      "mem": "96G",
-      "time_limit": "1:30:00",
-      "tier": "GSM5340850"
-    },
-    {
-      "jobid": "564134",
-      "partition": "short-cpu",
-      "node": "c009",
-      "cpus": 4,
-      "mem": "96G",
-      "time_limit": "1:30:00",
-      "tier": "GSM5340851"
-    },
-    {
-      "jobid": "564130",
+      "jobid": "564285",
       "partition": "short-cpu",
       "node": "c006",
       "cpus": 4,
       "mem": "96G",
       "time_limit": "1:30:00",
-      "tier": "GSM5340847"
+      "tier": "GSM8953631"
     },
     {
-      "jobid": "564128",
+      "jobid": "564280",
+      "partition": "short-cpu",
+      "node": "c009",
+      "cpus": 4,
+      "mem": "96G",
+      "time_limit": "1:30:00",
+      "tier": "GSM8953625"
+    },
+    {
+      "jobid": "564277",
+      "partition": "short-cpu",
+      "node": "c009",
+      "cpus": 4,
+      "mem": "96G",
+      "time_limit": "1:30:00",
+      "tier": "GSM8947456"
+    },
+    {
+      "jobid": "564272",
+      "partition": "short-cpu",
+      "node": "c006",
+      "cpus": 4,
+      "mem": "96G",
+      "time_limit": "1:30:00",
+      "tier": "GSM8768263"
+    },
+    {
+      "jobid": "564273",
+      "partition": "short-cpu",
+      "node": "c007",
+      "cpus": 4,
+      "mem": "96G",
+      "time_limit": "1:30:00",
+      "tier": "GSM8768264"
+    },
+    {
+      "jobid": "564271",
+      "partition": "short-cpu",
+      "node": "c005",
+      "cpus": 4,
+      "mem": "96G",
+      "time_limit": "1:30:00",
+      "tier": "GSM8768262"
+    },
+    {
+      "jobid": "564269",
+      "partition": "short-cpu",
+      "node": "c005",
+      "cpus": 4,
+      "mem": "96G",
+      "time_limit": "1:30:00",
+      "tier": "GSM8768260"
+    },
+    {
+      "jobid": "564268",
+      "partition": "short-cpu",
+      "node": "c004",
+      "cpus": 4,
+      "mem": "96G",
+      "time_limit": "1:30:00",
+      "tier": "GSM8768259"
+    },
+    {
+      "jobid": "564264",
+      "partition": "short-cpu",
+      "node": "c009",
+      "cpus": 4,
+      "mem": "96G",
+      "time_limit": "1:30:00",
+      "tier": "GSM8768255"
+    },
+    {
+      "jobid": "564260",
       "partition": "short-cpu",
       "node": "c010",
       "cpus": 4,
       "mem": "96G",
       "time_limit": "1:30:00",
-      "tier": "GSM5340845"
+      "tier": "GSM8768252"
     },
     {
-      "jobid": "564138",
+      "jobid": "564257",
+      "partition": "short-cpu",
+      "node": "c005",
+      "cpus": 4,
+      "mem": "96G",
+      "time_limit": "1:30:00",
+      "tier": "GSM8816807"
+    },
+    {
+      "jobid": "564258",
+      "partition": "short-cpu",
+      "node": "c009",
+      "cpus": 4,
+      "mem": "96G",
+      "time_limit": "1:30:00",
+      "tier": "GSM8816808"
+    },
+    {
+      "jobid": "564254",
+      "partition": "short-cpu",
+      "node": "c010",
+      "cpus": 4,
+      "mem": "96G",
+      "time_limit": "1:30:00",
+      "tier": "GSM8816805"
+    },
+    {
+      "jobid": "564253",
+      "partition": "short-cpu",
+      "node": "c009",
+      "cpus": 4,
+      "mem": "96G",
+      "time_limit": "1:30:00",
+      "tier": "GSM8816804"
+    },
+    {
+      "jobid": "564249",
+      "partition": "short-cpu",
+      "node": "c005",
+      "cpus": 4,
+      "mem": "96G",
+      "time_limit": "1:30:00",
+      "tier": "GSM8816801"
+    },
+    {
+      "jobid": "564248",
+      "partition": "short-cpu",
+      "node": "c005",
+      "cpus": 4,
+      "mem": "96G",
+      "time_limit": "1:30:00",
+      "tier": "GSM8816800"
+    },
+    {
+      "jobid": "564246",
+      "partition": "short-cpu",
+      "node": "c004",
+      "cpus": 4,
+      "mem": "96G",
+      "time_limit": "1:30:00",
+      "tier": "GSM8816798"
+    },
+    {
+      "jobid": "564244",
+      "partition": "short-cpu",
+      "node": "c004",
+      "cpus": 4,
+      "mem": "96G",
+      "time_limit": "1:30:00",
+      "tier": "GSM8816796"
+    },
+    {
+      "jobid": "564245",
+      "partition": "short-cpu",
+      "node": "c009",
+      "cpus": 4,
+      "mem": "96G",
+      "time_limit": "1:30:00",
+      "tier": "GSM8816797"
+    },
+    {
+      "jobid": "564243",
+      "partition": "short-cpu",
+      "node": "c006",
+      "cpus": 4,
+      "mem": "96G",
+      "time_limit": "1:30:00",
+      "tier": "GSM8816794"
+    },
+    {
+      "jobid": "564241",
+      "partition": "short-cpu",
+      "node": "c004",
+      "cpus": 4,
+      "mem": "96G",
+      "time_limit": "1:30:00",
+      "tier": "GSM8656019"
+    },
+    {
+      "jobid": "564242",
+      "partition": "short-cpu",
+      "node": "c010",
+      "cpus": 4,
+      "mem": "96G",
+      "time_limit": "1:30:00",
+      "tier": "GSM8656021"
+    },
+    {
+      "jobid": "564240",
+      "partition": "short-cpu",
+      "node": "c005",
+      "cpus": 4,
+      "mem": "96G",
+      "time_limit": "1:30:00",
+      "tier": "GSM8656017"
+    },
+    {
+      "jobid": "564233",
+      "partition": "short-cpu",
+      "node": "c010",
+      "cpus": 4,
+      "mem": "96G",
+      "time_limit": "1:30:00",
+      "tier": "GSM8258677"
+    },
+    {
+      "jobid": "564232",
+      "partition": "short-cpu",
+      "node": "c006",
+      "cpus": 4,
+      "mem": "96G",
+      "time_limit": "1:30:00",
+      "tier": "GSM8258676"
+    },
+    {
+      "jobid": "564204",
+      "partition": "short-cpu",
+      "node": "c006",
+      "cpus": 4,
+      "mem": "96G",
+      "time_limit": "1:30:00",
+      "tier": "GSM8254801"
+    },
+    {
+      "jobid": "564203",
+      "partition": "short-cpu",
+      "node": "c010",
+      "cpus": 4,
+      "mem": "96G",
+      "time_limit": "1:30:00",
+      "tier": "GSM8254800"
+    },
+    {
+      "jobid": "564199",
+      "partition": "short-cpu",
+      "node": "c004",
+      "cpus": 4,
+      "mem": "96G",
+      "time_limit": "1:30:00",
+      "tier": "GSM8254796"
+    },
+    {
+      "jobid": "564200",
+      "partition": "short-cpu",
+      "node": "c004",
+      "cpus": 4,
+      "mem": "96G",
+      "time_limit": "1:30:00",
+      "tier": "GSM8254797"
+    },
+    {
+      "jobid": "564198",
+      "partition": "short-cpu",
+      "node": "c007",
+      "cpus": 4,
+      "mem": "96G",
+      "time_limit": "1:30:00",
+      "tier": "GSM8254795"
+    },
+    {
+      "jobid": "564197",
+      "partition": "short-cpu",
+      "node": "c007",
+      "cpus": 4,
+      "mem": "96G",
+      "time_limit": "1:30:00",
+      "tier": "GSM8254794"
+    },
+    {
+      "jobid": "564192",
+      "partition": "short-cpu",
+      "node": "c008",
+      "cpus": 4,
+      "mem": "96G",
+      "time_limit": "1:30:00",
+      "tier": "GSM7966925"
+    },
+    {
+      "jobid": "564186",
+      "partition": "short-cpu",
+      "node": "c007",
+      "cpus": 4,
+      "mem": "96G",
+      "time_limit": "1:30:00",
+      "tier": "GSM7966919"
+    },
+    {
+      "jobid": "564184",
+      "partition": "short-cpu",
+      "node": "c004",
+      "cpus": 4,
+      "mem": "96G",
+      "time_limit": "1:30:00",
+      "tier": "GSM7966917"
+    },
+    {
+      "jobid": "564182",
+      "partition": "short-cpu",
+      "node": "c007",
+      "cpus": 4,
+      "mem": "96G",
+      "time_limit": "1:30:00",
+      "tier": "GSM7966915"
+    },
+    {
+      "jobid": "564287",
+      "partition": "short-gpu",
+      "node": "g005",
+      "cpus": 4,
+      "mem": "96G",
+      "time_limit": "1:30:00",
+      "tier": "GSM8953634"
+    },
+    {
+      "jobid": "564284",
+      "partition": "short-gpu",
+      "node": "g002",
+      "cpus": 4,
+      "mem": "96G",
+      "time_limit": "1:30:00",
+      "tier": "GSM8953629"
+    },
+    {
+      "jobid": "564278",
       "partition": "short-gpu",
       "node": "g001",
       "cpus": 4,
       "mem": "96G",
       "time_limit": "1:30:00",
-      "tier": "GSM5340855"
+      "tier": "GSM8947457"
+    },
+    {
+      "jobid": "564275",
+      "partition": "short-gpu",
+      "node": "g002",
+      "cpus": 4,
+      "mem": "96G",
+      "time_limit": "1:30:00",
+      "tier": "GSM8768266"
+    },
+    {
+      "jobid": "564276",
+      "partition": "short-gpu",
+      "node": "g008",
+      "cpus": 4,
+      "mem": "96G",
+      "time_limit": "1:30:00",
+      "tier": "GSM8768267"
+    },
+    {
+      "jobid": "564274",
+      "partition": "short-gpu",
+      "node": "g002",
+      "cpus": 4,
+      "mem": "96G",
+      "time_limit": "1:30:00",
+      "tier": "GSM8768265"
+    },
+    {
+      "jobid": "564270",
+      "partition": "short-gpu",
+      "node": "g008",
+      "cpus": 4,
+      "mem": "96G",
+      "time_limit": "1:30:00",
+      "tier": "GSM8768261"
+    },
+    {
+      "jobid": "564267",
+      "partition": "short-gpu",
+      "node": "g005",
+      "cpus": 4,
+      "mem": "96G",
+      "time_limit": "1:30:00",
+      "tier": "GSM8768258"
+    },
+    {
+      "jobid": "564265",
+      "partition": "short-gpu",
+      "node": "g001",
+      "cpus": 4,
+      "mem": "96G",
+      "time_limit": "1:30:00",
+      "tier": "GSM8768256"
+    },
+    {
+      "jobid": "564250",
+      "partition": "short-gpu",
+      "node": "g003",
+      "cpus": 4,
+      "mem": "96G",
+      "time_limit": "1:30:00",
+      "tier": "GSM8816802"
+    },
+    {
+      "jobid": "564251",
+      "partition": "short-gpu",
+      "node": "g003",
+      "cpus": 4,
+      "mem": "96G",
+      "time_limit": "1:30:00",
+      "tier": "GSM8816803"
+    },
+    {
+      "jobid": "564206",
+      "partition": "short-gpu",
+      "node": "g004",
+      "cpus": 4,
+      "mem": "96G",
+      "time_limit": "1:30:00",
+      "tier": "GSM8254803"
     }
   ],
   "efficiency": {
     "mem_p50_pct": 76.4,
     "mem_p95_pct": 77.4,
     "time_p50_pct": 30.9,
-    "time_p95_pct": 77.4,
-    "n_samples": 35736
+    "time_p95_pct": 77.3,
+    "n_samples": 35867
   },
   "downsize_proposals": [],
   "policy_snapshot": {
