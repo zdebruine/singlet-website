@@ -1,51 +1,51 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-06-12T04:30:22.845819Z",
+  "generated_at": "2026-06-12T04:45:23.160532Z",
   "cluster": "anvil",
   "campaign": "mouse-10x",
   "kpi": {
     "samples_total": 24735,
-    "samples_success": 2494,
-    "samples_failed_terminal": 2571,
-    "samples_in_flight": 553,
-    "samples_pending": 19117,
+    "samples_success": 2547,
+    "samples_failed_terminal": 2577,
+    "samples_in_flight": 551,
+    "samples_pending": 19060,
     "samples_claimed": 0,
-    "samples_with_summary": 2494,
-    "samples_done_queue": 5065,
-    "samples_failed_queue": 2571,
-    "samples_deny_list": 835,
-    "success_rate_pct": 49.2,
-    "cells_total": 7013351,
-    "reads_total": 56866881756,
-    "umis_total": 14311620936,
-    "nodes_in_use": 48,
-    "cpus_in_use": 18203,
-    "disk_usage_tb": 1.69
+    "samples_with_summary": 2547,
+    "samples_done_queue": 5124,
+    "samples_failed_queue": 2577,
+    "samples_deny_list": 841,
+    "success_rate_pct": 49.7,
+    "cells_total": 7213249,
+    "reads_total": 58259302282,
+    "umis_total": 14670456150,
+    "nodes_in_use": 47,
+    "cpus_in_use": 18133,
+    "disk_usage_tb": 1.7
   },
   "queue_state": {
-    "pending": 19117,
-    "claimed": 553,
-    "done": 2494,
-    "failed": 2571
+    "pending": 19060,
+    "claimed": 551,
+    "done": 2547,
+    "failed": 2577
   },
   "status_distribution": {
     "runtime_fail": 1679,
-    "barcode_stripped": 835,
+    "barcode_stripped": 841,
     "download_fail": 57,
-    "success": 2494
+    "success": 2547
   },
   "partitions": [
     {
       "name": "shared",
-      "alloc_cpus": 24426,
-      "idle_cpus": 615,
+      "alloc_cpus": 24320,
+      "idle_cpus": 734,
       "total_cpus": 32000,
       "idle_nodes": 0,
       "mixed_nodes": 0,
       "alloc_nodes": 250,
       "down_nodes": 0,
       "mem_per_node_mb": 0,
-      "cpu_util_pct": 76.3
+      "cpu_util_pct": 76.0
     }
   ],
   "tiers": [
@@ -53,17 +53,17 @@
       "name": "standard",
       "partition": "shared",
       "n_total": 24735,
-      "n_complete": 5065,
-      "n_success": 2494,
-      "n_failed": 2571,
-      "success_rate_pct": 49.2,
+      "n_complete": 5124,
+      "n_success": 2547,
+      "n_failed": 2577,
+      "success_rate_pct": 49.7,
       "mem_gb_req": 64,
       "mem_gb_p50": 34.4,
       "mem_gb_p95": 38.2,
       "mem_eff_pct": 53.8,
       "time_req_s": 43200,
-      "time_s_p50": 365,
-      "time_s_p95": 20484,
+      "time_s_p50": 366,
+      "time_s_p95": 20555,
       "time_eff_pct": 0.8,
       "cpus_req": 4,
       "downsize_candidate": false
@@ -76,7 +76,7 @@
     },
     {
       "kind": "TIMEOUT",
-      "count": 298
+      "count": 299
     },
     {
       "kind": "OUT_OF_MEMORY",
@@ -311,6 +311,39 @@
   ],
   "running_jobs": [
     {
+      "jobid": "18161322",
+      "gsm": "",
+      "job_name": "fb_1781227812785_13",
+      "partition": "shared",
+      "node": "(QOSMaxCpuPerUserLimit)",
+      "cpus": 35,
+      "mem": "64G",
+      "time_limit": "12:00:00",
+      "tier": "standard"
+    },
+    {
+      "jobid": "18161321",
+      "gsm": "",
+      "job_name": "fb_1781227812762_6",
+      "partition": "shared",
+      "node": "(QOSMaxCpuPerUserLimit)",
+      "cpus": 35,
+      "mem": "64G",
+      "time_limit": "12:00:00",
+      "tier": "standard"
+    },
+    {
+      "jobid": "18161320",
+      "gsm": "",
+      "job_name": "fb_1781227812693_10",
+      "partition": "shared",
+      "node": "(QOSMaxCpuPerUserLimit)",
+      "cpus": 35,
+      "mem": "64G",
+      "time_limit": "12:00:00",
+      "tier": "standard"
+    },
+    {
       "jobid": "18161319",
       "gsm": "",
       "job_name": "fb_1781227812639_12",
@@ -421,72 +454,6 @@
       "tier": "standard"
     },
     {
-      "jobid": "18161309",
-      "gsm": "",
-      "job_name": "fb_1781227811806_4",
-      "partition": "shared",
-      "node": "(QOSMaxCpuPerUserLimit)",
-      "cpus": 35,
-      "mem": "64G",
-      "time_limit": "12:00:00",
-      "tier": "standard"
-    },
-    {
-      "jobid": "18161322",
-      "gsm": "",
-      "job_name": "fb_1781227812785_13",
-      "partition": "shared",
-      "node": "(QOSMaxCpuPerUserLimit)",
-      "cpus": 35,
-      "mem": "64G",
-      "time_limit": "12:00:00",
-      "tier": "standard"
-    },
-    {
-      "jobid": "18161321",
-      "gsm": "",
-      "job_name": "fb_1781227812762_6",
-      "partition": "shared",
-      "node": "(QOSMaxCpuPerUserLimit)",
-      "cpus": 35,
-      "mem": "64G",
-      "time_limit": "12:00:00",
-      "tier": "standard"
-    },
-    {
-      "jobid": "18161320",
-      "gsm": "",
-      "job_name": "fb_1781227812693_10",
-      "partition": "shared",
-      "node": "(QOSMaxCpuPerUserLimit)",
-      "cpus": 35,
-      "mem": "64G",
-      "time_limit": "12:00:00",
-      "tier": "standard"
-    },
-    {
-      "jobid": "18161330",
-      "gsm": "",
-      "job_name": "fb_1781227813255_7",
-      "partition": "shared",
-      "node": "(QOSMaxCpuPerUserLimit)",
-      "cpus": 35,
-      "mem": "64G",
-      "time_limit": "12:00:00",
-      "tier": "standard"
-    },
-    {
-      "jobid": "18161329",
-      "gsm": "",
-      "job_name": "fb_1781227813203_7",
-      "partition": "shared",
-      "node": "(QOSMaxCpuPerUserLimit)",
-      "cpus": 35,
-      "mem": "64G",
-      "time_limit": "12:00:00",
-      "tier": "standard"
-    },
-    {
       "jobid": "18161328",
       "gsm": "",
       "job_name": "fb_1781227813194_12",
@@ -553,17 +520,6 @@
       "tier": "standard"
     },
     {
-      "jobid": "18161333",
-      "gsm": "",
-      "job_name": "fb_1781227813348_9",
-      "partition": "shared",
-      "node": "(QOSMaxCpuPerUserLimit)",
-      "cpus": 35,
-      "mem": "64G",
-      "time_limit": "12:00:00",
-      "tier": "standard"
-    },
-    {
       "jobid": "18161332",
       "gsm": "",
       "job_name": "fb_1781227813264_7",
@@ -586,9 +542,20 @@
       "tier": "standard"
     },
     {
-      "jobid": "18161340",
+      "jobid": "18161330",
       "gsm": "",
-      "job_name": "fb_1781227813749_8",
+      "job_name": "fb_1781227813255_7",
+      "partition": "shared",
+      "node": "(QOSMaxCpuPerUserLimit)",
+      "cpus": 35,
+      "mem": "64G",
+      "time_limit": "12:00:00",
+      "tier": "standard"
+    },
+    {
+      "jobid": "18161329",
+      "gsm": "",
+      "job_name": "fb_1781227813203_7",
       "partition": "shared",
       "node": "(QOSMaxCpuPerUserLimit)",
       "cpus": 35,
@@ -644,6 +611,50 @@
       "jobid": "18161334",
       "gsm": "",
       "job_name": "fb_1781227813429_13",
+      "partition": "shared",
+      "node": "(QOSMaxCpuPerUserLimit)",
+      "cpus": 35,
+      "mem": "64G",
+      "time_limit": "12:00:00",
+      "tier": "standard"
+    },
+    {
+      "jobid": "18161333",
+      "gsm": "",
+      "job_name": "fb_1781227813348_9",
+      "partition": "shared",
+      "node": "(QOSMaxCpuPerUserLimit)",
+      "cpus": 35,
+      "mem": "64G",
+      "time_limit": "12:00:00",
+      "tier": "standard"
+    },
+    {
+      "jobid": "18161342",
+      "gsm": "",
+      "job_name": "fb_1781227813843_15",
+      "partition": "shared",
+      "node": "(QOSMaxCpuPerUserLimit)",
+      "cpus": 35,
+      "mem": "64G",
+      "time_limit": "12:00:00",
+      "tier": "standard"
+    },
+    {
+      "jobid": "18161341",
+      "gsm": "",
+      "job_name": "fb_1781227813752_8",
+      "partition": "shared",
+      "node": "(QOSMaxCpuPerUserLimit)",
+      "cpus": 35,
+      "mem": "64G",
+      "time_limit": "12:00:00",
+      "tier": "standard"
+    },
+    {
+      "jobid": "18161340",
+      "gsm": "",
+      "job_name": "fb_1781227813749_8",
       "partition": "shared",
       "node": "(QOSMaxCpuPerUserLimit)",
       "cpus": 35,
@@ -848,25 +859,14 @@
       "mem": "48G",
       "time_limit": "1:30:00",
       "tier": "standard"
-    },
-    {
-      "jobid": "18163277",
-      "gsm": "GSM3187762",
-      "job_name": "fc_GSM3187762",
-      "partition": "shared",
-      "node": "(Priority)",
-      "cpus": 26,
-      "mem": "48G",
-      "time_limit": "1:30:00",
-      "tier": "standard"
     }
   ],
   "efficiency": {
     "mem_p50_pct": 53.8,
-    "mem_p95_pct": 59.6,
+    "mem_p95_pct": 59.7,
     "time_p50_pct": 0.8,
-    "time_p95_pct": 47.4,
-    "n_samples": 1283
+    "time_p95_pct": 47.6,
+    "n_samples": 1284
   },
   "downsize_proposals": [],
   "policy_snapshot": {
