@@ -1,52 +1,52 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-06-14T16:38:31Z",
+  "generated_at": "2026-06-14T16:55:55Z",
   "kpi": {
     "samples_total": 93384,
-    "samples_success": 29047,
-    "samples_failed_terminal": 25791,
+    "samples_success": 29051,
+    "samples_failed_terminal": 25788,
     "samples_in_flight": 61,
-    "samples_pending": 21830,
+    "samples_pending": 21828,
     "samples_claimed": 0,
-    "samples_with_summary": 45702,
-    "samples_done_queue": 45702,
-    "samples_failed_queue": 25791,
-    "samples_deny_list": 24945,
+    "samples_with_summary": 45707,
+    "samples_done_queue": 45707,
+    "samples_failed_queue": 25788,
+    "samples_deny_list": 24941,
     "success_rate_pct": 63.6,
-    "samples_success_genic": 32676,
+    "samples_success_genic": 32680,
     "genic_success_rate_pct": 71.5,
-    "cells_total": 184080639,
-    "reads_total": 1228224598379,
-    "umis_total": 345476386067,
+    "cells_total": 184091552,
+    "reads_total": 1228357972579,
+    "umis_total": 345513350815,
     "nodes_in_use": 16,
     "cpus_in_use": 244
   },
   "queue_state": {
     "pending": 239,
     "claimed": 0,
-    "done": 45702,
-    "failed": 25791
+    "done": 45707,
+    "failed": 25788
   },
   "status_distribution": {
-    "success": 29047,
+    "success": 29051,
     "align_low_map": 9458,
-    "no_srr": 846,
-    "data_incomplete": 24945,
+    "no_srr": 847,
+    "data_incomplete": 24941,
     "qc_warn": 3362,
-    "align_low_cells": 3835
+    "align_low_cells": 3836
   },
   "partitions": [
     {
       "name": "bigmem",
-      "idle_cpus": 80,
-      "alloc_cpus": 112,
+      "idle_cpus": 76,
+      "alloc_cpus": 116,
       "total_cpus": 192,
       "idle_nodes": 1,
       "mixed_nodes": 3,
       "alloc_nodes": 0,
       "down_nodes": 0,
       "mem_per_node_mb": 1545000,
-      "cpu_util_pct": 58.3
+      "cpu_util_pct": 60.4
     },
     {
       "name": "cpu",
@@ -74,15 +74,15 @@
     },
     {
       "name": "short-bigmem",
-      "idle_cpus": 80,
-      "alloc_cpus": 112,
+      "idle_cpus": 76,
+      "alloc_cpus": 116,
       "total_cpus": 192,
       "idle_nodes": 1,
       "mixed_nodes": 3,
       "alloc_nodes": 0,
       "down_nodes": 0,
       "mem_per_node_mb": 1545000,
-      "cpu_util_pct": 58.3
+      "cpu_util_pct": 60.4
     },
     {
       "name": "short-cpu",
@@ -113,11 +113,11 @@
   "failure_modes": [
     {
       "kind": "barcode_stripped",
-      "count": 24945
+      "count": 24941
     },
     {
       "kind": "download_fail",
-      "count": 846
+      "count": 847
     },
     {
       "kind": "TIMEOUT",
@@ -907,6 +907,15 @@
       "tier": "GSM7968909"
     },
     {
+      "jobid": "593958",
+      "partition": "cpu",
+      "node": "c008",
+      "cpus": 4,
+      "mem": "160G",
+      "time_limit": "8:00:00",
+      "tier": "GSM9213312"
+    },
+    {
       "jobid": "593815",
       "partition": "cpu",
       "node": "c005",
@@ -1096,15 +1105,6 @@
       "tier": "GSM8697079"
     },
     {
-      "jobid": "593933",
-      "partition": "cpu",
-      "node": "c008",
-      "cpus": 4,
-      "mem": "160G",
-      "time_limit": "8:00:00",
-      "tier": "GSM8445688"
-    },
-    {
       "jobid": "593932",
       "partition": "cpu",
       "node": "c006",
@@ -1121,6 +1121,15 @@
       "mem": "160G",
       "time_limit": "8:00:00",
       "tier": "GSM9375735"
+    },
+    {
+      "jobid": "593957",
+      "partition": "gpu",
+      "node": "g005",
+      "cpus": 4,
+      "mem": "160G",
+      "time_limit": "8:00:00",
+      "tier": "GSM9213311"
     },
     {
       "jobid": "593792",
@@ -1204,15 +1213,6 @@
       "tier": "GSM7385332"
     },
     {
-      "jobid": "593936",
-      "partition": "gpu",
-      "node": "g005",
-      "cpus": 4,
-      "mem": "160G",
-      "time_limit": "8:00:00",
-      "tier": "GSM8445694"
-    },
-    {
       "jobid": "593623",
       "partition": "gpu",
       "node": "g003",
@@ -1236,7 +1236,7 @@
     "mem_p95_pct": 77.4,
     "time_p50_pct": 29.3,
     "time_p95_pct": 83.4,
-    "n_samples": 45702
+    "n_samples": 45707
   },
   "downsize_proposals": [],
   "policy_snapshot": {
