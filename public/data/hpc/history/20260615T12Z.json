@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-06-15T12:18:02Z",
+  "generated_at": "2026-06-15T12:20:09Z",
   "kpi": {
     "samples_total": 93384,
     "samples_success": 29362,
@@ -1281,5 +1281,86 @@
     "apply_actions": false,
     "downsize_enabled": false,
     "dashboard_cadence_minutes": 30
+  },
+  "excluded_nodes": [
+    {
+      "node": "c002",
+      "partition": "cpu",
+      "cpus": 40,
+      "reason_excluded": "container_p_join launch failures",
+      "node_state": "idle",
+      "other_user_jobs": 0,
+      "our_jobs": 0,
+      "polite_borrow_available": true
+    },
+    {
+      "node": "c010",
+      "partition": "cpu",
+      "cpus": 52,
+      "reason_excluded": "historical instability",
+      "node_state": "mix-",
+      "other_user_jobs": 0,
+      "our_jobs": 5,
+      "polite_borrow_available": true
+    },
+    {
+      "node": "c100",
+      "partition": "cpu",
+      "cpus": 64,
+      "reason_excluded": "newer granite-rapids node class",
+      "node_state": "mix-",
+      "other_user_jobs": 1,
+      "our_jobs": 6,
+      "polite_borrow_available": false
+    },
+    {
+      "node": "c101",
+      "partition": "cpu",
+      "cpus": 64,
+      "reason_excluded": "newer granite-rapids node class",
+      "node_state": "mix-",
+      "other_user_jobs": 0,
+      "our_jobs": 6,
+      "polite_borrow_available": true
+    },
+    {
+      "node": "g050",
+      "partition": "gpu",
+      "cpus": 56,
+      "reason_excluded": "NVIDIA H100 GPU type mismatch",
+      "node_state": "idle",
+      "other_user_jobs": 0,
+      "our_jobs": 0,
+      "polite_borrow_available": true
+    },
+    {
+      "node": "g051",
+      "partition": "gpu",
+      "cpus": 56,
+      "reason_excluded": "NVIDIA H100 GPU type mismatch",
+      "node_state": "idle",
+      "other_user_jobs": 0,
+      "our_jobs": 0,
+      "polite_borrow_available": true
+    },
+    {
+      "node": "g052",
+      "partition": "gpu",
+      "cpus": 56,
+      "reason_excluded": "NVIDIA H100 GPU type mismatch",
+      "node_state": "idle",
+      "other_user_jobs": 0,
+      "our_jobs": 0,
+      "polite_borrow_available": true
+    }
+  ],
+  "borrow_cpus_available": 156,
+  "borrow_gpu_nodes_available": 3,
+  "fixes_applied": {
+    "as_of": "2026-06-15",
+    "timeout_fix": "campaign_daemon.sh attempt-0 time raised 01:30\u219208:00; short-* partitions removed",
+    "oom_fix": "Added attempt-2 tier (256G/12h/bigmem); MAX_ATTEMPTS 2\u21923",
+    "tmp_fix": "worker_pipelined.sh: /tmp precheck (10GB threshold) before claiming samples",
+    "attempt_resets": "103 TIMEOUT + 12 OOM GSMs reset to att=1 for 160G escalation"
   }
 }
