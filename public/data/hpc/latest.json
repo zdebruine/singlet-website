@@ -1,37 +1,37 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-06-15T12:20:09Z",
+  "generated_at": "2026-06-15T12:26:01Z",
   "kpi": {
     "samples_total": 93384,
-    "samples_success": 29362,
-    "samples_failed_terminal": 25333,
+    "samples_success": 29363,
+    "samples_failed_terminal": 25332,
     "samples_in_flight": 65,
     "samples_pending": 21738,
     "samples_claimed": 0,
-    "samples_with_summary": 46248,
-    "samples_done_queue": 46248,
-    "samples_failed_queue": 25333,
-    "samples_deny_list": 24442,
+    "samples_with_summary": 46249,
+    "samples_done_queue": 46249,
+    "samples_failed_queue": 25332,
+    "samples_deny_list": 24441,
     "success_rate_pct": 63.5,
-    "samples_success_genic": 33076,
+    "samples_success_genic": 33077,
     "genic_success_rate_pct": 71.5,
-    "cells_total": 186093975,
-    "reads_total": 1244309591707,
-    "umis_total": 350253828231,
+    "cells_total": 186097577,
+    "reads_total": 1244339591707,
+    "umis_total": 350257340410,
     "nodes_in_use": 16,
     "cpus_in_use": 260
   },
   "queue_state": {
     "pending": 235,
     "claimed": 0,
-    "done": 46248,
-    "failed": 25333
+    "done": 46249,
+    "failed": 25332
   },
   "status_distribution": {
-    "success": 29362,
+    "success": 29363,
     "align_low_map": 9588,
     "no_srr": 891,
-    "data_incomplete": 24442,
+    "data_incomplete": 24441,
     "qc_warn": 3394,
     "align_low_cells": 3904
   },
@@ -113,7 +113,7 @@
   "failure_modes": [
     {
       "kind": "barcode_stripped",
-      "count": 24442
+      "count": 24441
     },
     {
       "kind": "download_fail",
@@ -121,7 +121,7 @@
     },
     {
       "kind": "TIMEOUT",
-      "count": 133
+      "count": 134
     },
     {
       "kind": "OUT_OF_MEMORY",
@@ -682,15 +682,6 @@
   ],
   "running_jobs": [
     {
-      "jobid": "594841",
-      "partition": "bigmem",
-      "node": "b004",
-      "cpus": 4,
-      "mem": "160G",
-      "time_limit": "8:00:00",
-      "tier": "GSM8808523"
-    },
-    {
       "jobid": "595225",
       "partition": "bigmem",
       "node": "b003",
@@ -898,13 +889,22 @@
       "tier": "GSM8976796"
     },
     {
-      "jobid": "595574",
+      "jobid": "595579",
+      "partition": "bigmem",
+      "node": "b004",
+      "cpus": 4,
+      "mem": "160G",
+      "time_limit": "8:00:00",
+      "tier": "GSM9429755"
+    },
+    {
+      "jobid": "595580",
       "partition": "bigmem",
       "node": "b001",
       "cpus": 4,
       "mem": "160G",
       "time_limit": "8:00:00",
-      "tier": "GSM9420661"
+      "tier": "GSM9429763"
     },
     {
       "jobid": "595220",
@@ -1150,13 +1150,13 @@
       "tier": "GSM9678296"
     },
     {
-      "jobid": "595575",
+      "jobid": "595581",
       "partition": "cpu",
       "node": "c008",
       "cpus": 4,
       "mem": "160G",
       "time_limit": "8:00:00",
-      "tier": "GSM9420662"
+      "tier": "GSM9429765"
     },
     {
       "jobid": "595210",
@@ -1272,7 +1272,7 @@
     "mem_p95_pct": 77.4,
     "time_p50_pct": 29.2,
     "time_p95_pct": 84.1,
-    "n_samples": 46248
+    "n_samples": 46249
   },
   "downsize_proposals": [],
   "policy_snapshot": {
@@ -1281,86 +1281,5 @@
     "apply_actions": false,
     "downsize_enabled": false,
     "dashboard_cadence_minutes": 30
-  },
-  "excluded_nodes": [
-    {
-      "node": "c002",
-      "partition": "cpu",
-      "cpus": 40,
-      "reason_excluded": "container_p_join launch failures",
-      "node_state": "idle",
-      "other_user_jobs": 0,
-      "our_jobs": 0,
-      "polite_borrow_available": true
-    },
-    {
-      "node": "c010",
-      "partition": "cpu",
-      "cpus": 52,
-      "reason_excluded": "historical instability",
-      "node_state": "mix-",
-      "other_user_jobs": 0,
-      "our_jobs": 5,
-      "polite_borrow_available": true
-    },
-    {
-      "node": "c100",
-      "partition": "cpu",
-      "cpus": 64,
-      "reason_excluded": "newer granite-rapids node class",
-      "node_state": "mix-",
-      "other_user_jobs": 1,
-      "our_jobs": 6,
-      "polite_borrow_available": false
-    },
-    {
-      "node": "c101",
-      "partition": "cpu",
-      "cpus": 64,
-      "reason_excluded": "newer granite-rapids node class",
-      "node_state": "mix-",
-      "other_user_jobs": 0,
-      "our_jobs": 6,
-      "polite_borrow_available": true
-    },
-    {
-      "node": "g050",
-      "partition": "gpu",
-      "cpus": 56,
-      "reason_excluded": "NVIDIA H100 GPU type mismatch",
-      "node_state": "idle",
-      "other_user_jobs": 0,
-      "our_jobs": 0,
-      "polite_borrow_available": true
-    },
-    {
-      "node": "g051",
-      "partition": "gpu",
-      "cpus": 56,
-      "reason_excluded": "NVIDIA H100 GPU type mismatch",
-      "node_state": "idle",
-      "other_user_jobs": 0,
-      "our_jobs": 0,
-      "polite_borrow_available": true
-    },
-    {
-      "node": "g052",
-      "partition": "gpu",
-      "cpus": 56,
-      "reason_excluded": "NVIDIA H100 GPU type mismatch",
-      "node_state": "idle",
-      "other_user_jobs": 0,
-      "our_jobs": 0,
-      "polite_borrow_available": true
-    }
-  ],
-  "borrow_cpus_available": 156,
-  "borrow_gpu_nodes_available": 3,
-  "fixes_applied": {
-    "as_of": "2026-06-15",
-    "timeout_fix": "campaign_daemon.sh attempt-0 time raised 01:30\u219208:00; short-* partitions removed",
-    "oom_fix": "Added attempt-2 tier (256G/12h/bigmem); MAX_ATTEMPTS 2\u21923",
-    "tmp_fix": "worker_pipelined.sh: /tmp precheck (10GB threshold) before claiming samples",
-    "attempt_resets": "103 TIMEOUT + 12 OOM GSMs reset to att=1 for 160G escalation"
   }
 }
