@@ -1,39 +1,39 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-06-15T15:33:36Z",
+  "generated_at": "2026-06-15T15:50:55Z",
   "kpi": {
     "samples_total": 93384,
     "samples_success": 29397,
-    "samples_failed_terminal": 25276,
+    "samples_failed_terminal": 25271,
     "samples_in_flight": 65,
     "samples_pending": 21732,
     "samples_claimed": 0,
-    "samples_with_summary": 46311,
-    "samples_done_queue": 46311,
-    "samples_failed_queue": 25276,
-    "samples_deny_list": 24380,
+    "samples_with_summary": 46316,
+    "samples_done_queue": 46316,
+    "samples_failed_queue": 25271,
+    "samples_deny_list": 24375,
     "success_rate_pct": 63.5,
     "samples_success_genic": 33114,
     "genic_success_rate_pct": 71.5,
     "cells_total": 186261484,
-    "reads_total": 1246083393721,
-    "umis_total": 350662519966,
+    "reads_total": 1246233393721,
+    "umis_total": 350662519968,
     "nodes_in_use": 16,
     "cpus_in_use": 260
   },
   "queue_state": {
-    "pending": 142,
+    "pending": 133,
     "claimed": 0,
-    "done": 46311,
-    "failed": 25276
+    "done": 46316,
+    "failed": 25271
   },
   "status_distribution": {
     "success": 29397,
     "align_low_map": 9589,
     "no_srr": 896,
-    "data_incomplete": 24380,
+    "data_incomplete": 24375,
     "qc_warn": 3397,
-    "align_low_cells": 3928
+    "align_low_cells": 3933
   },
   "partitions": [
     {
@@ -62,15 +62,15 @@
     },
     {
       "name": "gpu",
-      "idle_cpus": 284,
-      "alloc_cpus": 60,
+      "idle_cpus": 280,
+      "alloc_cpus": 64,
       "total_cpus": 344,
       "idle_nodes": 2,
       "mixed_nodes": 7,
       "alloc_nodes": 0,
       "down_nodes": 0,
       "mem_per_node_mb": 384500,
-      "cpu_util_pct": 17.4
+      "cpu_util_pct": 18.6
     },
     {
       "name": "short-bigmem",
@@ -98,22 +98,22 @@
     },
     {
       "name": "short-gpu",
-      "idle_cpus": 284,
-      "alloc_cpus": 60,
+      "idle_cpus": 280,
+      "alloc_cpus": 64,
       "total_cpus": 344,
       "idle_nodes": 2,
       "mixed_nodes": 7,
       "alloc_nodes": 0,
       "down_nodes": 0,
       "mem_per_node_mb": 384500,
-      "cpu_util_pct": 17.4
+      "cpu_util_pct": 18.6
     }
   ],
   "tiers": [],
   "failure_modes": [
     {
       "kind": "barcode_stripped",
-      "count": 24380
+      "count": 24375
     },
     {
       "kind": "download_fail",
@@ -121,7 +121,7 @@
     },
     {
       "kind": "TIMEOUT",
-      "count": 144
+      "count": 146
     },
     {
       "kind": "OUT_OF_MEMORY",
@@ -772,15 +772,6 @@
       "tier": "GSM9069383"
     },
     {
-      "jobid": "595094",
-      "partition": "bigmem",
-      "node": "b001",
-      "cpus": 4,
-      "mem": "160G",
-      "time_limit": "8:00:00",
-      "tier": "GSM9059356"
-    },
-    {
       "jobid": "595351",
       "partition": "bigmem",
       "node": "b003",
@@ -806,15 +797,6 @@
       "mem": "160G",
       "time_limit": "8:00:00",
       "tier": "GSM9233006"
-    },
-    {
-      "jobid": "595088",
-      "partition": "bigmem",
-      "node": "b004",
-      "cpus": 4,
-      "mem": "160G",
-      "time_limit": "8:00:00",
-      "tier": "GSM9055581"
     },
     {
       "jobid": "595329",
@@ -844,6 +826,24 @@
       "tier": "GSM9475171"
     },
     {
+      "jobid": "595819",
+      "partition": "bigmem",
+      "node": "b001",
+      "cpus": 4,
+      "mem": "160G",
+      "time_limit": "8:00:00",
+      "tier": "GSM9594062"
+    },
+    {
+      "jobid": "595818",
+      "partition": "bigmem",
+      "node": "b004",
+      "cpus": 4,
+      "mem": "160G",
+      "time_limit": "8:00:00",
+      "tier": "GSM9594061"
+    },
+    {
       "jobid": "595778",
       "partition": "bigmem",
       "node": "b004",
@@ -853,13 +853,13 @@
       "tier": "GSM9561422"
     },
     {
-      "jobid": "595807",
+      "jobid": "595813",
       "partition": "bigmem",
       "node": "b001",
       "cpus": 4,
       "mem": "160G",
       "time_limit": "8:00:00",
-      "tier": "GSM9581854"
+      "tier": "GSM9588861"
     },
     {
       "jobid": "595538",
@@ -1272,7 +1272,7 @@
     "mem_p95_pct": 77.4,
     "time_p50_pct": 29.1,
     "time_p95_pct": 84.2,
-    "n_samples": 46311
+    "n_samples": 46316
   },
   "downsize_proposals": [],
   "policy_snapshot": {
