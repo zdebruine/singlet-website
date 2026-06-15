@@ -74,6 +74,14 @@ interface Snapshot {
     downsize_enabled: boolean;
     dashboard_cadence_minutes: number;
   };
+  excluded_nodes?: Array<{
+    node: string; partition: string; cpus: number;
+    reason_excluded: string; node_state: string;
+    other_user_jobs: number; our_jobs: number;
+    polite_borrow_available: boolean;
+  }>;
+  borrow_cpus_available?: number;
+  borrow_gpu_nodes_available?: number;
 }
 
 const COLORS = {
@@ -120,6 +128,24 @@ function fmtNum(n: number): string {
 function fmtDateTick(isoStr: string): string {
   const d = new Date(isoStr);
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+function fmtSnapshotTime(isoStr: string): string {
+  const d = new Date(isoStr);
+  return d.toLocaleString("en-US", {
+    timeZone: "America/New_York",
+    month: "numeric",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+    timeZoneName: "short",
+  });
+}
+
+function snapshotAgeMinutes(isoStr: string): number {
+  return Math.floor((Date.now() - new Date(isoStr).getTime()) / 60_000);
 }
 
 function fmtDuration(s: number): string {
@@ -287,15 +313,19 @@ const HpcDashboard = () => {
               <h1 className="font-display text-3xl font-bold text-foreground tracking-tightest mb-1">
                 HPC Dashboard — {CLUSTERS[cluster].label}
               </h1>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm text-muted-foreground flex items-center gap-2 flex-wrap">
                 {CLUSTERS[cluster].sub} ·
-                Snapshot: <span className="font-mono">{snap!.generated_at}</span> ·
-                Cadence: {snap!.policy_snapshot.dashboard_cadence_minutes} min
+                Last updated: <span className="font-medium text-foreground">{fmtSnapshotTime(snap!.generated_at)}</span>
+                {snapshotAgeMinutes(snap!.generated_at) > 30 && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-500/15 text-yellow-600 border border-yellow-500/30">
+                    <AlertTriangle size={11} /> stale ({snapshotAgeMinutes(snap!.generated_at)} min ago)
+                  </span>
+                )}
               </p>
             </div>
             <button onClick={() => load()} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md border border-border bg-secondary text-secondary-foreground text-xs font-medium hover:bg-muted">
               <RefreshCw size={12} className={loading ? "animate-spin" : ""} />
-              Refresh {lastFetched && `· ${lastFetched.toLocaleTimeString()}`}
+              Refresh {lastFetched && `· fetched ${lastFetched.toLocaleTimeString("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit", hour12: true, timeZoneName: "short" })}`}
             </button>
           </div>
 
@@ -384,6 +414,72 @@ const HpcDashboard = () => {
               </table>
             </div>
           </div>
+
+          {/* Excluded Nodes / Polite-Borrow Opportunity — Clipper only */}
+          {cluster === "clipper" && snap!.excluded_nodes && snap!.excluded_nodes.length > 0 && (
+            <div className="bg-card border border-border rounded-lg p-5 mb-6">
+              <h2 className="font-display text-lg font-bold mb-1 flex items-center gap-2">
+                <Server size={18} /> Excluded nodes &amp; polite-borrow policy
+              </h2>
+              <p className="text-xs text-muted-foreground mb-3">
+                These nodes are explicitly excluded from <code className="font-mono">singlet-worker-*</code> submissions.
+                When no other user has jobs queued, <code className="font-mono">polite_submit.sh</code> can opportunistically borrow them.
+                {(snap!.borrow_cpus_available ?? 0) > 0 && (
+                  <span className="ml-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-500/15 text-green-500 border border-green-500/30">
+                    <Zap size={11} /> {snap!.borrow_cpus_available} CPU cores borrowable now
+                  </span>
+                )}
+                {(snap!.borrow_gpu_nodes_available ?? 0) > 0 && (
+                  <span className="ml-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-purple-500/15 text-purple-500 border border-purple-500/30">
+                    <Zap size={11} /> {snap!.borrow_gpu_nodes_available} GPU node(s) borrowable now
+                  </span>
+                )}
+              </p>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-xs uppercase tracking-wider text-muted-foreground border-b border-border">
+                      <th className="text-left py-2 pr-4">Node</th>
+                      <th className="text-right pr-4">Partition</th>
+                      <th className="text-right pr-4">CPUs</th>
+                      <th className="text-left pr-4">Exclusion reason</th>
+                      <th className="text-right pr-4">State</th>
+                      <th className="text-right pr-4">Other-user jobs</th>
+                      <th className="text-right pr-4">Our jobs</th>
+                      <th className="text-right pr-4">Borrow?</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {snap!.excluded_nodes!.map(n => (
+                      <tr key={n.node} className="border-b border-border/50">
+                        <td className="py-2 pr-4 font-mono font-bold">{n.node}</td>
+                        <td className="text-right pr-4 font-mono text-xs text-muted-foreground">{n.partition}</td>
+                        <td className="text-right pr-4 font-mono">{n.cpus}</td>
+                        <td className="pr-4 text-xs text-muted-foreground">{n.reason_excluded}</td>
+                        <td className="text-right pr-4 font-mono text-xs"
+                            style={{ color: n.node_state === "idle" ? COLORS.success : n.node_state.startsWith("mix") ? COLORS.warning : COLORS.muted }}>
+                          {n.node_state}
+                        </td>
+                        <td className="text-right pr-4 font-mono"
+                            style={{ color: n.other_user_jobs > 0 ? COLORS.danger : COLORS.success }}>
+                          {n.other_user_jobs}
+                        </td>
+                        <td className="text-right pr-4 font-mono text-muted-foreground">{n.our_jobs}</td>
+                        <td className="text-right pr-4">
+                          {n.polite_borrow_available
+                            ? <span className="inline-flex items-center gap-1 text-xs font-medium" style={{ color: COLORS.success }}>✓ yes</span>
+                            : <span className="inline-flex items-center gap-1 text-xs font-medium" style={{ color: COLORS.warning }}>✗ busy</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="mt-3 text-xs text-muted-foreground font-mono">
+                Run: <code className="bg-muted px-1 rounded">singlet-agents/scripts/pipeline/polite_submit.sh --partition cpu --dry-run</code>
+              </p>
+            </div>
+          )}
 
           {/* Tier rollups */}
           <div className="bg-card border border-border rounded-lg p-5 mb-6">
@@ -557,6 +653,112 @@ const HpcDashboard = () => {
               )}
             </div>
           </div>
+
+          {/* Failure Analysis & Recommendations */}
+          {snap!.failure_modes.length > 0 && (() => {
+            const total = snap!.failure_modes.reduce((a, f) => a + f.count, 0);
+            const RECS: Record<string, { title: string; detail: string; severity: string }> = {
+              pipeline: {
+                title: "Pipeline crash (SLURM exit non-zero)",
+                detail: "Check worker logs for OOM signals not caught by SLURM, missing reference files, or singlet binary panics. Run: tail -100 $PILOT_ROOT/logs/worker-*.out | grep -i error",
+                severity: "danger",
+              },
+              encode: {
+                title: "SRA encode failure",
+                detail: "Encoding failed after 3 prefetch retries. Common causes: NCBI EBI embargo, corrupted SRA object, or /tmp disk full on node. Check per-node /tmp usage; consider --exclude for filled nodes.",
+                severity: "warning",
+              },
+              pipeline_timeout: {
+                title: "Pipeline timeout (wall-clock exceeded)",
+                detail: "Sample exceeded SINGLET_PIPELINE_TIMEOUT. Likely very large libraries (>500M reads). Check sample read counts and consider routing these to the bigmem/xlarge tier with a longer wall time.",
+                severity: "warning",
+              },
+              TIMEOUT: {
+                title: "SLURM wall-time timeout",
+                detail: "Job hit the SLURM --time limit before finishing. These are fc_ full-campaign jobs that need the time limit raised from 8h to 12–24h, or the sample should be routed to a different tier.",
+                severity: "warning",
+              },
+              no_srr: {
+                title: "No SRR accession in catalog",
+                detail: "GEO sample has no SRA submission linked. These are typically processed-data-only deposits. They are auto-placed in the deny-list after backfill fails.",
+                severity: "muted",
+              },
+              protocol_mismatch: {
+                title: "Protocol mismatch (barcode explosion)",
+                detail: "STAR alignment succeeded but pileup got 0 reads — detected protocol did not match actual library chemistry. The encoder confidence threshold may need tuning, or the sample may genuinely be a non-10x library.",
+                severity: "purple",
+              },
+              protocol_undetected: {
+                title: "Protocol auto-detection failed (confidence=NONE)",
+                detail: "Encoder could not detect a valid barcode chemistry with ≥MEDIUM confidence. Sample likely has very few reads or an exotic protocol. Consider manual protocol override in the panel TSV.",
+                severity: "purple",
+              },
+              encode_empty: {
+                title: "Empty SRA archive",
+                detail: "NCBI prefetch succeeded but the archive contained 0 reads. The SRA submission exists but the data has not been released or was retracted. These should be permanently failed.",
+                severity: "warning",
+              },
+              s3: {
+                title: "Download failure (S3/EBI/NCBI)",
+                detail: "prefetch or EBI download failed after 3 retries. Often transient network issues. Workers retry automatically; persistent s3 failures may indicate the SRA run is quarantined upstream.",
+                severity: "danger",
+              },
+              OUT_OF_MEMORY: {
+                title: "Out of memory (OOM kill)",
+                detail: "Job was killed by SLURM's OOM handler. These samples need routing to a higher-memory tier (bigmem or xlarge). Cross-reference GSM against the panel to upgrade their tier assignment.",
+                severity: "danger",
+              },
+              barcode_stripped: {
+                title: "Data incomplete — barcodes stripped",
+                detail: "GEO submission contains only processed/demultiplexed files without raw FASTQ. These 24K+ samples cannot be reprocessed from raw reads and should remain in data_incomplete / deny-list.",
+                severity: "muted",
+              },
+              data_incomplete: {
+                title: "Data incomplete",
+                detail: "Pipeline determined input data is insufficient for processing. Usually means processed-data-only GEO submissions. These are the dominant failure category and are expected.",
+                severity: "muted",
+              },
+              align_low_map: {
+                title: "Low mapping rate (QC filter)",
+                detail: "STAR aligned but ≥80% of reads failed to map. Indicates wrong reference (wrong species/genome build) or severe library quality issues. Check the GSM organism annotation in the panel.",
+                severity: "warning",
+              },
+              align_low_cells: {
+                title: "Insufficient cells recovered (QC filter)",
+                detail: "Pileup found too few barcodes above threshold. May be very low-quality library, wrong barcode whitelist, or a bulk RNA-seq sample miscategorized as single-cell.",
+                severity: "warning",
+              },
+            };
+            const topFailures = snap!.failure_modes.slice(0, 6);
+            return (
+              <div className="bg-card border border-border rounded-lg p-5 mb-6">
+                <h2 className="font-display text-lg font-bold mb-3 flex items-center gap-2">
+                  <AlertTriangle size={18} /> Failure analysis &amp; recommendations
+                </h2>
+                <div className="space-y-3">
+                  {topFailures.map(f => {
+                    const rec = RECS[f.kind];
+                    if (!rec) return null;
+                    const pct = total > 0 ? ((f.count / total) * 100).toFixed(1) : "0";
+                    const col = rec.severity === "danger" ? COLORS.danger
+                              : rec.severity === "warning" ? COLORS.warning
+                              : rec.severity === "purple" ? COLORS.purple
+                              : COLORS.muted;
+                    return (
+                      <div key={f.kind} className="border border-border/60 rounded-md p-3">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-mono font-bold text-sm" style={{ color: col }}>{f.kind}</span>
+                          <span className="font-mono text-xs text-muted-foreground">{f.count.toLocaleString()} ({pct}%)</span>
+                        </div>
+                        <div className="font-medium text-sm mb-0.5">{rec.title}</div>
+                        <div className="text-xs text-muted-foreground">{rec.detail}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Recent failures */}
           {snap!.recent_failures.length > 0 && (
