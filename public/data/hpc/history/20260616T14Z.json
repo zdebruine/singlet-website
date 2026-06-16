@@ -1,12 +1,12 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-06-16T14:36:38Z",
+  "generated_at": "2026-06-16T14:44:48Z",
   "kpi": {
     "samples_total": 93384,
     "samples_success": 29464,
     "samples_failed_terminal": 25175,
-    "samples_in_flight": 12,
-    "samples_pending": 21723,
+    "samples_in_flight": 13,
+    "samples_pending": 21722,
     "samples_claimed": 0,
     "samples_with_summary": 46474,
     "samples_done_queue": 46474,
@@ -19,7 +19,7 @@
     "reads_total": 1250620841625,
     "umis_total": 351132504601,
     "nodes_in_use": 3,
-    "cpus_in_use": 48
+    "cpus_in_use": 52
   },
   "queue_state": {
     "pending": 287,
@@ -38,27 +38,27 @@
   "partitions": [
     {
       "name": "bigmem",
-      "idle_cpus": 136,
-      "alloc_cpus": 56,
+      "idle_cpus": 132,
+      "alloc_cpus": 60,
       "total_cpus": 192,
       "idle_nodes": 1,
       "mixed_nodes": 3,
       "alloc_nodes": 0,
       "down_nodes": 0,
       "mem_per_node_mb": 1545000,
-      "cpu_util_pct": 29.2
+      "cpu_util_pct": 31.2
     },
     {
       "name": "cpu",
-      "idle_cpus": 160,
-      "alloc_cpus": 416,
+      "idle_cpus": 168,
+      "alloc_cpus": 408,
       "total_cpus": 576,
       "idle_nodes": 1,
       "mixed_nodes": 11,
       "alloc_nodes": 0,
       "down_nodes": 0,
       "mem_per_node_mb": 512000,
-      "cpu_util_pct": 72.2
+      "cpu_util_pct": 70.8
     },
     {
       "name": "gpu",
@@ -74,27 +74,27 @@
     },
     {
       "name": "short-bigmem",
-      "idle_cpus": 136,
-      "alloc_cpus": 56,
+      "idle_cpus": 132,
+      "alloc_cpus": 60,
       "total_cpus": 192,
       "idle_nodes": 1,
       "mixed_nodes": 3,
       "alloc_nodes": 0,
       "down_nodes": 0,
       "mem_per_node_mb": 1545000,
-      "cpu_util_pct": 29.2
+      "cpu_util_pct": 31.2
     },
     {
       "name": "short-cpu",
-      "idle_cpus": 160,
-      "alloc_cpus": 416,
+      "idle_cpus": 168,
+      "alloc_cpus": 408,
       "total_cpus": 576,
       "idle_nodes": 1,
       "mixed_nodes": 11,
       "alloc_nodes": 0,
       "down_nodes": 0,
       "mem_per_node_mb": 512000,
-      "cpu_util_pct": 72.2
+      "cpu_util_pct": 70.8
     },
     {
       "name": "short-gpu",
@@ -125,7 +125,7 @@
     },
     {
       "kind": "OUT_OF_MEMORY",
-      "count": 7
+      "count": 8
     }
   ],
   "recent_failures": [
@@ -682,6 +682,42 @@
   ],
   "running_jobs": [
     {
+      "jobid": "596678",
+      "partition": "bigmem",
+      "node": "b001",
+      "cpus": 4,
+      "mem": "256G",
+      "time_limit": "12:00:00",
+      "tier": "GSM7164616"
+    },
+    {
+      "jobid": "596676",
+      "partition": "bigmem",
+      "node": "b004",
+      "cpus": 4,
+      "mem": "256G",
+      "time_limit": "12:00:00",
+      "tier": "GSM7091141"
+    },
+    {
+      "jobid": "596677",
+      "partition": "bigmem",
+      "node": "b002",
+      "cpus": 4,
+      "mem": "256G",
+      "time_limit": "12:00:00",
+      "tier": "GSM7164608"
+    },
+    {
+      "jobid": "596675",
+      "partition": "bigmem",
+      "node": "b001",
+      "cpus": 4,
+      "mem": "256G",
+      "time_limit": "12:00:00",
+      "tier": "GSM7091138"
+    },
+    {
       "jobid": "596674",
       "partition": "bigmem",
       "node": "b004",
@@ -689,24 +725,6 @@
       "mem": "256G",
       "time_limit": "12:00:00",
       "tier": "GSM7091137"
-    },
-    {
-      "jobid": "596673",
-      "partition": "bigmem",
-      "node": "b001",
-      "cpus": 4,
-      "mem": "256G",
-      "time_limit": "12:00:00",
-      "tier": "GSM7091134"
-    },
-    {
-      "jobid": "596672",
-      "partition": "bigmem",
-      "node": "b002",
-      "cpus": 4,
-      "mem": "256G",
-      "time_limit": "12:00:00",
-      "tier": "GSM7091133"
     },
     {
       "jobid": "596666",
@@ -752,15 +770,6 @@
       "mem": "256G",
       "time_limit": "12:00:00",
       "tier": "GSM5682509"
-    },
-    {
-      "jobid": "596654",
-      "partition": "bigmem",
-      "node": "b004",
-      "cpus": 4,
-      "mem": "256G",
-      "time_limit": "12:00:00",
-      "tier": "GSM5019531"
     },
     {
       "jobid": "596642",
