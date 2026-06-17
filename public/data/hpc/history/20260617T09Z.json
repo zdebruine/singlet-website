@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-06-17T09:04:41Z",
+  "generated_at": "2026-06-17T09:20:18Z",
   "kpi": {
     "samples_total": 93384,
     "samples_success": 29527,
@@ -22,7 +22,7 @@
     "cpus_in_use": 248
   },
   "queue_state": {
-    "pending": 1060,
+    "pending": 1059,
     "claimed": 0,
     "done": 46646,
     "failed": 24765
@@ -121,36 +121,14 @@
     },
     {
       "kind": "OUT_OF_MEMORY",
-      "count": 31
+      "count": 32
     },
     {
       "kind": "TIMEOUT",
-      "count": 14
+      "count": 12
     }
   ],
   "recent_failures": [
-    {
-      "jobid": "596605",
-      "gsm": "GSM8673835",
-      "state": "TIMEOUT",
-      "tier": null,
-      "elapsed_s": 0,
-      "maxrss_gb": 0.0,
-      "timelimit_s": 0,
-      "end": "2026-06-16T05:10:28",
-      "retries": 0
-    },
-    {
-      "jobid": "596606",
-      "gsm": "GSM9303512",
-      "state": "TIMEOUT",
-      "tier": null,
-      "elapsed_s": 0,
-      "maxrss_gb": 0.0,
-      "timelimit_s": 0,
-      "end": "2026-06-16T05:10:29",
-      "retries": 0
-    },
     {
       "jobid": "596616",
       "gsm": "GSM5969965",
@@ -623,9 +601,29 @@
       "timelimit_s": 0,
       "end": "2026-06-17T05:04:30",
       "retries": 0
+    },
+    {
+      "jobid": "601397",
+      "gsm": "GSM3984875",
+      "state": "OUT_OF_MEMORY",
+      "tier": null,
+      "elapsed_s": 0,
+      "maxrss_gb": 0.0,
+      "timelimit_s": 0,
+      "end": "2026-06-17T05:18:11",
+      "retries": 0
     }
   ],
   "running_jobs": [
+    {
+      "jobid": "601401",
+      "partition": "cpu",
+      "node": "c008",
+      "cpus": 4,
+      "mem": "96G",
+      "time_limit": "2-00:00:00",
+      "tier": "GSM4494559"
+    },
     {
       "jobid": "601400",
       "partition": "cpu",
@@ -652,15 +650,6 @@
       "mem": "96G",
       "time_limit": "2-00:00:00",
       "tier": "GSM4054692"
-    },
-    {
-      "jobid": "601397",
-      "partition": "cpu",
-      "node": "c008",
-      "cpus": 4,
-      "mem": "96G",
-      "time_limit": "2-00:00:00",
-      "tier": "GSM3984875"
     },
     {
       "jobid": "601393",
