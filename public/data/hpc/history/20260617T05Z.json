@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-06-17T05:06:36Z",
+  "generated_at": "2026-06-17T05:19:50Z",
   "kpi": {
     "samples_total": 93384,
     "samples_success": 29524,
@@ -22,7 +22,7 @@
     "cpus_in_use": 152
   },
   "queue_state": {
-    "pending": 1221,
+    "pending": 1220,
     "claimed": 0,
     "done": 46640,
     "failed": 24751
@@ -50,15 +50,15 @@
     },
     {
       "name": "cpu",
-      "idle_cpus": 136,
-      "alloc_cpus": 440,
+      "idle_cpus": 160,
+      "alloc_cpus": 416,
       "total_cpus": 576,
       "idle_nodes": 0,
       "mixed_nodes": 12,
       "alloc_nodes": 0,
       "down_nodes": 0,
       "mem_per_node_mb": 512000,
-      "cpu_util_pct": 76.4
+      "cpu_util_pct": 72.2
     },
     {
       "name": "gpu",
@@ -86,15 +86,15 @@
     },
     {
       "name": "short-cpu",
-      "idle_cpus": 136,
-      "alloc_cpus": 440,
+      "idle_cpus": 160,
+      "alloc_cpus": 416,
       "total_cpus": 576,
       "idle_nodes": 0,
       "mixed_nodes": 12,
       "alloc_nodes": 0,
       "down_nodes": 0,
       "mem_per_node_mb": 512000,
-      "cpu_util_pct": 76.4
+      "cpu_util_pct": 72.2
     },
     {
       "name": "short-gpu",
@@ -121,7 +121,7 @@
     },
     {
       "kind": "OUT_OF_MEMORY",
-      "count": 26
+      "count": 27
     },
     {
       "kind": "TIMEOUT",
@@ -592,6 +592,17 @@
       "retries": 0
     },
     {
+      "jobid": "601223",
+      "gsm": "GSM9144054",
+      "state": "OUT_OF_MEMORY",
+      "tier": null,
+      "elapsed_s": 0,
+      "maxrss_gb": 0.0,
+      "timelimit_s": 0,
+      "end": "2026-06-17T01:07:47",
+      "retries": 0
+    },
+    {
       "jobid": "601236",
       "gsm": "GSM7164616",
       "state": "OUT_OF_MEMORY",
@@ -604,6 +615,15 @@
     }
   ],
   "running_jobs": [
+    {
+      "jobid": "601240",
+      "partition": "cpu",
+      "node": "c010",
+      "cpus": 4,
+      "mem": "96G",
+      "time_limit": "2-00:00:00",
+      "tier": "GSM8246589"
+    },
     {
       "jobid": "601239",
       "partition": "cpu",
@@ -684,15 +704,6 @@
       "mem": "96G",
       "time_limit": "2-00:00:00",
       "tier": "GSM6436667"
-    },
-    {
-      "jobid": "601223",
-      "partition": "cpu",
-      "node": "c010",
-      "cpus": 4,
-      "mem": "96G",
-      "time_limit": "2-00:00:00",
-      "tier": "GSM9144054"
     },
     {
       "jobid": "601212",
