@@ -3,9 +3,8 @@ import { useNavigate } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 
-const hasAuthConfig = Boolean(
-  import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-);
+// v0.9.0 is open-access — auth is disabled.
+const hasAuthConfig = false;
 
 const Auth = () => {
   const [mode, setMode] = useState<"signin" | "signup">("signin");
@@ -26,67 +25,16 @@ const Auth = () => {
       return;
     }
 
-    try {
-      const { supabase } = await import("@/integrations/supabase/client");
-
-      if (mode === "signup") {
-        const { error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: { emailRedirectTo: window.location.origin },
-        });
-
-        if (error) {
-          setMessage({ type: "error", text: error.message });
-        } else {
-          setMessage({ type: "success", text: "Check your email for a confirmation link." });
-        }
-      } else {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-
-        if (error) {
-          setMessage({ type: "error", text: error.message });
-        } else {
-          navigate("/dashboard");
-        }
-      }
-    } catch (error) {
-      setMessage({
-        type: "error",
-        text: error instanceof Error ? error.message : "Authentication is temporarily unavailable.",
-      });
-    } finally {
-      setLoading(false);
-    }
+    // v0.9.0: auth is open-access, this branch is never reached (hasAuthConfig = false)
+    setLoading(false);
   };
 
   const handleGoogleSignIn = async () => {
     setLoading(true);
     setMessage(null);
-
-    if (!hasAuthConfig) {
-      setMessage({ type: "error", text: "Authentication is temporarily unavailable." });
-      setLoading(false);
-      return;
-    }
-
-    try {
-      const { lovable } = await import("@/integrations/lovable/index");
-      const { error } = await lovable.auth.signInWithOAuth("google", {
-        redirect_uri: window.location.origin,
-      });
-
-      if (error) {
-        setMessage({ type: "error", text: error.message });
-        setLoading(false);
-      }
-    } catch (error) {
-      setMessage({
-        type: "error",
-        text: error instanceof Error ? error.message : "Authentication is temporarily unavailable.",
-      });
-      setLoading(false);
-    }
+    // v0.9.0: auth disabled
+    setMessage({ type: "error", text: "Authentication is temporarily unavailable." });
+    setLoading(false);
   };
 
   return (

@@ -3,7 +3,7 @@ import { ArrowLeft, ExternalLink, Database, CheckCircle2, XCircle, AlertCircle }
 import { useQuery } from "@tanstack/react-query";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import { supabase } from "@/integrations/supabase/client";
+import { apiClient } from "@/integrations/api/client";
 
 function formatNumber(n: number | null | undefined): string {
   if (n == null) return "—";
@@ -50,13 +50,13 @@ function useSeriesSamples(gseId: string) {
   return useQuery({
     queryKey: ["series", gseId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("samples")
-        .select("*")
-        .eq("gse_id", gseId)
-        .order("gsm_id", { ascending: true });
-      if (error) throw error;
-      return data;
+      const res = await apiClient.gse(gseId);
+      // Map GsmRow to the shape SeriesDetail.tsx expects (cells_called alias)
+      return res.samples.map(s => ({
+        ...s,
+        cells_called: s.n_cells,
+        updated_at: s.last_updated,
+      }));
     },
     enabled: !!gseId,
   });

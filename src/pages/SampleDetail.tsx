@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { useSample, useCorpusStats } from "@/hooks/useDatabase";
-import { supabase } from "@/integrations/supabase/client";
+import { apiClient } from "@/integrations/api/client";
 
 function formatNumber(n: number | null | undefined): string {
   if (n == null) return "—";
@@ -68,14 +68,13 @@ const SampleDetail = () => {
     queryKey: ["related-samples", sample?.gse_id],
     queryFn: async () => {
       if (!sample?.gse_id) return [];
-      const { data } = await supabase
-        .from("samples")
-        .select("gsm_id, status, cells_called, title")
-        .eq("gse_id", sample.gse_id)
-        .neq("gsm_id", sample.gsm_id)
-        .order("gsm_id")
-        .limit(10);
-      return data ?? [];
+      const res = await apiClient.gsm(sample.gsm_id);
+      return res.siblings.map(s => ({
+        gsm_id: s.gsm_id,
+        status: s.status,
+        cells_called: s.n_cells,
+        title: s.title,
+      }));
     },
     enabled: !!sample?.gse_id,
     staleTime: 60_000,
