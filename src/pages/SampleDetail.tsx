@@ -1,14 +1,18 @@
 import { useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { ArrowLeft, ExternalLink, Download, CheckCircle2, XCircle, AlertCircle, Copy, Check } from "lucide-react";
+import {
+  ArrowLeft, ExternalLink, CheckCircle2, XCircle, AlertCircle, AlertTriangle, Copy, Check
+} from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import { DownloadPanel } from "@/components/DownloadPanel";
 import { useSample, useCorpusStats } from "@/hooks/useDatabase";
-import { supabase } from "@/integrations/supabase/client";
+import { apiClient } from "@/integrations/api/client";
 
 function formatNumber(n: number | null | undefined): string {
   if (n == null) return "—";
+  if (n >= 1e9) return (n / 1e9).toFixed(1) + "B";
   if (n >= 1e6) return (n / 1e6).toFixed(1) + "M";
   if (n >= 1e3) return (n / 1e3).toFixed(1) + "K";
   return n.toLocaleString();
@@ -21,41 +25,79 @@ function formatBytes(bytes: number | null | undefined): string {
   return (bytes / 1e3).toFixed(0) + " KB";
 }
 
-function QCGauge({ label, value, unit, good, warn }: { label: string; value: number | null | undefined; unit?: string; good: number; warn: number }) {
+/** Prominent status badge — sized for headers */
+function StatusBadgeLarge({ status }: { status: string }) {
+  if (status === "SUCCESS") {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-emerald-700 bg-emerald-100 px-3 py-1 rounded-full border border-emerald-200">
+        <CheckCircle2 size={14} /> Pass
+      </span>
+    );
+  }
+  if (status === "HARD_FAIL") {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-red-700 bg-red-100 px-3 py-1 rounded-full border border-red-200">
+        <XCircle size={14} /> Failed
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-amber-700 bg-amber-100 px-3 py-1 rounded-full border border-amber-200">
+      <AlertCircle size={14} /> {status}
+    </span>
+  );
+}
+
+function StatusBadgeSmall({ status }: { status: string }) {
+  if (status === "SUCCESS") return <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full"><CheckCircle2 size={11} /> Pass</span>;
+  if (status === "HARD_FAIL") return <span className="inline-flex items-center gap-1 text-xs font-medium text-red-600 bg-red-50 px-2 py-0.5 rounded-full"><XCircle size={11} /> Fail</span>;
+  return <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full"><AlertCircle size={11} /> {status}</span>;
+}
+
+function QualityTier({ sample }: { sample: { mapping_rate: number | null; median_genes: number | null; n_cells: number | null; status: string } }) {
+  if (sample.status !== "SUCCESS") return null;
+  const mr = sample.mapping_rate ?? 0;
+  const mg = sample.median_genes ?? 0;
+  const cells = sample.n_cells ?? 0;
+
+  const isGold = mr >= 0.7 && mg >= 500 && cells >= 500;
+  const isSilver = mr >= 0.5 && mg >= 200 && cells >= 100;
+
+  if (isGold) return <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-yellow-50 text-yellow-700 border border-yellow-200">Gold</span>;
+  if (isSilver) return <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-slate-50 text-slate-600 border border-slate-200">Silver</span>;
+  return <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-orange-50 text-orange-700 border border-orange-200">Bronze</span>;
+}
+
+function QCGauge({
+  label, value, unit, good, warn, higherIsBetter = true
+}: {
+  label: string;
+  value: number | null | undefined;
+  unit?: string;
+  good: number;
+  warn: number;
+  higherIsBetter?: boolean;
+}) {
   if (value == null) return (
     <div className="rounded-lg border border-border bg-card p-4">
       <div className="text-xs text-muted-foreground mb-1">{label}</div>
-      <div className="text-2xl font-bold text-muted-foreground/40">—</div>
+      <div className="text-2xl font-bold text-muted-foreground/40 font-display">—</div>
     </div>
   );
-
-  const isGood = value >= good;
-  const isWarn = !isGood && value >= warn;
+  const isGood = higherIsBetter ? value >= good : value <= good;
+  const isWarn = !isGood && (higherIsBetter ? value >= warn : value <= warn);
   const color = isGood ? "text-emerald-600" : isWarn ? "text-amber-600" : "text-red-600";
+  const display = typeof value === "number" && unit === "%" && value <= 1 ? (value * 100).toFixed(1) : value.toLocaleString();
 
   return (
     <div className="rounded-lg border border-border bg-card p-4">
       <div className="text-xs text-muted-foreground mb-1">{label}</div>
       <div className={`text-2xl font-bold font-display ${color}`}>
-        {typeof value === "number" && value < 1 && unit === "%" ? (value * 100).toFixed(1) : value.toLocaleString()}
+        {display}
         {unit && <span className="text-sm font-normal ml-0.5">{unit}</span>}
       </div>
     </div>
   );
-}
-
-function QualityTier({ sample }: { sample: { mapping_rate: number | null; median_genes: number | null; cells_called: number | null; status: string } }) {
-  if (sample.status !== "SUCCESS") return null;
-  const mr = sample.mapping_rate ?? 0;
-  const mg = sample.median_genes ?? 0;
-  const cells = sample.cells_called ?? 0;
-
-  const isGold = mr >= 0.7 && mg >= 500 && cells >= 500;
-  const isSilver = mr >= 0.5 && mg >= 200 && cells >= 100;
-
-  if (isGold) return <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-yellow-50 text-yellow-700 border border-yellow-200">🥇 Gold</span>;
-  if (isSilver) return <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-slate-50 text-slate-600 border border-slate-200">🥈 Silver</span>;
-  return <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-orange-50 text-orange-700 border border-orange-200">🥉 Bronze</span>;
 }
 
 const SampleDetail = () => {
@@ -64,20 +106,14 @@ const SampleDetail = () => {
   const { data: corpusStats } = useCorpusStats();
   const [copied, setCopied] = useState(false);
 
-  const { data: relatedSamples } = useQuery({
-    queryKey: ["related-samples", sample?.gse_id],
+  const { data: siblings } = useQuery({
+    queryKey: ["siblings", gsmId],
     queryFn: async () => {
-      if (!sample?.gse_id) return [];
-      const { data } = await supabase
-        .from("samples")
-        .select("gsm_id, status, cells_called, title")
-        .eq("gse_id", sample.gse_id)
-        .neq("gsm_id", sample.gsm_id)
-        .order("gsm_id")
-        .limit(10);
-      return data ?? [];
+      if (!gsmId) return [];
+      const res = await apiClient.gsm(gsmId);
+      return res.siblings;
     },
-    enabled: !!sample?.gse_id,
+    enabled: !!gsmId,
     staleTime: 60_000,
   });
 
@@ -101,31 +137,43 @@ const SampleDetail = () => {
     </div>
   );
 
+  const isFailed = sample.status === "HARD_FAIL" || sample.status === "SOFT_FAIL";
+  const pythonSnippet = `import singlet\nadata = singlet.load("${sample.gsm_id}")\nprint(adata)`;
+
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
       <section className="pt-32 pb-20 px-6">
         <div className="max-w-5xl mx-auto">
-          {/* Breadcrumb */}
-          <Link to="/browse" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-6">
-            <ArrowLeft size={14} /> Back to Browse
-          </Link>
 
-          {/* Header */}
-          <div className="flex items-start justify-between mb-8">
+          {/* Breadcrumb */}
+          <div className="flex items-center gap-2 text-xs text-muted-foreground mb-6">
+            <Link to="/browse" className="inline-flex items-center gap-1 hover:text-foreground">
+              <ArrowLeft size={12} /> Browse
+            </Link>
+            {sample.gse_id && (
+              <>
+                <span>/</span>
+                <Link to={`/series/${sample.gse_id}`} className="hover:text-foreground font-mono">{sample.gse_id}</Link>
+              </>
+            )}
+            <span>/</span>
+            <span className="text-foreground font-mono">{sample.gsm_id}</span>
+          </div>
+
+          {/* ── HEADER ── */}
+          <div className="flex items-start justify-between gap-4 mb-4 flex-wrap">
             <div>
               <h1 className="font-display text-3xl font-bold text-foreground tracking-tightest mb-1">
                 {sample.gsm_id}
               </h1>
-              {sample.title && <p className="text-muted-foreground max-w-2xl">{sample.title}</p>}
-              <div className="flex items-center gap-3 mt-3">
+              {sample.title && <p className="text-muted-foreground max-w-2xl mb-2">{sample.title}</p>}
+              <div className="flex items-center gap-2 flex-wrap">
+                <StatusBadgeLarge status={sample.status} />
+                <QualityTier sample={sample} />
                 <span className="text-xs font-mono bg-muted px-2 py-1 rounded">{sample.protocol ?? "unknown"}</span>
                 <span className="text-xs italic text-muted-foreground">{sample.organism}</span>
-                <span className="text-xs text-muted-foreground">{sample.modality ?? "scrna"}</span>
-                {sample.status === "SUCCESS" && <span className="inline-flex items-center gap-1 text-xs text-emerald-600"><CheckCircle2 size={12} /> Success</span>}
-                {sample.status === "HARD_FAIL" && <span className="inline-flex items-center gap-1 text-xs text-red-600"><XCircle size={12} /> Failed</span>}
-                {sample.status !== "SUCCESS" && sample.status !== "HARD_FAIL" && <span className="inline-flex items-center gap-1 text-xs text-amber-600"><AlertCircle size={12} /> {sample.status}</span>}
-                <QualityTier sample={sample} />
+                {sample.modality && <span className="text-xs text-muted-foreground">{sample.modality}</span>}
               </div>
             </div>
             <div className="flex gap-2">
@@ -145,190 +193,228 @@ const SampleDetail = () => {
                   {sample.gse_id} →
                 </Link>
               )}
-              {sample.gse_id && (
-                <a
-                  href={`https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=${sample.gse_id}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium border border-border rounded-lg hover:bg-muted"
-                >
-                  GEO <ExternalLink size={12} />
-                </a>
-              )}
             </div>
           </div>
 
-          {/* QC Metrics */}
-          <div className="mb-8">
-            <h2 className="font-display text-lg font-bold text-foreground mb-4">QC Metrics</h2>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <QCGauge label="Cells Called" value={sample.cells_called} good={100} warn={10} />
-              <QCGauge label="Mapping Rate" value={sample.mapping_rate} unit="%" good={0.5} warn={0.3} />
-              <QCGauge label="Median Genes/Cell" value={sample.median_genes} good={500} warn={200} />
-              <QCGauge label="Median UMIs/Cell" value={sample.median_umis} good={1000} warn={500} />
-              <QCGauge label="MT %" value={sample.mt_pct} unit="%" good={0} warn={10} />
-              <QCGauge label="Doublet Rate" value={sample.doublet_rate} unit="%" good={0} warn={0.1} />
-              <QCGauge label="Ambient %" value={sample.ambient_pct} unit="%" good={0} warn={0.15} />
-              <QCGauge label="Saturation" value={sample.saturation} unit="%" good={0.5} warn={0.3} />
-            </div>
-
-            {/* Corpus comparison */}
-            {sample.status === "SUCCESS" && corpusStats && (
-              <div className="mt-4 rounded-lg border border-border bg-card p-4">
-                <h3 className="text-xs font-medium text-muted-foreground mb-3 uppercase tracking-wider">vs. Corpus Average</h3>
-                <div className="space-y-2">
-                  {[
-                    { label: "Mapping Rate", value: sample.mapping_rate, avg: Number(corpusStats.avg_mapping_rate), format: (v: number) => `${(v * 100).toFixed(1)}%` },
-                    { label: "Median Genes", value: sample.median_genes, avg: Number(corpusStats.avg_median_genes), format: (v: number) => v.toLocaleString() },
-                  ].map(({ label, value, avg, format }) => {
-                    if (value == null || !avg) return null;
-                    const ratio = value / avg;
-                    const pct = Math.min(ratio * 50, 100); // 50% mark = average
-                    const color = ratio >= 1 ? "bg-emerald-500" : ratio >= 0.7 ? "bg-amber-500" : "bg-red-500";
-                    return (
-                      <div key={label} className="flex items-center gap-3">
-                        <span className="text-xs text-muted-foreground w-28 shrink-0">{label}</span>
-                        <div className="flex-1 h-2 rounded-full bg-muted relative overflow-hidden">
-                          <div className={`absolute left-0 top-0 h-full rounded-full ${color}`} style={{ width: `${pct}%` }} />
-                          <div className="absolute top-0 h-full w-px bg-muted-foreground/40" style={{ left: "50%" }} />
-                        </div>
-                        <span className="text-xs font-mono w-16 text-right text-foreground">{format(value)}</span>
-                        <span className="text-[10px] text-muted-foreground w-14 text-right">avg {format(avg)}</span>
-                      </div>
-                    );
-                  })}
+          {/* ── FAILURE PANEL — full-width amber for failed samples ── */}
+          {isFailed && (
+            <div className="mb-8 rounded-xl border-2 border-amber-300 bg-amber-50 p-6">
+              <div className="flex items-start gap-3">
+                <AlertTriangle size={20} className="text-amber-600 flex-shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <h2 className="text-base font-bold text-amber-900 mb-2">
+                    QC Failed — {sample.status === "HARD_FAIL" ? "Hard Fail" : "Soft Fail"}
+                  </h2>
+                  {sample.failure_category && (
+                    <div className="mb-2">
+                      <span className="text-xs font-semibold text-amber-700 uppercase tracking-wider">Failure category: </span>
+                      <span className="text-sm text-amber-900 font-medium">{sample.failure_category.replace(/_/g, " ")}</span>
+                    </div>
+                  )}
+                  {sample.failure_detail && (
+                    <div className="mb-2">
+                      <span className="text-xs font-semibold text-amber-700 uppercase tracking-wider">Detail: </span>
+                      <span className="text-sm text-amber-800">{sample.failure_detail}</span>
+                    </div>
+                  )}
+                  {sample.qc_flag && (
+                    <div>
+                      <span className="text-xs font-semibold text-amber-700 uppercase tracking-wider">QC flag: </span>
+                      <span className="text-sm text-amber-800">{sample.qc_flag}</span>
+                    </div>
+                  )}
+                  <p className="text-xs text-amber-700 mt-3 border-t border-amber-200 pt-3">
+                    This sample is included in the catalog for transparency. Metadata is preserved; no .singlet output was generated.
+                  </p>
                 </div>
               </div>
-            )}
-          </div>
+            </div>
+          )}
 
-          {/* Processing Info */}
+          {/* ── QC METRICS (success samples only) ── */}
+          {sample.status === "SUCCESS" && (
+            <div className="mb-8">
+              <h2 className="font-display text-base font-bold text-foreground mb-3 uppercase tracking-wider">QC Metrics</h2>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <QCGauge label="Cells" value={sample.cells_called ?? sample.n_cells} good={500} warn={100} />
+                <QCGauge label="Mapping Rate" value={sample.mapping_rate} unit="%" good={0.7} warn={0.5} />
+                <QCGauge label="Median Genes/Cell" value={sample.median_genes} good={500} warn={200} />
+                <QCGauge label="Median UMIs/Cell" value={sample.median_umis} good={1000} warn={500} />
+                <QCGauge label="MT %" value={sample.mt_pct} unit="%" good={5} warn={15} higherIsBetter={false} />
+              </div>
+
+              {/* Corpus comparison */}
+              {corpusStats && (
+                <div className="mt-4 rounded-lg border border-border bg-card p-4">
+                  <h3 className="text-xs font-medium text-muted-foreground mb-3 uppercase tracking-wider">vs. Corpus Average</h3>
+                  <div className="space-y-2">
+                    {[
+                      { label: "Mapping Rate", value: sample.mapping_rate, avg: corpusStats.avg_mapping_rate, fmt: (v: number) => `${(v * 100).toFixed(1)}%` },
+                      { label: "Median Genes", value: sample.median_genes, avg: corpusStats.avg_median_genes, fmt: (v: number) => v.toLocaleString() },
+                    ].map(({ label, value, avg, fmt }) => {
+                      if (value == null || !avg) return null;
+                      const ratio = value / avg;
+                      const pct = Math.min(ratio * 50, 100);
+                      const color = ratio >= 1 ? "bg-emerald-500" : ratio >= 0.7 ? "bg-amber-500" : "bg-red-500";
+                      return (
+                        <div key={label} className="flex items-center gap-3">
+                          <span className="text-xs text-muted-foreground w-28 shrink-0">{label}</span>
+                          <div className="flex-1 h-2 rounded-full bg-muted relative overflow-hidden">
+                            <div className={`absolute left-0 top-0 h-full rounded-full ${color}`} style={{ width: `${pct}%` }} />
+                            <div className="absolute top-0 h-full w-px bg-muted-foreground/40" style={{ left: "50%" }} />
+                          </div>
+                          <span className="text-xs font-mono w-16 text-right text-foreground">{fmt(value)}</span>
+                          <span className="text-[10px] text-muted-foreground w-16 text-right">avg {fmt(avg)}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── METADATA TABLE ── */}
           <div className="grid md:grid-cols-2 gap-6 mb-8">
+            {/* Biology */}
+            <div className="rounded-xl border border-border bg-card p-6">
+              <h3 className="font-display text-sm font-bold text-foreground mb-4 uppercase tracking-wider">Biology</h3>
+              <dl className="space-y-2.5 text-sm">
+                {[
+                  ["Organism", sample.organism],
+                  ["Tissue", sample.tissue],
+                  ["Cell Type", sample.cell_type],
+                  ["Disease", sample.disease],
+                  ["Donor ID", sample.donor_id],
+                  ["Sex", sample.sex],
+                  ["Protocol", sample.protocol],
+                  ["Modality", sample.modality],
+                ].map(([key, val]) => val ? (
+                  <div key={String(key)} className="flex justify-between gap-2">
+                    <dt className="text-muted-foreground">{key}</dt>
+                    <dd className="text-foreground text-right max-w-[200px] truncate">{String(val)}</dd>
+                  </div>
+                ) : null)}
+              </dl>
+            </div>
+
+            {/* Processing */}
             <div className="rounded-xl border border-border bg-card p-6">
               <h3 className="font-display text-sm font-bold text-foreground mb-4 uppercase tracking-wider">Processing</h3>
-              <dl className="space-y-3 text-sm">
-                <div className="flex justify-between">
-                  <dt className="text-muted-foreground">Pipeline Version</dt>
-                  <dd className="font-mono text-foreground">{sample.singlet_version ?? "—"}</dd>
-                </div>
-                <div className="flex justify-between">
-                  <dt className="text-muted-foreground">Commit</dt>
-                  <dd className="font-mono text-foreground text-xs">{sample.singlet_commit?.slice(0, 8) ?? "—"}</dd>
-                </div>
-                <div className="flex justify-between">
-                  <dt className="text-muted-foreground">Wall Time</dt>
-                  <dd className="font-mono text-foreground">{sample.wall_time_s ? `${sample.wall_time_s}s` : "—"}</dd>
-                </div>
-                <div className="flex justify-between">
-                  <dt className="text-muted-foreground">Download Path</dt>
-                  <dd className="font-mono text-foreground">{sample.download_path ?? "—"}</dd>
-                </div>
-                <div className="flex justify-between">
-                  <dt className="text-muted-foreground">Processed</dt>
-                  <dd className="text-foreground">{sample.pipeline_date ? new Date(sample.pipeline_date).toLocaleDateString() : "—"}</dd>
-                </div>
-              </dl>
-            </div>
-
-            <div className="rounded-xl border border-border bg-card p-6">
-              <h3 className="font-display text-sm font-bold text-foreground mb-4 uppercase tracking-wider">Data</h3>
-              <dl className="space-y-3 text-sm">
-                <div className="flex justify-between">
-                  <dt className="text-muted-foreground">GEO Series</dt>
-                  <dd className="font-mono text-foreground">
-                    <Link to={`/series/${sample.gse_id}`} className="text-primary hover:underline">{sample.gse_id}</Link>
-                  </dd>
-                </div>
-                <div className="flex justify-between">
-                  <dt className="text-muted-foreground">SRR Accessions</dt>
-                  <dd className="font-mono text-foreground text-xs">{sample.srr_ids?.join(", ") ?? "—"}</dd>
-                </div>
-                <div className="flex justify-between">
-                  <dt className="text-muted-foreground">.1pz Size</dt>
-                  <dd className="font-mono text-foreground">{formatBytes(sample.pz_size_bytes)}</dd>
-                </div>
-                <div className="flex justify-between">
-                  <dt className="text-muted-foreground">Source</dt>
-                  <dd className="text-foreground">{sample.source ?? "—"}</dd>
-                </div>
-                {sample.failure_category && (
-                  <div className="flex justify-between">
-                    <dt className="text-muted-foreground">Failure</dt>
-                    <dd className="font-mono text-red-600 text-xs">{sample.failure_category}</dd>
-                  </div>
-                )}
+              <dl className="space-y-2.5 text-sm">
+                {[
+                  ["GEO Series", null, sample.gse_id ? (
+                    <Link to={`/series/${sample.gse_id}`} className="text-primary hover:underline font-mono">{sample.gse_id}</Link>
+                  ) : null],
+                  ["SRR Accessions", sample.srr_ids?.join(", ") ?? null],
+                  ["Pipeline Version", sample.singlet_version ?? null],
+                  ["Processed", sample.pipeline_date ? new Date(sample.pipeline_date).toLocaleDateString() : null],
+                  [".1pz Size", sample.pz_size_bytes ? formatBytes(sample.pz_size_bytes) : null],
+                  ["Source", sample.source ?? null],
+                  ["Status", null, <StatusBadgeSmall key="status" status={sample.status} />],
+                ].map(([key, val, node]) => {
+                  const display = node ?? (val ? <span className="text-foreground text-right max-w-[220px] truncate font-mono text-xs">{String(val)}</span> : null);
+                  if (!display) return null;
+                  return (
+                    <div key={String(key)} className="flex justify-between items-center gap-2">
+                      <dt className="text-muted-foreground shrink-0">{key}</dt>
+                      <dd className="text-right">{display}</dd>
+                    </div>
+                  );
+                })}
               </dl>
             </div>
           </div>
 
-          {/* GEO Characteristics */}
+          {/* ── GEO CHARACTERISTICS ── */}
           {sample.characteristics && typeof sample.characteristics === "object" && Object.keys(sample.characteristics).length > 0 && (
-            <div className="rounded-xl border border-border bg-card p-6">
-              <h3 className="font-display text-sm font-bold text-foreground uppercase tracking-wider mb-4">Sample Characteristics</h3>
-              <dl className="space-y-2 text-sm">
-                {Object.entries(sample.characteristics as Record<string, string>).map(([key, value]) => (
-                  <div key={key} className="flex justify-between">
-                    <dt className="text-muted-foreground capitalize">{key}</dt>
-                    <dd className="text-foreground text-right max-w-[200px] truncate">{value}</dd>
+            <div className="rounded-xl border border-border bg-card p-6 mb-8">
+              <h3 className="font-display text-sm font-bold text-foreground uppercase tracking-wider mb-4">Sample Characteristics (GEO)</h3>
+              <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2 text-sm">
+                {Object.entries(sample.characteristics as Record<string, string>).map(([k, v]) => (
+                  <div key={k} className="flex justify-between gap-2">
+                    <dt className="text-muted-foreground capitalize">{k}</dt>
+                    <dd className="text-foreground text-right max-w-[200px] truncate">{v}</dd>
                   </div>
                 ))}
               </dl>
             </div>
           )}
 
-          {/* Code example */}
-          <div className="rounded-xl border border-border bg-card p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-display text-sm font-bold text-foreground uppercase tracking-wider">Load This Sample</h3>
-              <button
-                onClick={() => {
-                  navigator.clipboard.writeText(`import singlet\nadata = singlet.load("${sample.gsm_id}")\nprint(adata)`);
-                  setCopied(true);
-                  setTimeout(() => setCopied(false), 2000);
-                }}
-                className="inline-flex items-center gap-1 px-2 py-1 text-xs text-muted-foreground hover:text-foreground border border-border rounded-md hover:bg-muted"
-              >
-                {copied ? <><Check size={12} /> Copied</> : <><Copy size={12} /> Copy</>}
-              </button>
-            </div>
-            <div className="rounded-lg bg-background border border-border p-4">
-              <pre className="font-mono text-xs text-muted-foreground leading-6 overflow-x-auto">{`import singlet
+          {/* ── LOAD CODE ── */}
+          {sample.status === "SUCCESS" && (
+            <div className="rounded-xl border border-border bg-card p-6 mb-8">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-display text-sm font-bold text-foreground uppercase tracking-wider">Load This Sample</h3>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(pythonSnippet);
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                  }}
+                  className="inline-flex items-center gap-1 px-2 py-1 text-xs text-muted-foreground hover:text-foreground border border-border rounded-md hover:bg-muted"
+                >
+                  {copied ? <><Check size={12} /> Copied</> : <><Copy size={12} /> Copy</>}
+                </button>
+              </div>
+              <div className="rounded-lg bg-background border border-border p-4">
+                <pre className="font-mono text-xs text-muted-foreground leading-6 overflow-x-auto whitespace-pre">{`import singlet
 
-# Load directly from the Singlet Atlas
 adata = singlet.load("${sample.gsm_id}")
-print(adata)  # ${formatNumber(sample.cells_called)} cells × ${formatNumber(sample.median_genes)} genes`}</pre>
+print(adata)  # ${formatNumber(sample.cells_called ?? sample.n_cells)} cells`}</pre>
+              </div>
             </div>
-          </div>
+          )}
 
-          {/* Related samples from same series */}
-          {relatedSamples && relatedSamples.length > 0 && (
-            <div className="mt-8 rounded-xl border border-border bg-card p-6">
-              <h3 className="font-display text-sm font-bold text-foreground mb-3 uppercase tracking-wider">
-                Other samples in {sample.gse_id}
-              </h3>
+          {/* ── DOWNLOAD (success only) ── */}
+          {sample.status === "SUCCESS" && (
+            <div className="mb-8">
+              <h2 className="font-display text-base font-bold text-foreground mb-3 uppercase tracking-wider">Download</h2>
+              <DownloadPanel
+                accession={sample.gsm_id}
+                r2BundleKey={(sample as Record<string, unknown>).r2_bundle_key as string | null ?? null}
+                r2BundleBytes={sample.pz_size_bytes}
+              />
+            </div>
+          )}
+
+          {/* ── SIBLINGS ── */}
+          {siblings && siblings.length > 0 && (
+            <div className="rounded-xl border border-border bg-card p-6">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-display text-sm font-bold text-foreground uppercase tracking-wider">
+                  Other samples in {sample.gse_id}
+                </h3>
+                {sample.gse_id && (
+                  <Link to={`/series/${sample.gse_id}`} className="text-xs text-primary hover:underline">
+                    View series →
+                  </Link>
+                )}
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {relatedSamples.map((r) => (
+                {siblings.slice(0, 8).map((s) => (
                   <Link
-                    key={r.gsm_id}
-                    to={`/sample/${r.gsm_id}`}
+                    key={s.gsm_id}
+                    to={`/sample/${s.gsm_id}`}
                     className="flex items-center justify-between px-3 py-2 rounded-lg border border-border/50 hover:bg-muted/30 transition-colors"
                   >
                     <div className="flex items-center gap-2">
-                      <span className="font-mono text-xs text-primary">{r.gsm_id}</span>
-                      {r.status === "SUCCESS" && <CheckCircle2 size={10} className="text-emerald-500" />}
-                      {r.status === "HARD_FAIL" && <XCircle size={10} className="text-red-500" />}
+                      <span className="font-mono text-xs text-primary">{s.gsm_id}</span>
+                      <StatusBadgeSmall status={s.status} />
                     </div>
-                    <span className="text-[10px] text-muted-foreground truncate max-w-[120px]">{r.title ?? ""}</span>
+                    <span className="text-[10px] text-muted-foreground truncate max-w-[120px]">{s.title ?? ""}</span>
                   </Link>
                 ))}
+                {siblings.length > 8 && (
+                  <p className="text-xs text-muted-foreground col-span-2 text-center py-1">
+                    +{siblings.length - 8} more —{" "}
+                    <Link to={`/series/${sample.gse_id}`} className="text-primary hover:underline">view all</Link>
+                  </p>
+                )}
               </div>
-              {sample.gse_id && (
-                <Link to={`/series/${sample.gse_id}`} className="inline-block mt-3 text-xs text-primary hover:underline">
-                  View all samples in this series →
-                </Link>
-              )}
             </div>
           )}
+
         </div>
       </section>
       <Footer />

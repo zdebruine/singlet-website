@@ -1,11 +1,30 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+/**
+ * Browse / Explorer — v0.9.0
+ *
+ * Two-column layout:
+ *  Left:  Accordion filter sidebar (organism, tissue, cell_type, assay, disease,
+ *          QC status, failure_reason [only when Fail/All], sex, year range,
+ *          cell-count range slider)
+ *  Right: GSE/GSM tab toggle · sortable table · pagination
+ *          Live "Showing X studies · Y samples · Z cells" matching bar
+ *          Active filters shown as removable chips
+ *          Filter state mirrored in URL query params
+ */
+import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { Search, Filter, Database, ChevronLeft, ChevronRight, CheckCircle2, XCircle, AlertCircle, ArrowUpDown, ArrowUp, ArrowDown, Download } from "lucide-react";
+import {
+  Search, ChevronLeft, ChevronRight, CheckCircle2, XCircle, AlertCircle,
+  ArrowUpDown, ArrowUp, ArrowDown, Download, X, ChevronDown, ChevronRight as ChevronRt, SlidersHorizontal
+} from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import { useSamples, useFilterOptions, useCorpusStats, useFeaturedSeries, type SampleFilters } from "@/hooks/useDatabase";
+import { useQuery } from "@tanstack/react-query";
+import { apiClient } from "@/integrations/api/client";
+import type { GsmListParams, GseListParams, GsmRow, GseRow } from "@/integrations/api/types";
 
-function formatNumber(n: number | null | undefined): string {
+// ── Formatters ────────────────────────────────────────────────────────────────
+
+function fmt(n: number | null | undefined): string {
   if (n == null) return "—";
   if (n >= 1e9) return (n / 1e9).toFixed(1) + "B";
   if (n >= 1e6) return (n / 1e6).toFixed(1) + "M";
@@ -13,451 +32,706 @@ function formatNumber(n: number | null | undefined): string {
   return n.toLocaleString();
 }
 
+// ── Badges ────────────────────────────────────────────────────────────────────
+
 function StatusBadge({ status }: { status: string }) {
-  if (status === "SUCCESS") return <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full"><CheckCircle2 size={12} /> Success</span>;
-  if (status === "HARD_FAIL") return <span className="inline-flex items-center gap-1 text-xs font-medium text-red-600 bg-red-50 px-2 py-0.5 rounded-full"><XCircle size={12} /> Failed</span>;
-  return <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full"><AlertCircle size={12} /> {status}</span>;
+  if (status === "SUCCESS") return <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full"><CheckCircle2 size={11} /> Pass</span>;
+  if (status === "HARD_FAIL") return <span className="inline-flex items-center gap-1 text-xs font-medium text-red-600 bg-red-50 px-2 py-0.5 rounded-full"><XCircle size={11} /> Fail</span>;
+  return <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full"><AlertCircle size={11} /> {status}</span>;
 }
+
+// ── Accordion Section ─────────────────────────────────────────────────────────
+
+function AccordionSection({
+  label,
+  defaultOpen = false,
+  children,
+}: {
+  label: string;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="border-b border-border last:border-b-0">
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center justify-between px-4 py-3 text-xs font-semibold text-foreground uppercase tracking-wider hover:bg-muted/30 transition-colors"
+      >
+        {label}
+        {open ? <ChevronDown size={13} className="text-muted-foreground" /> : <ChevronRt size={13} className="text-muted-foreground" />}
+      </button>
+      {open && <div className="px-4 pb-3">{children}</div>}
+    </div>
+  );
+}
+
+// ── Facet Checkbox List ───────────────────────────────────────────────────────
+
+function FacetList({
+  options,
+  value,
+  onChange,
+  max = 8,
+}: {
+  options: string[];
+  value: string | undefined;
+  onChange: (v: string | undefined) => void;
+  max?: number;
+}) {
+  const [showAll, setShowAll] = useState(false);
+  const visible = showAll ? options : options.slice(0, max);
+  return (
+    <div className="space-y-1.5">
+      {visible.map((opt) => (
+        <label key={opt} className="flex items-center gap-2 cursor-pointer group">
+          <input
+            type="radio"
+            name={`facet-${options[0]}`}
+            checked={value === opt}
+            onChange={() => onChange(value === opt ? undefined : opt)}
+            onClick={() => { if (value === opt) onChange(undefined); }}
+            className="accent-primary"
+          />
+          <span className={`text-xs truncate group-hover:text-foreground transition-colors ${value === opt ? "text-foreground font-medium" : "text-muted-foreground"}`}>{opt}</span>
+        </label>
+      ))}
+      {options.length > max && (
+        <button
+          onClick={() => setShowAll(!showAll)}
+          className="text-[10px] text-primary hover:underline mt-1"
+        >
+          {showAll ? "Show less" : `+${options.length - max} more`}
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ── Range Slider (cells) ─────────────────────────────────────────────────────
+
+function CellRangeSlider({
+  value,
+  onChange,
+}: {
+  value: [number, number];
+  onChange: (v: [number, number]) => void;
+}) {
+  const [local, setLocal] = useState(value);
+  const STEPS = [0, 100, 500, 1000, 5000, 10000, 50000, 100000, 500000, 1000000];
+
+  return (
+    <div className="space-y-2">
+      <div className="flex justify-between text-[10px] text-muted-foreground">
+        <span>{fmt(local[0])}</span>
+        <span>{local[1] >= 1000000 ? "1M+" : fmt(local[1])}</span>
+      </div>
+      <input
+        type="range"
+        min={0}
+        max={STEPS.length - 1}
+        value={STEPS.indexOf(STEPS.reduce((prev, cur) => Math.abs(cur - local[0]) < Math.abs(prev - local[0]) ? cur : prev))}
+        onChange={(e) => {
+          const newMin = STEPS[Number(e.target.value)];
+          const newVal: [number, number] = [newMin, Math.max(newMin, local[1])];
+          setLocal(newVal);
+          onChange(newVal);
+        }}
+        className="w-full accent-primary"
+      />
+      <input
+        type="range"
+        min={0}
+        max={STEPS.length - 1}
+        value={STEPS.indexOf(STEPS.reduce((prev, cur) => Math.abs(cur - local[1]) < Math.abs(prev - local[1]) ? cur : prev))}
+        onChange={(e) => {
+          const newMax = STEPS[Number(e.target.value)];
+          const newVal: [number, number] = [Math.min(local[0], newMax), newMax];
+          setLocal(newVal);
+          onChange(newVal);
+        }}
+        className="w-full accent-primary"
+      />
+    </div>
+  );
+}
+
+// ── Filter Chip ───────────────────────────────────────────────────────────────
+
+function FilterChip({ label, onRemove }: { label: string; onRemove: () => void }) {
+  return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary border border-primary/20">
+      {label}
+      <button onClick={onRemove} className="ml-0.5 hover:text-primary/70">
+        <X size={10} />
+      </button>
+    </span>
+  );
+}
+
+// ── Sort icon helper ──────────────────────────────────────────────────────────
+
+function SortIcon({ col, sortBy, sortAsc }: { col: string; sortBy: string | undefined; sortAsc: boolean }) {
+  if (sortBy !== col) return <ArrowUpDown size={11} className="opacity-30" />;
+  return sortAsc ? <ArrowUp size={11} /> : <ArrowDown size={11} />;
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
 
 const Browse = () => {
   const [searchParams, setSearchParams] = useSearchParams();
-
-  // Parse filters from URL
-  const filters: SampleFilters = {
-    organism: searchParams.get("organism") || undefined,
-    protocol: searchParams.get("protocol") || undefined,
-    modality: searchParams.get("modality") || undefined,
-    status: searchParams.get("status") || undefined,
-    qualityTier: (searchParams.get("quality") as "gold" | "silver" | "bronze") || undefined,
-    search: searchParams.get("q") || undefined,
-    page: Number(searchParams.get("page")) || 0,
-    pageSize: Number(searchParams.get("size")) || 50,
-    sortBy: searchParams.get("sort") || undefined,
-    sortAsc: searchParams.get("asc") === "1" ? true : searchParams.get("asc") === "0" ? false : undefined,
-  };
-
-  const setFilters = useCallback((updater: SampleFilters | ((f: SampleFilters) => SampleFilters)) => {
-    const next = typeof updater === "function" ? updater(filters) : updater;
-    const params = new URLSearchParams();
-    if (next.organism) params.set("organism", next.organism);
-    if (next.protocol) params.set("protocol", next.protocol);
-    if (next.modality) params.set("modality", next.modality);
-    if (next.status) params.set("status", next.status);
-    if (next.qualityTier) params.set("quality", next.qualityTier);
-    if (next.search) params.set("q", next.search);
-    if (next.page) params.set("page", String(next.page));
-    if (next.pageSize && next.pageSize !== 50) params.set("size", String(next.pageSize));
-    if (next.sortBy) params.set("sort", next.sortBy);
-    if (next.sortAsc !== undefined) params.set("asc", next.sortAsc ? "1" : "0");
-    setSearchParams(params, { replace: true });
-  }, [filters, setSearchParams]);
-
-  const [searchInput, setSearchInput] = useState(filters.search ?? "");
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const searchRef = useRef<HTMLInputElement>(null);
 
-  // Keyboard shortcuts: / or s → focus search, n → next page, p → prev page
+  // ── Parse URL → filter state ──────────────────────────────────────────────
+  const tab = (searchParams.get("tab") ?? "gsm") as "gsm" | "gse";
+  const organism = searchParams.get("organism") || undefined;
+  const tissue = searchParams.get("tissue") || undefined;
+  const cellType = searchParams.get("cell_type") || undefined;
+  const protocol = searchParams.get("protocol") || undefined;
+  const disease = searchParams.get("disease") || undefined;
+  const sex = searchParams.get("sex") || undefined;
+  const qcStatus = searchParams.get("status") || undefined;          // Pass / Warn / Fail / All
+  const failureCategory = searchParams.get("failure_category") || undefined;
+  const q = searchParams.get("q") || undefined;
+  const page = Number(searchParams.get("page")) || 0;
+  const pageSize = Number(searchParams.get("size")) || 50;
+  const sortBy = searchParams.get("sort") || undefined;
+  const sortAsc = searchParams.get("asc") === "1";
+  const minCells = Number(searchParams.get("min_cells")) || 0;
+  const maxCells = Number(searchParams.get("max_cells")) || 1000000;
+
+  const [searchInput, setSearchInput] = useState(q ?? "");
+
+  // ── Sync searchInput when URL changes ─────────────────────────────────────
+  useEffect(() => { setSearchInput(q ?? ""); }, [q]);
+
+  // ── Push filters → URL ────────────────────────────────────────────────────
+  const setParam = useCallback((key: string, val: string | undefined) => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (val) next.set(key, val); else next.delete(key);
+      next.delete("page"); // reset page on filter change
+      return next;
+    }, { replace: true });
+  }, [setSearchParams]);
+
+  const resetPage = useCallback(() => {
+    setSearchParams((prev) => { const n = new URLSearchParams(prev); n.delete("page"); return n; }, { replace: true });
+  }, [setSearchParams]);
+
+  const setPage = useCallback((p: number) => {
+    setSearchParams((prev) => { const n = new URLSearchParams(prev); if (p > 0) n.set("page", String(p)); else n.delete("page"); return n; }, { replace: true });
+  }, [setSearchParams]);
+
+  const toggleSort = useCallback((col: string) => {
+    setSearchParams((prev) => {
+      const n = new URLSearchParams(prev);
+      const prevSort = n.get("sort");
+      const prevAsc = n.get("asc") === "1";
+      if (prevSort === col) {
+        n.set("asc", prevAsc ? "0" : "1");
+      } else {
+        n.set("sort", col);
+        n.set("asc", col === "gsm_id" || col === "id" ? "1" : "0");
+      }
+      n.delete("page");
+      return n;
+    }, { replace: true });
+  }, [setSearchParams]);
+
+  const clearAll = useCallback(() => {
+    setSearchInput("");
+    setSearchParams(new URLSearchParams({ tab }), { replace: true });
+  }, [setSearchParams, tab]);
+
+  // ── Keyboard shortcuts ────────────────────────────────────────────────────
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement;
-      if (target.tagName === "INPUT" || target.tagName === "SELECT" || target.tagName === "TEXTAREA") return;
+      const tgt = e.target as HTMLElement;
+      if (tgt.tagName === "INPUT" || tgt.tagName === "TEXTAREA" || tgt.tagName === "SELECT") return;
       if (e.key === "/" || e.key === "s") { e.preventDefault(); searchRef.current?.focus(); }
-      if (e.key === "n") setFilters((f) => ({ ...f, page: (f.page ?? 0) + 1 }));
-      if (e.key === "p") setFilters((f) => ({ ...f, page: Math.max(0, (f.page ?? 0) - 1) }));
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [setFilters]);
+  }, []);
 
-  const toggleSort = (col: string) => {
-    setFilters((f) => ({
-      ...f,
-      sortBy: col,
-      sortAsc: f.sortBy === col ? !f.sortAsc : col === "cells_called" || col === "mapping_rate" || col === "median_genes" ? false : true,
-      page: 0,
-    }));
+  // ── Facets data ───────────────────────────────────────────────────────────
+  const { data: facets } = useQuery({
+    queryKey: ["facets"],
+    queryFn: () => apiClient.facets(),
+    staleTime: 300_000,
+  });
+
+  // ── Corpus stats ──────────────────────────────────────────────────────────
+  const { data: corpusStats } = useQuery({
+    queryKey: ["corpus-stats"],
+    queryFn: () => apiClient.stats(),
+    staleTime: 60_000,
+  });
+
+  // ── Derive API status param ───────────────────────────────────────────────
+  const apiStatus = useMemo(() => {
+    if (!qcStatus || qcStatus === "All") return undefined;
+    if (qcStatus === "Pass") return "SUCCESS";
+    if (qcStatus === "Fail") return "HARD_FAIL";
+    if (qcStatus === "Warn") return "SOFT_FAIL";
+    return qcStatus;
+  }, [qcStatus]);
+
+  const showFailureCategory = qcStatus === "Fail" || qcStatus === "All" || !qcStatus;
+
+  // ── GSM query ─────────────────────────────────────────────────────────────
+  const gsmParams: GsmListParams = {
+    organism, protocol, tissue, cell_type: cellType, disease, sex,
+    status: apiStatus,
+    failure_category: failureCategory,
+    q,
+    page, page_size: pageSize,
+    sort: sortBy,
+    asc: sortBy ? sortAsc : undefined,
+    min_cells: minCells > 0 ? minCells : undefined,
+    max_cells: maxCells < 1000000 ? maxCells : undefined,
   };
+  const { data: gsmResult, isLoading: gsmLoading } = useQuery({
+    queryKey: ["gsm-list", gsmParams],
+    queryFn: () => apiClient.gsmList(gsmParams),
+    staleTime: 30_000,
+    enabled: tab === "gsm",
+  });
 
-  const SortIcon = ({ col }: { col: string }) => {
-    if (filters.sortBy !== col) return <ArrowUpDown size={12} className="opacity-30" />;
-    return filters.sortAsc ? <ArrowUp size={12} /> : <ArrowDown size={12} />;
+  // ── GSE query ─────────────────────────────────────────────────────────────
+  const gseParams: GseListParams = {
+    organism, q,
+    page, page_size: pageSize,
+    sort: sortBy,
+    asc: sortBy ? sortAsc : undefined,
+    min_cells: minCells > 0 ? minCells : undefined,
+    max_cells: maxCells < 1000000 ? maxCells : undefined,
   };
+  const { data: gseResult, isLoading: gseLoading } = useQuery({
+    queryKey: ["gse-list", gseParams],
+    queryFn: () => apiClient.gseList(gseParams),
+    staleTime: 30_000,
+    enabled: tab === "gse",
+  });
 
-  const { data: corpusStats } = useCorpusStats();
-  const { data: filterOptions } = useFilterOptions();
-  const { data: featuredSeries } = useFeaturedSeries();
-  const { data: result, isLoading, error } = useSamples(filters);
+  const isLoading = tab === "gsm" ? gsmLoading : gseLoading;
+  const totalItems = tab === "gsm" ? (gsmResult?.total ?? 0) : (gseResult?.total ?? 0);
+  const totalPages = Math.ceil(totalItems / pageSize);
+  const gsmRows = gsmResult?.data ?? [];
+  const gseRows = gseResult?.data ?? [];
 
-  const samples = result?.samples ?? [];
-  const total = result?.total ?? 0;
-  const totalPages = Math.ceil(total / (filters.pageSize ?? 50));
+  // ── Total cells in current GSM result (summed) ────────────────────────────
+  const resultCells = useMemo(() => gsmRows.reduce((a, s) => a + (s.n_cells ?? 0), 0), [gsmRows]);
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    setFilters((f) => ({ ...f, search: searchInput || undefined, page: 0 }));
+  // ── Active filter count ───────────────────────────────────────────────────
+  const activeFilters = [organism, tissue, cellType, protocol, disease, sex, qcStatus, failureCategory, q, minCells > 0 ? "min_cells" : null, maxCells < 1000000 ? "max_cells" : null].filter(Boolean);
+
+  // ── CSV export ────────────────────────────────────────────────────────────
+  const exportCSV = () => {
+    if (!gsmRows.length) return;
+    const cols = ["gsm_id", "gse_id", "organism", "protocol", "tissue", "cell_type", "disease", "sex", "status", "n_cells", "mapping_rate", "median_genes", "failure_category"];
+    const rows = gsmRows.map((s: GsmRow) => cols.map((c) => {
+      const v = (s as Record<string, unknown>)[c];
+      if (v == null) return "";
+      const str = String(v);
+      return str.includes(",") ? `"${str}"` : str;
+    }).join(","));
+    const blob = new Blob([[cols.join(","), ...rows].join("\n")], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = "singlet_samples.csv"; a.click();
+    URL.revokeObjectURL(url);
   };
 
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
-      <section className="pt-32 pb-20 px-6">
-        <div className="max-w-7xl mx-auto">
-          {/* Header */}
-          <div className="mb-8">
-            <h1 className="font-display text-3xl font-bold text-foreground tracking-tightest mb-2">
-              Browse Datasets
+
+      <section className="pt-24 pb-20 px-4 md:px-6">
+        <div className="max-w-8xl mx-auto">
+
+          {/* ── PAGE HEADER ── */}
+          <div className="mb-5">
+            <h1 className="font-display text-2xl font-bold text-foreground tracking-tightest mb-1">
+              Singlet Atlas Explorer
             </h1>
-            <p className="text-muted-foreground">
-              Explore {formatNumber(corpusStats?.total_samples)} uniformly reprocessed single-cell samples
-              across {formatNumber(corpusStats?.species_count)} species and {formatNumber(corpusStats?.series_count)} GEO series.
-              {" "}<Link to="/atlas-docs" className="text-primary hover:underline">Load with Python →</Link>
+            <p className="text-sm text-muted-foreground">
+              {fmt(corpusStats?.total_cells)} cells across {fmt(corpusStats?.total_samples)} samples and {fmt(corpusStats?.series_count)} GEO series.
+              {" "}<Link to="/docs/access" className="text-primary hover:underline text-xs">Load with Python →</Link>
             </p>
           </div>
 
-          {/* Stats bar */}
-          {corpusStats && (
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
-              {[
-                { label: "Total Cells", value: formatNumber(corpusStats.total_cells) },
-                { label: "Samples", value: formatNumber(corpusStats.total_samples) },
-                { label: "Success Rate", value: corpusStats.success_rate ? `${(corpusStats.success_rate * 100).toFixed(1)}%` : "—" },
-                { label: "Avg Map Rate", value: corpusStats.avg_mapping_rate ? `${(corpusStats.avg_mapping_rate * 100).toFixed(1)}%` : "—" },
-                { label: "Avg Med. Genes", value: formatNumber(corpusStats.avg_median_genes) },
-              ].map((s) => (
-                <div key={s.label} className="rounded-lg border border-border bg-card p-4 text-center">
-                  <div className="text-2xl font-bold text-foreground font-display">{s.value}</div>
-                  <div className="text-xs text-muted-foreground mt-1">{s.label}</div>
-                </div>
-              ))}
+          {/* ── SEARCH BAR ── */}
+          <div className="flex gap-2 mb-4">
+            <div className="relative flex-1">
+              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <input
+                ref={searchRef}
+                type="text"
+                placeholder="Search GSM, GSE, tissue, cell type... (press / to focus)"
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") { setParam("q", searchInput || undefined); } }}
+                className="w-full pl-9 pr-4 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+              />
             </div>
-          )}
-
-          {/* Quick search chips */}
-          <div className="flex gap-2 flex-wrap mb-2">
-            <span className="text-xs text-muted-foreground self-center mr-1">Tissue:</span>
-            {["brain", "lung", "bone marrow", "liver", "skin", "blood", "tumor", "heart", "kidney"].map((term) => (
-              <button
-                key={term}
-                onClick={() => { setSearchInput(term); setFilters((f) => ({ ...f, search: term, page: 0 })); }}
-                className="px-3 py-1 rounded-full text-xs font-medium border border-border bg-background hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
-              >
-                {term}
-              </button>
-            ))}
-          </div>
-          <div className="flex gap-2 flex-wrap mb-2">
-            <span className="text-xs text-muted-foreground self-center mr-1">Cell type:</span>
-            {["PBMC", "T cells", "stem cell", "K562", "organoid", "fibroblasts", "B cells", "NK cells"].map((term) => (
-              <button
-                key={term}
-                onClick={() => { setSearchInput(term); setFilters((f) => ({ ...f, search: term, page: 0 })); }}
-                className="px-3 py-1 rounded-full text-xs font-medium border border-border bg-background hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
-              >
-                {term}
-              </button>
-            ))}
-          </div>
-          <div className="flex gap-2 flex-wrap mb-4">
-            <span className="text-xs text-muted-foreground self-center mr-1">Protocol:</span>
-            {["10xv3", "10xv2", "dropseq", "celseq2", "scirna", "marsseq"].map((term) => (
-              <button
-                key={term}
-                onClick={() => setFilters((f) => ({ ...f, protocol: f.protocol === term ? undefined : term, page: 0 }))}
-                className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${filters.protocol === term ? "border-primary bg-primary/10 text-primary" : "border-border bg-background hover:bg-muted text-muted-foreground hover:text-foreground"}`}
-              >
-                {term}
-              </button>
-            ))}
-          </div>
-          <div className="flex gap-2 flex-wrap mb-4">
-            <span className="text-xs text-muted-foreground self-center mr-1">Quality:</span>
-            {([["gold", "🥇"], ["silver", "🥈"], ["bronze", "🥉"]] as const).map(([tier, emoji]) => (
-              <button
-                key={tier}
-                onClick={() => setFilters((f) => ({ ...f, qualityTier: f.qualityTier === tier ? undefined : tier, page: 0 }))}
-                className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${filters.qualityTier === tier ? "border-primary bg-primary/10 text-primary" : "border-border bg-background hover:bg-muted text-muted-foreground hover:text-foreground"}`}
-              >
-                {emoji} {tier}
-              </button>
-            ))}
-          </div>
-
-          {/* Featured series */}
-          {featuredSeries && featuredSeries.length > 0 && !filters.search && !filters.organism && !filters.qualityTier && (
-            <div className="mb-6">
-              <h3 className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wider">Top Series (by cells)</h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                {featuredSeries.slice(0, 4).map((s) => (
-                  <Link
-                    key={s.gse_id}
-                    to={`/series/${s.gse_id}`}
-                    className="rounded-lg border border-border bg-card p-3 hover:bg-muted/30 transition-colors"
-                  >
-                    <div className="font-mono text-xs text-primary font-medium">{s.gse_id}</div>
-                    <div className="text-[10px] text-muted-foreground mt-1">
-                      {s.n_samples} samples • {formatNumber(s.total_cells)} cells • {(s.avg_mapping_rate * 100).toFixed(0)}% MR
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Filters */}
-          <div className="flex flex-col md:flex-row gap-4 mb-6">
-            <form onSubmit={handleSearch} className="flex-1 flex gap-2">
-              <div className="relative flex-1">
-                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                <input
-                  ref={searchRef}
-                  type="text"
-                  placeholder="Search by GSM, GSE, title, or tissue... (press / to focus)"
-                  value={searchInput}
-                  onChange={(e) => setSearchInput(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
-                />
-              </div>
-              <button type="submit" className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90">
-                Search
-              </button>
-            </form>
-
-            <div className="flex gap-2 flex-wrap">
-              <select
-                value={filters.organism ?? ""}
-                onChange={(e) => setFilters((f) => ({ ...f, organism: e.target.value || undefined, page: 0 }))}
-                className="px-3 py-2 rounded-lg border border-border bg-background text-sm"
-              >
-                <option value="">All Species</option>
-                {filterOptions?.organisms.map((o) => <option key={o} value={o}>{o}</option>)}
-              </select>
-
-              <select
-                value={filters.protocol ?? ""}
-                onChange={(e) => setFilters((f) => ({ ...f, protocol: e.target.value || undefined, page: 0 }))}
-                className="px-3 py-2 rounded-lg border border-border bg-background text-sm"
-              >
-                <option value="">All Protocols</option>
-                {filterOptions?.protocols.map((p) => <option key={p} value={p}>{p}</option>)}
-              </select>
-
-              <select
-                value={filters.modality ?? ""}
-                onChange={(e) => setFilters((f) => ({ ...f, modality: e.target.value || undefined, page: 0 }))}
-                className="px-3 py-2 rounded-lg border border-border bg-background text-sm"
-              >
-                <option value="">All Modalities</option>
-                {filterOptions?.modalities.map((m) => <option key={m} value={m}>{m}</option>)}
-              </select>
-
-              <select
-                value={filters.status ?? ""}
-                onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value || undefined, page: 0 }))}
-                className="px-3 py-2 rounded-lg border border-border bg-background text-sm"
-              >
-                <option value="">All Statuses</option>
-                <option value="SUCCESS">Success</option>
-                <option value="SOFT_FAIL">Soft Fail</option>
-                <option value="HARD_FAIL">Hard Fail</option>
-              </select>
-
-              <select
-                value={filters.qualityTier ?? ""}
-                onChange={(e) => setFilters((f) => ({ ...f, qualityTier: (e.target.value || undefined) as "gold" | "silver" | "bronze" | undefined, page: 0 }))}
-                className="px-3 py-2 rounded-lg border border-border bg-background text-sm"
-              >
-                <option value="">All Quality</option>
-                <option value="gold">🥇 Gold</option>
-                <option value="silver">🥈 Silver</option>
-                <option value="bronze">🥉 Bronze</option>
-              </select>
-
-              {(filters.organism || filters.protocol || filters.modality || filters.status || filters.qualityTier || filters.search) && (
-                <>
-                  <button
-                    onClick={() => { setSearchInput(""); setFilters({ page: 0, pageSize: filters.pageSize ?? 50 }); }}
-                    className="px-3 py-2 rounded-lg border border-border bg-background text-xs text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                  >
-                    Clear all ✕
-                  </button>
-                  <button
-                    onClick={() => { navigator.clipboard.writeText(window.location.href); }}
-                    className="px-3 py-2 rounded-lg border border-border bg-background text-xs text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                    title="Copy filtered URL to clipboard"
-                  >
-                    Share 🔗
-                  </button>
-                </>
+            <button
+              onClick={() => { setParam("q", searchInput || undefined); }}
+              className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90"
+            >
+              Search
+            </button>
+            <button
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              title="Toggle filters"
+            >
+              <SlidersHorizontal size={14} />
+              <span className="hidden sm:inline">Filters</span>
+              {activeFilters.length > 0 && (
+                <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-primary text-primary-foreground text-[9px] font-bold">
+                  {activeFilters.length}
+                </span>
               )}
-            </div>
+            </button>
           </div>
 
-          {/* Active filter indicator */}
-          {!isLoading && total > 0 && (filters.organism || filters.protocol || filters.modality || filters.status || filters.qualityTier || filters.search) && (
-            <div className="text-xs text-muted-foreground mb-2">
-              Showing <span className="font-semibold text-foreground">{total.toLocaleString()}</span> matching samples
+          {/* ── ACTIVE FILTER CHIPS ── */}
+          {activeFilters.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mb-4 items-center">
+              <span className="text-xs text-muted-foreground">Active:</span>
+              {organism && <FilterChip label={`Organism: ${organism}`} onRemove={() => setParam("organism", undefined)} />}
+              {tissue && <FilterChip label={`Tissue: ${tissue}`} onRemove={() => setParam("tissue", undefined)} />}
+              {cellType && <FilterChip label={`Cell type: ${cellType}`} onRemove={() => setParam("cell_type", undefined)} />}
+              {protocol && <FilterChip label={`Protocol: ${protocol}`} onRemove={() => setParam("protocol", undefined)} />}
+              {disease && <FilterChip label={`Disease: ${disease}`} onRemove={() => setParam("disease", undefined)} />}
+              {sex && <FilterChip label={`Sex: ${sex}`} onRemove={() => setParam("sex", undefined)} />}
+              {qcStatus && <FilterChip label={`Status: ${qcStatus}`} onRemove={() => setParam("status", undefined)} />}
+              {failureCategory && <FilterChip label={`Failure: ${failureCategory}`} onRemove={() => setParam("failure_category", undefined)} />}
+              {q && <FilterChip label={`"${q}"`} onRemove={() => { setSearchInput(""); setParam("q", undefined); }} />}
+              {minCells > 0 && <FilterChip label={`Min cells: ${fmt(minCells)}`} onRemove={() => setParam("min_cells", undefined)} />}
+              {maxCells < 1000000 && <FilterChip label={`Max cells: ${fmt(maxCells)}`} onRemove={() => setParam("max_cells", undefined)} />}
+              <button onClick={clearAll} className="text-xs text-muted-foreground hover:text-foreground underline ml-1">Clear all</button>
+              <button
+                onClick={() => navigator.clipboard.writeText(window.location.href)}
+                className="text-xs text-muted-foreground hover:text-foreground underline ml-1"
+              >
+                Copy URL
+              </button>
             </div>
           )}
 
-          {/* Results table */}
-          <div className="rounded-xl border border-border bg-card overflow-hidden">
-            {isLoading ? (
-              <div className="p-12 text-center text-muted-foreground">Loading samples...</div>
-            ) : error ? (
-              <div className="p-12 text-center text-destructive">Error loading data. Ensure Supabase is configured.</div>
-            ) : samples.length === 0 ? (
-              <div className="p-12 text-center text-muted-foreground">No samples found matching your filters.</div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-border bg-muted/30">
-                      <th className="text-left px-4 py-3 font-medium text-muted-foreground cursor-pointer select-none" onClick={() => toggleSort("gsm_id")}>
-                        <span className="inline-flex items-center gap-1">Sample <SortIcon col="gsm_id" /></span>
-                      </th>
-                      <th className="text-left px-4 py-3 font-medium text-muted-foreground cursor-pointer select-none" onClick={() => toggleSort("organism")}>
-                        <span className="inline-flex items-center gap-1">Organism <SortIcon col="organism" /></span>
-                      </th>
-                      <th className="text-left px-4 py-3 font-medium text-muted-foreground cursor-pointer select-none" onClick={() => toggleSort("protocol")}>
-                        <span className="inline-flex items-center gap-1">Protocol <SortIcon col="protocol" /></span>
-                      </th>
-                      <th className="text-left px-4 py-3 font-medium text-muted-foreground cursor-pointer select-none" onClick={() => toggleSort("status")}>
-                        <span className="inline-flex items-center gap-1">Status <SortIcon col="status" /></span>
-                      </th>
-                      <th className="text-right px-4 py-3 font-medium text-muted-foreground cursor-pointer select-none" onClick={() => toggleSort("cells_called")}>
-                        <span className="inline-flex items-center gap-1 justify-end">Cells <SortIcon col="cells_called" /></span>
-                      </th>
-                      <th className="text-right px-4 py-3 font-medium text-muted-foreground cursor-pointer select-none" onClick={() => toggleSort("mapping_rate")}>
-                        <span className="inline-flex items-center gap-1 justify-end">Map % <SortIcon col="mapping_rate" /></span>
-                      </th>
-                      <th className="text-right px-4 py-3 font-medium text-muted-foreground cursor-pointer select-none" onClick={() => toggleSort("median_genes")}>
-                        <span className="inline-flex items-center gap-1 justify-end">Med. Genes <SortIcon col="median_genes" /></span>
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {samples.map((s) => (
-                      <tr key={s.gsm_id} className="border-b border-border/50 hover:bg-muted/20 transition-colors">
-                        <td className="px-4 py-3">
-                          <Link to={`/sample/${s.gsm_id}`} className="font-mono text-primary hover:underline text-xs">
-                            {s.gsm_id}
-                          </Link>
-                          {s.title && <div className="text-xs text-muted-foreground mt-0.5 truncate max-w-[240px]">{s.title}</div>}
-                          {s.source && <div className="text-[10px] text-muted-foreground/70 mt-0.5 truncate max-w-[200px]">{s.source}</div>}
-                          {(() => {
-                            const chars = (s as Record<string, unknown>).characteristics as Record<string, string> | null;
-                            const tissue = chars?.tissue;
-                            const cellType = chars?.["cell type"];
-                            if (!tissue && !cellType) return null;
-                            return (
-                              <div className="flex gap-1 mt-0.5 flex-wrap">
-                                {tissue && <span className="text-[10px] px-1.5 py-0 rounded bg-primary/10 text-primary/80">{tissue}</span>}
-                                {cellType && <span className="text-[10px] px-1.5 py-0 rounded bg-violet-500/10 text-violet-600/80">{cellType}</span>}
-                              </div>
-                            );
-                          })()}
-                          {s.gse_id && <Link to={`/series/${s.gse_id}`} className="text-[10px] text-muted-foreground/60 hover:text-primary font-mono">{s.gse_id}</Link>}
-                        </td>
-                        <td className="px-4 py-3 text-xs text-muted-foreground italic">{s.organism}</td>
-                        <td className="px-4 py-3">
-                          <span className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded">{s.protocol ?? "—"}</span>
-                        </td>
-                        <td className="px-4 py-3">
-                          <StatusBadge status={s.status} />
-                          {s.failure_category && s.status !== "SUCCESS" && (
-                            <div className="text-[10px] text-muted-foreground/60 mt-0.5">{s.failure_category.replace(/_/g, " ")}</div>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-right font-mono text-xs">
-                          {formatNumber(s.cells_called)}
-                          {s.status === "SUCCESS" && (() => {
-                            const mr = s.mapping_rate ?? 0; const mg = s.median_genes ?? 0; const cells = s.cells_called ?? 0;
-                            const isGold = mr >= 0.7 && mg >= 500 && cells >= 500;
-                            const isSilver = !isGold && mr >= 0.5 && mg >= 200 && cells >= 100;
-                            const color = isGold ? "bg-yellow-400" : isSilver ? "bg-slate-300" : "bg-orange-300";
-                            return <span className={`inline-block w-1.5 h-1.5 rounded-full ${color} ml-1`} />;
-                          })()}
-                        </td>
-                        <td className="px-4 py-3 text-right font-mono text-xs">
-                          {s.mapping_rate != null ? `${(s.mapping_rate * 100).toFixed(1)}%` : "—"}
-                        </td>
-                        <td className="px-4 py-3 text-right font-mono text-xs">{formatNumber(s.median_genes)}</td>
-                      </tr>
+          {/* ── TWO COLUMN LAYOUT ── */}
+          <div className="flex gap-5 items-start">
+
+            {/* ── LEFT SIDEBAR ── */}
+            {sidebarOpen && (
+              <div className="w-56 flex-shrink-0 rounded-xl border border-border bg-card sticky top-20 overflow-hidden">
+                <div className="px-4 py-3 border-b border-border flex items-center justify-between">
+                  <span className="text-xs font-bold text-foreground uppercase tracking-wider">Filters</span>
+                  {activeFilters.length > 0 && (
+                    <button onClick={clearAll} className="text-[10px] text-primary hover:underline">Reset</button>
+                  )}
+                </div>
+
+                {/* Organism */}
+                <AccordionSection label="Organism" defaultOpen>
+                  <FacetList
+                    options={facets?.organisms ?? []}
+                    value={organism}
+                    onChange={(v) => setParam("organism", v)}
+                  />
+                </AccordionSection>
+
+                {/* Tissue */}
+                <AccordionSection label="Tissue" defaultOpen>
+                  <FacetList
+                    options={facets?.tissues ?? []}
+                    value={tissue}
+                    onChange={(v) => setParam("tissue", v)}
+                    max={6}
+                  />
+                </AccordionSection>
+
+                {/* Cell Type */}
+                <AccordionSection label="Cell Type">
+                  <FacetList
+                    options={facets?.cell_types ?? []}
+                    value={cellType}
+                    onChange={(v) => setParam("cell_type", v)}
+                    max={6}
+                  />
+                </AccordionSection>
+
+                {/* Assay / Protocol */}
+                <AccordionSection label="Assay / Protocol">
+                  <FacetList
+                    options={facets?.protocols ?? []}
+                    value={protocol}
+                    onChange={(v) => setParam("protocol", v)}
+                  />
+                </AccordionSection>
+
+                {/* Disease */}
+                <AccordionSection label="Disease">
+                  <FacetList
+                    options={facets?.diseases ?? []}
+                    value={disease}
+                    onChange={(v) => setParam("disease", v)}
+                    max={6}
+                  />
+                </AccordionSection>
+
+                {/* QC Status */}
+                <AccordionSection label="QC Status" defaultOpen>
+                  <div className="space-y-1.5">
+                    {(["All", "Pass", "Warn", "Fail"] as const).map((s) => (
+                      <label key={s} className="flex items-center gap-2 cursor-pointer group">
+                        <input
+                          type="radio"
+                          checked={(!qcStatus && s === "All") || qcStatus === s}
+                          onChange={() => setParam("status", s === "All" ? undefined : s)}
+                          className="accent-primary"
+                        />
+                        <span className={`text-xs ${(!qcStatus && s === "All") || qcStatus === s ? "text-foreground font-medium" : "text-muted-foreground"}`}>{s}</span>
+                      </label>
                     ))}
-                  </tbody>
-                </table>
+                  </div>
+                </AccordionSection>
+
+                {/* Failure Reason — only when Fail / All */}
+                {showFailureCategory && (facets?.failure_categories ?? []).length > 0 && (
+                  <AccordionSection label="Failure Reason">
+                    <FacetList
+                      options={facets?.failure_categories ?? []}
+                      value={failureCategory}
+                      onChange={(v) => setParam("failure_category", v)}
+                    />
+                  </AccordionSection>
+                )}
+
+                {/* Sex */}
+                <AccordionSection label="Sex">
+                  <FacetList
+                    options={facets?.sexes ?? []}
+                    value={sex}
+                    onChange={(v) => setParam("sex", v)}
+                  />
+                </AccordionSection>
+
+                {/* Cell count range */}
+                <AccordionSection label="Cell Count Range">
+                  <CellRangeSlider
+                    value={[minCells, maxCells]}
+                    onChange={([mn, mx]) => {
+                      setSearchParams((prev) => {
+                        const n = new URLSearchParams(prev);
+                        if (mn > 0) n.set("min_cells", String(mn)); else n.delete("min_cells");
+                        if (mx < 1000000) n.set("max_cells", String(mx)); else n.delete("max_cells");
+                        n.delete("page");
+                        return n;
+                      }, { replace: true });
+                    }}
+                  />
+                </AccordionSection>
               </div>
             )}
 
-            {/* Pagination */}
-            {total > 0 && (
-              <div className="flex items-center justify-between px-4 py-3 border-t border-border bg-muted/10">
-                <div className="flex items-center gap-3">
-                  <span className="text-xs text-muted-foreground">
-                    Showing {(filters.page ?? 0) * (filters.pageSize ?? 50) + 1}–{Math.min(((filters.page ?? 0) + 1) * (filters.pageSize ?? 50), total)} of {total.toLocaleString()} samples
-                  </span>
-                  <button
-                    onClick={() => {
-                      if (!samples.length) return;
-                      const cols = ["gsm_id", "gse_id", "organism", "protocol", "status", "source", "title", "tissue", "cell_type", "mapping_rate", "cells_called", "median_genes", "median_umis", "mt_pct", "doublet_rate"];
-                      const header = cols.join(",");
-                      const rows = samples.map((s: Record<string, unknown>) => cols.map((c) => {
-                        let v = s[c];
-                        if (v == null && (c === "tissue" || c === "cell_type")) {
-                          const chars = s["characteristics"] as Record<string, string> | null;
-                          v = chars?.[c === "cell_type" ? "cell type" : c] ?? "";
-                        }
-                        if (v == null) return "";
-                        const str = String(v);
-                        return str.includes(",") ? `"${str}"` : str;
-                      }).join(","));
-                      const csv = [header, ...rows].join("\n");
-                      const blob = new Blob([csv], { type: "text/csv" });
-                      const url = URL.createObjectURL(blob);
-                      const a = document.createElement("a");
-                      a.href = url;
-                      a.download = "singlet_samples.csv";
-                      a.click();
-                      URL.revokeObjectURL(url);
-                    }}
-                    className="flex items-center gap-1 px-2 py-1 rounded border border-border text-xs text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                    title="Export current page to CSV"
-                  >
-                    <Download size={12} /> CSV
-                  </button>
+            {/* ── RIGHT RESULTS AREA ── */}
+            <div className="flex-1 min-w-0">
+
+              {/* GSE/GSM Tab toggle */}
+              <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                <div className="flex rounded-lg border border-border overflow-hidden">
+                  {(["gsm", "gse"] as const).map((t) => (
+                    <button
+                      key={t}
+                      onClick={() => {
+                        setSearchParams((prev) => { const n = new URLSearchParams(prev); n.set("tab", t); n.delete("page"); return n; }, { replace: true });
+                      }}
+                      className={`px-4 py-1.5 text-xs font-medium transition-colors ${tab === t ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground bg-background hover:bg-muted"}`}
+                    >
+                      {t === "gsm" ? "Samples (GSM)" : "Studies (GSE)"}
+                    </button>
+                  ))}
                 </div>
-                <div className="flex items-center gap-2">
-                  <select
-                    value={filters.pageSize ?? 50}
-                    onChange={(e) => setFilters((f) => ({ ...f, pageSize: Number(e.target.value), page: 0 }))}
-                    className="px-2 py-1 rounded border border-border bg-background text-xs"
-                  >
-                    <option value={25}>25</option>
-                    <option value={50}>50</option>
-                    <option value={100}>100</option>
-                  </select>
-                  <button
-                    onClick={() => setFilters((f) => ({ ...f, page: Math.max(0, (f.page ?? 0) - 1) }))}
-                    disabled={(filters.page ?? 0) === 0}
-                    className="p-1.5 rounded border border-border hover:bg-muted disabled:opacity-30"
-                  >
-                    <ChevronLeft size={14} />
-                  </button>
-                  <span className="px-3 py-1 text-xs text-muted-foreground">
-                    Page {(filters.page ?? 0) + 1} of {totalPages}
-                  </span>
-                  <button
-                    onClick={() => setFilters((f) => ({ ...f, page: Math.min(totalPages - 1, (f.page ?? 0) + 1) }))}
-                    disabled={(filters.page ?? 0) >= totalPages - 1}
-                    className="p-1.5 rounded border border-border hover:bg-muted disabled:opacity-30"
-                  >
-                    <ChevronRight size={14} />
-                  </button>
+
+                {/* Live matching bar */}
+                <div className="text-xs text-muted-foreground">
+                  {!isLoading && tab === "gsm" && gsmResult && (
+                    <span>
+                      <span className="font-semibold text-foreground">{gsmResult.total.toLocaleString()}</span> samples ·{" "}
+                      <span className="font-semibold text-foreground">{fmt(resultCells)}</span> cells (this page)
+                    </span>
+                  )}
+                  {!isLoading && tab === "gse" && gseResult && (
+                    <span>
+                      <span className="font-semibold text-foreground">{gseResult.total.toLocaleString()}</span> studies
+                    </span>
+                  )}
+                  {isLoading && <span className="animate-pulse">Loading...</span>}
                 </div>
               </div>
-            )}
+
+              {/* Results table */}
+              <div className="rounded-xl border border-border bg-card overflow-hidden">
+                {isLoading ? (
+                  <div className="p-12 text-center text-muted-foreground text-sm">Loading...</div>
+                ) : tab === "gsm" && gsmRows.length === 0 ? (
+                  <div className="p-12 text-center text-muted-foreground text-sm">No samples match your filters.</div>
+                ) : tab === "gse" && gseRows.length === 0 ? (
+                  <div className="p-12 text-center text-muted-foreground text-sm">No studies match your filters.</div>
+                ) : tab === "gsm" ? (
+                  /* ── GSM TABLE ── */
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-border bg-muted/30">
+                          {([
+                            ["gsm_id", "Sample", "text-left px-4"],
+                            ["organism", "Organism", "text-left px-3"],
+                            ["protocol", "Protocol", "text-left px-3"],
+                            ["status", "Status", "text-left px-3"],
+                            ["n_cells", "Cells", "text-right px-3"],
+                            ["mapping_rate", "Map %", "text-right px-3"],
+                            ["median_genes", "Med. Genes", "text-right px-4"],
+                          ] as [string, string, string][]).map(([col, label, cls]) => (
+                            <th
+                              key={col}
+                              onClick={() => toggleSort(col)}
+                              className={`${cls} py-3 text-xs font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground`}
+                            >
+                              <span className="inline-flex items-center gap-1">
+                                {label} <SortIcon col={col} sortBy={sortBy} sortAsc={sortAsc} />
+                              </span>
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {gsmRows.map((s: GsmRow) => {
+                          const isFailed = s.status !== "SUCCESS";
+                          return (
+                            <tr key={s.gsm_id} className={`border-b border-border/40 hover:bg-muted/20 transition-colors ${isFailed ? "bg-red-50/20" : ""}`}>
+                              <td className="px-4 py-2.5">
+                                <Link to={`/sample/${s.gsm_id}`} className="font-mono text-xs text-primary hover:underline">{s.gsm_id}</Link>
+                                {s.title && <div className="text-[10px] text-muted-foreground mt-0.5 truncate max-w-[200px]">{s.title}</div>}
+                                {s.gse_id && <Link to={`/series/${s.gse_id}`} className="text-[10px] text-muted-foreground/60 hover:text-primary font-mono">{s.gse_id}</Link>}
+                              </td>
+                              <td className="px-3 py-2.5 text-xs italic text-muted-foreground">{s.organism}</td>
+                              <td className="px-3 py-2.5">
+                                <span className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded text-[10px]">{s.protocol ?? "—"}</span>
+                              </td>
+                              <td className="px-3 py-2.5">
+                                <StatusBadge status={s.status} />
+                                {isFailed && s.failure_category && (
+                                  <div className="text-[10px] text-red-600/70 mt-0.5">{s.failure_category.replace(/_/g, " ")}</div>
+                                )}
+                              </td>
+                              <td className="px-3 py-2.5 text-right font-mono text-xs">{fmt(s.n_cells)}</td>
+                              <td className="px-3 py-2.5 text-right font-mono text-xs">{s.mapping_rate != null ? `${(s.mapping_rate * 100).toFixed(1)}%` : "—"}</td>
+                              <td className="px-4 py-2.5 text-right font-mono text-xs">{fmt(s.median_genes)}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  /* ── GSE TABLE ── */
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-border bg-muted/30">
+                          {([
+                            ["id", "Series", "text-left px-4"],
+                            ["organism", "Organism", "text-left px-3"],
+                            ["n_gsm_total", "Samples", "text-right px-3"],
+                            ["n_cells", "Cells", "text-right px-3"],
+                            ["submitted_date", "Year", "text-right px-4"],
+                          ] as [string, string, string][]).map(([col, label, cls]) => (
+                            <th
+                              key={col}
+                              onClick={() => toggleSort(col)}
+                              className={`${cls} py-3 text-xs font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground`}
+                            >
+                              <span className="inline-flex items-center gap-1">
+                                {label} <SortIcon col={col} sortBy={sortBy} sortAsc={sortAsc} />
+                              </span>
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {gseRows.map((s: GseRow) => (
+                          <tr key={s.id} className="border-b border-border/40 hover:bg-muted/20 transition-colors">
+                            <td className="px-4 py-2.5">
+                              <Link to={`/series/${s.id}`} className="font-mono text-xs text-primary hover:underline">{s.id}</Link>
+                              {s.title && <div className="text-[10px] text-muted-foreground mt-0.5 truncate max-w-[280px]">{s.title}</div>}
+                            </td>
+                            <td className="px-3 py-2.5 text-xs italic text-muted-foreground">{s.organism}</td>
+                            <td className="px-3 py-2.5 text-right text-xs">
+                              <span className="text-emerald-600 font-mono">{s.n_gsm_done}</span>
+                              <span className="text-muted-foreground font-mono">/{s.n_gsm_total}</span>
+                              {s.n_gsm_failed > 0 && (
+                                <span className="text-red-500 font-mono ml-1">({s.n_gsm_failed} fail)</span>
+                              )}
+                            </td>
+                            <td className="px-3 py-2.5 text-right font-mono text-xs">{fmt(s.n_cells)}</td>
+                            <td className="px-4 py-2.5 text-right text-xs text-muted-foreground">
+                              {s.submitted_date ? new Date(s.submitted_date).getFullYear() : "—"}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {/* Pagination */}
+                {totalItems > 0 && !isLoading && (
+                  <div className="flex items-center justify-between px-4 py-3 border-t border-border bg-muted/10">
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs text-muted-foreground">
+                        {page * pageSize + 1}–{Math.min((page + 1) * pageSize, totalItems)} of {totalItems.toLocaleString()}
+                      </span>
+                      {tab === "gsm" && (
+                        <button
+                          onClick={exportCSV}
+                          className="flex items-center gap-1 px-2 py-1 rounded border border-border text-xs text-muted-foreground hover:text-foreground hover:bg-muted"
+                          title="Export page to CSV"
+                        >
+                          <Download size={11} /> CSV
+                        </button>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={pageSize}
+                        onChange={(e) => setSearchParams((prev) => { const n = new URLSearchParams(prev); n.set("size", e.target.value); n.delete("page"); return n; }, { replace: true })}
+                        className="px-2 py-1 rounded border border-border bg-background text-xs"
+                      >
+                        {[25, 50, 100].map((s) => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                      <button onClick={() => setPage(Math.max(0, page - 1))} disabled={page === 0} className="p-1.5 rounded border border-border hover:bg-muted disabled:opacity-30">
+                        <ChevronLeft size={13} />
+                      </button>
+                      <span className="text-xs text-muted-foreground px-2">
+                        {page + 1} / {totalPages}
+                      </span>
+                      <button onClick={() => setPage(Math.min(totalPages - 1, page + 1))} disabled={page >= totalPages - 1} className="p-1.5 rounded border border-border hover:bg-muted disabled:opacity-30">
+                        <ChevronRight size={13} />
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       </section>
+
       <Footer />
     </div>
   );

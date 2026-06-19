@@ -1,0 +1,21 @@
+name = "singlet-bio"
+compatibility_date = "2024-09-23"
+pages_build_output_dir = "dist"
+
+# ── D1 Database ───────────────────────────────────────────────────────────────
+# database_id is a placeholder — run `wrangler d1 create singlet-catalog` and
+# paste the returned UUID here before deploying.
+[[d1_databases]]
+binding = "DB"
+database_name = "singlet-catalog"
+database_id = "LOCAL"
+
+# ── R2 Bucket ─────────────────────────────────────────────────────────────────
+# Create with: wrangler r2 bucket create singlet-data
+[[r2_buckets]]
+binding = "SINGLET_DATA"
+bucket_name = "singlet-data"
+
+# ── Environment variables (non-secret) ───────────────────────────────────────
+[vars]
+ENVIRONMENT = "production"

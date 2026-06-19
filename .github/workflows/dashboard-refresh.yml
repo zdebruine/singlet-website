@@ -1,0 +1,32 @@
+name: Refresh HPC Dashboard
+
+# Runs every 15 minutes (deterministic quarters of each hour).
+# Requires these repository secrets:
+#   CLIPPER_SSH_HOST  — hostname/IP of the Clipper login node
+#   CLIPPER_SSH_USER  — SSH username (e.g. debruinz)
+#   CLIPPER_SSH_KEY   — private SSH key for passwordless login
+
+on:
+  schedule:
+    - cron: '0,15,30,45 * * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: dashboard-refresh
+  cancel-in-progress: true
+
+jobs:
+  refresh-clipper:
+    name: Clipper snapshot
+    runs-on: ubuntu-latest
+    if: ${{ vars.DASHBOARD_REFRESH_ENABLED != 'false' }}
+    steps:
+      - name: Trigger Clipper publish_dashboard.sh
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.CLIPPER_SSH_HOST }}
+          username: ${{ secrets.CLIPPER_SSH_USER }}
+          key: ${{ secrets.CLIPPER_SSH_KEY }}
+          timeout: 300s
+          script: |
+            bash /mnt/home/debruinz/Singlet-AI/singlet-agents/scripts/pipeline/publish_dashboard.sh

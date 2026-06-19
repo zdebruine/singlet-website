@@ -34,6 +34,7 @@ import Notebooks from "./pages/Notebooks.tsx";
 import SplicePatternSpec from "./pages/SplicePatternSpec.tsx";
 import DataObjects from "./pages/DataObjects.tsx";
 import HpcDashboard from "./pages/HpcDashboard.tsx";
+import DocsAccess from "./pages/DocsAccess.tsx";
 
 
 const queryClient = new QueryClient();
@@ -51,6 +52,7 @@ const App = () => (
           
           <Route path="/pricing" element={<PricingPage />} />
           <Route path="/docs" element={<Docs />} />
+          <Route path="/docs/access" element={<DocsAccess />} />
           <Route path="/data-license" element={<DataLicense />} />
           <Route path="/gene-programs" element={<GenePrograms />} />
           <Route path="/target-explorer" element={<TargetExplorer />} />
