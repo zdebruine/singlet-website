@@ -1,7 +1,13 @@
 /**
  * GET /api/facets
- * Returns distinct filter option values for dropdowns.
- * Tries meta_cache first; falls back to live D1 queries.
+ * Returns filter option values WITH counts, as arrays the Browse UI consumes:
+ *   organisms, protocols, qc_flags, failure_categories, tissues, cell_types,
+ *   diseases, sexes — each an array of { value, count }, ordered by count desc
+ *   and capped to the top entries.
+ *
+ * Note: facets are computed live from D1 (GROUP BY ... ORDER BY count DESC).
+ * The meta_cache fast path is intentionally not used here because its stored
+ * shape predates the { value, count } contract.
  */
 import { corsOk, corsErr, handleOptions } from "../_shared/cors";
 
@@ -9,39 +15,64 @@ interface Env {
   DB: D1Database;
 }
 
+interface FacetOption {
+  value: string;
+  count: number;
+}
+
+const FACET_LIMIT = 100;
+
+/**
+ * Group a non-null column and return its top values with counts.
+ * `col` is a fixed identifier from the call sites below — never user input —
+ * so interpolating it into the SQL is safe (no parameterization for idents).
+ */
+async function facet(db: D1Database, col: string): Promise<FacetOption[]> {
+  const res = await db
+    .prepare(
+      `SELECT ${col} AS value, COUNT(*) AS count
+         FROM gsm
+        WHERE ${col} IS NOT NULL AND ${col} != ''
+        GROUP BY ${col}
+        ORDER BY count DESC
+        LIMIT ?`
+    )
+    .bind(FACET_LIMIT)
+    .all<{ value: string; count: number }>();
+  return res.results.map((r) => ({ value: r.value, count: r.count }));
+}
+
 export const onRequestGet: PagesFunction<Env> = async ({ env }) => {
   try {
-    // Fast path: cached facets
-    const cached = await env.DB.prepare(
-      "SELECT value FROM meta_cache WHERE key = 'facets'"
-    ).first<{ value: string }>();
-    if (cached) {
-      return corsOk(JSON.parse(cached.value));
-    }
-
-    // Slow path: compute from DB
-    const [organisms, protocols, tissues, cellTypes, diseases, sexes, statuses, qcFlags, failCats] = await Promise.all([
-      env.DB.prepare("SELECT DISTINCT organism FROM gsm WHERE organism IS NOT NULL ORDER BY organism").all<{ organism: string }>(),
-      env.DB.prepare("SELECT DISTINCT protocol FROM gsm WHERE protocol IS NOT NULL ORDER BY protocol").all<{ protocol: string }>(),
-      env.DB.prepare("SELECT DISTINCT tissue FROM gsm WHERE tissue IS NOT NULL ORDER BY tissue").all<{ tissue: string }>(),
-      env.DB.prepare("SELECT DISTINCT cell_type FROM gsm WHERE cell_type IS NOT NULL ORDER BY cell_type").all<{ cell_type: string }>(),
-      env.DB.prepare("SELECT DISTINCT disease FROM gsm WHERE disease IS NOT NULL ORDER BY disease").all<{ disease: string }>(),
-      env.DB.prepare("SELECT DISTINCT sex FROM gsm WHERE sex IS NOT NULL ORDER BY sex").all<{ sex: string }>(),
-      env.DB.prepare("SELECT DISTINCT status FROM gsm ORDER BY status").all<{ status: string }>(),
-      env.DB.prepare("SELECT DISTINCT qc_flag FROM gsm WHERE qc_flag IS NOT NULL ORDER BY qc_flag").all<{ qc_flag: string }>(),
-      env.DB.prepare("SELECT DISTINCT failure_category FROM gsm WHERE failure_category IS NOT NULL ORDER BY failure_category").all<{ failure_category: string }>(),
+    const [
+      organisms,
+      protocols,
+      tissues,
+      cell_types,
+      diseases,
+      sexes,
+      qc_flags,
+      failure_categories,
+    ] = await Promise.all([
+      facet(env.DB, "organism"),
+      facet(env.DB, "protocol"),
+      facet(env.DB, "tissue"),
+      facet(env.DB, "cell_type"),
+      facet(env.DB, "disease"),
+      facet(env.DB, "sex"),
+      facet(env.DB, "qc_flag"),
+      facet(env.DB, "failure_category"),
     ]);
 
     return corsOk({
-      organisms: organisms.results.map(r => r.organism),
-      protocols: protocols.results.map(r => r.protocol),
-      tissues: tissues.results.map(r => r.tissue),
-      cell_types: cellTypes.results.map(r => r.cell_type),
-      diseases: diseases.results.map(r => r.disease),
-      sexes: sexes.results.map(r => r.sex),
-      statuses: statuses.results.map(r => r.status),
-      qc_flags: qcFlags.results.map(r => r.qc_flag),
-      failure_categories: failCats.results.map(r => r.failure_category),
+      organisms,
+      protocols,
+      tissues,
+      cell_types,
+      diseases,
+      sexes,
+      qc_flags,
+      failure_categories,
     });
   } catch (e) {
     return corsErr(String(e));

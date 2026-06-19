@@ -209,8 +209,8 @@ export const CorpusSection = ({ data }: { data: PipelineMetrics }) => {
                             CZI CELLxGENE Census takes author-processed data — different pipelines, different parameters, different quality.
                             Our atlas reprocesses every sample from raw FASTQ through{" "}
                             <span className="font-mono text-foreground">{corpus.pipeline_version}</span> with{" "}
-                            spliced/unspliced/ambiguous quantification. Every cell is directly comparable. This is what makes
-                            atlas-scale NMF training possible.
+                            spliced/unspliced/ambiguous quantification. Every cell sits in the same gene space and the same QC,
+                            so samples from different labs and studies are directly comparable.
                         </p>
                     </div>
                 </div>

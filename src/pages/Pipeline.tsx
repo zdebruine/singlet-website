@@ -295,18 +295,13 @@ trio = usa(sample)              # spliced / unspliced / ambiguous`}</code></pre>
                   <>
                     <div
                       className="h-full bg-emerald-500 transition-all"
-                      style={{ width: `${(breakdown.success / Number(stats.total_samples)) * 100}%` }}
-                      title={`SUCCESS: ${breakdown.success}`}
-                    />
-                    <div
-                      className="h-full bg-amber-500 transition-all"
-                      style={{ width: `${(breakdown.soft_fail / Number(stats.total_samples)) * 100}%` }}
-                      title={`SOFT_FAIL: ${breakdown.soft_fail}`}
+                      style={{ width: `${(breakdown.done / Number(stats.total_samples)) * 100}%` }}
+                      title={`DONE: ${breakdown.done}`}
                     />
                     <div
                       className="h-full bg-red-500/70 transition-all"
-                      style={{ width: `${(breakdown.hard_fail / Number(stats.total_samples)) * 100}%` }}
-                      title={`HARD_FAIL: ${breakdown.hard_fail}`}
+                      style={{ width: `${(breakdown.failed / Number(stats.total_samples)) * 100}%` }}
+                      title={`FAIL: ${breakdown.failed}`}
                     />
                   </>
                 ) : (
@@ -317,9 +312,8 @@ trio = usa(sample)              # spliced / unspliced / ambiguous`}</code></pre>
                 )}
               </div>
               <div className="flex gap-4 mt-2 text-[10px] text-muted-foreground">
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500" /> SUCCESS{breakdown ? ` (${breakdown.success})` : ""}</span>
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500" /> SOFT_FAIL{breakdown ? ` (${breakdown.soft_fail})` : ""}</span>
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500/70" /> HARD_FAIL{breakdown ? ` (${breakdown.hard_fail})` : ""}</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500" /> DONE{breakdown ? ` (${breakdown.done})` : ""}</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500/70" /> FAIL{breakdown ? ` (${breakdown.failed})` : ""}</span>
               </div>
               <p className="text-xs text-muted-foreground mt-4">
                 Uniformly reprocessing every human droplet-based and spatially-resolved single-cell sequencing dataset on GEO

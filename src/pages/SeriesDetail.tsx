@@ -22,10 +22,10 @@ function formatYear(dateStr: string | null | undefined): string {
 }
 
 function StatusBadge({ status, failureCategory }: { status: string; failureCategory?: string | null }) {
-  if (status === "SUCCESS") {
+  if (status === "DONE") {
     return <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full"><CheckCircle2 size={12} /> Pass</span>;
   }
-  if (status === "HARD_FAIL") {
+  if (status === "FAIL") {
     return (
       <span className="inline-flex items-center gap-1 text-xs font-medium text-red-600 bg-red-50 px-2 py-0.5 rounded-full">
         <XCircle size={12} /> Fail
@@ -37,7 +37,7 @@ function StatusBadge({ status, failureCategory }: { status: string; failureCateg
 }
 
 function QCSummaryBar({ samples }: { samples: GsmRow[] }) {
-  const success = samples.filter(s => s.status === "SUCCESS");
+  const success = samples.filter(s => s.status === "DONE");
   if (success.length === 0) return null;
 
   const gold = success.filter(s => (s.mapping_rate ?? 0) >= 0.7 && (s.median_genes ?? 0) >= 500 && (s.n_cells ?? 0) >= 500).length;
@@ -166,8 +166,8 @@ const SeriesDetail = () => {
 
   const { series, samples, publications } = data as GseDetailResponse;
 
-  const failedSamples = samples.filter(s => s.status !== "SUCCESS");
-  const successSamples = samples.filter(s => s.status === "SUCCESS");
+  const failedSamples = samples.filter(s => s.status === "FAIL");
+  const successSamples = samples.filter(s => s.status === "DONE");
   const totalCells = successSamples.reduce((a, s) => a + (s.n_cells ?? 0), 0);
   const avgMR = successSamples.length
     ? successSamples.reduce((a, s) => a + (s.mapping_rate ?? 0), 0) / successSamples.length
@@ -361,7 +361,7 @@ const SeriesDetail = () => {
                   </thead>
                   <tbody>
                     {sortedSamples.map((s) => {
-                      const isFailed = s.status !== "SUCCESS";
+                      const isFailed = s.status === "FAIL";
                       return (
                         <tr key={s.gsm_id} className={`border-b border-border/50 hover:bg-muted/20 transition-colors ${isFailed ? "bg-red-50/30" : ""}`}>
                           <td className="px-4 py-2.5">

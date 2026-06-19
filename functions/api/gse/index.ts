@@ -24,12 +24,18 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
     const maxCells = url.searchParams.get("max_cells") ? parseInt(url.searchParams.get("max_cells")!, 10) : null;
     const page = Math.max(0, intParam(url, "page", 0));
     const pageSize = clampPageSize(intParam(url, "page_size", 25));
-    const sortRaw = url.searchParams.get("sort") ?? "n_cells";
-    const sort = ALLOWED_SORT_COLS.has(sortRaw) ? sortRaw : "n_cells";
+    const sortRaw = url.searchParams.get("sort");
+    const hasSort = !!sortRaw && ALLOWED_SORT_COLS.has(sortRaw);
+    const sort = hasSort ? (sortRaw as string) : null;
     const asc = url.searchParams.get("asc") === "1";
 
     const dir = asc ? "ASC" : "DESC";
     const offset = page * pageSize;
+
+    // Default ordering: series with completed samples and real data first.
+    const orderBy = sort
+      ? `${sort} ${dir} NULLS LAST`
+      : `(n_gsm_done > 0) DESC, n_cells DESC`;
 
     // Build WHERE clauses
     const conditions: string[] = [];
@@ -66,7 +72,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
       `SELECT id, title, organism, n_gsm_total, n_gsm_done, n_gsm_failed, n_cells,
               pubmed_ids, r2_bundle_key, r2_bundle_bytes, submitted_date, last_updated
        FROM gse ${where}
-       ORDER BY ${sort} ${dir}
+       ORDER BY ${orderBy}
        LIMIT ? OFFSET ?`
     ).bind(...params, pageSize, offset).all<Record<string, unknown>>();
 

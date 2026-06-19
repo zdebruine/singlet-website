@@ -16,7 +16,7 @@ const footerCols = [
     title: "Resources",
     links: [
       { label: "Notebooks", to: "/notebooks" },
-      { label: "Validation", to: "/validation" },
+      { label: "Benchmarks", to: "/benchmarks" },
       { label: "Blog", to: "/blog" },
       { label: "GitHub", href: "https://github.com/Singlet-Bio/singlet" },
     ],

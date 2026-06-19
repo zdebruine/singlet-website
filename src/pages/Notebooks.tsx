@@ -256,10 +256,10 @@ const Notebooks = () => (
 
 import singlet
 
-# Browse the 4,697-sample atlas
+# Browse the atlas
 singlet.summary()
-df = singlet.samples(organism="Homo sapiens", status="SUCCESS")
-print(f"{len(df)} successful human samples")
+df = singlet.samples(organism="Homo sapiens", status="DONE")
+print(f"{len(df)} processed human samples")
 
 # Load a singlet output directory as AnnData
 adata = singlet.load_dir("/path/to/quant/GSM3573650")
@@ -339,17 +339,19 @@ print(f"{adata.n_obs} cells × {adata.n_vars} genes")
         <div className="mt-12 rounded-xl border border-border bg-card p-6">
           <h2 className="text-xl font-bold text-foreground mb-3">AI-Assisted Analysis</h2>
           <p className="text-sm text-muted-foreground mb-4">
-            Use the Singlet MCP server to query the atlas directly from Claude, Cursor, or VS Code Copilot.
-            Ask questions like "find all human lung 10xv3 samples" or "what's the QC for GSM5238385".
+            Use the Singlet MCP server to search and browse the atlas catalog directly from Claude, Cursor, or VS Code Copilot —
+            then fetch a sample's data to your machine. Ask things like "find all human lung 10xv3 samples" or
+            "download GSM5238385 as h5ad".
           </p>
           <pre className="font-mono text-xs text-foreground bg-muted/50 rounded-lg p-4 overflow-x-auto">
-            <code>{`# Install and start the MCP server
-pip install mcp supabase
-python -m singlet.mcp.server
+            <code>{`# Install the MCP extra and launch the server
+pip install "singlet[mcp]"
+python -m singlet.mcp
 
 # Then ask your AI assistant:
-# "How many mouse samples are in the Singlet Atlas?"
-# "Show me code to load and cluster GSM5238385"`}</code>
+# "Search the catalog for human lung 10xv3 samples"
+# "Fetch GSM5238385 locally as a .singlet bundle"
+# "Load GSM5238385 as an AnnData (h5ad) on my machine"`}</code>
           </pre>
           <a
             href="https://github.com/Singlet-Bio/singlet/tree/main/python/singlet/mcp"

@@ -1,4 +1,4 @@
-import { ArrowRight, Upload, Shield, Zap, Lock, FileCheck } from "lucide-react";
+import { ArrowRight, Terminal, Shield, Zap, Lock, FileCheck } from "lucide-react";
 import { Link } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
@@ -14,13 +14,13 @@ const BYOD = () => (
             </div>
             <div className="max-w-4xl mx-auto text-center relative">
                 <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-primary/30 bg-primary/[0.08] text-xs font-mono text-primary mb-4">
-                    Open source · MIT
+                    Open source · MIT · runs locally
                 </span>
                 <h1 className="font-display text-4xl md:text-6xl font-bold text-foreground tracking-tightest mb-4">
-                    Add your data <span className="gradient-text">to the atlas.</span>
+                    Bring your data <span className="gradient-text">to the atlas.</span>
                 </h1>
                 <p className="text-base md:text-lg text-muted-foreground max-w-xl mx-auto leading-relaxed">
-                    Run the same open-source pipeline that built the public atlas on your own SRA or FASTQ. You get harmonized matrices — same references, same gene space — that load right alongside everything else.
+                    Run the <span className="font-mono text-foreground">singlet</span> pipeline on your own compute to turn raw reads into harmonized <span className="font-mono text-foreground">.singlet</span> data — same aligner, reference, and QC as the public atlas. No upload, no account, no plan.
                 </p>
             </div>
         </section>
@@ -30,23 +30,23 @@ const BYOD = () => (
             {/* How it works */}
             <div className="mb-12">
                 <p className="section-dot font-mono text-xs text-primary uppercase tracking-widest mb-3 text-center">Workflow</p>
-                <h2 className="font-display text-2xl md:text-3xl font-bold text-foreground text-center tracking-tightest mb-8">Three steps. <span className="gradient-text">Full context.</span></h2>
+                <h2 className="font-display text-2xl md:text-3xl font-bold text-foreground text-center tracking-tightest mb-8">Process locally. <span className="gradient-text">Load anywhere.</span></h2>
                 <div className="grid md:grid-cols-3 gap-4 stagger-fade">
                     {[
                         {
-                            icon: Upload,
-                            title: "Run",
-                            desc: "Point the open-source pipeline at your SRA accession or local FASTQ. It runs anywhere — laptop, HPC, or cloud — and your raw data never has to leave your machine.",
+                            icon: Terminal,
+                            title: "Run the pipeline",
+                            desc: "Point singlet at an SRA accession or your own FASTQs. It runs anywhere — laptop, HPC, or cloud — and your raw reads never have to leave your machine.",
                         },
                         {
                             icon: Zap,
-                            title: "Harmonize",
-                            desc: "Identical references, QC, and normalization as every public dataset. The output is a standard matrix in the same gene space — no batch effects from different tools or builds.",
+                            title: "Get .singlet output",
+                            desc: "Identical aligner, reference, and QC as every public dataset. The output is open .singlet / .1pz in the same gene space — no batch effects from different tools or builds.",
                         },
                         {
                             icon: Shield,
-                            title: "Load",
-                            desc: "Open your harmonized matrix with singlet.load() and stream it through the same DataLoader, concatenated with any slice of the public atlas.",
+                            title: "Load with the same tools",
+                            desc: "Open your harmonized output with singlet.load_dir() in Python or as_seurat() in R — directly comparable and concatenable with any slice of the public atlas.",
                         },
                     ].map((step) => (
                         <div key={step.title} className="rounded-xl border border-border bg-card p-5 text-center">
@@ -60,7 +60,25 @@ const BYOD = () => (
 
             <div className="glow-line mx-auto max-w-4xl" />
 
-            {/* Code example */}
+            {/* Code example — CLI */}
+            <div className="rounded-xl border border-border overflow-hidden my-12">
+                <div className="flex items-center gap-1.5 px-4 py-2.5 border-b border-border bg-muted/30">
+                    <div className="w-2.5 h-2.5 rounded-full bg-destructive/60" />
+                    <div className="w-2.5 h-2.5 rounded-full bg-yellow-500/60" />
+                    <div className="w-2.5 h-2.5 rounded-full bg-green-500/60" />
+                    <span className="ml-2 font-mono text-[10px] text-muted-foreground">terminal</span>
+                </div>
+                <div className="bg-background p-5 font-mono text-xs leading-6 overflow-x-auto">
+                    <code className="text-foreground">
+                        <span className="text-muted-foreground"># Process an SRA accession with the same reference as the atlas</span>{"\n"}
+                        <span className="text-primary">$</span> singlet-process SRR11537951 -o ./out --organism human{"\n\n"}
+                        <span className="text-muted-foreground"># or your own FASTQs:</span>{"\n"}
+                        <span className="text-primary">$</span> singlet-process --reads R1.fastq.gz R2.fastq.gz -o ./out --organism human
+                    </code>
+                </div>
+            </div>
+
+            {/* Code example — Python */}
             <div className="rounded-xl border border-border overflow-hidden my-12">
                 <div className="flex items-center gap-1.5 px-4 py-2.5 border-b border-border bg-muted/30">
                     <div className="w-2.5 h-2.5 rounded-full bg-destructive/60" />
@@ -70,18 +88,13 @@ const BYOD = () => (
                 </div>
                 <div className="bg-background p-5 font-mono text-xs leading-6 overflow-x-auto">
                     <code className="text-foreground">
-                        <span className="text-muted-foreground"># 1. Harmonize your run with the open pipeline</span>{"\n"}
-                        <span className="text-muted-foreground">#    $ singlet-pipeline run SRR12345678 -o my_sample/</span>{"\n\n"}
-                        <span className="text-primary">import</span> singlet{"\n\n"}
-                        <span className="text-muted-foreground"># 2. Load your harmonized matrix</span>{"\n"}
-                        mine = singlet.load(<span className="text-primary">"my_sample/"</span>){"\n\n"}
-                        <span className="text-muted-foreground"># 3. Stream it next to the public atlas</span>{"\n"}
-                        loader = singlet.dataloader({"\n"}
-                        {"  "}datasets=[mine, <span className="text-primary">"atlas:pancreas"</span>],{"\n"}
-                        {"  "}batch_size=<span className="text-primary">512</span>{"\n"}
-                        ){"\n\n"}
-                        <span className="text-muted-foreground"># Same gene space — concatenate freely</span>{"\n"}
-                        mine.var_names == singlet.atlas.var_names  <span className="text-muted-foreground"># True</span>
+                        <span className="text-muted-foreground"># Same pipeline, from Python</span>{"\n"}
+                        <span className="text-primary">from</span> singlet <span className="text-primary">import</span> run_pipeline{"\n\n"}
+                        run = run_pipeline(<span className="text-primary">"SRR11537951"</span>, <span className="text-primary">"./out"</span>, organism=<span className="text-primary">"human"</span>){"\n\n"}
+                        <span className="text-muted-foreground"># Load the harmonized output anywhere</span>{"\n"}
+                        <span className="text-primary">import</span> singlet{"\n"}
+                        adata = singlet.load_dir(<span className="text-primary">"./out"</span>){"\n\n"}
+                        <span className="text-muted-foreground"># R: library(singlet); seu &lt;- as_seurat("./out/gene_counts.1pz")</span>
                     </code>
                 </div>
             </div>
@@ -93,23 +106,23 @@ const BYOD = () => (
                 {[
                     {
                         icon: FileCheck,
-                        title: "Consistent processing",
-                        desc: "Same pipeline as every public dataset. Zero batch effects from different tools or references.",
+                        title: "Same as the atlas",
+                        desc: "Identical aligner, reference, and QC as every public dataset — so your data is directly comparable with zero batch effects from tooling or builds.",
                     },
                     {
                         icon: Zap,
                         title: "One gene space",
-                        desc: "Your matrix lands in the same genes and normalization as the atlas — concatenate and train across both freely.",
+                        desc: "Your output lands in the same genes as the atlas — concatenate and analyze across both with the same singlet tools.",
                     },
                     {
                         icon: Lock,
-                        title: "Your data stays yours",
-                        desc: "The pipeline runs on your own hardware. Raw reads never have to leave your environment.",
+                        title: "Local & free",
+                        desc: "The pipeline runs on your own hardware. No upload required, no account, no keys, no tiers — and $0 egress.",
                     },
                     {
                         icon: FileCheck,
-                        title: "Publication-ready",
-                        desc: "Reproducible, traceable methods against the same public reference — reviewers trust it.",
+                        title: "Open formats",
+                        desc: "Output is open .singlet / .1pz that loads with singlet.load_dir() in Python or as_seurat() in R. Reproducible, traceable methods reviewers trust.",
                     },
                 ].map((item) => {
                     const Icon = item.icon;
@@ -125,14 +138,14 @@ const BYOD = () => (
                 })}
             </div>
 
-            {/* Security */}
+            {/* Notice */}
             <div className="rounded-xl border border-border bg-card p-5 mb-12 flex items-start gap-4">
                 <Lock size={18} className="text-primary mt-0.5 flex-shrink-0" />
                 <div>
-                    <h2 className="font-display text-sm font-bold text-foreground mb-1">Run it your way</h2>
+                    <h2 className="font-display text-sm font-bold text-foreground mb-1">It's all yours</h2>
                     <p className="text-xs text-muted-foreground leading-relaxed">
-                        The pipeline is MIT licensed, so you can run it entirely on your own laptop, HPC, or VPC — no upload, no lock-in.
-                        Prefer not to manage it? Team and Enterprise plans include managed harmonization, where we run the same pipeline on your data for you.
+                        The pipeline is MIT licensed and runs entirely on your own laptop, HPC, or VPC — no upload, no lock-in.
+                        Data is CC0 and code is MIT, with no accounts, keys, or tiers. The live atlas spans 73,749 samples and 430.7M cells, and your harmonized data loads right alongside it.
                     </p>
                 </div>
             </div>
@@ -143,14 +156,11 @@ const BYOD = () => (
                     The pipeline is free and open source.
                 </p>
                 <p className="text-sm text-muted-foreground mb-6">
-                    Run it yourself for free, or let us manage harmonization on a paid plan.
+                    Run it on your own compute — no upload, no account, no plan.
                 </p>
                 <div className="flex flex-wrap gap-3 justify-center">
                     <Link to="/docs" className="shimmer-border inline-flex items-center gap-2 px-6 py-2.5 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity">
                         Read the Docs <ArrowRight size={14} />
-                    </Link>
-                    <Link to="/pricing" className="inline-flex items-center gap-2 px-6 py-2.5 rounded-md border border-border bg-secondary text-secondary-foreground text-sm font-medium hover:bg-muted transition-colors">
-                        See Plans
                     </Link>
                 </div>
             </section>

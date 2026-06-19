@@ -51,14 +51,13 @@ const PYTHON_INSTALL = `pip install singlet`;
 
 const PYTHON_LOAD_GSE = `import singlet
 
-# List all samples in a GEO series
-df = singlet.samples(gse_id="GSE200218")
-print(df[["gsm_id", "organism", "status", "n_cells"]])
+# Load an entire GEO series in one line
+adata = singlet.load("GSE149383")
+print(adata)  # AnnData: cells × genes
 
-# Load the first successful sample into AnnData
-gsm_id = df.loc[df["status"] == "SUCCESS", "gsm_id"].iloc[0]
-adata = singlet.load(gsm_id)
-print(adata)  # AnnData: 18432 cells × 28476 genes`;
+# Filter the catalog, then load a specific sample
+df = singlet.catalog(organism="Homo sapiens", tissue="lung")
+adata = singlet.load(df.iloc[0]["gsm_id"], genes=["CD3D", "CD8A"])`;
 
 const PYTHON_CATALOG_FILTER = `import singlet
 
@@ -66,26 +65,21 @@ const PYTHON_CATALOG_FILTER = `import singlet
 df = singlet.catalog(
     organism="Homo sapiens",
     tissue="blood",
-    status="SUCCESS",
     min_cells=10000,
 )
 print(f"{len(df)} samples matched")
 
-# Load any sample directly
-adata = singlet.load("GSM6010234")
+# Load any sample directly, optionally filtering cells
+adata = singlet.load("GSM6010234", obs_filter="n_genes > 500")
 adata.obs.head()`;
 
-const PYTHON_PYTORCH = `import singlet, torch
+const PYTHON_PYTORCH = `import torch
+from singlet.torch import DataLoader
 
-# Stream directly into a PyTorch DataLoader
-loader = singlet.dataloader(
-    organism="Homo sapiens",
-    tissue="lung",
-    batch_size=512,
-    device="cuda",
-)
+# Stream a series straight into a PyTorch DataLoader
+loader = DataLoader("GSE149383", batch_size=256, normalize=True)
 
-for cells, meta in loader:        # cells on GPU
+for cells, meta in loader:
     logits = model(cells)
     loss = criterion(logits, meta["cell_type"])
     loss.backward()`;
@@ -96,13 +90,12 @@ const R_INSTALL = `install.packages("singlet")  # CRAN
 
 const R_LOAD_GSE = `library(singlet)
 
-# List samples in a series
-df <- singlet_samples(gse_id = "GSE200218")
-head(df[, c("gsm_id", "organism", "status", "n_cells")])
+# Read a .1pz bundle straight from the atlas
+mat <- read_1pz("GSE149383")
 
-# Load a sample as SingleCellExperiment
-gsm_id <- df$gsm_id[df$status == "SUCCESS"][1]
-sce <- singlet_load(gsm_id)
+# Convert to your object of choice
+sce <- as_sce(mat)       # SingleCellExperiment
+seu <- as_seurat(mat)    # Seurat
 sce`;
 
 const R_CATALOG_FILTER = `library(singlet)
@@ -111,23 +104,27 @@ const R_CATALOG_FILTER = `library(singlet)
 df <- singlet_catalog(
   organism = "Homo sapiens",
   tissue   = "liver",
-  status   = "SUCCESS",
   min_cells = 10000
 )
 cat(nrow(df), "samples matched\\n")
 
-# Convert to Seurat
-library(Seurat)
-seu <- singlet_load("GSM5220101", format = "seurat")
+# Read a matching sample and convert to Seurat
+mat <- read_1pz(df$gsm_id[1])
+seu <- as_seurat(mat)
 seu`;
 
-const CURL_EXAMPLE = `# Download a .singlet bundle directly
-curl -L "https://data.singlet.bio/bundles/GSE200218.singlet" \\
-     -o "GSE200218.singlet"
+const CURL_EXAMPLE = `# Download a .singlet bundle directly — no auth, $0 egress
+curl -O https://data.singlet.bio/data/GSE149383/GSE149383.singlet
 
-# Inspect size first
-curl -sI "https://data.singlet.bio/bundles/GSE200218.singlet" \\
-  | grep content-length`;
+# Open it locally and convert to AnnData
+python - <<'PY'
+import singlet
+adata = singlet.SingletBundle.open("GSE149383.singlet").to_anndata()
+print(adata)
+PY
+
+# ...or skip curl entirely — singlet.load() fetches and caches for you
+python -c 'import singlet; print(singlet.load("GSE149383"))'`;
 
 const DocsAccess = () => {
   const [pyTab, setPyTab] = useState<"load" | "filter" | "pytorch">("load");

@@ -39,11 +39,18 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
     // Pagination / sorting
     const page     = Math.max(0, intParam(url, "page", 0));
     const pageSize = clampPageSize(intParam(url, "page_size", 50));
-    const sortRaw  = url.searchParams.get("sort") ?? "pipeline_date";
-    const sort     = ALLOWED_SORT_COLS.has(sortRaw) ? sortRaw : "pipeline_date";
+    const sortRaw  = url.searchParams.get("sort");
+    const hasSort  = !!sortRaw && ALLOWED_SORT_COLS.has(sortRaw);
+    const sort     = hasSort ? (sortRaw as string) : null;
     const asc      = url.searchParams.get("asc") === "1";
     const dir      = asc ? "ASC" : "DESC";
     const offset   = page * pageSize;
+
+    // Default ordering: successful rows with real data first.
+    // (SQLite sorts NULLs first on ASC, so `n_cells DESC` places NULLs last.)
+    const orderBy = sort
+      ? `${sort} ${dir} NULLS LAST`
+      : `(status = 'DONE') DESC, n_cells DESC`;
 
     const conditions: string[] = [];
     const bindParams: (string | number)[] = [];
@@ -75,7 +82,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
                 status, qc_flag, failure_category, singlet_version, pipeline_date,
                 pz_size_bytes, title, source, srr_ids, last_updated
          FROM gsm ${where}
-         ORDER BY ${sort} ${dir} NULLS LAST
+         ORDER BY ${orderBy}
          LIMIT ? OFFSET ?`
       ).bind(...bindParams, pageSize, offset).all<Record<string, unknown>>(),
     ]);

@@ -1,10 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import {
-  ArrowRight, Lock, Crown, Copy, Check,
-  Cpu, Zap, Package, Github,
-  Search, Filter, BarChart3, FlaskConical,
-  Key,
+  ArrowRight, Copy, Check,
+  Download, Terminal, Package, Github,
+  Cpu, Database, BookOpen,
 } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
@@ -31,12 +30,10 @@ function useScrollspy(ids: string[], offset = 120) {
 /* ── Code Block ── */
 const CodeBlock = ({
   code,
-  pro = false,
   title,
   comment,
 }: {
   code: string;
-  pro?: boolean;
   title?: string;
   comment?: string;
 }) => {
@@ -48,16 +45,11 @@ const CodeBlock = ({
   };
 
   return (
-    <div className={`rounded-lg border overflow-hidden my-4 ${pro ? "border-primary/30 bg-primary/[0.02]" : "border-border"}`}>
-      {(title || pro) && (
+    <div className="rounded-lg border border-border overflow-hidden my-4">
+      {title && (
         <div className="flex items-center justify-between px-4 py-2 border-b border-border/50 bg-muted/30">
           <div className="flex items-center gap-2">
-            {title && <span className="text-xs font-mono text-muted-foreground">{title}</span>}
-            {pro && (
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-primary/15 text-primary">
-                <Crown size={10} /> Pro
-              </span>
-            )}
+            <span className="text-xs font-mono text-muted-foreground">{title}</span>
           </div>
           <button onClick={copy} className="text-muted-foreground hover:text-foreground transition-colors p-1">
             {copied ? <Check size={14} /> : <Copy size={14} />}
@@ -65,7 +57,7 @@ const CodeBlock = ({
         </div>
       )}
       <div className="relative">
-        {!title && !pro && (
+        {!title && (
           <button onClick={copy} className="absolute top-3 right-3 text-muted-foreground hover:text-foreground transition-colors p-1 z-10">
             {copied ? <Check size={14} /> : <Copy size={14} />}
           </button>
@@ -83,68 +75,16 @@ const CodeBlock = ({
   );
 };
 
-/* ── Pro gate callout ── */
-const ProGate = ({ feature }: { feature: string }) => (
-  <div className="rounded-lg border border-primary/20 bg-primary/[0.04] px-4 py-3 my-4 flex items-start gap-3">
-    <Lock size={14} className="text-primary mt-0.5 flex-shrink-0" />
-    <div>
-      <p className="text-xs text-foreground font-medium">{feature} — free tier included, Pro for higher limits.</p>
-      <Link to="/pricing" className="text-xs text-primary hover:underline">See plans →</Link>
-    </div>
-  </div>
-);
-
-/* ── Tier badge ── */
-const TierBadge = ({ tier }: { tier: string }) => {
-  if (tier === "free") return null;
-  const isAcademic = tier === "academic";
-  return (
-    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider flex-shrink-0 ${isAcademic ? "bg-emerald-500/15 text-emerald-600" : "bg-primary/15 text-primary"
-      }`}>
-      {!isAcademic && <Crown size={8} />} {tier}
-    </span>
-  );
-};
-
 /* ── Section anchors ── */
 const SECTIONS = [
-  { id: "install", label: "Install" },
   { id: "quickstart", label: "Quick Start" },
-  { id: "predict", label: "Predict" },
-  { id: "generate", label: "Generate" },
-  { id: "analyze", label: "Analyze" },
-  { id: "mcp", label: "MCP Tools" },
-  { id: "reference", label: "API Reference" },
-  { id: "data-objects", label: "Data Objects" },
-  { id: "specs", label: "Format Specs" },
+  { id: "download", label: "Download data" },
+  { id: "pipeline", label: "Run the pipeline" },
+  { id: "pytorch", label: "PyTorch loaders" },
+  { id: "mcp", label: "MCP tool" },
+  { id: "formats", label: "Data objects & formats" },
   { id: "citation", label: "Citation" },
 ] as const;
-
-/* ── Grouped API Reference table ── */
-const RefGroup = ({
-  icon,
-  label,
-  fns,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  fns: { fn: string; desc: string; tier: string }[];
-}) => (
-  <>
-    <h3 className="font-display text-base font-semibold text-foreground mb-4 flex items-center gap-2">
-      {icon} {label}
-    </h3>
-    <div className="rounded-lg border border-border divide-y divide-border mb-8 overflow-hidden">
-      {fns.map((item) => (
-        <div key={item.fn} className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-4 px-4 py-3">
-          <code className="font-mono text-xs text-foreground break-all sm:whitespace-nowrap flex-shrink-0 mt-0.5">{item.fn}</code>
-          <span className="text-xs text-muted-foreground flex-1">{item.desc}</span>
-          <TierBadge tier={item.tier} />
-        </div>
-      ))}
-    </div>
-  </>
-);
 
 /* ══════════════════════════════════════════════════════════════════
    PAGE
@@ -167,16 +107,17 @@ const Docs = () => {
         </div>
         <div className="max-w-4xl mx-auto relative">
           <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-primary/30 bg-primary/[0.08] text-xs font-mono text-primary mb-4">
-            Python API
+            Open dataset · CC0 data · MIT code
           </span>
           <h1 className="font-display text-4xl md:text-6xl font-bold text-foreground tracking-tightest mb-4">
             <span className="font-mono">singlet</span>
           </h1>
           <p className="text-base md:text-lg text-muted-foreground max-w-2xl leading-relaxed mb-6">
-            Predict expression for any condition. Generate cells on your device. Analyze with interpretable programs.{" "}
-            <span className="gradient-text font-semibold">All from one package.</span>
+            An open single-cell RNA-seq dataset and the open-source{" "}
+            <span className="font-mono text-foreground">singlet</span> package to fetch and process it.{" "}
+            <span className="gradient-text font-semibold">Free and public — no accounts, no API keys, no sign-in.</span>
           </p>
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap gap-3 mb-6">
             <div className="inline-flex items-center gap-2 px-4 py-2.5 rounded-md bg-muted border border-border font-mono text-sm text-foreground">
               pip install singlet
             </div>
@@ -188,6 +129,12 @@ const Docs = () => {
               className="inline-flex items-center gap-2 px-4 py-2.5 rounded-md border border-border text-sm text-muted-foreground hover:text-foreground transition-colors">
               <Package size={16} /> PyPI
             </a>
+          </div>
+          <div className="flex flex-wrap gap-x-6 gap-y-2 text-xs text-muted-foreground">
+            <span><span className="text-foreground font-semibold">73,749</span> samples</span>
+            <span><span className="text-foreground font-semibold">430.7M</span> cells</span>
+            <span><span className="text-foreground font-semibold">146</span> species</span>
+            <span><span className="text-foreground font-semibold">8,271</span> series</span>
           </div>
         </div>
       </section>
@@ -214,364 +161,245 @@ const Docs = () => {
 
         <div className="lg:ml-56 flex-1 max-w-3xl mx-auto px-6 lg:px-10 pb-24">
 
-          {/* ────────────────────────── INSTALL ────────────────────────── */}
-          <section id="install" className="pt-16">
-            <h2 className="font-display text-2xl font-bold text-foreground tracking-tightest mb-6">Install</h2>
+          {/* ────────────────────────── QUICK START ────────────────────────── */}
+          <section id="quickstart" className="pt-16">
+            <h2 className="font-display text-2xl font-bold text-foreground tracking-tightest mb-6">Quick Start</h2>
+
+            <p className="text-sm text-muted-foreground leading-relaxed mb-4">
+              Singlet is an open scRNA-seq dataset (data <span className="text-foreground font-semibold">CC0</span>,
+              code <span className="text-foreground font-semibold">MIT</span>) plus the open-source{" "}
+              <span className="font-mono text-foreground">singlet</span> package to fetch and process it. Downloads come
+              from Cloudflare R2 with <span className="text-foreground font-semibold">$0 egress</span> — no accounts, no
+              API keys, no sign-in.
+            </p>
 
             <CodeBlock
-              code={`pip install singlet\n\n# GPU acceleration (optional)\npip install singlet[cuda]`}
+              code={`# Install the package
+pip install singlet
+
+# Optional extras
+pip install "singlet[torch]"   # PyTorch loaders
+pip install "singlet[mcp]"     # MCP data-fetch tool
+pip install "singlet[gpu]"     # GPU acceleration`}
               title="Terminal"
+            />
+
+            <CodeBlock
+              code={`import singlet
+
+# Fetch a public per-GSE bundle and load it as AnnData
+adata = singlet.load("GSE149383")
+
+adata          # AnnData — cells × genes
+adata.X        # sparse count matrix
+adata.obs      # per-cell metadata
+adata.var      # gene annotations`}
+              title="quick_start.py"
+              comment="No key, no login — singlet.load() resolves the public bundle and returns AnnData."
             />
 
             <div className="rounded-lg border border-border bg-card p-5 mt-4">
               <h4 className="font-display text-sm font-semibold text-foreground mb-2">Requirements</h4>
               <div className="grid grid-cols-2 gap-3 text-xs text-muted-foreground">
                 <div><span className="text-foreground font-medium">Python</span> ≥ 3.9</div>
-                <div><span className="text-foreground font-medium">PyTorch</span> ≥ 2.0</div>
-                <div><span className="text-foreground font-medium">CUDA</span> ≥ 11.8 (optional)</div>
-                <div><span className="text-foreground font-medium">Memory</span> 4 GB+</div>
+                <div><span className="text-foreground font-medium">AnnData / scanpy</span> compatible</div>
+                <div><span className="text-foreground font-medium">PyTorch</span> ≥ 2.0 (for <span className="font-mono">[torch]</span>)</div>
+                <div><span className="text-foreground font-medium">CUDA</span> ≥ 11.8 (for <span className="font-mono">[gpu]</span>)</div>
               </div>
             </div>
-
-            <h3 className="font-display text-base font-semibold text-foreground mb-3 mt-8 flex items-center gap-2">
-              <Key size={14} className="text-primary" /> API Key
-            </h3>
-            <p className="text-sm text-muted-foreground leading-relaxed mb-3">
-              Downloads and inference require a free API key.{" "}
-              <Link to="/pricing" className="text-primary hover:underline">Create one here</Link>, then configure:
-            </p>
-
-            <CodeBlock
-              code={`# Environment variable (recommended for servers & CI)\nexport SINGLET_API_KEY="sdb_live_..."\n\n# Or: programmatic login\nsinglet.login(key="sdb_live_...")\n\n# Or: config file at ~/.config/singlet/credentials (0600 permissions)`}
-              title="Authentication"
-            />
-
-            <div className="rounded-lg border border-border overflow-x-auto mt-4 mb-2">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b border-border bg-muted/30">
-                    <th className="px-4 py-2.5 text-left font-semibold text-foreground">Tier</th>
-                    <th className="px-4 py-2.5 text-left font-semibold text-foreground">Functions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {[
-                    ["No key needed", "programs(), pp.*, tl.pca(), tl.umap(), DataLoader — all local analysis"],
-                    ["Free key", "predict(), compare(), perturb(), gene_profile(), generate(), MCP tools"],
-                    ["Pro ($100/mo)", "Batch API, BYOD, higher rate limits"],
-                  ].map((row) => (
-                    <tr key={row[0]} className="border-b border-border/50">
-                      <td className="px-4 py-2 font-medium text-foreground whitespace-nowrap">{row[0]}</td>
-                      <td className="px-4 py-2 font-mono text-muted-foreground">{row[1]}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <p className="text-xs text-muted-foreground">
-              Keys use prefixes: <code className="bg-muted px-1 py-0.5 rounded text-[11px]">sdb_live_</code> (production), <code className="bg-muted px-1 py-0.5 rounded text-[11px]">sdb_test_</code> (sandbox).
-              Never commit keys to version control. <Link to="/pricing" className="text-primary hover:underline">Rate limits &amp; plans →</Link>
-            </p>
           </section>
 
           <div className="glow-line mx-auto" />
 
-          {/* ────────────────────────── QUICK START ────────────────────────── */}
-          <section id="quickstart" className="pt-20">
-            <h2 className="font-display text-2xl font-bold text-foreground tracking-tightest mb-6">Quick Start</h2>
+          {/* ────────────────────────── DOWNLOAD DATA ────────────────────────── */}
+          <section id="download" className="pt-20">
+            <h2 className="font-display text-2xl font-bold text-foreground tracking-tightest mb-6 flex items-center gap-2">
+              <Download size={20} className="text-primary" /> Download data
+            </h2>
 
+            <p className="text-sm text-muted-foreground leading-relaxed mb-6">
+              Every dataset is published as a per-GSE <span className="font-mono text-foreground">.singlet</span> bundle on
+              Cloudflare R2. There are no accounts and no egress fees. The explicit download below is fully reproducible —
+              the file you fetch is the file everyone else fetches.
+            </p>
+
+            <h3 className="font-display text-base font-semibold text-foreground mb-3">Explicit download (reproducible)</h3>
+            <CodeBlock
+              code={`# Download the bundle directly — public URL, $0 egress
+curl -O https://data.singlet.bio/data/GSE149383/GSE149383.singlet`}
+              title="Terminal"
+            />
             <CodeBlock
               code={`import singlet
 
-# Predict expression for any condition — returns named biological programs
-result = singlet.predict(
-    species="human", tissue="liver",
-    cell_type="hepatocyte", disease="NASH"
-)
-result.programs       # lipid_metabolism (+2.3×), inflammatory_signaling (+1.8×)
-result.confidence     # {'overall': 0.87, 'p_value': 0.003}
-result.top_genes(5)   # ['FASN', 'SCD', 'TNF', 'IL6', 'CCL2']
+bundle = singlet.SingletBundle.open("GSE149383.singlet")
 
-# Generate cells on your device from the prediction
-adata = result.generate(n_cells=500)
-# AnnData — 500 cells × ~30,000 genes, generated locally via W · ĥ
+adata = bundle.to_anndata()        # gene_counts = exon + intron, returns AnnData
+bundle.to_h5ad("GSE149383.h5ad")   # write a standard .h5ad`}
+              title="open_bundle.py"
+            />
 
-# One-liner convenience
-adata = singlet.generate(
-    species="human", tissue="liver",
-    cell_type="hepatocyte", n_cells=1000
-)`}
-              title="quick_start.py"
+            <h3 className="font-display text-base font-semibold text-foreground mb-3 mt-8">Convenience one-liner</h3>
+            <CodeBlock
+              code={`import singlet
+
+# Resolves the public per-GSE bundle and returns AnnData
+adata = singlet.load("GSE149383")`}
+              title="load.py"
+            />
+
+            <h3 className="font-display text-base font-semibold text-foreground mb-3 mt-8">Load a local pipeline output directory</h3>
+            <CodeBlock
+              code={`import singlet
+
+# Load an "out/" directory produced by the pipeline
+adata = singlet.load_dir("out/", layer="gene_counts")`}
+              title="load_dir.py"
+            />
+
+            <h3 className="font-display text-base font-semibold text-foreground mb-3 mt-8">Browse the atlas offline</h3>
+            <CodeBlock
+              code={`import singlet
+
+singlet.catalog()                      # the full catalog
+singlet.datasets(organism="human")     # filter datasets by organism
+singlet.summary()                      # high-level atlas summary`}
+              title="browse.py"
+            />
+
+            <h3 className="font-display text-base font-semibold text-foreground mb-3 mt-8">R (load & analyze only)</h3>
+            <CodeBlock
+              code={`library(singlet)
+
+mat <- read_1pz("counts.1pz")     # read a .1pz sparse matrix
+seu <- as_seurat("counts.1pz")    # Seurat object
+sce <- as_sce("counts.1pz")       # SingleCellExperiment`}
+              title="load.R"
+              comment="R loads and analyzes outputs only — there is no raw-reads pipeline in R."
+            />
+          </section>
+
+          <div className="glow-line mx-auto" />
+
+          {/* ────────────────────────── RUN THE PIPELINE ────────────────────────── */}
+          <section id="pipeline" className="pt-20">
+            <h2 className="font-display text-2xl font-bold text-foreground tracking-tightest mb-6 flex items-center gap-2">
+              <Terminal size={20} className="text-primary" /> Run the pipeline
+            </h2>
+
+            <p className="text-sm text-muted-foreground leading-relaxed mb-6">
+              Process your own reads into the same harmonized{" "}
+              <span className="font-mono text-foreground">.singlet</span> format. Point the pipeline at an SRA accession
+              (or your own FASTQ) and it produces an output directory you can load with{" "}
+              <span className="font-mono text-foreground">singlet.load_dir()</span>.
+            </p>
+
+            <h3 className="font-display text-base font-semibold text-foreground mb-3">Command line</h3>
+            <CodeBlock
+              code={`singlet-process SRR11537951 -o ./out --organism human`}
+              title="Terminal"
+            />
+
+            <h3 className="font-display text-base font-semibold text-foreground mb-3 mt-8">Python</h3>
+            <CodeBlock
+              code={`from singlet import run_pipeline
+
+run_pipeline("SRR11537951", "./out", organism="human")`}
+              title="run_pipeline.py"
             />
 
             <div className="rounded-lg border border-border/60 bg-muted/20 px-5 py-3 mt-4">
               <p className="text-xs text-muted-foreground leading-relaxed">
-                <span className="text-foreground font-semibold">Free:</span> Full CPM inference + local cell generation + MCP tools.{" "}
-                <span className="text-foreground font-semibold">Pro ($100/mo):</span> Batch API, BYOD, higher rate limits.{" "}
-                <Link to="/pricing" className="text-primary hover:underline">See plans →</Link>
+                <span className="text-foreground font-semibold">R note:</span> there is no raw-reads pipeline in R. The R
+                package only loads and analyzes pipeline outputs — run the pipeline from the CLI or Python, then read the
+                results in R with <span className="font-mono">read_1pz()</span>, <span className="font-mono">as_seurat()</span>,
+                or <span className="font-mono">as_sce()</span>.
               </p>
             </div>
           </section>
 
           <div className="glow-line mx-auto" />
 
-          {/* ────────────────────────── PREDICT ────────────────────────── */}
-          <section id="predict" className="pt-20">
-            <h2 className="font-display text-2xl font-bold text-foreground tracking-tightest mb-6">Predict</h2>
-
-            <p className="text-sm text-muted-foreground leading-relaxed mb-6">
-              The <span className="text-foreground font-semibold">Conditional Program Model</span> (CPM) predicts gene expression for any biological condition.
-              Every prediction decomposes as{" "}
-              <span className="font-mono text-foreground"><em>x̂</em> = <em>W</em> · <em>ĥ</em></span>{" "}
-              — a single matrix multiply through named biological programs. The API returns program activities (<em>ĥ</em>) and confidence scores;
-              your device generates cells locally using the open-source W matrix.
-            </p>
-
-            <h3 className="font-display text-base font-semibold text-foreground mb-3">Predict expression</h3>
-            <CodeBlock
-              code={`result = singlet.predict(
-    species="human", tissue="liver",
-    cell_type="hepatocyte", disease="NASH"
-)
-
-result.programs
-# Programs UP:   lipid_metabolism (+2.3×), inflammatory_signaling (+1.8×)
-# Programs DOWN: oxidative_phosphorylation (−0.6×), bile_acid_synthesis (−0.5×)
-
-result.confidence     # {'overall': 0.87, 'p_value': 0.003}
-result.top_genes(5)   # ['FASN', 'SCD', 'TNF', 'IL6', 'CCL2']
-result.expression     # full ~30,000-gene profile`}
-              title="singlet.predict()"
-            />
-
-            <h3 className="font-display text-base font-semibold text-foreground mb-3 mt-8">Predict perturbation effects</h3>
-            <CodeBlock
-              code={`# What happens when you knock out PCSK9 in hepatocytes?
-delta = singlet.perturb(
-    cell_type="hepatocyte", tissue="liver",
-    perturbation="PCSK9_KO"
-)
-delta.affected_programs
-# cholesterol_biosynthesis (−1.4×), LDLR_regulatory (+0.8×)
-
-# Generate cells for control and perturbed conditions
-adata_ctrl = delta.generate_control(n_cells=200)
-adata_pert = delta.generate_perturbed(n_cells=200)
-
-# Check safety across cell types
-safety = singlet.perturb(
-    perturbation="PCSK9_KO",
-    cell_types=["hepatocyte", "cardiomyocyte", "macrophage"]
-)
-safety.cross_cell_type_effects`}
-              title="singlet.perturb()"
-            />
-
-            <h3 className="font-display text-base font-semibold text-foreground mb-3 mt-8">Compare conditions</h3>
-            <CodeBlock
-              code={`diff = singlet.compare(
-    condition_a={"tissue": "liver", "cell_type": "hepatocyte", "disease": "NASH"},
-    condition_b={"tissue": "liver", "cell_type": "hepatocyte", "disease": "healthy"}
-)
-diff.programs  # ranked differential programs with magnitudes and confidence intervals
-
-# Generate cells for both sides to analyze locally
-adata_nash    = diff.generate_a(n_cells=300)
-adata_healthy = diff.generate_b(n_cells=300)`}
-              title="singlet.compare()"
-            />
-
-            <div className="rounded-lg border-2 border-primary/20 bg-primary/[0.04] p-5 mt-6">
-              <p className="text-sm text-foreground leading-relaxed mb-3">
-                <span className="font-semibold">Every prediction is decomposed.</span> Every gene in the output traces to specific named biological programs —
-                not opaque attention layers or latent dimensions. The full program dictionary (10,000+ programs) is open source.
-              </p>
-              <div className="grid grid-cols-3 gap-4 text-xs text-muted-foreground">
-                <div><span className="text-foreground font-medium">~5 ms</span> inference per call</div>
-                <div><span className="text-foreground font-medium">~30,000</span> genes per prediction</div>
-                <div><span className="text-foreground font-medium">10,000+</span> named programs</div>
-              </div>
-            </div>
-
-            <div className="rounded-lg border border-border bg-muted/20 p-4 mt-4">
-              <h4 className="text-xs font-semibold text-foreground mb-2">Coming soon</h4>
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                <span className="text-foreground">singlet.velocity()</span> — factor velocities from spliced/unspliced NMF.{" "}
-                <span className="text-foreground">singlet.predict_atac()</span> — chromatin accessibility from transcriptomic conditions.{" "}
-                <span className="text-foreground">singlet.predict_protein()</span> — surface protein levels via CITEseq bridges.{" "}
-                <span className="text-foreground">singlet.deconvolve_spatial()</span> — Visium spot deconvolution via NMF projection.
-              </p>
-            </div>
-          </section>
-
-          <div className="glow-line mx-auto" />
-
-          {/* ────────────────────────── GENERATE ────────────────────────── */}
-          <section id="generate" className="pt-20">
-            <h2 className="font-display text-2xl font-bold text-foreground tracking-tightest mb-6">Generate</h2>
+          {/* ────────────────────────── PYTORCH LOADERS ────────────────────────── */}
+          <section id="pytorch" className="pt-20">
+            <h2 className="font-display text-2xl font-bold text-foreground tracking-tightest mb-6 flex items-center gap-2">
+              <Cpu size={20} className="text-primary" /> PyTorch loaders
+            </h2>
 
             <p className="text-sm text-muted-foreground leading-relaxed mb-4">
-              Singlet generates cells <span className="text-foreground font-semibold">on your device</span>.
-              The API returns seeding vectors (program activities <em>ĥ</em>) — your local singlet package combines them
-              with the open-source W matrix to produce full expression profiles:{" "}
-              <span className="font-mono text-foreground"><em>x̂</em> = <em>W</em> · <em>ĥ</em></span>.
-              You control how many cells to generate and all data stays local.
+              The <span className="font-mono text-foreground">singlet[torch]</span> extra streams datasets straight into
+              PyTorch. <span className="font-mono text-foreground">singlet.torch.DataLoader</span> yields dense
+              <span className="font-mono text-foreground"> float32</span> tensors of shape
+              <span className="font-mono text-foreground"> (n_cells × n_genes)</span>.
             </p>
 
-            <div className="rounded-lg border border-border/60 bg-muted/20 px-5 py-3 mb-6">
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                <span className="text-foreground font-semibold">How it works:</span> The W matrix (10,000+ gene programs × ~30,000 genes) is open source and cached
-                locally on first use (~50 MB). Each API call returns a lightweight program activity vector (<em>ĥ</em>).
-                Cell generation is a single matrix multiply on your machine — no raw data ever leaves or enters the server.
-              </p>
-            </div>
-
-            <h3 className="font-display text-base font-semibold text-foreground mb-3">Generate from a prediction</h3>
             <CodeBlock
-              code={`result = singlet.predict(
-    species="human", tissue="liver",
-    cell_type="hepatocyte", disease="NASH"
-)
-
-# Generate cells locally — you control the sample size
-adata = result.generate(n_cells=500)
-# AnnData — 500 cells × ~30,000 genes
-# Heterogeneity modeled from program variance estimates
-
-adata.X           # expression matrix (sparse)
-adata.obs         # cell metadata (condition, programs, confidence)
-adata.var         # gene annotations`}
-              title="result.generate()"
-              comment="W matrix cached locally (~50 MB). Generation runs entirely on your device."
+              code={`pip install "singlet[torch]"`}
+              title="Terminal"
             />
 
-            <h3 className="font-display text-base font-semibold text-foreground mb-3 mt-8">One-liner convenience</h3>
-            <CodeBlock
-              code={`# Predict + generate in one call
-adata = singlet.generate(
-    species="human", tissue="liver",
-    cell_type="hepatocyte", disease="NASH",
-    n_cells=1000
-)
-
-# Generate for multiple conditions
-conditions = [
-    {"tissue": "liver", "cell_type": "hepatocyte", "disease": "NASH"},
-    {"tissue": "liver", "cell_type": "hepatocyte", "disease": "healthy"},
-    {"tissue": "liver", "cell_type": "kupffer_cell", "disease": "NASH"},
-]
-panels = [singlet.generate(species="human", n_cells=200, **c) for c in conditions]`}
-              title="singlet.generate()"
-            />
-
-            <h3 className="font-display text-base font-semibold text-foreground mb-3 mt-8">Explore the program dictionary</h3>
-            <CodeBlock
-              code={`# Browse all 10,000+ named programs
-programs = singlet.programs()
-# DataFrame: program_id, name, top_genes, GO_terms, ...
-
-# Gene-centric view — which programs use this gene?
-profile = singlet.gene_profile("TREM2")
-# Expression across cell types, tissues, diseases
-# Programs where TREM2 is a top contributor`}
-              title="singlet.programs() / singlet.gene_profile()"
-            />
-          </section>
-
-          <div className="glow-line mx-auto" />
-
-          {/* ────────────────────────── ANALYZE ────────────────────────── */}
-          <section id="analyze" className="pt-20">
-            <h2 className="font-display text-2xl font-bold text-foreground tracking-tightest mb-6">Analyze</h2>
-
-            <p className="text-sm text-muted-foreground leading-relaxed mb-4">
-              All analysis runs <span className="text-foreground font-semibold">locally on your device</span> using
-              standard AnnData objects from generated cells. Compatible with scanpy, scvi-tools, and any AnnData-based workflow.
-            </p>
-
-            <h3 className="font-display text-base font-semibold text-foreground mb-3">Preprocessing</h3>
-            <CodeBlock
-              code={`# Generated cells come as scanpy-compatible AnnData
-adata = singlet.generate(
-    species="human", tissue="liver",
-    cell_type="hepatocyte", disease="NASH",
-    n_cells=1000
-)
-
-# Standard preprocessing — runs locally, no auth needed
-singlet.pp.normalize(adata)               # log-normalization
-singlet.pp.highly_variable_genes(adata)   # feature selection (Seurat v3)
-singlet.pp.scale(adata)                   # unit variance`}
-              title="singlet.pp.* — runs locally, no auth needed"
-            />
-
-            <h3 className="font-display text-base font-semibold text-foreground mb-3 mt-8">Embeddings &amp; NMF</h3>
-            <CodeBlock
-              code={`# PCA — free, runs locally
-singlet.tl.pca(adata, n_comps=50)
-singlet.tl.umap(adata)
-
-# NMF projection — project generated cells into the program space
-singlet.tl.nmf(adata, k=50)
-# Each factor is a named program: "alveolar type 2 — surfactant production"
-
-# Differential programs between conditions
-adata_nash = singlet.generate(species="human", tissue="liver",
-    cell_type="hepatocyte", disease="NASH", n_cells=500)
-adata_healthy = singlet.generate(species="human", tissue="liver",
-    cell_type="hepatocyte", disease="healthy", n_cells=500)
-
-singlet.tl.differential_programs(adata_nash, adata_healthy)`}
-              title="Embeddings &amp; differential analysis"
-              comment="Gene programs (W matrix) are open source — 10,000+ named programs. Free for any use."
-            />
-
-            <h3 className="font-display text-base font-semibold text-foreground mb-3 mt-8">PyTorch integration</h3>
             <CodeBlock
               code={`from singlet.torch import DataLoader
 
-# Stream generated cells into PyTorch for downstream ML
-loader = DataLoader(adata, batch_size=512, shuffle=True, device="cuda")
+loader = DataLoader("GSE200218", batch_size=256, normalize=True)
 
 for batch in loader:
-    loss = model(batch)   # sparse float32, already on GPU
-    loss.backward()`}
-              title="singlet.torch.DataLoader"
+    ...   # dense float32 tensors, shape (n_cells × n_genes)`}
+              title="pytorch_loader.py"
             />
 
-            <div className="rounded-lg border-2 border-emerald-500/20 bg-emerald-500/[0.04] p-4 mt-4">
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                <span className="text-emerald-600 font-semibold">Open Source</span> — The full 10,000+ program gene dictionary (W matrix) is freely available.
-                Use for NNLS projection, GSEA, or as features for downstream ML. CZI hosts our proof-of-concept NMF models on CELLxGENE Census alongside
-                transformer models (Geneformer, scGPT) — the only non-transformer model chosen.
-              </p>
-            </div>
+            <h3 className="font-display text-base font-semibold text-foreground mb-3 mt-8">Lower-level dataset</h3>
+            <CodeBlock
+              code={`from singlet.torch import OnePZDataset
 
-            <div className="rounded-lg border-2 border-primary/20 bg-primary/[0.04] p-4 mt-4">
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                <span className="text-foreground font-semibold">Why NMF over PCA?</span> PCA gives you principal components with no biological meaning.
-                NMF gives you <span className="text-primary font-semibold">non-negative factors</span> that correspond to cell types, pathways, and regulatory circuits —
-                interpretable by construction.
-              </p>
-            </div>
+# Wrap a .1pz path or a public accession as a torch Dataset
+dataset = OnePZDataset("GSE200218")`}
+              title="dataset.py"
+              comment="Use singlet.torch.DataLoader — not singlet.dataloader()."
+            />
           </section>
 
           <div className="glow-line mx-auto" />
 
-          {/* ────────────────────────── MCP TOOLS ────────────────────────── */}
+          {/* ────────────────────────── MCP TOOL ────────────────────────── */}
           <section id="mcp" className="pt-20">
-            <h2 className="font-display text-2xl font-bold text-foreground tracking-tightest mb-6">MCP Tools</h2>
+            <h2 className="font-display text-2xl font-bold text-foreground tracking-tightest mb-6 flex items-center gap-2">
+              <Database size={20} className="text-primary" /> MCP tool
+            </h2>
 
             <p className="text-sm text-muted-foreground leading-relaxed mb-4">
-              Query the atlas from your AI coding assistant via{" "}
+              The <span className="font-mono text-foreground">singlet[mcp]</span> extra ships a{" "}
               <a href="https://modelcontextprotocol.io" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
                 Model Context Protocol
-              </a>.
-              Tool names mirror the Python API — same functions, same parameters.
+              </a>{" "}
+              server that lets an AI assistant search the catalog and fetch data. It is a catalog-search and
+              data-fetch tool only.
             </p>
 
-            <div className="grid gap-4 md:grid-cols-2 mb-6">
+            <CodeBlock
+              code={`pip install "singlet[mcp]"
+
+# Launch the server over stdio
+python -m singlet.mcp`}
+              title="Terminal"
+            />
+
+            <h3 className="font-display text-base font-semibold text-foreground mb-3 mt-8">What the tools do</h3>
+            <div className="rounded-lg border border-border divide-y divide-border mb-6 overflow-hidden">
+              {[
+                ["Search & browse", "Query the catalog of series and samples by organism, tissue, and other metadata."],
+                ["Per-sample QC", "Inspect quality-control metrics for an individual sample (GSM)."],
+                ["Sample access & fetch", "Pick a GSE/GSM and fetch its .singlet / h5ad bundle to local disk."],
+              ].map((row) => (
+                <div key={row[0]} className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-4 px-4 py-3">
+                  <span className="font-semibold text-xs text-foreground sm:whitespace-nowrap flex-shrink-0">{row[0]}</span>
+                  <span className="text-xs text-muted-foreground flex-1">{row[1]}</span>
+                </div>
+              ))}
+            </div>
+
+            <h3 className="font-display text-base font-semibold text-foreground mb-3">Connect a client</h3>
+            <div className="grid gap-4 md:grid-cols-2">
               <CodeBlock
                 code={`// .vscode/mcp.json
 {
@@ -579,202 +407,106 @@ for batch in loader:
     "singlet": {
       "type": "stdio",
       "command": "python",
-      "args": ["-m", "singlet.mcp.server"]
+      "args": ["-m", "singlet.mcp"]
     }
   }
 }`}
-                title="VS Code / Cursor (local)"
+                title="VS Code / Cursor"
               />
               <CodeBlock
-                code={`# CLI (local stdio)
+                code={`# Claude Code (stdio)
 $ claude mcp add singlet \\
-    -- python -m singlet.mcp.server
-
-# Or .mcp.json
-{
-  "mcpServers": {
-    "singlet": {
-      "command": "python",
-      "args": ["-m", "singlet.mcp.server"]
-    }
-  }
-}`}
-                title="Claude Code (local)"
+    -- python -m singlet.mcp`}
+                title="Claude Code"
               />
             </div>
 
-            <h3 className="font-display text-base font-semibold text-foreground mb-3">Example prompts</h3>
+            <h3 className="font-display text-base font-semibold text-foreground mb-3 mt-4">Example prompts</h3>
+            <div className="rounded-lg border border-border divide-y divide-border mb-2 overflow-hidden">
+              {[
+                "Search the catalog for human liver datasets",
+                "Show the QC metrics for sample GSM4502482",
+                "Fetch the .singlet bundle for GSE149383 to ./data",
+              ].map((prompt) => (
+                <div key={prompt} className="px-4 py-2.5">
+                  <span className="text-xs text-foreground italic">"{prompt}"</span>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <div className="glow-line mx-auto" />
+
+          {/* ────────────────────────── DATA OBJECTS & FORMATS ────────────────────────── */}
+          <section id="formats" className="pt-20">
+            <h2 className="font-display text-2xl font-bold text-foreground tracking-tightest mb-6">Data objects &amp; formats</h2>
+
+            <p className="text-sm text-muted-foreground leading-relaxed mb-6">
+              Singlet datasets are published as <span className="font-mono text-foreground">.singlet</span> bundles built
+              on the <span className="font-mono text-foreground">.1pz</span> compressed matrix format, and convert
+              losslessly to standard <span className="font-mono text-foreground">.h5ad</span> / AnnData.
+            </p>
+
             <div className="rounded-lg border border-border divide-y divide-border mb-6 overflow-hidden">
               {[
-                { prompt: "Predict expression for human liver hepatocytes with NASH", tier: "Free" },
-                { prompt: "What programs are upregulated in Crohn's macrophages vs healthy?", tier: "Free" },
-                { prompt: "Simulate a PCSK9 knockout in hepatocytes and show affected programs", tier: "Free" },
-                { prompt: "Generate 500 alveolar type 2 cells from a healthy human lung", tier: "Free" },
-                { prompt: "What does the gene TREM2 do across cell types?", tier: "Free" },
+                {
+                  fmt: ".singlet",
+                  desc: "Per-GSE bundle: a ZIP of zstd-compressed .1pz sparse matrices plus JSON metadata. h5ad-compatible. Open with singlet.SingletBundle.open() or singlet.load().",
+                },
+                {
+                  fmt: ".1pz",
+                  desc: "The underlying zstd-compressed sparse matrix format inside a bundle. Read directly with read_1pz() in R or via the bundle API in Python.",
+                },
+                {
+                  fmt: ".h5ad",
+                  desc: "Standard AnnData on disk. Produced by bundle.to_h5ad() and consumable by scanpy and any AnnData-based workflow.",
+                },
               ].map((item) => (
-                <div key={item.prompt} className="flex items-center gap-4 px-4 py-2.5">
-                  <span className="text-xs text-foreground italic flex-1">"{item.prompt}"</span>
-                  <span className={`text-[10px] font-mono font-bold flex-shrink-0 ${item.tier === "Free" ? "text-emerald-600" : "text-primary"}`}>{item.tier}</span>
+                <div key={item.fmt} className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-4 px-4 py-3">
+                  <code className="font-mono text-xs text-foreground sm:whitespace-nowrap flex-shrink-0 mt-0.5">{item.fmt}</code>
+                  <span className="text-xs text-muted-foreground flex-1">{item.desc}</span>
                 </div>
               ))}
             </div>
 
-            <h3 className="font-display text-base font-semibold text-foreground mb-3">Supported platforms</h3>
-            <div className="rounded-lg border border-border overflow-x-auto mb-4">
-              <table className="w-full text-xs">
-                <tbody>
-                  {[
-                    ["GitHub Copilot (VS Code)", ".vscode/mcp.json"],
-                    ["Claude Code", ".mcp.json or CLI"],
-                    ["Cursor", ".cursor/mcp.json"],
-                    ["Claude Desktop", "claude_desktop_config.json"],
-                    ["ChatGPT (OpenAI)", "Working Connections"],
-                    ["Any MCP client", "stdio transport (python -m singlet.mcp.server)"],
-                  ].map((row) => (
-                    <tr key={row[0]} className="border-b border-border/50">
-                      <td className="px-4 py-2 font-medium text-foreground">{row[0]}</td>
-                      <td className="px-4 py-2 font-mono text-muted-foreground">{row[1]}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <ProGate feature="MCP tools — predict, compare, perturb, generate, and gene_profile are free; batch API requires Pro" />
-          </section>
-
-          <div className="glow-line mx-auto" />
-
-          {/* ────────────────────────── API REFERENCE ────────────────────────── */}
-          <section id="reference" className="pt-20">
-            <h2 className="font-display text-2xl font-bold text-foreground tracking-tightest mb-6">API Reference</h2>
-
-            <RefGroup
-              icon={<Cpu size={16} className="text-primary" />}
-              label="CPM Inference"
-              fns={[
-                { fn: "singlet.predict(species, tissue, cell_type, disease, ...)", desc: "Predict expression profile for any condition. Returns program activities (ĥ), confidence scores, and p-values.", tier: "free" },
-                { fn: "singlet.perturb(cell_type, perturbation, ...)", desc: "Predict perturbation effects (KO, drug, overexpression). Returns affected programs with control/perturbed seeding vectors.", tier: "free" },
-                { fn: "singlet.perturb_batch(perturbations, ...)", desc: "Batch perturbation screening — hundreds of perturbations in one call.", tier: "pro" },
-                { fn: "singlet.compare(condition_a, condition_b)", desc: "Differential program analysis between two conditions. Returns ranked programs with confidence intervals.", tier: "free" },
-                { fn: "singlet.velocity(cell_type, trajectory)", desc: "(Roadmap) Factor velocities from spliced/unspliced NMF.", tier: "free" },
-                { fn: "singlet.predict_atac(tissue, cell_type, ...)", desc: "(Roadmap) Predict chromatin accessibility from transcriptomic conditions.", tier: "free" },
-                { fn: "singlet.predict_protein(tissue, cell_type, ...)", desc: "(Roadmap) Predict surface protein levels via CITEseq bridges.", tier: "free" },
-                { fn: "singlet.deconvolve_spatial(visium_data, atlas)", desc: "(Roadmap) Deconvolute Visium spots into cell type programs.", tier: "free" },
-              ]}
-            />
-
-            <RefGroup
-              icon={<Zap size={16} className="text-primary" />}
-              label="Generate"
-              fns={[
-                { fn: "result.generate(n_cells)", desc: "Generate cells locally from a prediction result. Uses cached W matrix × ĥ on your device.", tier: "free" },
-                { fn: "singlet.generate(species, tissue, ..., n_cells)", desc: "One-liner: predict + generate in a single call. Returns AnnData.", tier: "free" },
-                { fn: "diff.generate_a(n_cells) / diff.generate_b(n_cells)", desc: "Generate cells for each side of a compare() result.", tier: "free" },
-                { fn: "delta.generate_control(n_cells) / delta.generate_perturbed(n_cells)", desc: "Generate control and perturbed cells from a perturb() result.", tier: "free" },
-              ]}
-            />
-
-            <RefGroup
-              icon={<Search size={16} className="text-primary" />}
-              label="Discovery"
-              fns={[
-                { fn: "singlet.programs()", desc: "Browse the full program dictionary (10,000+ named programs). Returns DataFrame.", tier: "free" },
-                { fn: "singlet.gene_profile(gene)", desc: "Atlas-wide summary: expression by cell type, tissue, disease, and contributing programs.", tier: "free" },
-              ]}
-            />
-
-            <RefGroup
-              icon={<Filter size={16} className="text-primary" />}
-              label="Preprocessing"
-              fns={[
-                { fn: "singlet.pp.normalize(adata)", desc: "Log-normalization with library size correction.", tier: "free" },
-                { fn: "singlet.pp.highly_variable_genes(adata)", desc: "Highly variable gene selection (Seurat v3).", tier: "free" },
-                { fn: "singlet.pp.filter_cells(adata, ...)", desc: "QC filtering by min_genes, max_genes, mito_pct.", tier: "free" },
-                { fn: "singlet.pp.filter_genes(adata, ...)", desc: "Filter genes by min_cells expressing.", tier: "free" },
-                { fn: "singlet.pp.scale(adata)", desc: "Scale to unit variance.", tier: "free" },
-              ]}
-            />
-
-            <RefGroup
-              icon={<BarChart3 size={16} className="text-primary" />}
-              label="Analysis"
-              fns={[
-                { fn: "singlet.tl.pca(adata, n_comps)", desc: "PCA dimensionality reduction.", tier: "free" },
-                { fn: "singlet.tl.umap(adata)", desc: "UMAP embedding.", tier: "free" },
-                { fn: "singlet.tl.nmf(adata, k)", desc: "GPU-accelerated NMF — interpretable biological programs.", tier: "free" },
-                { fn: "singlet.tl.differential_programs(adata_a, adata_b)", desc: "Differential NMF program activation between generated panels.", tier: "free" },
-                { fn: "singlet.tl.enrichment(gene_list)", desc: "Gene set enrichment against GO, KEGG, Reactome.", tier: "free" },
-              ]}
-            />
-
-            <RefGroup
-              icon={<FlaskConical size={16} className="text-primary" />}
-              label="PyTorch"
-              fns={[
-                { fn: "singlet.torch.DataLoader(adata, ...)", desc: "PyTorch DataLoader from generated AnnData. Sparse tensors, GPU via CuSPARSE.", tier: "free" },
-                { fn: "singlet.torch.SingletDataset(adata)", desc: "PyTorch Dataset wrapper for AnnData.", tier: "free" },
-              ]}
-            />
-          </section>
-
-          <div className="glow-line mx-auto" />
-
-          {/* ────────────────────────── DATA OBJECTS ────────────────────────── */}
-          <section id="data-objects" className="pt-20">
-            <h2 className="font-display text-2xl font-bold text-foreground tracking-tightest mb-6">Data Objects</h2>
-            <p className="text-sm text-muted-foreground mb-6">
-              Every processed sample is one <code className="font-mono text-[0.85em] bg-muted/60 px-1 rounded">SingletSample</code>{" "}
-              with typed accessors for every modality: counts, USA, PSI, mitochondrial
-              variants, donor SNPs, microbiome, CRISPR guides, antibodies, V(D)J. All
-              derived matrices compute on demand from canonical row blocks.
+            <h3 className="font-display text-base font-semibold text-foreground mb-3">AnnData layers</h3>
+            <p className="text-sm text-muted-foreground leading-relaxed mb-4">
+              When a bundle is converted to AnnData, the primary count matrix is{" "}
+              <span className="font-mono text-foreground">gene_counts</span> (exon + intron). Select a layer explicitly
+              when loading a local pipeline output directory:
             </p>
-            <div className="rounded-lg border border-border bg-card p-5">
-              <Link to="/docs/data-objects" className="block group">
-                <h3 className="font-display text-base font-semibold text-foreground mb-1 group-hover:text-primary transition-colors">
-                  Data Objects &amp; Fetch API
-                </h3>
-                <p className="text-sm text-muted-foreground">
-                  <code className="font-mono text-[0.85em] bg-muted/60 px-1 rounded">singlet.open("GSM3308814")</code> →
-                  one Sample, every matrix is a method call. Caching, manifests, parallel
-                  fetch — the whole user-facing surface in one page.
-                </p>
-              </Link>
-            </div>
-          </section>
+            <CodeBlock
+              code={`import singlet
 
-          <div className="glow-line mx-auto" />
-          <section id="specs" className="pt-20">
-            <h2 className="font-display text-2xl font-bold text-foreground tracking-tightest mb-6">Format Specifications</h2>
-            <p className="text-sm text-muted-foreground mb-6">
-              Canonical on-disk formats produced by the Singlet pipeline. These specs
-              define the atomic units of stored data — every downstream view (gene
-              counts, spliced/unspliced/ambiguous, junction usage) is derived from
-              them.
-            </p>
-            <div className="rounded-lg border border-border bg-card p-5">
+# gene_counts = exon + intron
+adata = singlet.load_dir("out/", layer="gene_counts")`}
+              title="layers.py"
+            />
+
+            <div className="rounded-lg border border-border bg-card p-5 mt-4">
               <Link to="/specs/splice-patterns" className="block group">
-                <h3 className="font-display text-base font-semibold text-foreground mb-1 group-hover:text-primary transition-colors">
-                  Splice Pattern Format <span className="text-xs font-mono text-muted-foreground">v0.1 draft</span>
+                <h3 className="font-display text-base font-semibold text-foreground mb-1 group-hover:text-primary transition-colors flex items-center gap-2">
+                  <BookOpen size={15} /> Splice Pattern Format <span className="text-xs font-mono text-muted-foreground">v0.1 draft</span>
                 </h3>
                 <p className="text-sm text-muted-foreground">
-                  Atomic representation of mapped RNA-seq UMIs: per-gene structural
-                  paths encoded as token sequences, with a single dedup pass and
-                  no double-counting. Backed by an installable feature dictionary
-                  (SFD).
+                  Atomic representation of mapped RNA-seq UMIs: per-gene structural paths encoded as token sequences,
+                  with a single dedup pass and no double-counting.
                 </p>
               </Link>
             </div>
           </section>
 
           <div className="glow-line mx-auto" />
+
+          {/* ────────────────────────── CITATION ────────────────────────── */}
           <section id="citation" className="pt-20">
-            <h2 className="font-display text-2xl font-bold text-foreground tracking-tightest mb-6">Citation &amp; Licensing</h2>
+            <h2 className="font-display text-2xl font-bold text-foreground tracking-tightest mb-6">Citation</h2>
 
             <div className="rounded-lg border border-border bg-card p-5 mb-6">
-              <h3 className="font-display text-sm font-semibold text-foreground mb-3">Cite Singlet Bio</h3>
-              <p className="text-xs text-muted-foreground mt-3">
-                If you use Singlet Bio data or generated results in a publication, please cite Singlet Bio and include the release version.
+              <h3 className="font-display text-sm font-semibold text-foreground mb-3">Cite Singlet</h3>
+              <p className="text-sm text-muted-foreground">
+                If you use the Singlet dataset or the <span className="font-mono text-foreground">singlet</span> package in
+                a publication, please cite Singlet and include the dataset release version you downloaded.
               </p>
             </div>
 
@@ -783,22 +515,17 @@ $ claude mcp add singlet \\
               <ul className="space-y-2 text-sm text-muted-foreground">
                 <li className="flex items-start gap-2">
                   <span className="text-primary font-bold mt-0.5">•</span>
-                  <span><strong>NMF gene programs (W matrix)</strong> — MIT license. 10,000+ named programs. Free for any use.</span>
+                  <span><strong>Dataset</strong> — CC0 (public domain). Free for any use, no attribution required.</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-primary font-bold mt-0.5">•</span>
-                  <span><strong>CPM model outputs</strong> — Free for research; commercial use requires Pro plan.</span>
+                  <span><strong>singlet package</strong> — MIT license (open source).</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-primary font-bold mt-0.5">•</span>
-                  <span><strong>Singlet package</strong> — MIT license (open source).</span>
+                  <span><strong>Downloads</strong> — public Cloudflare R2, $0 egress. No accounts, no API keys, no sign-in.</span>
                 </li>
               </ul>
-              <p className="text-xs text-muted-foreground mt-3">
-                See{" "}
-                <Link to="/pricing" className="text-primary hover:underline">pricing &amp; plans</Link>{" "}
-                for details on rate limits and commercial use.
-              </p>
             </div>
           </section>
 
@@ -809,21 +536,25 @@ $ claude mcp add singlet \\
                 <span className="font-mono">pip install singlet</span> <span className="gradient-text">and go.</span>
               </h2>
               <p className="text-sm text-muted-foreground mb-6 max-w-lg mx-auto">
-                Predict, generate, analyze. Start free.
+                Open data, open code. Download, process, and analyze — free and public.
               </p>
               <div className="flex flex-wrap gap-3 justify-center">
-                <Link
-                  to="/pricing"
-                  className="shimmer-border inline-flex items-center gap-2 px-6 py-2.5 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity"
+                <a
+                  href="https://github.com/Singlet-Bio/singlet"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 px-6 py-2.5 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity"
                 >
-                  See Plans <ArrowRight size={14} />
-                </Link>
-                <Link
-                  to="/gene-programs"
+                  <Github size={14} /> View on GitHub <ArrowRight size={14} />
+                </a>
+                <a
+                  href="https://pypi.org/project/singlet/"
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="inline-flex items-center gap-2 px-6 py-2.5 rounded-md border border-border bg-secondary text-secondary-foreground text-sm font-medium hover:bg-muted transition-colors"
                 >
-                  Explore Technology
-                </Link>
+                  <Package size={14} /> PyPI
+                </a>
               </div>
             </div>
           </section>

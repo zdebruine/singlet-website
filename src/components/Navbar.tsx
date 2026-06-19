@@ -1,7 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { Menu, X, Github } from "lucide-react";
-import { useAuth } from "@/hooks/useAuth";
 
 const navLinks = [
   { to: "/browse", label: "Browse" },
@@ -9,13 +8,12 @@ const navLinks = [
   { to: "/docs", label: "Quickstart" },
   { to: "/byod", label: "Bring your data" },
   { to: "/pipeline", label: "Pipeline" },
-  { to: "/validation", label: "Validation" },
+  { to: "/notebooks", label: "Notebooks" },
 ];
 
 const Navbar = () => {
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const { user, loading: authLoading } = useAuth();
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
@@ -61,26 +59,15 @@ const Navbar = () => {
 
         {/* Desktop Right */}
         <div className="hidden lg:flex items-center gap-3">
-          {!authLoading && (user ? (
-            <Link
-              to="/dashboard"
-              className="inline-flex items-center px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity"
-            >
-              Dashboard
-            </Link>
-          ) : (
-            <>
-              <Link to="/auth" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-                Sign In
-              </Link>
-              <Link
-                to="/auth"
-                className="inline-flex items-center px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity"
-              >
-                Get Started
-              </Link>
-            </>
-          ))}
+          <Link to="/docs" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+            Quickstart
+          </Link>
+          <Link
+            to="/browse"
+            className="inline-flex items-center px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity"
+          >
+            Browse the atlas
+          </Link>
         </div>
 
         {/* Mobile Toggle */}
@@ -101,18 +88,10 @@ const Navbar = () => {
             GitHub
           </a>
           <div className="border-t border-border pt-3 mt-1 flex flex-col gap-3">
-            {user ? (
-              <Link to="/dashboard" className="inline-flex items-center justify-center px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm font-medium" onClick={() => setMobileOpen(false)}>
-                Dashboard
-              </Link>
-            ) : (
-              <>
-                <Link to="/auth" className="text-sm text-muted-foreground" onClick={() => setMobileOpen(false)}>Sign In</Link>
-                <Link to="/auth" className="inline-flex items-center justify-center px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm font-medium" onClick={() => setMobileOpen(false)}>
-                  Get Started
-                </Link>
-              </>
-            )}
+            <Link to="/docs" className="text-sm text-muted-foreground" onClick={() => setMobileOpen(false)}>Quickstart</Link>
+            <Link to="/browse" className="inline-flex items-center justify-center px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm font-medium" onClick={() => setMobileOpen(false)}>
+              Browse the atlas
+            </Link>
           </div>
         </div>
       )}

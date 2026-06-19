@@ -67,7 +67,7 @@ summary = sample.summary                   # run-level metrics dict`}</Code>
 ├── mt.1pz                    # mitochondrial (ad, dp) — heteroplasmy / lineage
 ├── nonhost.json              # microbiome bulk metrics (Kraken2 + Bracken)
 ├── nonhost_species.1pz       # per-cell × taxid counts
-├── guides.1pz                # CRISPR guide counts (perturbation screens)
+├── guides.1pz                # CRISPR guide counts
 ├── antibodies.1pz            # CITE-seq ADT counts
 ├── vdj_gene_usage.1pz        # B/T-cell receptor V(D)J usage
 ├── donor_consensus.fa        # per-donor consensus
@@ -87,7 +87,7 @@ summary = sample.summary                   # run-level metrics dict`}</Code>
             <h3 className="font-display text-sm font-semibold text-foreground mb-2 mt-6">Expression &amp; splicing</h3>
             <ul className="list-disc list-inside text-sm space-y-1">
               <li><Mono>sample.gene_counts()</Mono> → cells × genes total UMIs (CSC). Sum of exon + intron + junction blocks.</li>
-              <li><Mono>sample.usa()</Mono> → <Mono>UsaTriplet(spliced, unspliced, ambiguous)</Mono>. Partition; sums to <Mono>gene_counts</Mono>. Direct input for scVelo / dynamo.</li>
+              <li><Mono>sample.usa()</Mono> → <Mono>UsaTriplet(spliced, unspliced, ambiguous)</Mono>. Partition; sums to <Mono>gene_counts</Mono>.</li>
               <li><Mono>sample.psi()</Mono> → per-junction Ψ (inclusion vs. competing junctions sharing donor/acceptor).</li>
               <li><Mono>sample.counts.exon_body() / .intron_body() / .junctions()</Mono> → raw row blocks for custom analyses.</li>
             </ul>

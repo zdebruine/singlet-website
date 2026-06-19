@@ -50,9 +50,8 @@ export interface SampleFilters {
 }
 
 export interface StatusBreakdown {
-  success: number;
-  soft_fail: number;
-  hard_fail: number;
+  done: number;
+  failed: number;
 }
 
 export interface FailureCategoryStat {
@@ -131,12 +130,12 @@ export function useSpeciesStats() {
   return useQuery({
     queryKey: ["species-stats"],
     queryFn: async (): Promise<SpeciesStat[]> => {
-      // Aggregate from gsm list — fetch SUCCESS samples, group client-side
+      // Aggregate from gsm list — fetch DONE samples, group client-side
       // (This is acceptable at catalog scale; a future meta_cache key can cache it)
       const all: GsmRow[] = [];
       let page = 0;
       while (true) {
-        const res = await apiClient.gsmList({ status: "SUCCESS", page_size: 500, page });
+        const res = await apiClient.gsmList({ status: "DONE", page_size: 500, page });
         all.push(...res.data);
         if (all.length >= res.total || res.data.length < 500) break;
         page++;
@@ -177,8 +176,8 @@ export function useSamples(filters: SampleFilters = {}) {
 
   // Map qualityTier to qc_flag param
   const qc_flag = qualityTier && qualityTier !== "" ? qualityTier : undefined;
-  // Derive status override: any qualityTier implies SUCCESS
-  const effectiveStatus = qualityTier ? "SUCCESS" : status;
+  // Derive status override: any qualityTier implies a successfully processed sample
+  const effectiveStatus = qualityTier ? "DONE" : status;
 
   return useQuery({
     queryKey: ["samples", filters],
@@ -257,15 +256,14 @@ export function useStatusBreakdown() {
     queryFn: async (): Promise<StatusBreakdown> => {
       const stats = await apiClient.stats();
       const total = stats.total_samples;
-      const success = stats.success_samples;
-      // Derive from total & success_rate if available
-      const terminal = stats.success_rate ? Math.round(success / stats.success_rate) : total;
-      const failed = terminal - success;
-      // Split failed evenly into soft/hard as approximation (meta_cache can be enhanced)
+      const done = stats.success_samples;
+      // Live D1 status is binary: DONE vs FAIL. Everything terminal that is
+      // not DONE is a failure (with a documented failure_category).
+      const terminal = stats.success_rate ? Math.round(done / stats.success_rate) : total;
+      const failed = Math.max(terminal - done, 0);
       return {
-        success,
-        soft_fail: Math.round(failed / 2),
-        hard_fail: failed - Math.round(failed / 2),
+        done,
+        failed,
       };
     },
     staleTime: 60_000,
@@ -282,14 +280,12 @@ export function useFailureCategoryStats() {
       const all: GsmRow[] = [];
       let page = 0;
       while (true) {
-        const res = await apiClient.gsmList({ status: "HARD_FAIL", page_size: 500, page });
+        const res = await apiClient.gsmList({ status: "FAIL", page_size: 500, page });
         all.push(...res.data);
         if (all.length >= res.total || res.data.length < 500) break;
         page++;
         if (page > 20) break; // safety cap
       }
-      const softPage = await apiClient.gsmList({ status: "SOFT_FAIL", page_size: 500, page: 0 });
-      all.push(...softPage.data);
 
       const counts = new Map<string, number>();
       for (const r of all) {
@@ -316,7 +312,7 @@ export function useProtocolStats() {
         facets.protocols.map(async (proto) => {
           const [total, success] = await Promise.all([
             apiClient.gsmList({ protocol: proto, page_size: 1 }),
-            apiClient.gsmList({ protocol: proto, status: "SUCCESS", page_size: 1 }),
+            apiClient.gsmList({ protocol: proto, status: "DONE", page_size: 1 }),
           ]);
           return { protocol: proto, total: total.total, success: success.total, rate: total.total > 0 ? success.total / total.total : 0 };
         })
@@ -338,7 +334,7 @@ export function useSpeciesSuccessStats() {
         facets.organisms.map(async (org) => {
           const [total, success] = await Promise.all([
             apiClient.gsmList({ organism: org, page_size: 1 }),
-            apiClient.gsmList({ organism: org, status: "SUCCESS", page_size: 1 }),
+            apiClient.gsmList({ organism: org, status: "DONE", page_size: 1 }),
           ]);
           return { organism: org, total: total.total, success: success.total, rate: total.total > 0 ? success.total / total.total : 0 };
         })

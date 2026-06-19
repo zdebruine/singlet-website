@@ -67,16 +67,21 @@ export interface CorpusStats {
   success_rate: number | null;
 }
 
+/** A single facet option with its document count. */
+export interface FacetOption {
+  value: string;
+  count: number;
+}
+
 export interface Facets {
-  organisms: string[];
-  protocols: string[];
-  tissues: string[];
-  cell_types: string[];
-  diseases: string[];
-  sexes: string[];
-  statuses: string[];
-  qc_flags: string[];
-  failure_categories: string[];
+  organisms: FacetOption[];
+  protocols: FacetOption[];
+  tissues: FacetOption[];
+  cell_types: FacetOption[];
+  diseases: FacetOption[];
+  sexes: FacetOption[];
+  qc_flags: FacetOption[];
+  failure_categories: FacetOption[];
 }
 
 export interface PagedResponse<T> {

@@ -13,14 +13,14 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
-  Search, ChevronLeft, ChevronRight, CheckCircle2, XCircle, AlertCircle,
+  Search, ChevronLeft, ChevronRight, CheckCircle, AlertTriangle, XCircle,
   ArrowUpDown, ArrowUp, ArrowDown, Download, X, ChevronDown, ChevronRight as ChevronRt, SlidersHorizontal
 } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/integrations/api/client";
-import type { GsmListParams, GseListParams, GsmRow, GseRow } from "@/integrations/api/types";
+import type { GsmListParams, GseListParams, GsmRow, GseRow, FacetOption } from "@/integrations/api/types";
 
 // ── Formatters ────────────────────────────────────────────────────────────────
 
@@ -34,10 +34,24 @@ function fmt(n: number | null | undefined): string {
 
 // ── Badges ────────────────────────────────────────────────────────────────────
 
-function StatusBadge({ status }: { status: string }) {
-  if (status === "SUCCESS") return <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full"><CheckCircle2 size={11} /> Pass</span>;
-  if (status === "HARD_FAIL") return <span className="inline-flex items-center gap-1 text-xs font-medium text-red-600 bg-red-50 px-2 py-0.5 rounded-full"><XCircle size={11} /> Fail</span>;
-  return <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full"><AlertCircle size={11} /> {status}</span>;
+/**
+ * Status iconography.
+ *  - status === "DONE"  → green check (Pass)  [amber Warn if qc_flag === "WARN"]
+ *  - status === "FAIL"  → red X (Fail)
+ *  - anything else      → amber triangle (e.g. PENDING / RUNNING)
+ * D1 columns: status ∈ {DONE, FAIL, ...}; qc_flag ∈ {HEALTHY, LOW_QUALITY, WARN, null}.
+ */
+function StatusBadge({ status, qcFlag }: { status: string; qcFlag?: string | null }) {
+  if (status === "DONE") {
+    if (qcFlag === "WARN") {
+      return <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full"><AlertTriangle size={11} /> Warn</span>;
+    }
+    return <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full"><CheckCircle size={11} /> Pass</span>;
+  }
+  if (status === "FAIL") {
+    return <span className="inline-flex items-center gap-1 text-xs font-medium text-red-600 bg-red-50 px-2 py-0.5 rounded-full"><XCircle size={11} /> Fail</span>;
+  }
+  return <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full"><AlertTriangle size={11} /> {status}</span>;
 }
 
 // ── Accordion Section ─────────────────────────────────────────────────────────
@@ -74,26 +88,28 @@ function FacetList({
   onChange,
   max = 8,
 }: {
-  options: string[];
+  options: FacetOption[];
   value: string | undefined;
   onChange: (v: string | undefined) => void;
   max?: number;
 }) {
   const [showAll, setShowAll] = useState(false);
   const visible = showAll ? options : options.slice(0, max);
+  const groupName = `facet-${options[0]?.value ?? "empty"}`;
   return (
     <div className="space-y-1.5">
       {visible.map((opt) => (
-        <label key={opt} className="flex items-center gap-2 cursor-pointer group">
+        <label key={opt.value} className="flex items-center gap-2 cursor-pointer group">
           <input
             type="radio"
-            name={`facet-${options[0]}`}
-            checked={value === opt}
-            onChange={() => onChange(value === opt ? undefined : opt)}
-            onClick={() => { if (value === opt) onChange(undefined); }}
+            name={groupName}
+            checked={value === opt.value}
+            onChange={() => onChange(value === opt.value ? undefined : opt.value)}
+            onClick={() => { if (value === opt.value) onChange(undefined); }}
             className="accent-primary"
           />
-          <span className={`text-xs truncate group-hover:text-foreground transition-colors ${value === opt ? "text-foreground font-medium" : "text-muted-foreground"}`}>{opt}</span>
+          <span className={`text-xs truncate flex-1 group-hover:text-foreground transition-colors ${value === opt.value ? "text-foreground font-medium" : "text-muted-foreground"}`}>{opt.value}</span>
+          <span className="text-[10px] tabular-nums text-muted-foreground/60 flex-shrink-0">{opt.count.toLocaleString()}</span>
         </label>
       ))}
       {options.length > max && (
@@ -270,13 +286,16 @@ const Browse = () => {
     staleTime: 60_000,
   });
 
-  // ── Derive API status param ───────────────────────────────────────────────
-  const apiStatus = useMemo(() => {
-    if (!qcStatus || qcStatus === "All") return undefined;
-    if (qcStatus === "Pass") return "SUCCESS";
-    if (qcStatus === "Fail") return "HARD_FAIL";
-    if (qcStatus === "Warn") return "SOFT_FAIL";
-    return qcStatus;
+  // ── Derive API status / qc_flag params ────────────────────────────────────
+  // UI radios: All / Pass / Warn / Fail.
+  // D1: status ∈ {DONE, FAIL, ...}; qc_flag ∈ {HEALTHY, LOW_QUALITY, WARN, null}.
+  //   Pass → qc_flag=HEALTHY · Warn → qc_flag=WARN · Fail → status=FAIL.
+  const { apiStatus, apiQcFlag } = useMemo(() => {
+    if (!qcStatus || qcStatus === "All") return { apiStatus: undefined, apiQcFlag: undefined };
+    if (qcStatus === "Pass") return { apiStatus: undefined, apiQcFlag: "HEALTHY" };
+    if (qcStatus === "Warn") return { apiStatus: undefined, apiQcFlag: "WARN" };
+    if (qcStatus === "Fail") return { apiStatus: "FAIL", apiQcFlag: undefined };
+    return { apiStatus: qcStatus, apiQcFlag: undefined };
   }, [qcStatus]);
 
   const showFailureCategory = qcStatus === "Fail" || qcStatus === "All" || !qcStatus;
@@ -285,6 +304,7 @@ const Browse = () => {
   const gsmParams: GsmListParams = {
     organism, protocol, tissue, cell_type: cellType, disease, sex,
     status: apiStatus,
+    qc_flag: apiQcFlag,
     failure_category: failureCategory,
     q,
     page, page_size: pageSize,
@@ -436,52 +456,62 @@ const Browse = () => {
                 </div>
 
                 {/* Organism */}
-                <AccordionSection label="Organism" defaultOpen>
-                  <FacetList
-                    options={facets?.organisms ?? []}
-                    value={organism}
-                    onChange={(v) => setParam("organism", v)}
-                  />
-                </AccordionSection>
+                {(facets?.organisms ?? []).length > 0 && (
+                  <AccordionSection label="Organism" defaultOpen>
+                    <FacetList
+                      options={facets?.organisms ?? []}
+                      value={organism}
+                      onChange={(v) => setParam("organism", v)}
+                    />
+                  </AccordionSection>
+                )}
 
                 {/* Tissue */}
-                <AccordionSection label="Tissue" defaultOpen>
-                  <FacetList
-                    options={facets?.tissues ?? []}
-                    value={tissue}
-                    onChange={(v) => setParam("tissue", v)}
-                    max={6}
-                  />
-                </AccordionSection>
+                {(facets?.tissues ?? []).length > 0 && (
+                  <AccordionSection label="Tissue" defaultOpen>
+                    <FacetList
+                      options={facets?.tissues ?? []}
+                      value={tissue}
+                      onChange={(v) => setParam("tissue", v)}
+                      max={6}
+                    />
+                  </AccordionSection>
+                )}
 
                 {/* Cell Type */}
-                <AccordionSection label="Cell Type">
-                  <FacetList
-                    options={facets?.cell_types ?? []}
-                    value={cellType}
-                    onChange={(v) => setParam("cell_type", v)}
-                    max={6}
-                  />
-                </AccordionSection>
+                {(facets?.cell_types ?? []).length > 0 && (
+                  <AccordionSection label="Cell Type">
+                    <FacetList
+                      options={facets?.cell_types ?? []}
+                      value={cellType}
+                      onChange={(v) => setParam("cell_type", v)}
+                      max={6}
+                    />
+                  </AccordionSection>
+                )}
 
                 {/* Assay / Protocol */}
-                <AccordionSection label="Assay / Protocol">
-                  <FacetList
-                    options={facets?.protocols ?? []}
-                    value={protocol}
-                    onChange={(v) => setParam("protocol", v)}
-                  />
-                </AccordionSection>
+                {(facets?.protocols ?? []).length > 0 && (
+                  <AccordionSection label="Assay / Protocol">
+                    <FacetList
+                      options={facets?.protocols ?? []}
+                      value={protocol}
+                      onChange={(v) => setParam("protocol", v)}
+                    />
+                  </AccordionSection>
+                )}
 
                 {/* Disease */}
-                <AccordionSection label="Disease">
-                  <FacetList
-                    options={facets?.diseases ?? []}
-                    value={disease}
-                    onChange={(v) => setParam("disease", v)}
-                    max={6}
-                  />
-                </AccordionSection>
+                {(facets?.diseases ?? []).length > 0 && (
+                  <AccordionSection label="Disease">
+                    <FacetList
+                      options={facets?.diseases ?? []}
+                      value={disease}
+                      onChange={(v) => setParam("disease", v)}
+                      max={6}
+                    />
+                  </AccordionSection>
+                )}
 
                 {/* QC Status */}
                 <AccordionSection label="QC Status" defaultOpen>
@@ -512,13 +542,15 @@ const Browse = () => {
                 )}
 
                 {/* Sex */}
-                <AccordionSection label="Sex">
-                  <FacetList
-                    options={facets?.sexes ?? []}
-                    value={sex}
-                    onChange={(v) => setParam("sex", v)}
-                  />
-                </AccordionSection>
+                {(facets?.sexes ?? []).length > 0 && (
+                  <AccordionSection label="Sex">
+                    <FacetList
+                      options={facets?.sexes ?? []}
+                      value={sex}
+                      onChange={(v) => setParam("sex", v)}
+                    />
+                  </AccordionSection>
+                )}
 
                 {/* Cell count range */}
                 <AccordionSection label="Cell Count Range">
@@ -562,7 +594,7 @@ const Browse = () => {
                   {!isLoading && tab === "gsm" && gsmResult && (
                     <span>
                       <span className="font-semibold text-foreground">{gsmResult.total.toLocaleString()}</span> samples ·{" "}
-                      <span className="font-semibold text-foreground">{fmt(resultCells)}</span> cells (this page)
+                      <span className="font-semibold text-foreground">{fmt(resultCells)}</span> cells on this page
                     </span>
                   )}
                   {!isLoading && tab === "gse" && gseResult && (
@@ -583,8 +615,9 @@ const Browse = () => {
                 ) : tab === "gse" && gseRows.length === 0 ? (
                   <div className="p-12 text-center text-muted-foreground text-sm">No studies match your filters.</div>
                 ) : tab === "gsm" ? (
-                  /* ── GSM TABLE ── */
-                  <div className="overflow-x-auto">
+                  /* ── GSM TABLE (md+) ── */
+                  <>
+                  <div className="hidden md:block overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b border-border bg-muted/30">
@@ -611,7 +644,7 @@ const Browse = () => {
                       </thead>
                       <tbody>
                         {gsmRows.map((s: GsmRow) => {
-                          const isFailed = s.status !== "SUCCESS";
+                          const isFailed = s.status === "FAIL";
                           return (
                             <tr key={s.gsm_id} className={`border-b border-border/40 hover:bg-muted/20 transition-colors ${isFailed ? "bg-red-50/20" : ""}`}>
                               <td className="px-4 py-2.5">
@@ -624,7 +657,7 @@ const Browse = () => {
                                 <span className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded text-[10px]">{s.protocol ?? "—"}</span>
                               </td>
                               <td className="px-3 py-2.5">
-                                <StatusBadge status={s.status} />
+                                <StatusBadge status={s.status} qcFlag={s.qc_flag} />
                                 {isFailed && s.failure_category && (
                                   <div className="text-[10px] text-red-600/70 mt-0.5">{s.failure_category.replace(/_/g, " ")}</div>
                                 )}
@@ -638,6 +671,36 @@ const Browse = () => {
                       </tbody>
                     </table>
                   </div>
+
+                  {/* ── GSM CARDS (mobile, <md) ── */}
+                  <div className="md:hidden divide-y divide-border/40">
+                    {gsmRows.map((s: GsmRow) => {
+                      const isFailed = s.status === "FAIL";
+                      return (
+                        <div key={s.gsm_id} className={`p-4 ${isFailed ? "bg-red-50/20" : ""}`}>
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <Link to={`/sample/${s.gsm_id}`} className="font-mono text-sm text-primary hover:underline">{s.gsm_id}</Link>
+                              {s.gse_id && <Link to={`/series/${s.gse_id}`} className="block text-[10px] text-muted-foreground/60 hover:text-primary font-mono">{s.gse_id}</Link>}
+                            </div>
+                            <StatusBadge status={s.status} qcFlag={s.qc_flag} />
+                          </div>
+                          {s.title && <div className="text-[11px] text-muted-foreground mt-1 line-clamp-2">{s.title}</div>}
+                          {isFailed && s.failure_category && (
+                            <div className="text-[10px] text-red-600/70 mt-0.5">{s.failure_category.replace(/_/g, " ")}</div>
+                          )}
+                          <div className="grid grid-cols-2 gap-x-3 gap-y-1 mt-2 text-[11px]">
+                            <div><span className="text-muted-foreground">Organism: </span><span className="italic">{s.organism ?? "—"}</span></div>
+                            <div><span className="text-muted-foreground">Protocol: </span><span className="font-mono">{s.protocol ?? "—"}</span></div>
+                            <div><span className="text-muted-foreground">Cells: </span><span className="font-mono">{fmt(s.n_cells)}</span></div>
+                            <div><span className="text-muted-foreground">Map %: </span><span className="font-mono">{s.mapping_rate != null ? `${(s.mapping_rate * 100).toFixed(1)}%` : "—"}</span></div>
+                            <div><span className="text-muted-foreground">Med. genes: </span><span className="font-mono">{fmt(s.median_genes)}</span></div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  </>
                 ) : (
                   /* ── GSE TABLE ── */
                   <div className="overflow-x-auto">
@@ -691,10 +754,10 @@ const Browse = () => {
 
                 {/* Pagination */}
                 {totalItems > 0 && !isLoading && (
-                  <div className="flex items-center justify-between px-4 py-3 border-t border-border bg-muted/10">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 py-3 border-t border-border bg-muted/10">
                     <div className="flex items-center gap-3">
                       <span className="text-xs text-muted-foreground">
-                        {page * pageSize + 1}–{Math.min((page + 1) * pageSize, totalItems)} of {totalItems.toLocaleString()}
+                        Showing {(page * pageSize + 1).toLocaleString()}–{Math.min((page + 1) * pageSize, totalItems).toLocaleString()} of {totalItems.toLocaleString()} {tab === "gsm" ? "samples" : "studies"}
                       </span>
                       {tab === "gsm" && (
                         <button
@@ -707,20 +770,23 @@ const Browse = () => {
                       )}
                     </div>
                     <div className="flex items-center gap-2">
-                      <select
-                        value={pageSize}
-                        onChange={(e) => setSearchParams((prev) => { const n = new URLSearchParams(prev); n.set("size", e.target.value); n.delete("page"); return n; }, { replace: true })}
-                        className="px-2 py-1 rounded border border-border bg-background text-xs"
-                      >
-                        {[25, 50, 100].map((s) => <option key={s} value={s}>{s}</option>)}
-                      </select>
-                      <button onClick={() => setPage(Math.max(0, page - 1))} disabled={page === 0} className="p-1.5 rounded border border-border hover:bg-muted disabled:opacity-30">
+                      <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <span className="hidden sm:inline">Rows</span>
+                        <select
+                          value={pageSize}
+                          onChange={(e) => setSearchParams((prev) => { const n = new URLSearchParams(prev); n.set("size", e.target.value); n.delete("page"); return n; }, { replace: true })}
+                          className="px-2 py-1 rounded border border-border bg-background text-xs"
+                        >
+                          {[25, 50, 100].map((s) => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                      </label>
+                      <button onClick={() => setPage(Math.max(0, page - 1))} disabled={page === 0} className="p-1.5 rounded border border-border hover:bg-muted disabled:opacity-30" title="Previous page">
                         <ChevronLeft size={13} />
                       </button>
-                      <span className="text-xs text-muted-foreground px-2">
-                        {page + 1} / {totalPages}
+                      <span className="text-xs text-muted-foreground px-2 whitespace-nowrap">
+                        Page {page + 1} of {totalPages.toLocaleString()}
                       </span>
-                      <button onClick={() => setPage(Math.min(totalPages - 1, page + 1))} disabled={page >= totalPages - 1} className="p-1.5 rounded border border-border hover:bg-muted disabled:opacity-30">
+                      <button onClick={() => setPage(Math.min(totalPages - 1, page + 1))} disabled={page >= totalPages - 1} className="p-1.5 rounded border border-border hover:bg-muted disabled:opacity-30" title="Next page">
                         <ChevronRight size={13} />
                       </button>
                     </div>

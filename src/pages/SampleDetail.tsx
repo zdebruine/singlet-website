@@ -27,14 +27,14 @@ function formatBytes(bytes: number | null | undefined): string {
 
 /** Prominent status badge — sized for headers */
 function StatusBadgeLarge({ status }: { status: string }) {
-  if (status === "SUCCESS") {
+  if (status === "DONE") {
     return (
       <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-emerald-700 bg-emerald-100 px-3 py-1 rounded-full border border-emerald-200">
         <CheckCircle2 size={14} /> Pass
       </span>
     );
   }
-  if (status === "HARD_FAIL") {
+  if (status === "FAIL") {
     return (
       <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-red-700 bg-red-100 px-3 py-1 rounded-full border border-red-200">
         <XCircle size={14} /> Failed
@@ -49,13 +49,13 @@ function StatusBadgeLarge({ status }: { status: string }) {
 }
 
 function StatusBadgeSmall({ status }: { status: string }) {
-  if (status === "SUCCESS") return <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full"><CheckCircle2 size={11} /> Pass</span>;
-  if (status === "HARD_FAIL") return <span className="inline-flex items-center gap-1 text-xs font-medium text-red-600 bg-red-50 px-2 py-0.5 rounded-full"><XCircle size={11} /> Fail</span>;
+  if (status === "DONE") return <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full"><CheckCircle2 size={11} /> Pass</span>;
+  if (status === "FAIL") return <span className="inline-flex items-center gap-1 text-xs font-medium text-red-600 bg-red-50 px-2 py-0.5 rounded-full"><XCircle size={11} /> Fail</span>;
   return <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full"><AlertCircle size={11} /> {status}</span>;
 }
 
 function QualityTier({ sample }: { sample: { mapping_rate: number | null; median_genes: number | null; n_cells: number | null; status: string } }) {
-  if (sample.status !== "SUCCESS") return null;
+  if (sample.status !== "DONE") return null;
   const mr = sample.mapping_rate ?? 0;
   const mg = sample.median_genes ?? 0;
   const cells = sample.n_cells ?? 0;
@@ -137,7 +137,7 @@ const SampleDetail = () => {
     </div>
   );
 
-  const isFailed = sample.status === "HARD_FAIL" || sample.status === "SOFT_FAIL";
+  const isFailed = sample.status === "FAIL";
   const pythonSnippet = `import singlet\nadata = singlet.load("${sample.gsm_id}")\nprint(adata)`;
 
   return (
@@ -203,7 +203,7 @@ const SampleDetail = () => {
                 <AlertTriangle size={20} className="text-amber-600 flex-shrink-0 mt-0.5" />
                 <div className="flex-1">
                   <h2 className="text-base font-bold text-amber-900 mb-2">
-                    QC Failed — {sample.status === "HARD_FAIL" ? "Hard Fail" : "Soft Fail"}
+                    Processing Failed
                   </h2>
                   {sample.failure_category && (
                     <div className="mb-2">
@@ -232,7 +232,7 @@ const SampleDetail = () => {
           )}
 
           {/* ── QC METRICS (success samples only) ── */}
-          {sample.status === "SUCCESS" && (
+          {sample.status === "DONE" && (
             <div className="mb-8">
               <h2 className="font-display text-base font-bold text-foreground mb-3 uppercase tracking-wider">QC Metrics</h2>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -342,7 +342,7 @@ const SampleDetail = () => {
           )}
 
           {/* ── LOAD CODE ── */}
-          {sample.status === "SUCCESS" && (
+          {sample.status === "DONE" && (
             <div className="rounded-xl border border-border bg-card p-6 mb-8">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-display text-sm font-bold text-foreground uppercase tracking-wider">Load This Sample</h3>
@@ -367,7 +367,7 @@ print(adata)  # ${formatNumber(sample.cells_called ?? sample.n_cells)} cells`}</
           )}
 
           {/* ── DOWNLOAD (success only) ── */}
-          {sample.status === "SUCCESS" && (
+          {sample.status === "DONE" && (
             <div className="mb-8">
               <h2 className="font-display text-base font-bold text-foreground mb-3 uppercase tracking-wider">Download</h2>
               <DownloadPanel
