@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { BookOpen, Cpu, ExternalLink, Play, Dna, FileCode, BarChart3, Search, TestTube, FlaskConical } from "lucide-react";
+import { BookOpen, Cpu, ExternalLink, Play, Dna, FileCode, BarChart3, Search, TestTube, FlaskConical, Layers } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 
@@ -94,6 +94,17 @@ const NOTEBOOKS: Notebook[] = [
     tags: ["beginner", "scanpy", "clustering"],
     githubUrl: `${BASE}/01_load_and_explore.ipynb`,
     colabUrl: `${COLAB}/01_load_and_explore.ipynb`,
+    status: "ready",
+  },
+  {
+    id: "pytorch_dataloader",
+    title: "PyTorch DataLoader",
+    description:
+      "Stream real atlas .singlet data into a PyTorch DataLoader — sparse-friendly, GPU-ready float32 batches (n_cells × n_genes) for model training.",
+    icon: <Layers size={20} />,
+    tags: ["pytorch", "training", "dataloader"],
+    githubUrl: `${BASE}/pytorch_dataloader.ipynb`,
+    colabUrl: `${COLAB}/pytorch_dataloader.ipynb`,
     status: "ready",
   },
   {
@@ -241,7 +252,7 @@ const Notebooks = () => (
             Notebooks & Tutorials
           </h1>
           <p className="text-muted-foreground max-w-2xl">
-            18 executed Jupyter notebooks covering data loading, catalog exploration, formal equivalence, QC profiling, doublet detection, cell cycle scoring, .1pz format, and corpus analytics — plus 1 more coming soon (GPU analysis).
+            19 executed Jupyter notebooks covering data loading, PyTorch training batches, catalog exploration, formal equivalence, QC profiling, doublet detection, cell cycle scoring, .1pz format, and corpus analytics.
           </p>
         </div>
 
