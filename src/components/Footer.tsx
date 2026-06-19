@@ -3,33 +3,28 @@ import { Github } from "lucide-react";
 
 const footerCols = [
   {
-    title: "Product",
+    title: "Atlas",
     links: [
-      { label: "Technology", to: "/gene-programs" },
-      { label: "Intelligence Layers", to: "/intelligence" },
-      
-      { label: "Enterprise", to: "/enterprise" },
-      { label: "Pricing", to: "/pricing" },
-      { label: "Docs", to: "/docs" },
-      { label: "Atlas API", to: "/atlas-docs" },
+      { label: "Browse data", to: "/browse" },
+      { label: "Download", to: "/docs/access" },
+      { label: "Quickstart", to: "/docs" },
+      { label: "Bring your own data", to: "/byod" },
+      { label: "Pipeline", to: "/pipeline" },
     ],
   },
   {
     title: "Resources",
     links: [
-      { label: "Browse Database", to: "/browse" },
       { label: "Notebooks", to: "/notebooks" },
       { label: "Validation", to: "/validation" },
       { label: "Blog", to: "/blog" },
-      { label: "Pipeline", to: "/pipeline" },
       { label: "GitHub", href: "https://github.com/Singlet-Bio/singlet" },
     ],
   },
   {
-    title: "Company",
+    title: "Contact",
     links: [
-      { label: "For Investors", to: "/invest" },
-      { label: "Contact", href: "mailto:hello@singlet.bio" },
+      { label: "Email", href: "mailto:hello@singlet.bio" },
     ],
   },
   {

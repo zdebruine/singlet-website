@@ -4,14 +4,12 @@ import { Menu, X, Github } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 
 const navLinks = [
-  { to: "/browse", label: "Database" },
-  { to: "/notebooks", label: "Notebooks" },
-  { to: "/atlas-docs", label: "Atlas API" },
-  { to: "/docs", label: "Docs" },
+  { to: "/browse", label: "Browse" },
+  { to: "/docs/access", label: "Download" },
+  { to: "/docs", label: "Quickstart" },
+  { to: "/byod", label: "Bring your data" },
   { to: "/pipeline", label: "Pipeline" },
   { to: "/validation", label: "Validation" },
-  { to: "/benchmarks", label: "Benchmarks" },
-  { to: "/blog", label: "Blog" },
 ];
 
 const Navbar = () => {
