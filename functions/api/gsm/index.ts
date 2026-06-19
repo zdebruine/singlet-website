@@ -7,6 +7,7 @@
  * Sorting: sort (column), asc (1=asc)
  */
 import { corsOk, corsErr, handleOptions, intParam, clampPageSize } from "../../_shared/cors";
+import { safeList } from "../../_shared/json";
 
 interface Env {
   DB: D1Database;
@@ -89,7 +90,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
 
     const data = rows.results.map(r => ({
       ...r,
-      srr_ids: r.srr_ids ? JSON.parse(r.srr_ids as string) : [],
+      srr_ids: safeList(r.srr_ids),
     }));
 
     return corsOk({ total: countRow?.n ?? 0, page, page_size: pageSize, data });

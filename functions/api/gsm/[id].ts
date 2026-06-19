@@ -3,6 +3,7 @@
  * Sample detail: sample row + parent series (summary) + siblings (same GSE, up to 20).
  */
 import { corsOk, corsErr, handleOptions } from "../../_shared/cors";
+import { safeJson, safeList } from "../../_shared/json";
 
 interface Env {
   DB: D1Database;
@@ -41,8 +42,8 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, params }) => {
     return corsOk({
       sample: {
         ...sample,
-        srr_ids: sample.srr_ids ? JSON.parse(sample.srr_ids as string) : [],
-        characteristics: sample.characteristics ? JSON.parse(sample.characteristics as string) : null,
+        srr_ids: safeList(sample.srr_ids),
+        characteristics: safeJson(sample.characteristics, sample.characteristics ?? null),
       },
       series: seriesRow ?? null,
       siblings: siblingsResult.results,

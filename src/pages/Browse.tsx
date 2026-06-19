@@ -36,17 +36,23 @@ function fmt(n: number | null | undefined): string {
 
 /**
  * Status iconography.
- *  - status === "DONE"  → green check (Pass)  [amber Warn if qc_flag === "WARN"]
+ *  - status === "DONE"  → green check + quality tier (gold/silver/bronze) when present
  *  - status === "FAIL"  → red X (Fail)
  *  - anything else      → amber triangle (e.g. PENDING / RUNNING)
- * D1 columns: status ∈ {DONE, FAIL, ...}; qc_flag ∈ {HEALTHY, LOW_QUALITY, WARN, null}.
+ * D1 columns: status ∈ {DONE, FAIL, ...}; qc_flag ∈ {gold, silver, bronze, null}.
  */
+const TIER_STYLE: Record<string, string> = {
+  gold: "text-yellow-700 bg-yellow-50",
+  silver: "text-slate-600 bg-slate-100",
+  bronze: "text-orange-700 bg-orange-50",
+};
 function StatusBadge({ status, qcFlag }: { status: string; qcFlag?: string | null }) {
   if (status === "DONE") {
-    if (qcFlag === "WARN") {
-      return <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full"><AlertTriangle size={11} /> Warn</span>;
+    const tier = (qcFlag || "").toLowerCase();
+    if (tier && TIER_STYLE[tier]) {
+      return <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${TIER_STYLE[tier]}`}><CheckCircle size={11} /> {tier.charAt(0).toUpperCase() + tier.slice(1)}</span>;
     }
-    return <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full"><CheckCircle size={11} /> Pass</span>;
+    return <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full"><CheckCircle size={11} /> Done</span>;
   }
   if (status === "FAIL") {
     return <span className="inline-flex items-center gap-1 text-xs font-medium text-red-600 bg-red-50 px-2 py-0.5 rounded-full"><XCircle size={11} /> Fail</span>;
@@ -287,18 +293,19 @@ const Browse = () => {
   });
 
   // ── Derive API status / qc_flag params ────────────────────────────────────
-  // UI radios: All / Pass / Warn / Fail.
-  // D1: status ∈ {DONE, FAIL, ...}; qc_flag ∈ {HEALTHY, LOW_QUALITY, WARN, null}.
-  //   Pass → qc_flag=HEALTHY · Warn → qc_flag=WARN · Fail → status=FAIL.
+  // UI radios: All / Gold / Silver / Bronze / Failed.
+  // D1: status ∈ {DONE, FAIL, ...}; qc_flag (quality tier) ∈ {gold, silver, bronze, null}.
+  //   Gold/Silver/Bronze → qc_flag=<tier> · Failed → status=FAIL.
   const { apiStatus, apiQcFlag } = useMemo(() => {
     if (!qcStatus || qcStatus === "All") return { apiStatus: undefined, apiQcFlag: undefined };
-    if (qcStatus === "Pass") return { apiStatus: undefined, apiQcFlag: "HEALTHY" };
-    if (qcStatus === "Warn") return { apiStatus: undefined, apiQcFlag: "WARN" };
-    if (qcStatus === "Fail") return { apiStatus: "FAIL", apiQcFlag: undefined };
+    if (qcStatus === "Failed") return { apiStatus: "FAIL", apiQcFlag: undefined };
+    if (["Gold", "Silver", "Bronze"].includes(qcStatus)) {
+      return { apiStatus: undefined, apiQcFlag: qcStatus.toLowerCase() };
+    }
     return { apiStatus: qcStatus, apiQcFlag: undefined };
   }, [qcStatus]);
 
-  const showFailureCategory = qcStatus === "Fail" || qcStatus === "All" || !qcStatus;
+  const showFailureCategory = qcStatus === "Failed" || qcStatus === "All" || !qcStatus;
 
   // ── GSM query ─────────────────────────────────────────────────────────────
   const gsmParams: GsmListParams = {
@@ -513,10 +520,10 @@ const Browse = () => {
                   </AccordionSection>
                 )}
 
-                {/* QC Status */}
-                <AccordionSection label="QC Status" defaultOpen>
+                {/* QC quality tier */}
+                <AccordionSection label="Quality" defaultOpen>
                   <div className="space-y-1.5">
-                    {(["All", "Pass", "Warn", "Fail"] as const).map((s) => (
+                    {(["All", "Gold", "Silver", "Bronze", "Failed"] as const).map((s) => (
                       <label key={s} className="flex items-center gap-2 cursor-pointer group">
                         <input
                           type="radio"

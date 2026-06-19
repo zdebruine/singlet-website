@@ -5,6 +5,7 @@
  * Sorting: sort (column name), asc (1 = ascending, default desc)
  */
 import { corsOk, corsErr, handleOptions, intParam, clampPageSize } from "../../_shared/cors";
+import { safeList } from "../../_shared/json";
 
 interface Env {
   DB: D1Database;
@@ -78,7 +79,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
 
     const data = rows.results.map(r => ({
       ...r,
-      pubmed_ids: r.pubmed_ids ? JSON.parse(r.pubmed_ids as string) : [],
+      pubmed_ids: safeList(r.pubmed_ids),
     }));
 
     return corsOk({ total, page, page_size: pageSize, data });

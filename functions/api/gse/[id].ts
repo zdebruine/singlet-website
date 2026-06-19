@@ -3,6 +3,7 @@
  * Series detail: series row + all samples + linked publications.
  */
 import { corsOk, corsErr, handleOptions } from "../../_shared/cors";
+import { safeJson, safeList } from "../../_shared/json";
 
 interface Env {
   DB: D1Database;
@@ -40,13 +41,13 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, params }) => {
 
     const series = {
       ...seriesRow,
-      pubmed_ids: seriesRow.pubmed_ids ? JSON.parse(seriesRow.pubmed_ids as string) : [],
+      pubmed_ids: safeList(seriesRow.pubmed_ids),
     };
 
     const samples = samplesResult.results.map(r => ({
       ...r,
-      srr_ids: r.srr_ids ? JSON.parse(r.srr_ids as string) : [],
-      characteristics: r.characteristics ? JSON.parse(r.characteristics as string) : null,
+      srr_ids: safeList(r.srr_ids),
+      characteristics: safeJson(r.characteristics, r.characteristics ?? null),
     }));
 
     return corsOk({
