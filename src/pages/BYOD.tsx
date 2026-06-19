@@ -41,7 +41,7 @@ const BYOD = () => (
                         {
                             icon: Zap,
                             title: "Get .singlet output",
-                            desc: "Identical aligner, reference, and QC as every public dataset. The output is open .singlet / .1pz in the same gene space — no batch effects from different tools or builds.",
+                            desc: "Identical aligner, reference, and QC as every public dataset. The output is an open .singlet bundle in the same gene space — no batch effects from different tools or builds.",
                         },
                         {
                             icon: Shield,
@@ -94,7 +94,7 @@ const BYOD = () => (
                         <span className="text-muted-foreground"># Load the harmonized output anywhere</span>{"\n"}
                         <span className="text-primary">import</span> singlet{"\n"}
                         adata = singlet.load_dir(<span className="text-primary">"./out"</span>){"\n\n"}
-                        <span className="text-muted-foreground"># R: library(singlet); seu &lt;- as_seurat("./out/gene_counts.1pz")</span>
+                        <span className="text-muted-foreground"># R: library(singlet); seu &lt;- load("./out", as = "seurat")</span>
                     </code>
                 </div>
             </div>
@@ -122,7 +122,7 @@ const BYOD = () => (
                     {
                         icon: FileCheck,
                         title: "Open formats",
-                        desc: "Output is open .singlet / .1pz that loads with singlet.load_dir() in Python or as_seurat() in R. Reproducible, traceable methods reviewers trust.",
+                        desc: "Output is an open, self-contained .singlet bundle that loads with singlet.load_dir() in Python or load() in R. Reproducible, traceable methods reviewers trust.",
                     },
                 ].map((item) => {
                     const Icon = item.icon;

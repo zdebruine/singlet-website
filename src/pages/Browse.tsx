@@ -14,13 +14,14 @@ import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
   Search, ChevronLeft, ChevronRight, CheckCircle, AlertTriangle, XCircle,
-  ArrowUpDown, ArrowUp, ArrowDown, Download, X, ChevronDown, ChevronRight as ChevronRt, SlidersHorizontal
+  ArrowUpDown, ArrowUp, ArrowDown, Download, X, ChevronDown, ChevronRight as ChevronRt, SlidersHorizontal,
+  Wand2, Sparkles
 } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/integrations/api/client";
-import type { GsmListParams, GseListParams, GsmRow, GseRow, FacetOption } from "@/integrations/api/types";
+import type { GsmListParams, GseListParams, GsmRow, GseRow, FacetOption, NlSearchInterpreted } from "@/integrations/api/types";
 
 // ── Formatters ────────────────────────────────────────────────────────────────
 
@@ -216,6 +217,7 @@ const Browse = () => {
   const qcStatus = searchParams.get("status") || undefined;          // Pass / Warn / Fail / All
   const failureCategory = searchParams.get("failure_category") || undefined;
   const q = searchParams.get("q") || undefined;
+  const nl = searchParams.get("nl") || undefined;
   const page = Number(searchParams.get("page")) || 0;
   const pageSize = Number(searchParams.get("size")) || 50;
   const sortBy = searchParams.get("sort") || undefined;
@@ -224,16 +226,33 @@ const Browse = () => {
   const maxCells = Number(searchParams.get("max_cells")) || 1000000;
 
   const [searchInput, setSearchInput] = useState(q ?? "");
+  const [nlInput, setNlInput] = useState(nl ?? "");
 
   // ── Sync searchInput when URL changes ─────────────────────────────────────
   useEffect(() => { setSearchInput(q ?? ""); }, [q]);
+  useEffect(() => { setNlInput(nl ?? ""); }, [nl]);
 
   // ── Push filters → URL ────────────────────────────────────────────────────
+  // Using a normal facet/keyword filter clears any active NL query so the two
+  // entry points don't fight; the NL submit handler manages `nl` itself.
   const setParam = useCallback((key: string, val: string | undefined) => {
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
       if (val) next.set(key, val); else next.delete(key);
+      next.delete("nl"); // facet/keyword use clears the NL query
       next.delete("page"); // reset page on filter change
+      return next;
+    }, { replace: true });
+  }, [setSearchParams]);
+
+  // ── Submit an NL query → URL (?nl=...) ────────────────────────────────────
+  const submitNl = useCallback((text: string) => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      const t = text.trim();
+      if (t) next.set("nl", t); else next.delete("nl");
+      next.set("tab", "gsm"); // NL results render in the samples view
+      next.delete("page");
       return next;
     }, { replace: true });
   }, [setSearchParams]);
@@ -324,7 +343,7 @@ const Browse = () => {
     queryKey: ["gsm-list", gsmParams],
     queryFn: () => apiClient.gsmList(gsmParams),
     staleTime: 30_000,
-    enabled: tab === "gsm",
+    enabled: tab === "gsm" && !nl,
   });
 
   // ── GSE query ─────────────────────────────────────────────────────────────
@@ -343,10 +362,26 @@ const Browse = () => {
     enabled: tab === "gse",
   });
 
-  const isLoading = tab === "gsm" ? gsmLoading : gseLoading;
-  const totalItems = tab === "gsm" ? (gsmResult?.total ?? 0) : (gseResult?.total ?? 0);
-  const totalPages = Math.ceil(totalItems / pageSize);
-  const gsmRows = gsmResult?.data ?? [];
+  // ── NL (AI) search query ──────────────────────────────────────────────────
+  // Active only when ?nl=... is present. Results render in the GSM (samples)
+  // view, replacing the faceted list. Server-side translates the query to
+  // structured filters via Claude Haiku (or degrades to keyword search).
+  const { data: nlResult, isLoading: nlLoading, isError: nlError } = useQuery({
+    queryKey: ["nl-search", nl, pageSize],
+    queryFn: () => apiClient.nlSearch(nl!, { level: "gsm", limit: pageSize }),
+    staleTime: 60_000,
+    enabled: !!nl && tab === "gsm",
+  });
+  const nlActive = !!nl && tab === "gsm";
+
+  const isLoading = nlActive ? nlLoading : tab === "gsm" ? gsmLoading : gseLoading;
+  const totalItems = nlActive
+    ? (nlResult?.total ?? 0)
+    : tab === "gsm" ? (gsmResult?.total ?? 0) : (gseResult?.total ?? 0);
+  // NL search returns a single capped page (server has no offset paging), so
+  // pagination collapses to one page in that mode.
+  const totalPages = nlActive ? 1 : Math.ceil(totalItems / pageSize);
+  const gsmRows = (nlActive ? (nlResult?.data as GsmRow[] | undefined) : gsmResult?.data) ?? [];
   const gseRows = gseResult?.data ?? [];
 
   // ── Total cells in current GSM result (summed) ────────────────────────────
@@ -387,6 +422,78 @@ const Browse = () => {
               {fmt(corpusStats?.total_cells)} cells across {fmt(corpusStats?.total_samples)} samples and {fmt(corpusStats?.series_count)} GEO series.
               {" "}<Link to="/docs/access" className="text-primary hover:underline text-xs">Load with Python →</Link>
             </p>
+          </div>
+
+          {/* ── AI / NATURAL-LANGUAGE SEARCH ── */}
+          <div className="mb-4 rounded-xl border border-primary/30 bg-primary/[0.04] p-3">
+            <div className="flex gap-2 items-stretch">
+              <div className="relative flex-1">
+                <Sparkles size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-primary" />
+                <input
+                  type="text"
+                  placeholder={'"T cells from pediatric AML" — ask in plain English'}
+                  value={nlInput}
+                  onChange={(e) => setNlInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") submitNl(nlInput); }}
+                  className="w-full pl-9 pr-4 py-2 rounded-lg border border-primary/30 bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                />
+              </div>
+              <button
+                onClick={() => submitNl(nlInput)}
+                disabled={!nlInput.trim()}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 disabled:opacity-40"
+              >
+                <Wand2 size={14} /> AI Search
+              </button>
+              {nl && (
+                <button
+                  onClick={() => { setNlInput(""); setParam("nl", undefined); }}
+                  className="inline-flex items-center px-3 py-2 rounded-lg border border-border text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                  title="Clear AI search"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+
+            {/* "Interpreted as" chips — only when AI is configured and returned filters */}
+            {nlActive && nlResult?.configured && nlResult.interpreted && (
+              <div className="flex flex-wrap items-center gap-1.5 mt-2.5">
+                <span className="text-[11px] text-muted-foreground">Interpreted as:</span>
+                {(() => {
+                  const i = nlResult.interpreted as NlSearchInterpreted;
+                  const chips: { label: string; val: string }[] = [];
+                  i.organism.forEach((v) => chips.push({ label: "Organism", val: v }));
+                  i.tissue.forEach((v) => chips.push({ label: "Tissue", val: v }));
+                  i.cell_type.forEach((v) => chips.push({ label: "Cell type", val: v }));
+                  i.disease.forEach((v) => chips.push({ label: "Disease", val: v }));
+                  i.protocol.forEach((v) => chips.push({ label: "Protocol", val: v }));
+                  i.sex.forEach((v) => chips.push({ label: "Sex", val: v }));
+                  if (i.min_cells != null) chips.push({ label: "Min cells", val: fmt(i.min_cells) });
+                  if (i.q) chips.push({ label: "Keywords", val: i.q });
+                  if (chips.length === 0) {
+                    return <span className="text-[11px] text-muted-foreground italic">no specific filters — showing all matches</span>;
+                  }
+                  return chips.map((c, idx) => (
+                    <span key={`${c.label}-${idx}`} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-primary/10 text-primary border border-primary/20">
+                      <span className="text-primary/60">{c.label}:</span> {c.val}
+                    </span>
+                  ));
+                })()}
+              </div>
+            )}
+
+            {/* Not-configured note — subtle, not broken-looking */}
+            {nlActive && nlResult && nlResult.configured === false && (
+              <p className="text-[11px] text-muted-foreground mt-2.5">
+                AI search not configured yet — showing keyword matches.
+              </p>
+            )}
+            {nlActive && nlError && (
+              <p className="text-[11px] text-amber-600 mt-2.5">
+                AI search is temporarily unavailable. Try the keyword search below.
+              </p>
+            )}
           </div>
 
           {/* ── SEARCH BAR ── */}
@@ -598,9 +705,9 @@ const Browse = () => {
 
                 {/* Live matching bar */}
                 <div className="text-xs text-muted-foreground">
-                  {!isLoading && tab === "gsm" && gsmResult && (
+                  {!isLoading && tab === "gsm" && (nlActive ? nlResult : gsmResult) && (
                     <span>
-                      <span className="font-semibold text-foreground">{gsmResult.total.toLocaleString()}</span> samples ·{" "}
+                      <span className="font-semibold text-foreground">{totalItems.toLocaleString()}</span> samples ·{" "}
                       <span className="font-semibold text-foreground">{fmt(resultCells)}</span> cells on this page
                     </span>
                   )}
@@ -764,7 +871,9 @@ const Browse = () => {
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 py-3 border-t border-border bg-muted/10">
                     <div className="flex items-center gap-3">
                       <span className="text-xs text-muted-foreground">
-                        Showing {(page * pageSize + 1).toLocaleString()}–{Math.min((page + 1) * pageSize, totalItems).toLocaleString()} of {totalItems.toLocaleString()} {tab === "gsm" ? "samples" : "studies"}
+                        {nlActive
+                          ? <>Showing {gsmRows.length.toLocaleString()} of {totalItems.toLocaleString()} matching samples</>
+                          : <>Showing {(page * pageSize + 1).toLocaleString()}–{Math.min((page + 1) * pageSize, totalItems).toLocaleString()} of {totalItems.toLocaleString()} {tab === "gsm" ? "samples" : "studies"}</>}
                       </span>
                       {tab === "gsm" && (
                         <button

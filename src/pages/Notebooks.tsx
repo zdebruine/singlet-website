@@ -219,11 +219,11 @@ const NOTEBOOKS: Notebook[] = [
   },
   {
     id: "1pz_format",
-    title: ".1pz Format: 8.7× Smaller Than h5ad",
+    title: ".singlet Format: 8.7× Smaller Than h5ad",
     description:
-      "Read/write .1pz sparse matrices: 678K cells × 38K genes in 15 MB (vs 133 MB h5ad). Benchmarks, format comparison, load_dir() with full metadata.",
+      "The compact, self-contained .singlet bundle: 678K cells × 38K genes in 15 MB (vs 133 MB h5ad). Benchmarks, format comparison, load_dir() with full metadata.",
     icon: <FileCode size={20} />,
-    tags: ["format", "compression", "1pz", "benchmark"],
+    tags: ["format", "compression", "singlet", "benchmark"],
     githubUrl: `${BASE}/1pz_format.ipynb`,
     colabUrl: `${COLAB}/1pz_format.ipynb`,
     status: "ready",
@@ -252,7 +252,7 @@ const Notebooks = () => (
             Notebooks & Tutorials
           </h1>
           <p className="text-muted-foreground max-w-2xl">
-            19 executed Jupyter notebooks covering data loading, PyTorch training batches, catalog exploration, formal equivalence, QC profiling, doublet detection, cell cycle scoring, .1pz format, and corpus analytics.
+            19 executed Jupyter notebooks covering data loading, PyTorch training batches, catalog exploration, formal equivalence, QC profiling, doublet detection, cell cycle scoring, the .singlet format, and corpus analytics.
           </p>
         </div>
 
@@ -356,10 +356,11 @@ print(f"{adata.n_obs} cells × {adata.n_vars} genes")
           </p>
           <pre className="font-mono text-xs text-foreground bg-muted/50 rounded-lg p-4 overflow-x-auto">
             <code>{`# Install the MCP extra and launch the server
-pip install "singlet[mcp]"
+pip install "singlet-bio[mcp]"
 python -m singlet.mcp
 
 # Then ask your AI assistant:
+# "Find T cells from pediatric AML"   (singlet_nl_search)
 # "Search the catalog for human lung 10xv3 samples"
 # "Fetch GSM5238385 locally as a .singlet bundle"
 # "Load GSM5238385 as an AnnData (h5ad) on my machine"`}</code>

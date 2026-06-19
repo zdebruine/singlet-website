@@ -15,6 +15,7 @@ import type {
   GseRow,
   GsmRow,
   SearchResponse,
+  NlSearchResponse,
 } from "./types";
 
 const BASE = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
@@ -76,5 +77,22 @@ export const apiClient = {
   /** GET /api/search?q=... — cross-entity FTS search */
   search(q: string): Promise<SearchResponse> {
     return get<SearchResponse>("/api/search", { q });
+  },
+
+  /**
+   * GET /api/nl-search?q=... — natural-language ("AI") search.
+   * Translates plain English into structured filters server-side (Claude Haiku)
+   * and returns matching samples/series. Degrades to keyword search when the
+   * Anthropic key isn't configured (configured: false).
+   */
+  nlSearch(
+    q: string,
+    opts: { level?: "gsm" | "gse"; limit?: number } = {}
+  ): Promise<NlSearchResponse> {
+    return get<NlSearchResponse>("/api/nl-search", {
+      q,
+      level: opts.level,
+      limit: opts.limit,
+    });
   },
 };

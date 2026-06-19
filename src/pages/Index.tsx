@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   ArrowRight, ChevronRight, Check, Database, Cloud, GitBranch,
-  Zap, Shield, BookOpen, Boxes, Download, Gauge, Server, Copy
+  Zap, Shield, BookOpen, Boxes, Download, Gauge, Server, Copy, Sparkles, Search
 } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
@@ -151,6 +151,14 @@ const Pillar = ({ icon: Icon, title, desc, code }: { icon: React.ElementType; ti
 /* ───────────────────── PAGE ───────────────────── */
 const Index = () => {
   const [codeTab, setCodeTab] = useState<"python" | "r">("python");
+  const [nlQuery, setNlQuery] = useState("");
+  const navigate = useNavigate();
+
+  const runNlSearch = () => {
+    const q = nlQuery.trim();
+    if (!q) return;
+    navigate(`/browse?nl=${encodeURIComponent(q)}`);
+  };
 
   // Live stats from API
   const { data: corpusStats } = useQuery({
@@ -178,22 +186,28 @@ const Index = () => {
   const LOAD_SNIPPET = `import singlet
 
 # Load directly — no download needed
-adata = singlet.load("GSE200218")
-print(adata)  # AnnData: 18,432 cells × 28,476 genes
+adata = singlet.load("GSE149298")
+print(adata)  # AnnData: cells × genes
 
-# Filter the catalog
-df = singlet.catalog(tissue="liver", organism="Homo sapiens")
-adata = singlet.load(df.iloc[0]["gsm_id"])`;
+# A list/array of accessions or .singlet files → one concatenated AnnData
+adata = singlet.load(["GSE149298", "GSE184652"])
+
+# Or search in plain English, then load
+accs = singlet.find("T cells from pediatric AML")
+adata = singlet.find_load("microglia in Alzheimer's disease")`;
 
   const R_SNIPPET = `library(singlet)
 
 # Load as SingleCellExperiment
-sce <- singlet_load("GSE200218")
+sce <- load("GSE149298")
 sce
 
-# Filter and load
-df <- singlet_catalog(tissue = "liver", organism = "Homo sapiens")
-sce <- singlet_load(df$gsm_id[1])`;
+# Combine several series, or load as Seurat
+sce <- load(c("GSE149298", "GSE184652"))
+seu <- load("GSE149298", as = "seurat")
+
+# Search in plain English
+accs <- find("T cells from pediatric AML")`;
 
   return (
     <div className="min-h-screen bg-background">
@@ -210,7 +224,7 @@ sce <- singlet_load(df$gsm_id[1])`;
           <div className="flex justify-center mb-5">
             <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-primary/30 bg-primary/[0.08] text-xs font-mono text-primary">
               <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-              Available now — pip install singlet
+              Available now — pip install singlet-bio
             </span>
           </div>
 
@@ -245,6 +259,30 @@ sce <- singlet_load(df$gsm_id[1])`;
             </div>
           </div>
 
+          {/* Natural-language (AI) search */}
+          <div className="max-w-xl mx-auto mb-6">
+            <div className="flex gap-2 items-stretch">
+              <div className="relative flex-1">
+                <Sparkles size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-primary" />
+                <input
+                  type="text"
+                  placeholder={'Ask in plain English — "T cells from pediatric AML"'}
+                  value={nlQuery}
+                  onChange={(e) => setNlQuery(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") runNlSearch(); }}
+                  className="w-full pl-10 pr-4 py-3 rounded-md border border-primary/30 bg-card/80 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                />
+              </div>
+              <button
+                onClick={runNlSearch}
+                disabled={!nlQuery.trim()}
+                className="inline-flex items-center gap-1.5 px-5 py-3 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 disabled:opacity-40 transition-opacity"
+              >
+                <Sparkles size={14} /> AI Search
+              </button>
+            </div>
+          </div>
+
           {/* Primary CTAs */}
           <div className="flex flex-wrap gap-4 justify-center">
             <Link to="/browse" className="shimmer-border inline-flex items-center gap-2 px-7 py-3 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity">
@@ -270,7 +308,7 @@ sce <- singlet_load(df$gsm_id[1])`;
             <ValueProp>CC0 public domain — no attribution required</ValueProp>
             <ValueProp>Includes failed samples, fully documented</ValueProp>
             <ValueProp>One <code className="font-mono text-xs bg-muted px-1 rounded">.singlet</code> → AnnData / Seurat / SCE / parquet on your machine</ValueProp>
-            <ValueProp>MIT pipeline runs anywhere — laptop, HPC, or cloud</ValueProp>
+            <ValueProp>Search in plain English — describe what you want, get matching datasets</ValueProp>
             <ValueProp>No account, no API key — open by default</ValueProp>
           </div>
         </div>
@@ -333,13 +371,13 @@ sce <- singlet_load(df$gsm_id[1])`;
               icon={Database}
               title="Harmonized Atlas"
               desc="Every public human single-cell RNA-seq dataset, reprocessed from raw reads through one identical pipeline. Same references, same QC, same gene space — across every lab and study."
-              code='singlet.load("GSE200218")'
+              code='singlet.load("GSE149298")'
             />
             <Pillar
-              icon={Zap}
-              title="On-demand Streaming"
-              desc="Load any slice of the atlas without downloading it first. Cells are fetched, decoded, and ready to use — as AnnData, SCE, or PyTorch tensors."
-              code='singlet.catalog(tissue="liver")'
+              icon={Search}
+              title="Search in Plain English"
+              desc="Describe what you want — tissue, cell type, disease, organism, protocol — and Claude translates it into atlas filters. On the website, in the package, or via the MCP tool."
+              code='singlet.find("T cells in AML")'
             />
             <Pillar
               icon={GitBranch}
@@ -427,7 +465,7 @@ sce <- singlet_load(df$gsm_id[1])`;
             The world's single-cell data, ready to use.
           </h2>
           <p className="text-sm text-muted-foreground mb-8 max-w-lg mx-auto">
-            <span className="font-mono text-foreground">pip install singlet</span>, then load any GEO accession — or stream millions of cells directly into your model.
+            <span className="font-mono text-foreground">pip install singlet-bio</span>, then load any GEO accession — or stream millions of cells directly into your model.
           </p>
           <div className="flex flex-wrap gap-3 justify-center">
             <Link to="/browse" className="shimmer-border inline-flex items-center gap-2 px-6 py-2.5 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity">

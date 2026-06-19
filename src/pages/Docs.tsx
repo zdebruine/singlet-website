@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import {
   ArrowRight, Copy, Check,
   Download, Terminal, Package, Github,
-  Cpu, Database, BookOpen,
+  Cpu, Database, BookOpen, Search,
 } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
@@ -78,6 +78,7 @@ const CodeBlock = ({
 /* ── Section anchors ── */
 const SECTIONS = [
   { id: "quickstart", label: "Quick Start" },
+  { id: "search", label: "Natural-language search" },
   { id: "download", label: "Download data" },
   { id: "pipeline", label: "Run the pipeline" },
   { id: "pytorch", label: "PyTorch loaders" },
@@ -119,7 +120,7 @@ const Docs = () => {
           </p>
           <div className="flex flex-wrap gap-3 mb-6">
             <div className="inline-flex items-center gap-2 px-4 py-2.5 rounded-md bg-muted border border-border font-mono text-sm text-foreground">
-              pip install singlet
+              pip install singlet-bio
             </div>
             <a href="https://github.com/Singlet-Bio/singlet" target="_blank" rel="noopener noreferrer"
               className="inline-flex items-center gap-2 px-4 py-2.5 rounded-md border border-border text-sm text-muted-foreground hover:text-foreground transition-colors">
@@ -174,28 +175,30 @@ const Docs = () => {
             </p>
 
             <CodeBlock
-              code={`# Install the package
-pip install singlet
+              code={`# Install the package (import name stays "singlet")
+pip install singlet-bio
 
 # Optional extras
-pip install "singlet[torch]"   # PyTorch loaders
-pip install "singlet[mcp]"     # MCP data-fetch tool
-pip install "singlet[gpu]"     # GPU acceleration`}
+pip install "singlet-bio[torch]"   # PyTorch loaders
+pip install "singlet-bio[mcp]"     # MCP search & fetch tool
+pip install "singlet-bio[gpu]"     # GPU acceleration`}
               title="Terminal"
             />
 
             <CodeBlock
               code={`import singlet
 
-# Fetch a public per-GSE bundle and load it as AnnData
-adata = singlet.load("GSE149383")
+# One accession, one .singlet file, or a list/array mixing them → one AnnData
+adata = singlet.load("GSE149298")
+adata = singlet.load("GSE149298.singlet")
+adata = singlet.load(["GSE149298", "GSE184652"])     # concatenated
 
 adata          # AnnData — cells × genes
 adata.X        # sparse count matrix
 adata.obs      # per-cell metadata
 adata.var      # gene annotations`}
               title="quick_start.py"
-              comment="No key, no login — singlet.load() resolves the public bundle and returns AnnData."
+              comment="No key, no login — singlet.load() resolves the public .singlet bundle(s) and returns one AnnData."
             />
 
             <div className="rounded-lg border border-border bg-card p-5 mt-4">
@@ -206,6 +209,49 @@ adata.var      # gene annotations`}
                 <div><span className="text-foreground font-medium">PyTorch</span> ≥ 2.0 (for <span className="font-mono">[torch]</span>)</div>
                 <div><span className="text-foreground font-medium">CUDA</span> ≥ 11.8 (for <span className="font-mono">[gpu]</span>)</div>
               </div>
+            </div>
+          </section>
+
+          <div className="glow-line mx-auto" />
+
+          {/* ────────────────────────── NATURAL-LANGUAGE SEARCH ────────────────────────── */}
+          <section id="search" className="pt-20">
+            <h2 className="font-display text-2xl font-bold text-foreground tracking-tightest mb-6 flex items-center gap-2">
+              <Search size={20} className="text-primary" /> Natural-language search
+            </h2>
+
+            <p className="text-sm text-muted-foreground leading-relaxed mb-4">
+              Describe what you want in plain English and Singlet uses{" "}
+              <span className="text-foreground font-semibold">Claude</span> to translate it into metadata filters over
+              the atlas — tissue, cell type, disease, organism, and protocol — then returns the matching accessions.
+            </p>
+
+            <CodeBlock
+              code={`import singlet
+
+# Plain English → list of matching accessions
+accs = singlet.find("T cells from pediatric AML")
+
+# find + load in one call → AnnData
+adata = singlet.find_load("microglia in Alzheimer's disease")`}
+              title="search.py"
+            />
+
+            <h3 className="font-display text-base font-semibold text-foreground mb-3 mt-8">R</h3>
+            <CodeBlock
+              code={`library(singlet)
+
+accs <- find("T cells from pediatric AML")`}
+              title="search.R"
+            />
+
+            <div className="rounded-lg border border-border/60 bg-muted/20 px-5 py-3 mt-4">
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                <span className="text-foreground font-semibold">Available three ways:</span> on the website (the AI
+                search box on <Link to="/browse" className="text-primary hover:underline">Browse</Link>), in the
+                Python/R packages via <span className="font-mono">find()</span>, and via the MCP tool{" "}
+                <span className="font-mono">singlet_nl_search</span>.
+              </p>
             </div>
           </section>
 
@@ -226,16 +272,15 @@ adata.var      # gene annotations`}
             <h3 className="font-display text-base font-semibold text-foreground mb-3">Explicit download (reproducible)</h3>
             <CodeBlock
               code={`# Download the bundle directly — public URL, $0 egress
-curl -O https://data.singlet.bio/data/GSE149383/GSE149383.singlet`}
+curl -O https://data.singlet.bio/data/GSE149298/GSE149298.singlet`}
               title="Terminal"
             />
             <CodeBlock
               code={`import singlet
 
-bundle = singlet.SingletBundle.open("GSE149383.singlet")
-
-adata = bundle.to_anndata()        # gene_counts = exon + intron, returns AnnData
-bundle.to_h5ad("GSE149383.h5ad")   # write a standard .h5ad`}
+# Load one or many .singlet files / accessions → one AnnData
+adata = singlet.load("GSE149298.singlet")
+adata = singlet.load(["GSE149298.singlet", "GSE184652.singlet"])  # concatenated`}
               title="open_bundle.py"
             />
 
@@ -244,7 +289,7 @@ bundle.to_h5ad("GSE149383.h5ad")   # write a standard .h5ad`}
               code={`import singlet
 
 # Resolves the public per-GSE bundle and returns AnnData
-adata = singlet.load("GSE149383")`}
+adata = singlet.load("GSE149298")`}
               title="load.py"
             />
 
@@ -269,11 +314,11 @@ singlet.summary()                      # high-level atlas summary`}
 
             <h3 className="font-display text-base font-semibold text-foreground mb-3 mt-8">R (load & analyze only)</h3>
             <CodeBlock
-              code={`library(singlet)
+              code={`library(singlet)              # install.packages("singlet")  (CRAN, coming soon)
 
-mat <- read_1pz("counts.1pz")     # read a .1pz sparse matrix
-seu <- as_seurat("counts.1pz")    # Seurat object
-sce <- as_sce("counts.1pz")       # SingleCellExperiment`}
+sce <- load("GSE149298")                    # SingleCellExperiment
+sce <- load(c("GSE149298", "GSE184652"))    # combined
+seu <- load("GSE149298", as = "seurat")     # Seurat object`}
               title="load.R"
               comment="R loads and analyzes outputs only — there is no raw-reads pipeline in R."
             />
@@ -312,8 +357,8 @@ run_pipeline("SRR11537951", "./out", organism="human")`}
               <p className="text-xs text-muted-foreground leading-relaxed">
                 <span className="text-foreground font-semibold">R note:</span> there is no raw-reads pipeline in R. The R
                 package only loads and analyzes pipeline outputs — run the pipeline from the CLI or Python, then read the
-                results in R with <span className="font-mono">read_1pz()</span>, <span className="font-mono">as_seurat()</span>,
-                or <span className="font-mono">as_sce()</span>.
+                results in R with <span className="font-mono">load()</span>,{" "}
+                <span className="font-mono">load(..., as = "seurat")</span>, or the local output directory.
               </p>
             </div>
           </section>
@@ -327,35 +372,38 @@ run_pipeline("SRR11537951", "./out", organism="human")`}
             </h2>
 
             <p className="text-sm text-muted-foreground leading-relaxed mb-4">
-              The <span className="font-mono text-foreground">singlet[torch]</span> extra streams datasets straight into
-              PyTorch. <span className="font-mono text-foreground">singlet.torch.DataLoader</span> yields dense
+              The <span className="font-mono text-foreground">singlet-bio[torch]</span> extra streams datasets straight
+              into PyTorch. <span className="font-mono text-foreground">singlet.torch.DataLoader</span> yields dense
               <span className="font-mono text-foreground"> float32</span> tensors of shape
-              <span className="font-mono text-foreground"> (n_cells × n_genes)</span>.
+              <span className="font-mono text-foreground"> (n_cells × n_genes)</span>. An array of{" "}
+              <span className="font-mono text-foreground">.singlet</span> files is the preferred form (accessions also
+              work).
             </p>
 
             <CodeBlock
-              code={`pip install "singlet[torch]"`}
+              code={`pip install "singlet-bio[torch]"`}
               title="Terminal"
             />
 
             <CodeBlock
               code={`from singlet.torch import DataLoader
 
-loader = DataLoader("GSE200218", batch_size=256, normalize=True)
+# An array of .singlet files is the preferred form (accessions also work)
+loader = DataLoader(["GSE149298.singlet", "GSE184652.singlet"], batch_size=256, normalize=True)
 
 for batch in loader:
-    ...   # dense float32 tensors, shape (n_cells × n_genes)`}
+    ...   # float32 tensors, shape (n_cells × n_genes)`}
               title="pytorch_loader.py"
             />
 
             <h3 className="font-display text-base font-semibold text-foreground mb-3 mt-8">Lower-level dataset</h3>
             <CodeBlock
-              code={`from singlet.torch import OnePZDataset
+              code={`from singlet.torch import SingletDataset
 
-# Wrap a .1pz path or a public accession as a torch Dataset
-dataset = OnePZDataset("GSE200218")`}
+# Wrap .singlet files or public accessions as a torch Dataset
+dataset = SingletDataset(["GSE149298.singlet", "GSE184652.singlet"])`}
               title="dataset.py"
-              comment="Use singlet.torch.DataLoader — not singlet.dataloader()."
+              comment="The class is singlet.torch.DataLoader / SingletDataset — never singlet.dataloader()."
             />
           </section>
 
@@ -368,16 +416,16 @@ dataset = OnePZDataset("GSE200218")`}
             </h2>
 
             <p className="text-sm text-muted-foreground leading-relaxed mb-4">
-              The <span className="font-mono text-foreground">singlet[mcp]</span> extra ships a{" "}
+              The <span className="font-mono text-foreground">singlet-bio[mcp]</span> extra ships a{" "}
               <a href="https://modelcontextprotocol.io" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
                 Model Context Protocol
               </a>{" "}
-              server that lets an AI assistant search the catalog and fetch data. It is a catalog-search and
-              data-fetch tool only.
+              server that lets an AI assistant search the catalog (including natural-language search), inspect QC, and
+              fetch data. No accounts, no Supabase.
             </p>
 
             <CodeBlock
-              code={`pip install "singlet[mcp]"
+              code={`pip install "singlet-bio[mcp]"
 
 # Launch the server over stdio
 python -m singlet.mcp`}
@@ -387,6 +435,7 @@ python -m singlet.mcp`}
             <h3 className="font-display text-base font-semibold text-foreground mb-3 mt-8">What the tools do</h3>
             <div className="rounded-lg border border-border divide-y divide-border mb-6 overflow-hidden">
               {[
+                ["singlet_nl_search", "Natural-language dataset search: plain English → matching accessions plus the interpreted filters (tissue, cell type, disease, organism, protocol)."],
                 ["Search & browse", "Query the catalog of series and samples by organism, tissue, and other metadata."],
                 ["Per-sample QC", "Inspect quality-control metrics for an individual sample (GSM)."],
                 ["Sample access & fetch", "Pick a GSE/GSM and fetch its .singlet / h5ad bundle to local disk."],
@@ -424,9 +473,10 @@ $ claude mcp add singlet \\
             <h3 className="font-display text-base font-semibold text-foreground mb-3 mt-4">Example prompts</h3>
             <div className="rounded-lg border border-border divide-y divide-border mb-2 overflow-hidden">
               {[
+                "Find T cells from pediatric AML",
                 "Search the catalog for human liver datasets",
                 "Show the QC metrics for sample GSM4502482",
-                "Fetch the .singlet bundle for GSE149383 to ./data",
+                "Fetch the .singlet bundle for GSE149298 to ./data",
               ].map((prompt) => (
                 <div key={prompt} className="px-4 py-2.5">
                   <span className="text-xs text-foreground italic">"{prompt}"</span>
@@ -442,24 +492,20 @@ $ claude mcp add singlet \\
             <h2 className="font-display text-2xl font-bold text-foreground tracking-tightest mb-6">Data objects &amp; formats</h2>
 
             <p className="text-sm text-muted-foreground leading-relaxed mb-6">
-              Singlet datasets are published as <span className="font-mono text-foreground">.singlet</span> bundles built
-              on the <span className="font-mono text-foreground">.1pz</span> compressed matrix format, and convert
-              losslessly to standard <span className="font-mono text-foreground">.h5ad</span> / AnnData.
+              Singlet datasets are published as <span className="font-mono text-foreground">.singlet</span> bundles —
+              self-contained and compressed — and convert losslessly to standard{" "}
+              <span className="font-mono text-foreground">.h5ad</span> / AnnData.
             </p>
 
             <div className="rounded-lg border border-border divide-y divide-border mb-6 overflow-hidden">
               {[
                 {
                   fmt: ".singlet",
-                  desc: "Per-GSE bundle: a ZIP of zstd-compressed .1pz sparse matrices plus JSON metadata. h5ad-compatible. Open with singlet.SingletBundle.open() or singlet.load().",
-                },
-                {
-                  fmt: ".1pz",
-                  desc: "The underlying zstd-compressed sparse matrix format inside a bundle. Read directly with read_1pz() in R or via the bundle API in Python.",
+                  desc: "A self-contained, compressed bundle holding the count matrices plus metadata for a dataset (compressed internally). h5ad-compatible. Open with singlet.load().",
                 },
                 {
                   fmt: ".h5ad",
-                  desc: "Standard AnnData on disk. Produced by bundle.to_h5ad() and consumable by scanpy and any AnnData-based workflow.",
+                  desc: "Standard AnnData on disk. Interoperable with scanpy and any AnnData-based workflow; load a .singlet and write .h5ad with AnnData's own writer.",
                 },
               ].map((item) => (
                 <div key={item.fmt} className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-4 px-4 py-3">
@@ -533,7 +579,7 @@ adata = singlet.load_dir("out/", layer="gene_counts")`}
           <section className="pt-20 pb-8">
             <div className="border-t border-border pt-14 text-center">
               <h2 className="font-display text-2xl font-bold text-foreground tracking-tightest mb-2">
-                <span className="font-mono">pip install singlet</span> <span className="gradient-text">and go.</span>
+                <span className="font-mono">pip install singlet-bio</span> <span className="gradient-text">and go.</span>
               </h2>
               <p className="text-sm text-muted-foreground mb-6 max-w-lg mx-auto">
                 Open data, open code. Download, process, and analyze — free and public.

@@ -47,17 +47,15 @@ function CodeBlock({ code, lang = "python" }: { code: string; lang?: string }) {
   );
 }
 
-const PYTHON_INSTALL = `pip install singlet`;
+const PYTHON_INSTALL = `pip install singlet-bio`;
 
 const PYTHON_LOAD_GSE = `import singlet
 
-# Load an entire GEO series in one line
-adata = singlet.load("GSE149383")
-print(adata)  # AnnData: cells × genes
-
-# Filter the catalog, then load a specific sample
-df = singlet.catalog(organism="Homo sapiens", tissue="lung")
-adata = singlet.load(df.iloc[0]["gsm_id"], genes=["CD3D", "CD8A"])`;
+# One accession, one .singlet file, or a list/array → one AnnData
+adata = singlet.load("GSE149298")
+adata = singlet.load("GSE149298.singlet")
+adata = singlet.load(["GSE149298", "GSE184652"])   # concatenated
+print(adata)  # AnnData: cells × genes`;
 
 const PYTHON_CATALOG_FILTER = `import singlet
 
@@ -69,65 +67,74 @@ df = singlet.catalog(
 )
 print(f"{len(df)} samples matched")
 
-# Load any sample directly, optionally filtering cells
-adata = singlet.load("GSM6010234", obs_filter="n_genes > 500")
+# Load any sample directly
+adata = singlet.load("GSM6010234")
 adata.obs.head()`;
+
+const PYTHON_SEARCH = `import singlet
+
+# Plain English → list of matching accessions
+accs = singlet.find("T cells from pediatric AML")
+
+# find + load in one call → AnnData
+adata = singlet.find_load("microglia in Alzheimer's disease")`;
 
 const PYTHON_PYTORCH = `import torch
 from singlet.torch import DataLoader
 
-# Stream a series straight into a PyTorch DataLoader
-loader = DataLoader("GSE149383", batch_size=256, normalize=True)
+# An array of .singlet files is the preferred form (accessions also work)
+loader = DataLoader(["GSE149298.singlet", "GSE184652.singlet"], batch_size=256, normalize=True)
 
-for cells, meta in loader:
-    logits = model(cells)
-    loss = criterion(logits, meta["cell_type"])
-    loss.backward()`;
+for batch in loader:        # float32 (n_cells × n_genes)
+    logits = model(batch)
+    ...`;
 
-const R_INSTALL = `install.packages("singlet")  # CRAN
+const R_INSTALL = `install.packages("singlet")  # (CRAN, coming soon)
 # or from GitHub:
 # remotes::install_github("Singlet-Bio/singlet/r")`;
 
 const R_LOAD_GSE = `library(singlet)
 
-# Read a .1pz bundle straight from the atlas
-mat <- read_1pz("GSE149383")
+# One accession, or several combined → SingleCellExperiment
+sce <- load("GSE149298")
+sce <- load(c("GSE149298", "GSE184652"))   # combined
 
-# Convert to your object of choice
-sce <- as_sce(mat)       # SingleCellExperiment
-seu <- as_seurat(mat)    # Seurat
+# Or load as Seurat
+seu <- load("GSE149298", as = "seurat")
 sce`;
 
 const R_CATALOG_FILTER = `library(singlet)
 
-# Filter the catalog
-df <- singlet_catalog(
+# Search the catalog in plain English
+accs <- find("T cells from pediatric AML")
+
+# ...or filter explicitly
+df <- catalog(
   organism = "Homo sapiens",
   tissue   = "liver",
   min_cells = 10000
 )
 cat(nrow(df), "samples matched\\n")
 
-# Read a matching sample and convert to Seurat
-mat <- read_1pz(df$gsm_id[1])
-seu <- as_seurat(mat)
+# Load a matching series as Seurat
+seu <- load(df$gse_id[1], as = "seurat")
 seu`;
 
 const CURL_EXAMPLE = `# Download a .singlet bundle directly — no auth, $0 egress
-curl -O https://data.singlet.bio/data/GSE149383/GSE149383.singlet
+curl -O https://data.singlet.bio/data/GSE149298/GSE149298.singlet
 
-# Open it locally and convert to AnnData
+# Open it locally as AnnData
 python - <<'PY'
 import singlet
-adata = singlet.SingletBundle.open("GSE149383.singlet").to_anndata()
+adata = singlet.load("GSE149298.singlet")
 print(adata)
 PY
 
 # ...or skip curl entirely — singlet.load() fetches and caches for you
-python -c 'import singlet; print(singlet.load("GSE149383"))'`;
+python -c 'import singlet; print(singlet.load("GSE149298"))'`;
 
 const DocsAccess = () => {
-  const [pyTab, setPyTab] = useState<"load" | "filter" | "pytorch">("load");
+  const [pyTab, setPyTab] = useState<"load" | "search" | "filter" | "pytorch">("load");
   const [rTab, setRTab] = useState<"load" | "filter">("load");
 
   return (
@@ -149,6 +156,8 @@ const DocsAccess = () => {
           <p className="text-muted-foreground text-base mb-10 max-w-2xl">
             Load any sample or series directly from the Singlet Atlas — no account, no API key.
             Data streams from Cloudflare R2 with <span className="font-medium text-foreground">$0 egress</span> and <span className="font-medium text-foreground">CC0 license</span>.
+            You can also <span className="font-medium text-foreground">search in plain English</span> with{" "}
+            <span className="font-mono text-foreground">singlet.find()</span> — see the Natural-language search tab below.
           </p>
 
           {/* Install */}
@@ -181,6 +190,7 @@ const DocsAccess = () => {
               <div className="flex border-b border-border bg-muted/20">
                 {([
                   ["load", "Load by GSE/GSM"],
+                  ["search", "Natural-language search"],
                   ["filter", "Catalog filter"],
                   ["pytorch", "PyTorch DataLoader"],
                 ] as const).map(([key, label]) => (
@@ -195,6 +205,7 @@ const DocsAccess = () => {
               </div>
               <div className="p-4">
                 {pyTab === "load" && <CodeBlock code={PYTHON_LOAD_GSE} />}
+                {pyTab === "search" && <CodeBlock code={PYTHON_SEARCH} />}
                 {pyTab === "filter" && <CodeBlock code={PYTHON_CATALOG_FILTER} />}
                 {pyTab === "pytorch" && <CodeBlock code={PYTHON_PYTORCH} />}
               </div>
@@ -253,7 +264,8 @@ const DocsAccess = () => {
               <div>
                 <h2 className="font-display text-base font-bold text-foreground mb-2">MCP Server</h2>
                 <p className="text-sm text-muted-foreground mb-3">
-                  Singlet ships a built-in <span className="font-mono text-foreground">Model Context Protocol</span> server so AI coding assistants (Claude, Copilot, Cursor) can query the catalog and load samples on your behalf.
+                  Singlet ships a built-in <span className="font-mono text-foreground">Model Context Protocol</span> server so AI coding assistants (Claude, Copilot, Cursor) can query the catalog, run natural-language search (<span className="font-mono text-foreground">singlet_nl_search</span>), and load samples on your behalf.
+                  Install with <span className="font-mono text-foreground">pip install "singlet-bio[mcp]"</span> and launch <span className="font-mono text-foreground">python -m singlet.mcp</span>. No Supabase.
                 </p>
                 <CodeBlock
                   code={`# In your MCP config (mcp.json / cline_mcp_settings.json)
@@ -268,7 +280,7 @@ const DocsAccess = () => {
                   lang="json"
                 />
                 <p className="text-xs text-muted-foreground mt-3">
-                  Once running, ask your assistant: <em>"Load the top lung cancer samples from singlet and show cell type composition."</em>
+                  Once running, ask your assistant: <em>"Find T cells from pediatric AML and show cell type composition."</em>
                 </p>
               </div>
             </div>

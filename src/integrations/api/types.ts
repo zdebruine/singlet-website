@@ -108,6 +108,33 @@ export interface SearchResponse {
   gse: Pick<GseRow, "id" | "title" | "organism" | "n_cells" | "n_gsm_done">[];
 }
 
+/** Structured filters the AI extracted from a natural-language query. */
+export interface NlSearchInterpreted {
+  organism: string[];
+  tissue: string[];
+  cell_type: string[];
+  disease: string[];
+  protocol: string[];
+  sex: string[];
+  min_cells: number | null;
+  q: string | null;
+}
+
+/**
+ * Response from /api/nl-search. Stable contract — also consumed by the
+ * Python/R packages and the MCP tool. `accessions` is a flat array of the
+ * matching gsm_id / gse_id strings for programmatic use.
+ */
+export interface NlSearchResponse {
+  configured: boolean;
+  interpreted: NlSearchInterpreted | null;
+  level?: "gsm" | "gse";
+  data: (GsmRow | GseRow)[];
+  accessions: string[];
+  total: number;
+  note?: string;
+}
+
 // ── Query params ─────────────────────────────────────────────────────────────
 
 export interface GsmListParams {
