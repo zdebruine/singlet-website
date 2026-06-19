@@ -1,21 +1,27 @@
+# Cloudflare Pages project name (matches the CF Pages project "singlet").
 name = "singlet"
 compatibility_date = "2024-09-23"
 pages_build_output_dir = "dist"
 
 # ── D1 Database ───────────────────────────────────────────────────────────────
-# database_id is a placeholder — run `wrangler d1 create singlet-catalog` and
-# paste the returned UUID here before deploying.
+# Binding name "DB" is consumed by functions/api/*.ts as `env.DB`.
+# database_id is the real production D1 UUID (non-secret).
 [[d1_databases]]
 binding = "DB"
 database_name = "singlet-catalog"
 database_id = "fb42f359-92a0-452c-91e4-f630f627c4c7"
 
 # ── R2 Bucket ─────────────────────────────────────────────────────────────────
-# Create with: wrangler r2 bucket create singlet-data
+# Binding name "SINGLET_DATA"; bucket served publicly at https://data.singlet.bio
 [[r2_buckets]]
 binding = "SINGLET_DATA"
 bucket_name = "singlet-data"
 
 # ── Environment variables (non-secret) ───────────────────────────────────────
+# NOTE: VITE_R2_PUBLIC_URL is a Vite *build-time* var (baked into the static
+# bundle), NOT a Worker runtime var, so it does NOT belong here. Its committed
+# default ("https://data.singlet.bio") is set in vite.config.ts and also has a
+# fallback in src/components/DownloadPanel.tsx. To override at deploy time, set
+# VITE_R2_PUBLIC_URL as a Cloudflare Pages *build* environment variable.
 [vars]
 ENVIRONMENT = "production"
