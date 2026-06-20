@@ -1,16 +1,16 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-06-20T02:56:02Z",
+  "generated_at": "2026-06-20T02:58:43Z",
   "kpi": {
     "samples_total": 93384,
     "samples_success": 29959,
-    "samples_failed_terminal": 41890,
-    "samples_in_flight": 35,
-    "samples_pending": 2554,
+    "samples_failed_terminal": 41964,
+    "samples_in_flight": 27,
+    "samples_pending": 2488,
     "samples_claimed": 0,
     "samples_with_summary": 48905,
     "samples_done_queue": 48905,
-    "samples_failed_queue": 41890,
+    "samples_failed_queue": 41964,
     "samples_deny_list": 37802,
     "success_rate_pct": 61.3,
     "samples_success_genic": 33813,
@@ -19,13 +19,13 @@
     "reads_total": 1293722745795,
     "umis_total": 359218133544,
     "nodes_in_use": 10,
-    "cpus_in_use": 140
+    "cpus_in_use": 108
   },
   "queue_state": {
-    "pending": 347,
+    "pending": 266,
     "claimed": 0,
     "done": 48905,
-    "failed": 41890
+    "failed": 41964
   },
   "status_distribution": {
     "success": 29959,
@@ -33,20 +33,20 @@
     "align_low_cells": 5244,
     "qc_warn": 3563,
     "data_incomplete": 37802,
-    "no_srr": 4088
+    "no_srr": 4162
   },
   "partitions": [
     {
       "name": "bigmem",
-      "idle_cpus": 96,
-      "alloc_cpus": 96,
+      "idle_cpus": 128,
+      "alloc_cpus": 64,
       "total_cpus": 192,
       "idle_nodes": 1,
-      "mixed_nodes": 2,
+      "mixed_nodes": 3,
       "alloc_nodes": 0,
       "down_nodes": 0,
       "mem_per_node_mb": 1545000,
-      "cpu_util_pct": 50.0
+      "cpu_util_pct": 33.3
     },
     {
       "name": "cpu",
@@ -74,15 +74,15 @@
     },
     {
       "name": "short-bigmem",
-      "idle_cpus": 96,
-      "alloc_cpus": 96,
+      "idle_cpus": 128,
+      "alloc_cpus": 64,
       "total_cpus": 192,
       "idle_nodes": 1,
-      "mixed_nodes": 2,
+      "mixed_nodes": 3,
       "alloc_nodes": 0,
       "down_nodes": 0,
       "mem_per_node_mb": 1545000,
-      "cpu_util_pct": 50.0
+      "cpu_util_pct": 33.3
     },
     {
       "name": "short-cpu",
@@ -117,7 +117,7 @@
     },
     {
       "kind": "download_fail",
-      "count": 4088
+      "count": 4162
     },
     {
       "kind": "OUT_OF_MEMORY",
@@ -401,103 +401,31 @@
       "tier": "GSM6963120"
     },
     {
-      "jobid": "625549",
-      "partition": "bigmem",
-      "node": "b001",
-      "cpus": 4,
-      "mem": "160G",
-      "time_limit": "2-00:00:00",
-      "tier": "GSM8099710"
-    },
-    {
-      "jobid": "625550",
-      "partition": "bigmem",
-      "node": "b001",
-      "cpus": 4,
-      "mem": "160G",
-      "time_limit": "2-00:00:00",
-      "tier": "GSM8099711"
-    },
-    {
-      "jobid": "625551",
-      "partition": "bigmem",
-      "node": "b001",
-      "cpus": 4,
-      "mem": "160G",
-      "time_limit": "2-00:00:00",
-      "tier": "GSM8099712"
-    },
-    {
-      "jobid": "625552",
-      "partition": "bigmem",
-      "node": "b004",
-      "cpus": 4,
-      "mem": "160G",
-      "time_limit": "2-00:00:00",
-      "tier": "GSM8099713"
-    },
-    {
-      "jobid": "625553",
-      "partition": "bigmem",
-      "node": "b004",
-      "cpus": 4,
-      "mem": "160G",
-      "time_limit": "2-00:00:00",
-      "tier": "GSM8099714"
-    },
-    {
-      "jobid": "625554",
-      "partition": "bigmem",
-      "node": "b004",
-      "cpus": 4,
-      "mem": "160G",
-      "time_limit": "2-00:00:00",
-      "tier": "GSM8099715"
-    },
-    {
-      "jobid": "625555",
+      "jobid": "625636",
       "partition": "bigmem",
       "node": "b003",
       "cpus": 4,
       "mem": "160G",
       "time_limit": "2-00:00:00",
-      "tier": "GSM8099716"
+      "tier": "GSM8099797"
     },
     {
-      "jobid": "625556",
+      "jobid": "625637",
       "partition": "bigmem",
       "node": "b003",
       "cpus": 4,
       "mem": "160G",
       "time_limit": "2-00:00:00",
-      "tier": "GSM8099717"
+      "tier": "GSM8099798"
     },
     {
-      "jobid": "625558",
+      "jobid": "625638",
       "partition": "bigmem",
       "node": "b003",
       "cpus": 4,
       "mem": "160G",
       "time_limit": "2-00:00:00",
-      "tier": "GSM8099719"
-    },
-    {
-      "jobid": "625559",
-      "partition": "bigmem",
-      "node": "b003",
-      "cpus": 4,
-      "mem": "160G",
-      "time_limit": "2-00:00:00",
-      "tier": "GSM8099720"
-    },
-    {
-      "jobid": "625560",
-      "partition": "bigmem",
-      "node": "b003",
-      "cpus": 4,
-      "mem": "160G",
-      "time_limit": "2-00:00:00",
-      "tier": "GSM8099721"
+      "tier": "GSM8099799"
     },
     {
       "jobid": "623072",
