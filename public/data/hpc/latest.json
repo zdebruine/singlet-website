@@ -1,12 +1,12 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-06-20T12:37:03Z",
+  "generated_at": "2026-06-20T12:49:25Z",
   "kpi": {
     "samples_total": 93384,
     "samples_success": 29959,
     "samples_failed_terminal": 43480,
-    "samples_in_flight": 24,
-    "samples_pending": 975,
+    "samples_in_flight": 23,
+    "samples_pending": 976,
     "samples_claimed": 0,
     "samples_with_summary": 48905,
     "samples_done_queue": 48905,
@@ -18,8 +18,8 @@
     "cells_total": 192450148,
     "reads_total": 1293722745795,
     "umis_total": 359218133544,
-    "nodes_in_use": 10,
-    "cpus_in_use": 96
+    "nodes_in_use": 9,
+    "cpus_in_use": 92
   },
   "queue_state": {
     "pending": 0,
@@ -50,15 +50,15 @@
     },
     {
       "name": "cpu",
-      "idle_cpus": 52,
-      "alloc_cpus": 524,
+      "idle_cpus": 56,
+      "alloc_cpus": 520,
       "total_cpus": 576,
       "idle_nodes": 0,
       "mixed_nodes": 9,
       "alloc_nodes": 0,
       "down_nodes": 0,
       "mem_per_node_mb": 770000,
-      "cpu_util_pct": 91.0
+      "cpu_util_pct": 90.3
     },
     {
       "name": "gpu",
@@ -86,15 +86,15 @@
     },
     {
       "name": "short-cpu",
-      "idle_cpus": 52,
-      "alloc_cpus": 524,
+      "idle_cpus": 56,
+      "alloc_cpus": 520,
       "total_cpus": 576,
       "idle_nodes": 0,
       "mixed_nodes": 9,
       "alloc_nodes": 0,
       "down_nodes": 0,
       "mem_per_node_mb": 770000,
-      "cpu_util_pct": 91.0
+      "cpu_util_pct": 90.3
     },
     {
       "name": "short-gpu",
@@ -122,9 +122,24 @@
     {
       "kind": "OUT_OF_MEMORY",
       "count": 15
+    },
+    {
+      "kind": "TIMEOUT",
+      "count": 1
     }
   ],
   "recent_failures": [
+    {
+      "jobid": "610181",
+      "gsm": "GSM4979217",
+      "state": "TIMEOUT",
+      "tier": null,
+      "elapsed_s": 0,
+      "maxrss_gb": 0.0,
+      "timelimit_s": 0,
+      "end": "2026-06-20T08:46:51",
+      "retries": 0
+    },
     {
       "jobid": "622639",
       "gsm": "GSM6437687",
@@ -498,15 +513,6 @@
       "mem": "96G",
       "time_limit": "2-00:00:00",
       "tier": "GSM4965650"
-    },
-    {
-      "jobid": "610181",
-      "partition": "cpu",
-      "node": "c009",
-      "cpus": 4,
-      "mem": "96G",
-      "time_limit": "2-00:00:00",
-      "tier": "GSM4979217"
     }
   ],
   "efficiency": {
