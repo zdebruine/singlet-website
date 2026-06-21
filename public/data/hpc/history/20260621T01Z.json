@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-06-21T01:24:39Z",
+  "generated_at": "2026-06-21T01:45:55Z",
   "kpi": {
     "samples_total": 93384,
     "samples_success": 29959,
     "samples_failed_terminal": 44785,
-    "samples_in_flight": 17,
+    "samples_in_flight": 15,
     "samples_pending": 0,
     "samples_claimed": 0,
     "samples_with_summary": 48905,
@@ -19,7 +19,7 @@
     "reads_total": 1293722745795,
     "umis_total": 359218133544,
     "nodes_in_use": 8,
-    "cpus_in_use": 68
+    "cpus_in_use": 60
   },
   "queue_state": {
     "pending": 0,
@@ -38,15 +38,15 @@
   "partitions": [
     {
       "name": "bigmem",
-      "idle_cpus": 144,
-      "alloc_cpus": 48,
+      "idle_cpus": 152,
+      "alloc_cpus": 40,
       "total_cpus": 192,
       "idle_nodes": 1,
       "mixed_nodes": 3,
       "alloc_nodes": 0,
       "down_nodes": 0,
       "mem_per_node_mb": 1545000,
-      "cpu_util_pct": 25.0
+      "cpu_util_pct": 20.8
     },
     {
       "name": "cpu",
@@ -74,15 +74,15 @@
     },
     {
       "name": "short-bigmem",
-      "idle_cpus": 144,
-      "alloc_cpus": 48,
+      "idle_cpus": 152,
+      "alloc_cpus": 40,
       "total_cpus": 192,
       "idle_nodes": 1,
       "mixed_nodes": 3,
       "alloc_nodes": 0,
       "down_nodes": 0,
       "mem_per_node_mb": 1545000,
-      "cpu_util_pct": 25.0
+      "cpu_util_pct": 20.8
     },
     {
       "name": "short-cpu",
@@ -121,7 +121,7 @@
     },
     {
       "kind": "TIMEOUT",
-      "count": 7
+      "count": 9
     }
   ],
   "recent_failures": [
@@ -201,6 +201,28 @@
       "timelimit_s": 0,
       "end": "2026-06-20T10:02:52",
       "retries": 0
+    },
+    {
+      "jobid": "618065",
+      "gsm": "GSM6963122",
+      "state": "TIMEOUT",
+      "tier": null,
+      "elapsed_s": 0,
+      "maxrss_gb": 0.0,
+      "timelimit_s": 0,
+      "end": "2026-06-20T21:45:34",
+      "retries": 0
+    },
+    {
+      "jobid": "618066",
+      "gsm": "GSM6963123",
+      "state": "TIMEOUT",
+      "tier": null,
+      "elapsed_s": 0,
+      "maxrss_gb": 0.0,
+      "timelimit_s": 0,
+      "end": "2026-06-20T21:45:34",
+      "retries": 0
     }
   ],
   "running_jobs": [
@@ -221,24 +243,6 @@
       "mem": "160G",
       "time_limit": "2-00:00:00",
       "tier": "GSM7139718"
-    },
-    {
-      "jobid": "618066",
-      "partition": "bigmem",
-      "node": "b001",
-      "cpus": 4,
-      "mem": "160G",
-      "time_limit": "2-00:00:00",
-      "tier": "GSM6963123"
-    },
-    {
-      "jobid": "618065",
-      "partition": "bigmem",
-      "node": "b004",
-      "cpus": 4,
-      "mem": "160G",
-      "time_limit": "2-00:00:00",
-      "tier": "GSM6963122"
     },
     {
       "jobid": "623073",
