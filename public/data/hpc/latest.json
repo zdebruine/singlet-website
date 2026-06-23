@@ -1,36 +1,36 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-06-23T15:15:33Z",
+  "generated_at": "2026-06-23T15:16:41Z",
   "kpi": {
     "samples_total": 99779,
     "samples_success": 30055,
     "samples_failed_terminal": 47155,
-    "samples_in_flight": 65,
-    "samples_pending": 2251,
+    "samples_in_flight": 66,
+    "samples_pending": 2249,
     "samples_claimed": 0,
-    "samples_with_summary": 50308,
-    "samples_done_queue": 50308,
+    "samples_with_summary": 50309,
+    "samples_done_queue": 50309,
     "samples_failed_queue": 47155,
     "samples_deny_list": 37802,
     "success_rate_pct": 59.7,
     "samples_success_genic": 33935,
     "genic_success_rate_pct": 67.5,
-    "cells_total": 192693262,
-    "reads_total": 1316108256163,
-    "umis_total": 361866902448,
+    "cells_total": 192693280,
+    "reads_total": 1316128413469,
+    "umis_total": 361867473031,
     "nodes_in_use": 10,
-    "cpus_in_use": 260
+    "cpus_in_use": 264
   },
   "queue_state": {
     "pending": 276,
     "claimed": 0,
-    "done": 50308,
+    "done": 50309,
     "failed": 47155
   },
   "status_distribution": {
     "success": 30055,
     "align_low_map": 10201,
-    "align_low_cells": 6260,
+    "align_low_cells": 6261,
     "qc_warn": 3792,
     "data_incomplete": 37802,
     "no_srr": 9353
@@ -38,15 +38,15 @@
   "partitions": [
     {
       "name": "bigmem",
-      "idle_cpus": 20,
-      "alloc_cpus": 172,
+      "idle_cpus": 16,
+      "alloc_cpus": 176,
       "total_cpus": 192,
       "idle_nodes": 0,
       "mixed_nodes": 4,
       "alloc_nodes": 0,
       "down_nodes": 0,
       "mem_per_node_mb": 1545000,
-      "cpu_util_pct": 89.6
+      "cpu_util_pct": 91.7
     },
     {
       "name": "cpu",
@@ -62,27 +62,27 @@
     },
     {
       "name": "gpu",
-      "idle_cpus": 236,
-      "alloc_cpus": 108,
+      "idle_cpus": 240,
+      "alloc_cpus": 104,
       "total_cpus": 344,
-      "idle_nodes": 1,
-      "mixed_nodes": 8,
+      "idle_nodes": 2,
+      "mixed_nodes": 7,
       "alloc_nodes": 0,
       "down_nodes": 0,
       "mem_per_node_mb": 384500,
-      "cpu_util_pct": 31.4
+      "cpu_util_pct": 30.2
     },
     {
       "name": "short-bigmem",
-      "idle_cpus": 20,
-      "alloc_cpus": 172,
+      "idle_cpus": 16,
+      "alloc_cpus": 176,
       "total_cpus": 192,
       "idle_nodes": 0,
       "mixed_nodes": 4,
       "alloc_nodes": 0,
       "down_nodes": 0,
       "mem_per_node_mb": 1545000,
-      "cpu_util_pct": 89.6
+      "cpu_util_pct": 91.7
     },
     {
       "name": "short-cpu",
@@ -98,15 +98,15 @@
     },
     {
       "name": "short-gpu",
-      "idle_cpus": 236,
-      "alloc_cpus": 108,
+      "idle_cpus": 240,
+      "alloc_cpus": 104,
       "total_cpus": 344,
-      "idle_nodes": 1,
-      "mixed_nodes": 8,
+      "idle_nodes": 2,
+      "mixed_nodes": 7,
       "alloc_nodes": 0,
       "down_nodes": 0,
       "mem_per_node_mb": 384500,
-      "cpu_util_pct": 31.4
+      "cpu_util_pct": 30.2
     }
   ],
   "tiers": [],
@@ -193,6 +193,24 @@
     }
   ],
   "running_jobs": [
+    {
+      "jobid": "637259",
+      "partition": "scavenger",
+      "node": "g005",
+      "cpus": 4,
+      "mem": "96G",
+      "time_limit": "2-00:00:00",
+      "tier": "GSM6683112"
+    },
+    {
+      "jobid": "637258",
+      "partition": "scavenger",
+      "node": "b002",
+      "cpus": 4,
+      "mem": "96G",
+      "time_limit": "2-00:00:00",
+      "tier": "GSM6683111"
+    },
     {
       "jobid": "637257",
       "partition": "scavenger",
@@ -698,15 +716,6 @@
       "tier": "GSM6682960"
     },
     {
-      "jobid": "637171",
-      "partition": "scavenger",
-      "node": "g005",
-      "cpus": 4,
-      "mem": "96G",
-      "time_limit": "2-00:00:00",
-      "tier": "GSM5598561"
-    },
-    {
       "jobid": "637132",
       "partition": "scavenger",
       "node": "g003",
@@ -784,7 +793,7 @@
     "mem_p95_pct": 78.8,
     "time_p50_pct": 29.6,
     "time_p95_pct": 89.0,
-    "n_samples": 50308
+    "n_samples": 50309
   },
   "downsize_proposals": [],
   "policy_snapshot": {
