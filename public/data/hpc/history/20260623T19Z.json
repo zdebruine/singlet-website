@@ -1,16 +1,16 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-06-23T19:30:45Z",
+  "generated_at": "2026-06-23T19:31:12Z",
   "kpi": {
     "samples_total": 99779,
     "samples_success": 30077,
-    "samples_failed_terminal": 47514,
+    "samples_failed_terminal": 47515,
     "samples_in_flight": 63,
-    "samples_pending": 1673,
+    "samples_pending": 1672,
     "samples_claimed": 0,
     "samples_with_summary": 50529,
     "samples_done_queue": 50529,
-    "samples_failed_queue": 47514,
+    "samples_failed_queue": 47515,
     "samples_deny_list": 37802,
     "success_rate_pct": 59.5,
     "samples_success_genic": 33980,
@@ -22,10 +22,10 @@
     "cpus_in_use": 252
   },
   "queue_state": {
-    "pending": 274,
+    "pending": 276,
     "claimed": 0,
     "done": 50529,
-    "failed": 47514
+    "failed": 47515
   },
   "status_distribution": {
     "success": 30077,
@@ -33,7 +33,7 @@
     "align_low_cells": 6405,
     "qc_warn": 3807,
     "data_incomplete": 37802,
-    "no_srr": 9712
+    "no_srr": 9713
   },
   "partitions": [
     {
@@ -117,11 +117,11 @@
     },
     {
       "kind": "download_fail",
-      "count": 9712
+      "count": 9713
     },
     {
       "kind": "OUT_OF_MEMORY",
-      "count": 8
+      "count": 9
     }
   ],
   "recent_failures": [
@@ -212,9 +212,29 @@
       "timelimit_s": 0,
       "end": "2026-06-23T15:08:40",
       "retries": 0
+    },
+    {
+      "jobid": "637877",
+      "gsm": "GSM7661395",
+      "state": "OUT_OF_MEMORY",
+      "tier": null,
+      "elapsed_s": 0,
+      "maxrss_gb": 0.0,
+      "timelimit_s": 0,
+      "end": "2026-06-23T15:31:07",
+      "retries": 0
     }
   ],
   "running_jobs": [
+    {
+      "jobid": "637932",
+      "partition": "scavenger",
+      "node": "g004",
+      "cpus": 4,
+      "mem": "96G",
+      "time_limit": "2-00:00:00",
+      "tier": "GSM8173886"
+    },
     {
       "jobid": "637930",
       "partition": "scavenger",
@@ -700,15 +720,6 @@
       "mem": "96G",
       "time_limit": "2-00:00:00",
       "tier": "GSM7661393"
-    },
-    {
-      "jobid": "637877",
-      "partition": "scavenger",
-      "node": "g004",
-      "cpus": 4,
-      "mem": "96G",
-      "time_limit": "2-00:00:00",
-      "tier": "GSM7661395"
     },
     {
       "jobid": "637874",
