@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-06-25T12:13:38Z",
+  "generated_at": "2026-06-25T12:16:42Z",
   "kpi": {
     "samples_total": 99779,
     "samples_success": 30083,
     "samples_failed_terminal": 48936,
-    "samples_in_flight": 1,
+    "samples_in_flight": 2,
     "samples_pending": 0,
     "samples_claimed": 0,
     "samples_with_summary": 51163,
@@ -18,8 +18,8 @@
     "cells_total": 193206796,
     "reads_total": 1333583834041,
     "umis_total": 364183818459,
-    "nodes_in_use": 1,
-    "cpus_in_use": 4
+    "nodes_in_use": 2,
+    "cpus_in_use": 8
   },
   "queue_state": {
     "pending": 0,
@@ -50,15 +50,15 @@
     },
     {
       "name": "cpu",
-      "idle_cpus": 268,
-      "alloc_cpus": 308,
+      "idle_cpus": 264,
+      "alloc_cpus": 312,
       "total_cpus": 576,
       "idle_nodes": 2,
       "mixed_nodes": 10,
       "alloc_nodes": 0,
       "down_nodes": 0,
       "mem_per_node_mb": 512000,
-      "cpu_util_pct": 53.5
+      "cpu_util_pct": 54.2
     },
     {
       "name": "gpu",
@@ -86,15 +86,15 @@
     },
     {
       "name": "short-cpu",
-      "idle_cpus": 268,
-      "alloc_cpus": 308,
+      "idle_cpus": 264,
+      "alloc_cpus": 312,
       "total_cpus": 576,
       "idle_nodes": 2,
       "mixed_nodes": 10,
       "alloc_nodes": 0,
       "down_nodes": 0,
       "mem_per_node_mb": 512000,
-      "cpu_util_pct": 53.5
+      "cpu_util_pct": 54.2
     },
     {
       "name": "short-gpu",
@@ -146,6 +146,15 @@
       "mem": "96G",
       "time_limit": "2-00:00:00",
       "tier": "GSM6284387"
+    },
+    {
+      "jobid": "640828",
+      "partition": "scavenger",
+      "node": "c008",
+      "cpus": 4,
+      "mem": "160G",
+      "time_limit": "2-00:00:00",
+      "tier": "GSM8505367"
     }
   ],
   "efficiency": {
