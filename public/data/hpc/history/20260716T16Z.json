@@ -1,112 +1,112 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-07-07T18:20:20Z",
+  "generated_at": "2026-07-16T16:02:28Z",
   "kpi": {
-    "samples_total": 99779,
-    "samples_success": 30311,
-    "samples_failed_terminal": 42148,
+    "samples_total": 101536,
+    "samples_success": 30327,
+    "samples_failed_terminal": 44203,
     "samples_in_flight": 0,
-    "samples_pending": 5017,
+    "samples_pending": 4581,
     "samples_claimed": 0,
-    "samples_with_summary": 52614,
-    "samples_done_queue": 52614,
-    "samples_failed_queue": 42148,
+    "samples_with_summary": 52752,
+    "samples_done_queue": 52752,
+    "samples_failed_queue": 44203,
     "samples_deny_list": 37802,
-    "success_rate_pct": 57.6,
-    "samples_success_genic": 34352,
-    "genic_success_rate_pct": 65.3,
-    "cells_total": 194517842,
-    "reads_total": 1364701158182,
-    "umis_total": 367435608682,
+    "success_rate_pct": 57.5,
+    "samples_success_genic": 34373,
+    "genic_success_rate_pct": 65.2,
+    "cells_total": 194622152,
+    "reads_total": 1367266523351,
+    "umis_total": 367736347519,
     "nodes_in_use": 0,
     "cpus_in_use": 0
   },
   "queue_state": {
     "pending": 0,
     "claimed": 0,
-    "done": 52614,
-    "failed": 42148
+    "done": 52752,
+    "failed": 44203
   },
   "status_distribution": {
-    "success": 30311,
-    "align_low_map": 10542,
-    "align_low_cells": 7669,
-    "qc_warn": 4092,
+    "success": 30327,
+    "align_low_map": 10560,
+    "align_low_cells": 7759,
+    "qc_warn": 4106,
     "data_incomplete": 37802,
-    "no_srr": 4346
+    "no_srr": 6401
   },
   "partitions": [
     {
       "name": "bigmem",
-      "idle_cpus": 24,
-      "alloc_cpus": 168,
+      "idle_cpus": 15,
+      "alloc_cpus": 177,
       "total_cpus": 192,
       "idle_nodes": 0,
-      "mixed_nodes": 2,
+      "mixed_nodes": 4,
       "alloc_nodes": 0,
       "down_nodes": 0,
       "mem_per_node_mb": 1545000,
-      "cpu_util_pct": 87.5
+      "cpu_util_pct": 92.2
     },
     {
       "name": "cpu",
-      "idle_cpus": 42,
-      "alloc_cpus": 534,
+      "idle_cpus": 253,
+      "alloc_cpus": 323,
       "total_cpus": 576,
       "idle_nodes": 0,
-      "mixed_nodes": 9,
-      "alloc_nodes": 3,
+      "mixed_nodes": 10,
+      "alloc_nodes": 1,
       "down_nodes": 0,
       "mem_per_node_mb": 770000,
-      "cpu_util_pct": 92.7
+      "cpu_util_pct": 56.1
     },
     {
       "name": "gpu",
-      "idle_cpus": 197,
-      "alloc_cpus": 147,
+      "idle_cpus": 116,
+      "alloc_cpus": 180,
       "total_cpus": 344,
-      "idle_nodes": 1,
+      "idle_nodes": 0,
       "mixed_nodes": 8,
       "alloc_nodes": 0,
-      "down_nodes": 0,
-      "mem_per_node_mb": 384500,
-      "cpu_util_pct": 42.7
+      "down_nodes": 1,
+      "mem_per_node_mb": 770000,
+      "cpu_util_pct": 52.3
     },
     {
       "name": "short-bigmem",
-      "idle_cpus": 24,
-      "alloc_cpus": 168,
+      "idle_cpus": 15,
+      "alloc_cpus": 177,
       "total_cpus": 192,
       "idle_nodes": 0,
-      "mixed_nodes": 2,
+      "mixed_nodes": 4,
       "alloc_nodes": 0,
       "down_nodes": 0,
       "mem_per_node_mb": 1545000,
-      "cpu_util_pct": 87.5
+      "cpu_util_pct": 92.2
     },
     {
       "name": "short-cpu",
-      "idle_cpus": 42,
-      "alloc_cpus": 534,
+      "idle_cpus": 253,
+      "alloc_cpus": 323,
       "total_cpus": 576,
       "idle_nodes": 0,
-      "mixed_nodes": 9,
-      "alloc_nodes": 3,
+      "mixed_nodes": 10,
+      "alloc_nodes": 1,
       "down_nodes": 0,
       "mem_per_node_mb": 770000,
-      "cpu_util_pct": 92.7
+      "cpu_util_pct": 56.1
     },
     {
       "name": "short-gpu",
-      "idle_cpus": 197,
-      "alloc_cpus": 147,
+      "idle_cpus": 116,
+      "alloc_cpus": 180,
       "total_cpus": 344,
-      "idle_nodes": 1,
+      "idle_nodes": 0,
       "mixed_nodes": 8,
       "alloc_nodes": 0,
-      "down_nodes": 0,
-      "mem_per_node_mb": 384500,
-      "cpu_util_pct": 42.7
+      "down_nodes": 1,
+      "mem_per_node_mb": 770000,
+      "cpu_util_pct": 52.3
     }
   ],
   "tiers": [],
@@ -117,7 +117,7 @@
     },
     {
       "kind": "download_fail",
-      "count": 4346
+      "count": 6401
     }
   ],
   "recent_failures": [],
@@ -125,9 +125,9 @@
   "efficiency": {
     "mem_p50_pct": 76.4,
     "mem_p95_pct": 79.9,
-    "time_p50_pct": 30.9,
-    "time_p95_pct": 90.7,
-    "n_samples": 52614
+    "time_p50_pct": 31.0,
+    "time_p95_pct": 90.6,
+    "n_samples": 52752
   },
   "downsize_proposals": [],
   "policy_snapshot": {
