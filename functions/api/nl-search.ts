@@ -440,8 +440,7 @@ async function handle(env: Env, request: Request): Promise<Response> {
     });
   }
 
-  const result =
-    level === "gse" ? await runGse(env.DB, interpreted, limit) : await runGsm(env.DB, interpreted, limit);
+  const result = await runSearch(env.DB, interpreted, level, limit, q);
 
   return corsOk({
     configured: true,
@@ -450,6 +449,7 @@ async function handle(env: Env, request: Request): Promise<Response> {
     data: result.data,
     accessions: result.accessions,
     total: result.total,
+    ...(result.note ? { note: result.note } : {}),
   });
 }
 
