@@ -473,7 +473,7 @@ accs <- find("T cells from pediatric AML")`;
             The world's single-cell data, ready to use.
           </h2>
           <p className="text-sm text-muted-foreground mb-8 max-w-lg mx-auto">
-            <span className="font-mono text-foreground">pip install singlet-bio</span>, then load any GEO accession — or stream millions of cells directly into your model.
+            <span className="font-mono text-foreground">pip install from GitHub</span>, then load any GEO accession — or stream millions of cells directly into your model.
           </p>
           <div className="flex flex-wrap gap-3 justify-center">
             <Link to="/browse" className="shimmer-border inline-flex items-center gap-2 px-6 py-2.5 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity">
