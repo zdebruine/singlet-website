@@ -11,7 +11,7 @@ import { apiClient } from "@/integrations/api/client";
 import type { GsmRow } from "@/integrations/api/types";
 
 // Re-export GsmRow under the legacy Table alias so imports like
-// `type { Tables } from "@/integrations/supabase/types"` in existing
+// legacy `Tables` type alias in existing
 // components can be replaced without touching JSX.
 export type { GsmRow };
 

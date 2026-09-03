@@ -9,6 +9,7 @@ import Footer from "@/components/Footer";
 import { DownloadPanel } from "@/components/DownloadPanel";
 import { useSample, useCorpusStats } from "@/hooks/useDatabase";
 import { apiClient } from "@/integrations/api/client";
+import { isSuspectCellCount, FLAGGED_CELLS_LABEL, protocolLabel } from "@/lib/catalog-display";
 
 function formatNumber(n: number | null | undefined): string {
   if (n == null) return "—";
@@ -171,7 +172,7 @@ const SampleDetail = () => {
               <div className="flex items-center gap-2 flex-wrap">
                 <StatusBadgeLarge status={sample.status} />
                 <QualityTier sample={sample} />
-                <span className="text-xs font-mono bg-muted px-2 py-1 rounded">{sample.protocol ?? "unknown"}</span>
+                <span className="text-xs font-mono bg-muted px-2 py-1 rounded">{protocolLabel(sample.protocol)}</span>
                 <span className="text-xs italic text-muted-foreground">{sample.organism}</span>
                 {sample.modality && <span className="text-xs text-muted-foreground">{sample.modality}</span>}
               </div>
@@ -236,7 +237,14 @@ const SampleDetail = () => {
             <div className="mb-8">
               <h2 className="font-display text-base font-bold text-foreground mb-3 uppercase tracking-wider">QC Metrics</h2>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <QCGauge label="Cells" value={sample.cells_called ?? sample.n_cells} good={500} warn={100} />
+                {isSuspectCellCount(sample.protocol, sample.cells_called ?? sample.n_cells) ? (
+                  <div className="rounded-lg border border-border bg-card p-3">
+                    <div className="text-[11px] uppercase tracking-wider text-muted-foreground mb-1">Cells</div>
+                    <div className="text-xs italic text-amber-600" title="Known plate-protocol cell-count bug — value withheld pending pipeline fix">{FLAGGED_CELLS_LABEL}</div>
+                  </div>
+                ) : (
+                  <QCGauge label="Cells" value={sample.cells_called ?? sample.n_cells} good={500} warn={100} />
+                )}
                 <QCGauge label="Mapping Rate" value={sample.mapping_rate} unit="%" good={0.7} warn={0.5} />
                 <QCGauge label="Median Genes/Cell" value={sample.median_genes} good={500} warn={200} />
                 <QCGauge label="Median UMIs/Cell" value={sample.median_umis} good={1000} warn={500} />
@@ -287,7 +295,7 @@ const SampleDetail = () => {
                   ["Disease", sample.disease],
                   ["Donor ID", sample.donor_id],
                   ["Sex", sample.sex],
-                  ["Protocol", sample.protocol],
+                  ["Protocol", protocolLabel(sample.protocol)],
                   ["Modality", sample.modality],
                 ].map(([key, val]) => val ? (
                   <div key={String(key)} className="flex justify-between gap-2">
@@ -361,7 +369,7 @@ const SampleDetail = () => {
                 <pre className="font-mono text-xs text-muted-foreground leading-6 overflow-x-auto whitespace-pre">{`import singlet
 
 adata = singlet.load("${sample.gsm_id}")
-print(adata)  # ${formatNumber(sample.cells_called ?? sample.n_cells)} cells`}</pre>
+print(adata)  # ${isSuspectCellCount(sample.protocol, sample.cells_called ?? sample.n_cells) ? "cell count under review" : formatNumber(sample.cells_called ?? sample.n_cells) + " cells"}`}</pre>
               </div>
             </div>
           )}
