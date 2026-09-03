@@ -12,15 +12,15 @@
  *   limit  — max rows (default 50, clamped 1..200)
  *
  * Behavior:
- *   - With env.ANTHROPIC_API_KEY set: calls the Anthropic Messages API
- *     (claude-haiku-4-5), grounding the model on the controlled vocabulary
- *     pulled live from D1, parses strict-JSON filters, and applies them.
+ *   - Interpretation runs in the Lovable Cloud edge function
+ *     `interpret-search-query`, which calls a Google Gemini model through the
+ *     Lovable AI Gateway (auto-provisioned LOVABLE_API_KEY — no key to set
+ *     anywhere by hand). It is grounded on the controlled vocabulary pulled
+ *     live from D1 here and passed through.
  *     Response: { configured: true, interpreted: {...}, data, accessions, total }
- *   - Without the key: degrades gracefully to a keyword (FTS/LIKE) search.
- *     Response: { configured: false, interpreted: null, data, accessions, total,
- *                 note: "AI search not configured" }
+ *   - If that call fails, degrades gracefully to a keyword (FTS/LIKE) search.
  *
- * NEVER returns 500 for a missing key / model failure — it falls back instead.
+ * NEVER returns 500 for a model failure — it falls back instead.
  * All SQL is parameterized. Identifier interpolation uses fixed column names only.
  *
  * Stable contract: this endpoint is also consumed by the Python/R packages and
@@ -129,20 +129,7 @@ async function loadVocab(db: D1Database): Promise<Record<ArrayField, string[]>> 
   return out;
 }
 
-// ── Anthropic Messages API call (Claude Haiku) ────────────────────────────────
-
-const SYSTEM_PROMPT = `You translate a single-cell genomics dataset search query into JSON metadata filters.
-
-You are given a controlled vocabulary of allowed values for several fields. For each field, use ONLY values that appear in the provided vocabulary (match the controlled-vocabulary spelling/case exactly). If the user references a concept that is not in a field's vocabulary, leave that field's array empty and instead put the leftover keywords in "q".
-
-Output STRICT JSON and nothing else — no prose, no markdown fences. The JSON must have exactly these keys:
-{"organism":[...],"tissue":[...],"cell_type":[...],"disease":[...],"protocol":[...],"sex":[...],"min_cells":<integer or null>,"q":<string or null>}
-
-Rules:
-- Each of organism/tissue/cell_type/disease/protocol/sex is an array of strings drawn from that field's vocabulary (empty array if nothing applies).
-- "min_cells" is an integer minimum cell count if the user implies one (e.g. "at least 5000 cells"), else null.
-- "q" holds any free-text keywords that don't map to a vocabulary field (e.g. an author, gene, or unmatched concept), else null.
-- Map synonyms to the vocabulary where possible (e.g. "AML" -> a leukemia disease value if present; "human" -> "Homo sapiens" if present).`;
+// ── Query interpretation (Lovable AI Gateway via Supabase edge function) ─────
 
 /** Extract the first balanced {...} JSON object from arbitrary text. */
 function extractJson(text: string): unknown | null {
@@ -201,47 +188,31 @@ function coerceInterpreted(raw: unknown): Interpreted {
   };
 }
 
-/** Call Claude Haiku to translate the query. Returns null on any failure. */
+/**
+ * Ask the Lovable Cloud edge function to translate the query.
+ * Returns null on any failure so the caller can fall back to keyword search.
+ */
 async function interpret(
-  apiKey: string,
+  env: Env,
   query: string,
   vocabLists: Record<ArrayField, string[]>
 ): Promise<Interpreted | null> {
-  const vocabText = ARRAY_FIELDS.map(
-    (f) => `${f}: ${vocabLists[f].length ? vocabLists[f].join(", ") : "(none)"}`
-  ).join("\n");
-  const userMessage =
-    `Controlled vocabulary (allowed values per field):\n${vocabText}\n\n` +
-    `User query: ${query}\n\n` +
-    `Return the JSON filters now.`;
-
+  const base = (env.SUPABASE_URL ?? DEFAULT_SUPABASE_URL).replace(/\/+$/, "");
+  const anon = env.SUPABASE_ANON_KEY ?? DEFAULT_SUPABASE_ANON_KEY;
   try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
+    const res = await fetch(`${base}/functions/v1/${INTERPRET_FN}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
+        apikey: anon,
+        Authorization: `Bearer ${anon}`,
       },
-      body: JSON.stringify({
-        model: "claude-haiku-4-5",
-        max_tokens: 500,
-        system: SYSTEM_PROMPT,
-        messages: [{ role: "user", content: userMessage }],
-      }),
+      body: JSON.stringify({ q: query, vocab: vocabLists }),
     });
     if (!res.ok) return null;
-    const data = (await res.json()) as {
-      content?: { type: string; text?: string }[];
-    };
-    const text = (data.content ?? [])
-      .filter((b) => b.type === "text" && typeof b.text === "string")
-      .map((b) => b.text as string)
-      .join("");
-    if (!text) return null;
-    const parsed = extractJson(text);
-    if (parsed == null) return null;
-    return coerceInterpreted(parsed);
+    const data = (await res.json()) as { interpreted?: unknown };
+    if (data.interpreted == null) return null;
+    return coerceInterpreted(data.interpreted);
   } catch {
     return null;
   }
@@ -362,7 +333,7 @@ async function handle(env: Env, request: Request): Promise<Response> {
 
   if (!q) {
     return corsOk({
-      configured: !!env.ANTHROPIC_API_KEY,
+      configured: true,
       interpreted: null,
       data: [],
       accessions: [],
@@ -383,24 +354,9 @@ async function handle(env: Env, request: Request): Promise<Response> {
     q,
   };
 
-  // ── Not configured → graceful keyword search ──
-  if (!env.ANTHROPIC_API_KEY) {
-    const result =
-      level === "gse" ? await runGse(env.DB, keywordFilter, limit) : await runGsm(env.DB, keywordFilter, limit);
-    return corsOk({
-      configured: false,
-      interpreted: null,
-      level,
-      data: result.data,
-      accessions: result.accessions,
-      total: result.total,
-      note: "AI search not configured",
-    });
-  }
-
   // ── Configured → ground on vocab, interpret, query ──
   const vocabLists = await loadVocab(env.DB);
-  const interpreted = await interpret(env.ANTHROPIC_API_KEY, q, vocabLists);
+  const interpreted = await interpret(env, q, vocabLists);
 
   if (!interpreted) {
     // Model failed/unparseable → fall back to keyword search, still 200.
