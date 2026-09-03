@@ -47,7 +47,7 @@ function CodeBlock({ code, lang = "python" }: { code: string; lang?: string }) {
   );
 }
 
-const PYTHON_INSTALL = `pip install singlet-bio`;
+const PYTHON_INSTALL = `# PyPI release coming soon — install from source for now\npip install "singlet-bio @ git+https://github.com/Singlet-Bio/singlet#subdirectory=python"`;
 
 const PYTHON_LOAD_GSE = `import singlet
 
@@ -265,7 +265,7 @@ const DocsAccess = () => {
                 <h2 className="font-display text-base font-bold text-foreground mb-2">MCP Server</h2>
                 <p className="text-sm text-muted-foreground mb-3">
                   Singlet ships a built-in <span className="font-mono text-foreground">Model Context Protocol</span> server so AI coding assistants (Claude, Copilot, Cursor) can query the catalog, run natural-language search (<span className="font-mono text-foreground">singlet_nl_search</span>), and load samples on your behalf.
-                  Install with <span className="font-mono text-foreground">pip install "singlet-bio[mcp]"</span> and launch <span className="font-mono text-foreground">python -m singlet.mcp</span>. No Supabase.
+                  Install with <span className="font-mono text-foreground">pip install "singlet-bio[mcp] @ git+https://github.com/Singlet-Bio/singlet#subdirectory=python"</span> and launch <span className="font-mono text-foreground">python -m singlet.mcp</span>. No Supabase.
                 </p>
                 <CodeBlock
                   code={`# In your MCP config (mcp.json / cline_mcp_settings.json)
