@@ -12,15 +12,15 @@
  *   limit  — max rows (default 50, clamped 1..200)
  *
  * Behavior:
- *   - With env.ANTHROPIC_API_KEY set: calls the Anthropic Messages API
- *     (claude-haiku-4-5), grounding the model on the controlled vocabulary
- *     pulled live from D1, parses strict-JSON filters, and applies them.
+ *   - Interpretation runs in the Lovable Cloud edge function
+ *     `interpret-search-query`, which calls a Google Gemini model through the
+ *     Lovable AI Gateway (auto-provisioned LOVABLE_API_KEY — no key to set
+ *     anywhere by hand). It is grounded on the controlled vocabulary pulled
+ *     live from D1 here and passed through.
  *     Response: { configured: true, interpreted: {...}, data, accessions, total }
- *   - Without the key: degrades gracefully to a keyword (FTS/LIKE) search.
- *     Response: { configured: false, interpreted: null, data, accessions, total,
- *                 note: "AI search not configured" }
+ *   - If that call fails, degrades gracefully to a keyword (FTS/LIKE) search.
  *
- * NEVER returns 500 for a missing key / model failure — it falls back instead.
+ * NEVER returns 500 for a model failure — it falls back instead.
  * All SQL is parameterized. Identifier interpolation uses fixed column names only.
  *
  * Stable contract: this endpoint is also consumed by the Python/R packages and
@@ -33,8 +33,21 @@ import { cachedJson } from "../_shared/cache";
 
 interface Env {
   DB: D1Database;
-  ANTHROPIC_API_KEY?: string;
+  /** Optional overrides; sane public defaults are baked in below. */
+  SUPABASE_URL?: string;
+  SUPABASE_ANON_KEY?: string;
 }
+
+/**
+ * Lovable Cloud (Supabase) edge function that performs the AI interpretation
+ * step via the Lovable AI Gateway. The anon key is public/client-safe by
+ * design, so it is inlined here — AI Search must not depend on any secret that
+ * has to be entered manually in the Cloudflare dashboard.
+ */
+const DEFAULT_SUPABASE_URL = "https://vbswbitfyallghbgxkuw.supabase.co";
+const DEFAULT_SUPABASE_ANON_KEY =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZic3diaXRmeWFsbGdoYmd4a3V3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ2MjkzNDksImV4cCI6MjA5MDIwNTM0OX0.GtX_3p0L78p0KqmgNY71ENagf-lugz5FhvhYrtKqLhs";
+const INTERPRET_FN = "interpret-search-query";
 
 // Columns the model is allowed to filter on (array-valued, case-insensitive).
 const ARRAY_FIELDS = ["organism", "tissue", "cell_type", "disease", "protocol", "sex"] as const;
@@ -116,20 +129,7 @@ async function loadVocab(db: D1Database): Promise<Record<ArrayField, string[]>> 
   return out;
 }
 
-// ── Anthropic Messages API call (Claude Haiku) ────────────────────────────────
-
-const SYSTEM_PROMPT = `You translate a single-cell genomics dataset search query into JSON metadata filters.
-
-You are given a controlled vocabulary of allowed values for several fields. For each field, use ONLY values that appear in the provided vocabulary (match the controlled-vocabulary spelling/case exactly). If the user references a concept that is not in a field's vocabulary, leave that field's array empty and instead put the leftover keywords in "q".
-
-Output STRICT JSON and nothing else — no prose, no markdown fences. The JSON must have exactly these keys:
-{"organism":[...],"tissue":[...],"cell_type":[...],"disease":[...],"protocol":[...],"sex":[...],"min_cells":<integer or null>,"q":<string or null>}
-
-Rules:
-- Each of organism/tissue/cell_type/disease/protocol/sex is an array of strings drawn from that field's vocabulary (empty array if nothing applies).
-- "min_cells" is an integer minimum cell count if the user implies one (e.g. "at least 5000 cells"), else null.
-- "q" holds any free-text keywords that don't map to a vocabulary field (e.g. an author, gene, or unmatched concept), else null.
-- Map synonyms to the vocabulary where possible (e.g. "AML" -> a leukemia disease value if present; "human" -> "Homo sapiens" if present).`;
+// ── Query interpretation (Lovable AI Gateway via Supabase edge function) ─────
 
 /** Extract the first balanced {...} JSON object from arbitrary text. */
 function extractJson(text: string): unknown | null {
@@ -188,47 +188,31 @@ function coerceInterpreted(raw: unknown): Interpreted {
   };
 }
 
-/** Call Claude Haiku to translate the query. Returns null on any failure. */
+/**
+ * Ask the Lovable Cloud edge function to translate the query.
+ * Returns null on any failure so the caller can fall back to keyword search.
+ */
 async function interpret(
-  apiKey: string,
+  env: Env,
   query: string,
   vocabLists: Record<ArrayField, string[]>
 ): Promise<Interpreted | null> {
-  const vocabText = ARRAY_FIELDS.map(
-    (f) => `${f}: ${vocabLists[f].length ? vocabLists[f].join(", ") : "(none)"}`
-  ).join("\n");
-  const userMessage =
-    `Controlled vocabulary (allowed values per field):\n${vocabText}\n\n` +
-    `User query: ${query}\n\n` +
-    `Return the JSON filters now.`;
-
+  const base = (env.SUPABASE_URL ?? DEFAULT_SUPABASE_URL).replace(/\/+$/, "");
+  const anon = env.SUPABASE_ANON_KEY ?? DEFAULT_SUPABASE_ANON_KEY;
   try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
+    const res = await fetch(`${base}/functions/v1/${INTERPRET_FN}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
+        apikey: anon,
+        Authorization: `Bearer ${anon}`,
       },
-      body: JSON.stringify({
-        model: "claude-haiku-4-5",
-        max_tokens: 500,
-        system: SYSTEM_PROMPT,
-        messages: [{ role: "user", content: userMessage }],
-      }),
+      body: JSON.stringify({ q: query, vocab: vocabLists }),
     });
     if (!res.ok) return null;
-    const data = (await res.json()) as {
-      content?: { type: string; text?: string }[];
-    };
-    const text = (data.content ?? [])
-      .filter((b) => b.type === "text" && typeof b.text === "string")
-      .map((b) => b.text as string)
-      .join("");
-    if (!text) return null;
-    const parsed = extractJson(text);
-    if (parsed == null) return null;
-    return coerceInterpreted(parsed);
+    const data = (await res.json()) as { interpreted?: unknown };
+    if (data.interpreted == null) return null;
+    return coerceInterpreted(data.interpreted);
   } catch {
     return null;
   }
@@ -251,18 +235,31 @@ interface BuiltQuery {
   params: (string | number)[];
 }
 
-/** Build the WHERE clause for the gsm table from interpreted filters. */
-function buildGsmWhere(f: Interpreted): BuiltQuery {
+/**
+ * Build the WHERE clause for the gsm table from interpreted filters.
+ * `mode` controls how the metadata fields combine: "and" (strict) or "or"
+ * (relaxed — used when the strict intersection is empty, which happens often
+ * because catalog annotations are sparse: an AML sample may have no cell_type).
+ */
+function buildGsmWhere(f: Interpreted, mode: "and" | "or" = "and"): BuiltQuery {
   const conditions: string[] = [];
   const params: (string | number)[] = [];
 
+  const fieldClauses: string[] = [];
   for (const field of ARRAY_FIELDS) {
     const vals = f[field];
     if (vals.length) {
       const placeholders = vals.map(() => "?").join(",");
-      conditions.push(`LOWER(${field}) IN (${placeholders})`);
+      fieldClauses.push(`LOWER(${field}) IN (${placeholders})`);
       for (const v of vals) params.push(v.toLowerCase());
     }
+  }
+  if (fieldClauses.length) {
+    conditions.push(
+      mode === "or" && fieldClauses.length > 1
+        ? `(${fieldClauses.join(" OR ")})`
+        : fieldClauses.join(" AND ")
+    );
   }
   if (f.min_cells != null) {
     conditions.push("n_cells >= ?");
@@ -304,8 +301,8 @@ function buildGseWhere(f: Interpreted): BuiltQuery {
 
 // ── Query execution ───────────────────────────────────────────────────────────
 
-async function runGsm(db: D1Database, f: Interpreted, limit: number) {
-  const { where, params } = buildGsmWhere(f);
+async function runGsm(db: D1Database, f: Interpreted, limit: number, mode: "and" | "or" = "and") {
+  const { where, params } = buildGsmWhere(f, mode);
   const [countRow, rows] = await Promise.all([
     db.prepare(`SELECT COUNT(*) AS n FROM gsm ${where}`).bind(...params).first<{ n: number }>(),
     db
@@ -342,6 +339,60 @@ async function runGse(db: D1Database, f: Interpreted, limit: number) {
   return { total: countRow?.n ?? 0, data, accessions };
 }
 
+/**
+ * Run the query, progressively relaxing the filters until something matches.
+ * The response contract is unchanged; a `note` explains any relaxation.
+ */
+async function runSearch(
+  db: D1Database,
+  f: Interpreted,
+  level: "gsm" | "gse",
+  limit: number,
+  rawQuery: string
+): Promise<{ total: number; data: unknown[]; accessions: string[]; note?: string }> {
+  const run = (filters: Interpreted, mode: "and" | "or" = "and") =>
+    level === "gse" ? runGse(db, filters, limit) : runGsm(db, filters, limit, mode);
+
+  const hasFields = ARRAY_FIELDS.some((k) => f[k].length > 0);
+
+  const strict = await run(f);
+  if (strict.total > 0) return strict;
+
+  // 1) Drop the free-text term — it ANDs against title/source and is often
+  //    a qualifier ("pediatric") that annotations don't carry.
+  if (f.q && hasFields) {
+    const noText = await run({ ...f, q: null });
+    if (noText.total > 0) {
+      return { ...noText, note: `No exact match for "${rawQuery}" — showing metadata matches` };
+    }
+  }
+
+  // 2) Broaden: match ANY of the interpreted metadata fields.
+  if (hasFields) {
+    const anyField = await run({ ...f, q: null }, "or");
+    if (anyField.total > 0) {
+      return { ...anyField, note: `No exact match for "${rawQuery}" — showing broader matches` };
+    }
+  }
+
+  // 3) Last resort: plain keyword search on the raw query.
+  const keyword = await run({
+    organism: [],
+    tissue: [],
+    cell_type: [],
+    disease: [],
+    protocol: [],
+    sex: [],
+    min_cells: null,
+    q: rawQuery,
+  });
+  if (keyword.total > 0) {
+    return { ...keyword, note: `No structured match — showing keyword matches for "${rawQuery}"` };
+  }
+
+  return strict;
+}
+
 // ── Handler ───────────────────────────────────────────────────────────────────
 
 async function handle(env: Env, request: Request): Promise<Response> {
@@ -349,7 +400,7 @@ async function handle(env: Env, request: Request): Promise<Response> {
 
   if (!q) {
     return corsOk({
-      configured: !!env.ANTHROPIC_API_KEY,
+      configured: true,
       interpreted: null,
       data: [],
       accessions: [],
@@ -370,24 +421,9 @@ async function handle(env: Env, request: Request): Promise<Response> {
     q,
   };
 
-  // ── Not configured → graceful keyword search ──
-  if (!env.ANTHROPIC_API_KEY) {
-    const result =
-      level === "gse" ? await runGse(env.DB, keywordFilter, limit) : await runGsm(env.DB, keywordFilter, limit);
-    return corsOk({
-      configured: false,
-      interpreted: null,
-      level,
-      data: result.data,
-      accessions: result.accessions,
-      total: result.total,
-      note: "AI search not configured",
-    });
-  }
-
   // ── Configured → ground on vocab, interpret, query ──
   const vocabLists = await loadVocab(env.DB);
-  const interpreted = await interpret(env.ANTHROPIC_API_KEY, q, vocabLists);
+  const interpreted = await interpret(env, q, vocabLists);
 
   if (!interpreted) {
     // Model failed/unparseable → fall back to keyword search, still 200.
@@ -404,8 +440,7 @@ async function handle(env: Env, request: Request): Promise<Response> {
     });
   }
 
-  const result =
-    level === "gse" ? await runGse(env.DB, interpreted, limit) : await runGsm(env.DB, interpreted, limit);
+  const result = await runSearch(env.DB, interpreted, level, limit, q);
 
   return corsOk({
     configured: true,
@@ -414,6 +449,7 @@ async function handle(env: Env, request: Request): Promise<Response> {
     data: result.data,
     accessions: result.accessions,
     total: result.total,
+    ...(result.note ? { note: result.note } : {}),
   });
 }
 
