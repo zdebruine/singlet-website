@@ -33,8 +33,21 @@ import { cachedJson } from "../_shared/cache";
 
 interface Env {
   DB: D1Database;
-  ANTHROPIC_API_KEY?: string;
+  /** Optional overrides; sane public defaults are baked in below. */
+  SUPABASE_URL?: string;
+  SUPABASE_ANON_KEY?: string;
 }
+
+/**
+ * Lovable Cloud (Supabase) edge function that performs the AI interpretation
+ * step via the Lovable AI Gateway. The anon key is public/client-safe by
+ * design, so it is inlined here — AI Search must not depend on any secret that
+ * has to be entered manually in the Cloudflare dashboard.
+ */
+const DEFAULT_SUPABASE_URL = "https://vbswbitfyallghbgxkuw.supabase.co";
+const DEFAULT_SUPABASE_ANON_KEY =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZic3diaXRmeWFsbGdoYmd4a3V3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ2MjkzNDksImV4cCI6MjA5MDIwNTM0OX0.GtX_3p0L78p0KqmgNY71ENagf-lugz5FhvhYrtKqLhs";
+const INTERPRET_FN = "interpret-search-query";
 
 // Columns the model is allowed to filter on (array-valued, case-insensitive).
 const ARRAY_FIELDS = ["organism", "tissue", "cell_type", "disease", "protocol", "sex"] as const;
