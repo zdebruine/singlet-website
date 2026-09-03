@@ -18,6 +18,7 @@ import {
   Wand2, Sparkles
 } from "lucide-react";
 import Navbar from "@/components/Navbar";
+import { isSuspectCellCount, FLAGGED_CELLS_LABEL, protocolLabel, isDisplayableOrganism } from "@/lib/catalog-display";
 import Footer from "@/components/Footer";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/integrations/api/client";
@@ -94,11 +95,14 @@ function FacetList({
   value,
   onChange,
   max = 8,
+  labelFn,
 }: {
   options: FacetOption[];
   value: string | undefined;
   onChange: (v: string | undefined) => void;
   max?: number;
+  /** Display-only relabelling; the stored facet value is unchanged. */
+  labelFn?: (v: string) => string;
 }) {
   const [showAll, setShowAll] = useState(false);
   const visible = showAll ? options : options.slice(0, max);
@@ -115,7 +119,7 @@ function FacetList({
             onClick={() => { if (value === opt.value) onChange(undefined); }}
             className="accent-primary"
           />
-          <span className={`text-xs truncate flex-1 group-hover:text-foreground transition-colors ${value === opt.value ? "text-foreground font-medium" : "text-muted-foreground"}`}>{opt.value}</span>
+          <span className={`text-xs truncate flex-1 group-hover:text-foreground transition-colors ${value === opt.value ? "text-foreground font-medium" : "text-muted-foreground"}`}>{labelFn ? labelFn(opt.value) : opt.value}</span>
           <span className="text-[10px] tabular-nums text-muted-foreground/60 flex-shrink-0">{opt.count.toLocaleString()}</span>
         </label>
       ))}
@@ -385,7 +389,14 @@ const Browse = () => {
   const gseRows = gseResult?.data ?? [];
 
   // ── Total cells in current GSM result (summed) ────────────────────────────
-  const resultCells = useMemo(() => gsmRows.reduce((a, s) => a + (s.n_cells ?? 0), 0), [gsmRows]);
+  const resultCells = useMemo(
+    () => gsmRows.reduce((a, s) => a + (isSuspectCellCount(s.protocol, s.n_cells) ? 0 : (s.n_cells ?? 0)), 0),
+    [gsmRows]
+  );
+  const organismFacets = useMemo(
+    () => (facets?.organisms ?? []).filter((o) => isDisplayableOrganism(o.value)),
+    [facets]
+  );
 
   // ── Active filter count ───────────────────────────────────────────────────
   const activeFilters = [organism, tissue, cellType, protocol, disease, sex, qcStatus, failureCategory, q, minCells > 0 ? "min_cells" : null, maxCells < 1000000 ? "max_cells" : null].filter(Boolean);
@@ -395,7 +406,7 @@ const Browse = () => {
     if (!gsmRows.length) return;
     const cols = ["gsm_id", "gse_id", "organism", "protocol", "tissue", "cell_type", "disease", "sex", "status", "n_cells", "mapping_rate", "median_genes", "failure_category"];
     const rows = gsmRows.map((s: GsmRow) => cols.map((c) => {
-      const v = (s as Record<string, unknown>)[c];
+      const v = (s as unknown as Record<string, unknown>)[c];
       if (v == null) return "";
       const str = String(v);
       return str.includes(",") ? `"${str}"` : str;
@@ -467,7 +478,7 @@ const Browse = () => {
                   i.tissue.forEach((v) => chips.push({ label: "Tissue", val: v }));
                   i.cell_type.forEach((v) => chips.push({ label: "Cell type", val: v }));
                   i.disease.forEach((v) => chips.push({ label: "Disease", val: v }));
-                  i.protocol.forEach((v) => chips.push({ label: "Protocol", val: v }));
+                  i.protocol.forEach((v) => chips.push({ label: "Protocol", val: protocolLabel(v) }));
                   i.sex.forEach((v) => chips.push({ label: "Sex", val: v }));
                   if (i.min_cells != null) chips.push({ label: "Min cells", val: fmt(i.min_cells) });
                   if (i.q) chips.push({ label: "Keywords", val: i.q });
@@ -538,7 +549,7 @@ const Browse = () => {
               {organism && <FilterChip label={`Organism: ${organism}`} onRemove={() => setParam("organism", undefined)} />}
               {tissue && <FilterChip label={`Tissue: ${tissue}`} onRemove={() => setParam("tissue", undefined)} />}
               {cellType && <FilterChip label={`Cell type: ${cellType}`} onRemove={() => setParam("cell_type", undefined)} />}
-              {protocol && <FilterChip label={`Protocol: ${protocol}`} onRemove={() => setParam("protocol", undefined)} />}
+              {protocol && <FilterChip label={`Protocol: ${protocolLabel(protocol)}`} onRemove={() => setParam("protocol", undefined)} />}
               {disease && <FilterChip label={`Disease: ${disease}`} onRemove={() => setParam("disease", undefined)} />}
               {sex && <FilterChip label={`Sex: ${sex}`} onRemove={() => setParam("sex", undefined)} />}
               {qcStatus && <FilterChip label={`Status: ${qcStatus}`} onRemove={() => setParam("status", undefined)} />}
@@ -570,10 +581,10 @@ const Browse = () => {
                 </div>
 
                 {/* Organism */}
-                {(facets?.organisms ?? []).length > 0 && (
+                {organismFacets.length > 0 && (
                   <AccordionSection label="Organism" defaultOpen>
                     <FacetList
-                      options={facets?.organisms ?? []}
+                      options={organismFacets}
                       value={organism}
                       onChange={(v) => setParam("organism", v)}
                     />
@@ -611,6 +622,7 @@ const Browse = () => {
                       options={facets?.protocols ?? []}
                       value={protocol}
                       onChange={(v) => setParam("protocol", v)}
+                      labelFn={protocolLabel}
                     />
                   </AccordionSection>
                 )}
@@ -768,7 +780,7 @@ const Browse = () => {
                               </td>
                               <td className="px-3 py-2.5 text-xs italic text-muted-foreground">{s.organism}</td>
                               <td className="px-3 py-2.5">
-                                <span className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded text-[10px]">{s.protocol ?? "—"}</span>
+                                <span className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded text-[10px]">{protocolLabel(s.protocol)}</span>
                               </td>
                               <td className="px-3 py-2.5">
                                 <StatusBadge status={s.status} qcFlag={s.qc_flag} />
@@ -776,7 +788,11 @@ const Browse = () => {
                                   <div className="text-[10px] text-red-600/70 mt-0.5">{s.failure_category.replace(/_/g, " ")}</div>
                                 )}
                               </td>
-                              <td className="px-3 py-2.5 text-right font-mono text-xs">{fmt(s.n_cells)}</td>
+                              <td className="px-3 py-2.5 text-right font-mono text-xs">
+                                {isSuspectCellCount(s.protocol, s.n_cells)
+                                  ? <span className="text-[10px] italic text-amber-600 font-sans" title="Known plate-protocol cell-count bug — value withheld pending pipeline fix">{FLAGGED_CELLS_LABEL}</span>
+                                  : fmt(s.n_cells)}
+                              </td>
                               <td className="px-3 py-2.5 text-right font-mono text-xs">{s.mapping_rate != null ? `${(s.mapping_rate * 100).toFixed(1)}%` : "—"}</td>
                               <td className="px-4 py-2.5 text-right font-mono text-xs">{fmt(s.median_genes)}</td>
                             </tr>
@@ -805,8 +821,8 @@ const Browse = () => {
                           )}
                           <div className="grid grid-cols-2 gap-x-3 gap-y-1 mt-2 text-[11px]">
                             <div><span className="text-muted-foreground">Organism: </span><span className="italic">{s.organism ?? "—"}</span></div>
-                            <div><span className="text-muted-foreground">Protocol: </span><span className="font-mono">{s.protocol ?? "—"}</span></div>
-                            <div><span className="text-muted-foreground">Cells: </span><span className="font-mono">{fmt(s.n_cells)}</span></div>
+                            <div><span className="text-muted-foreground">Protocol: </span><span className="font-mono">{protocolLabel(s.protocol)}</span></div>
+                            <div><span className="text-muted-foreground">Cells: </span>{isSuspectCellCount(s.protocol, s.n_cells) ? <span className="italic text-amber-600">{FLAGGED_CELLS_LABEL}</span> : <span className="font-mono">{fmt(s.n_cells)}</span>}</div>
                             <div><span className="text-muted-foreground">Map %: </span><span className="font-mono">{s.mapping_rate != null ? `${(s.mapping_rate * 100).toFixed(1)}%` : "—"}</span></div>
                             <div><span className="text-muted-foreground">Med. genes: </span><span className="font-mono">{fmt(s.median_genes)}</span></div>
                           </div>

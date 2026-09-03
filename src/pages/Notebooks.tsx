@@ -263,7 +263,7 @@ const Notebooks = () => (
             <a href="/atlas-docs" className="text-xs text-primary hover:underline">Full API docs →</a>
           </div>
           <pre className="font-mono text-xs text-foreground bg-muted/50 rounded-lg p-4 overflow-x-auto">
-            <code>{`pip install singlet-bio scanpy matplotlib
+            <code>{`pip install "singlet-bio @ git+https://github.com/Singlet-Bio/singlet#subdirectory=python" scanpy matplotlib
 
 import singlet
 
@@ -356,7 +356,7 @@ print(f"{adata.n_obs} cells × {adata.n_vars} genes")
           </p>
           <pre className="font-mono text-xs text-foreground bg-muted/50 rounded-lg p-4 overflow-x-auto">
             <code>{`# Install the MCP extra and launch the server
-pip install "singlet-bio[mcp]"
+pip install "singlet-bio[mcp] @ git+https://github.com/Singlet-Bio/singlet#subdirectory=python"
 python -m singlet.mcp
 
 # Then ask your AI assistant:

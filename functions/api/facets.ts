@@ -10,6 +10,7 @@
  * shape predates the { value, count } contract.
  */
 import { corsOk, corsErr, handleOptions } from "../_shared/cors";
+import { cachedJson } from "../_shared/cache";
 
 interface Env {
   DB: D1Database;
@@ -42,7 +43,8 @@ async function facet(db: D1Database, col: string): Promise<FacetOption[]> {
   return res.results.map((r) => ({ value: r.value, count: r.count }));
 }
 
-export const onRequestGet: PagesFunction<Env> = async ({ env }) => {
+export const onRequestGet: PagesFunction<Env> = async ({ env, request, waitUntil }) =>
+  cachedJson(request, waitUntil, async () => {
   try {
     const [
       organisms,
@@ -77,6 +79,6 @@ export const onRequestGet: PagesFunction<Env> = async ({ env }) => {
   } catch (e) {
     return corsErr(String(e));
   }
-};
+  });
 
 export const onRequestOptions: PagesFunction<Env> = async () => handleOptions();
