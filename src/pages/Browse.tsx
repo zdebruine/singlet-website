@@ -406,7 +406,7 @@ const Browse = () => {
     if (!gsmRows.length) return;
     const cols = ["gsm_id", "gse_id", "organism", "protocol", "tissue", "cell_type", "disease", "sex", "status", "n_cells", "mapping_rate", "median_genes", "failure_category"];
     const rows = gsmRows.map((s: GsmRow) => cols.map((c) => {
-      const v = (s as Record<string, unknown>)[c];
+      const v = (s as unknown as Record<string, unknown>)[c];
       if (v == null) return "";
       const str = String(v);
       return str.includes(",") ? `"${str}"` : str;

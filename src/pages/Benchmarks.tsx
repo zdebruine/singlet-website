@@ -35,11 +35,20 @@ function SpeedupBar({ speedup }: { speedup: number | null }) {
 }
 
 const Benchmarks = () => {
-  const { data: frontier, isLoading } = useGPUFrontier();
+  interface FrontierEntry {
+    feature: string;
+    speedup?: number | null;
+    wall_ms?: number | null;
+    sota_wall_ms?: number | null;
+    correctness_r?: number | null;
+    sota_tool?: string | null;
+  }
+  const { data: frontierRaw, isLoading } = useGPUFrontier();
+  const frontier = (frontierRaw ?? []) as FrontierEntry[];
 
   // Group by feature, take latest entry per feature
   const featureData = FEATURES.map((f) => {
-    const entries = (frontier ?? []).filter((e) => e.feature === f.id);
+    const entries = frontier.filter((e) => e.feature === f.id);
     const latest = entries[0]; // already sorted by measured_date DESC
     return { ...f, latest, entries };
   });

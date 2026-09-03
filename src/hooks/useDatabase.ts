@@ -175,7 +175,7 @@ export function useSamples(filters: SampleFilters = {}) {
   } = filters;
 
   // Map qualityTier to qc_flag param
-  const qc_flag = qualityTier && qualityTier !== "" ? qualityTier : undefined;
+  const qc_flag = qualityTier ? qualityTier : undefined;
   // Derive status override: any qualityTier implies a successfully processed sample
   const effectiveStatus = qualityTier ? "DONE" : status;
 
@@ -309,7 +309,7 @@ export function useProtocolStats() {
       const facets = await apiClient.facets();
       // Fetch totals per protocol via parallel requests
       const results = await Promise.all(
-        facets.protocols.map(async (proto) => {
+        facets.protocols.map(async ({ value: proto }) => {
           const [total, success] = await Promise.all([
             apiClient.gsmList({ protocol: proto, page_size: 1 }),
             apiClient.gsmList({ protocol: proto, status: "DONE", page_size: 1 }),
@@ -331,7 +331,7 @@ export function useSpeciesSuccessStats() {
     queryFn: async (): Promise<SpeciesSuccessStat[]> => {
       const facets = await apiClient.facets();
       const results = await Promise.all(
-        facets.organisms.map(async (org) => {
+        facets.organisms.map(async ({ value: org }) => {
           const [total, success] = await Promise.all([
             apiClient.gsmList({ organism: org, page_size: 1 }),
             apiClient.gsmList({ organism: org, status: "DONE", page_size: 1 }),
