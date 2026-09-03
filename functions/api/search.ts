@@ -4,12 +4,14 @@
  * Returns up to 10 results from each entity type.
  */
 import { corsOk, corsErr, handleOptions } from "../_shared/cors";
+import { cachedJson } from "../_shared/cache";
 
 interface Env {
   DB: D1Database;
 }
 
-export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
+export const onRequestGet: PagesFunction<Env> = async ({ env, request, waitUntil }) =>
+  cachedJson(request, waitUntil, async () => {
   try {
     const url = new URL(request.url);
     const q = url.searchParams.get("q")?.trim() ?? "";
@@ -37,6 +39,6 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
   } catch (e) {
     return corsErr(String(e));
   }
-};
+  });
 
 export const onRequestOptions: PagesFunction<Env> = async () => handleOptions();
