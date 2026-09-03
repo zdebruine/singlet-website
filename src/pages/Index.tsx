@@ -10,12 +10,14 @@ import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/integrations/api/client";
 
 /* ── Live Cell Counter (count-up from API total_cells) ── */
-function useCountUp(end: number, duration = 2000) {
+function useCountUp(end: number, duration = 2000, enabled = true) {
   const [count, setCount] = useState(0);
   const ref = useRef<HTMLSpanElement>(null);
   const started = useRef(false);
   useEffect(() => {
-    if (end === 0) return;
+    // Never animate before the stats request resolves — a 0/undefined target
+    // made the counters flash a bogus (sometimes negative) value.
+    if (!enabled || !end || end <= 0) return;
     const el = ref.current;
     if (!el) return;
     const observer = new IntersectionObserver(
@@ -36,7 +38,7 @@ function useCountUp(end: number, duration = 2000) {
     );
     observer.observe(el);
     return () => observer.disconnect();
-  }, [end, duration]);
+  }, [end, duration, enabled]);
   return { ref, count };
 }
 
@@ -161,7 +163,7 @@ const Index = () => {
   };
 
   // Live stats from API
-  const { data: corpusStats } = useQuery({
+  const { data: corpusStats, isSuccess: statsReady } = useQuery({
     queryKey: ["corpus-stats"],
     queryFn: () => apiClient.stats(),
     staleTime: 60_000,
@@ -172,9 +174,10 @@ const Index = () => {
   const totalSeries = corpusStats?.series_count ?? 0;
 
   // Animated live cell counter
-  const { ref: cellRef, count: cellCount } = useCountUp(totalCells, 2400);
-  const { ref: sampleRef, count: sampleCount } = useCountUp(totalSamples, 1800);
-  const { ref: seriesRef, count: seriesCount } = useCountUp(totalSeries, 1600);
+  const { ref: cellRef, count: cellCount } = useCountUp(totalCells, 2400, statsReady);
+  const { ref: sampleRef, count: sampleCount } = useCountUp(totalSamples, 1800, statsReady);
+  const { ref: seriesRef, count: seriesCount } = useCountUp(totalSeries, 1600, statsReady);
+  const Skeleton = () => <span className="inline-block h-8 w-24 rounded bg-muted animate-pulse align-middle" />;
 
   const fmt = (n: number) => {
     if (n >= 1e9) return (n / 1e9).toFixed(1) + "B";
@@ -222,10 +225,15 @@ accs <- find("T cells from pediatric AML")`;
         </div>
         <div className="relative max-w-4xl mx-auto text-center">
           <div className="flex justify-center mb-5">
-            <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-primary/30 bg-primary/[0.08] text-xs font-mono text-primary">
+            <a
+              href="https://github.com/Singlet-Bio/singlet#installation"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-primary/30 bg-primary/[0.08] text-xs font-mono text-primary hover:bg-primary/[0.14] transition-colors"
+            >
               <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-              Available now — pip install singlet-bio
-            </span>
+              Install from source — PyPI coming soon
+            </a>
           </div>
 
           <h1 className="font-display text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-foreground leading-[0.95] tracking-tightest mb-5">
@@ -241,19 +249,19 @@ accs <- find("T cells from pediatric AML")`;
           <div className="flex flex-wrap justify-center gap-8 mb-10 py-5 px-6 rounded-2xl border border-border bg-card/60 max-w-2xl mx-auto">
             <div className="text-center">
               <span ref={cellRef} className="block font-display text-3xl font-bold gradient-text">
-                {totalCells > 0 ? fmt(cellCount) : "—"}
+                {statsReady && totalCells > 0 ? fmt(cellCount) : <Skeleton />}
               </span>
               <span className="text-xs text-muted-foreground uppercase tracking-wider">cells</span>
             </div>
             <div className="text-center">
               <span ref={sampleRef} className="block font-display text-3xl font-bold text-foreground">
-                {totalSamples > 0 ? fmt(sampleCount) : "—"}
+                {statsReady && totalSamples > 0 ? fmt(sampleCount) : <Skeleton />}
               </span>
               <span className="text-xs text-muted-foreground uppercase tracking-wider">samples</span>
             </div>
             <div className="text-center">
               <span ref={seriesRef} className="block font-display text-3xl font-bold text-foreground">
-                {totalSeries > 0 ? seriesCount.toLocaleString() : "—"}
+                {statsReady && totalSeries > 0 ? seriesCount.toLocaleString() : <Skeleton />}
               </span>
               <span className="text-xs text-muted-foreground uppercase tracking-wider">GEO series</span>
             </div>
