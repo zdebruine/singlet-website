@@ -235,18 +235,31 @@ interface BuiltQuery {
   params: (string | number)[];
 }
 
-/** Build the WHERE clause for the gsm table from interpreted filters. */
-function buildGsmWhere(f: Interpreted): BuiltQuery {
+/**
+ * Build the WHERE clause for the gsm table from interpreted filters.
+ * `mode` controls how the metadata fields combine: "and" (strict) or "or"
+ * (relaxed — used when the strict intersection is empty, which happens often
+ * because catalog annotations are sparse: an AML sample may have no cell_type).
+ */
+function buildGsmWhere(f: Interpreted, mode: "and" | "or" = "and"): BuiltQuery {
   const conditions: string[] = [];
   const params: (string | number)[] = [];
 
+  const fieldClauses: string[] = [];
   for (const field of ARRAY_FIELDS) {
     const vals = f[field];
     if (vals.length) {
       const placeholders = vals.map(() => "?").join(",");
-      conditions.push(`LOWER(${field}) IN (${placeholders})`);
+      fieldClauses.push(`LOWER(${field}) IN (${placeholders})`);
       for (const v of vals) params.push(v.toLowerCase());
     }
+  }
+  if (fieldClauses.length) {
+    conditions.push(
+      mode === "or" && fieldClauses.length > 1
+        ? `(${fieldClauses.join(" OR ")})`
+        : fieldClauses.join(" AND ")
+    );
   }
   if (f.min_cells != null) {
     conditions.push("n_cells >= ?");
@@ -288,8 +301,8 @@ function buildGseWhere(f: Interpreted): BuiltQuery {
 
 // ── Query execution ───────────────────────────────────────────────────────────
 
-async function runGsm(db: D1Database, f: Interpreted, limit: number) {
-  const { where, params } = buildGsmWhere(f);
+async function runGsm(db: D1Database, f: Interpreted, limit: number, mode: "and" | "or" = "and") {
+  const { where, params } = buildGsmWhere(f, mode);
   const [countRow, rows] = await Promise.all([
     db.prepare(`SELECT COUNT(*) AS n FROM gsm ${where}`).bind(...params).first<{ n: number }>(),
     db
@@ -324,6 +337,60 @@ async function runGse(db: D1Database, f: Interpreted, limit: number) {
   const data = rows.results.map((r) => ({ ...r, pubmed_ids: safeList(r.pubmed_ids) }));
   const accessions = rows.results.map((r) => String(r.id));
   return { total: countRow?.n ?? 0, data, accessions };
+}
+
+/**
+ * Run the query, progressively relaxing the filters until something matches.
+ * The response contract is unchanged; a `note` explains any relaxation.
+ */
+async function runSearch(
+  db: D1Database,
+  f: Interpreted,
+  level: "gsm" | "gse",
+  limit: number,
+  rawQuery: string
+): Promise<{ total: number; data: unknown[]; accessions: string[]; note?: string }> {
+  const run = (filters: Interpreted, mode: "and" | "or" = "and") =>
+    level === "gse" ? runGse(db, filters, limit) : runGsm(db, filters, limit, mode);
+
+  const hasFields = ARRAY_FIELDS.some((k) => f[k].length > 0);
+
+  const strict = await run(f);
+  if (strict.total > 0) return strict;
+
+  // 1) Drop the free-text term — it ANDs against title/source and is often
+  //    a qualifier ("pediatric") that annotations don't carry.
+  if (f.q && hasFields) {
+    const noText = await run({ ...f, q: null });
+    if (noText.total > 0) {
+      return { ...noText, note: `No exact match for "${rawQuery}" — showing metadata matches` };
+    }
+  }
+
+  // 2) Broaden: match ANY of the interpreted metadata fields.
+  if (hasFields) {
+    const anyField = await run({ ...f, q: null }, "or");
+    if (anyField.total > 0) {
+      return { ...anyField, note: `No exact match for "${rawQuery}" — showing broader matches` };
+    }
+  }
+
+  // 3) Last resort: plain keyword search on the raw query.
+  const keyword = await run({
+    organism: [],
+    tissue: [],
+    cell_type: [],
+    disease: [],
+    protocol: [],
+    sex: [],
+    min_cells: null,
+    q: rawQuery,
+  });
+  if (keyword.total > 0) {
+    return { ...keyword, note: `No structured match — showing keyword matches for "${rawQuery}"` };
+  }
+
+  return strict;
 }
 
 // ── Handler ───────────────────────────────────────────────────────────────────
