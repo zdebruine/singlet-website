@@ -120,16 +120,15 @@ const Docs = () => {
           </p>
           <div className="flex flex-wrap gap-3 mb-6">
             <div className="inline-flex items-center gap-2 px-4 py-2.5 rounded-md bg-muted border border-border font-mono text-sm text-foreground">
-              pip install singlet-bio
+              pip install "singlet-bio @ git+https://github.com/Singlet-Bio/singlet#subdirectory=python"
             </div>
             <a href="https://github.com/Singlet-Bio/singlet" target="_blank" rel="noopener noreferrer"
               className="inline-flex items-center gap-2 px-4 py-2.5 rounded-md border border-border text-sm text-muted-foreground hover:text-foreground transition-colors">
               <Github size={16} /> GitHub
             </a>
-            <a href="https://pypi.org/project/singlet/" target="_blank" rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-md border border-border text-sm text-muted-foreground hover:text-foreground transition-colors">
-              <Package size={16} /> PyPI
-            </a>
+            <span className="inline-flex items-center gap-2 px-4 py-2.5 rounded-md border border-border text-sm text-muted-foreground">
+              <Package size={16} /> PyPI release coming soon
+            </span>
           </div>
           <div className="flex flex-wrap gap-x-6 gap-y-2 text-xs text-muted-foreground">
             <span><span className="text-foreground font-semibold">73,749</span> samples</span>
@@ -175,13 +174,13 @@ const Docs = () => {
             </p>
 
             <CodeBlock
-              code={`# Install the package (import name stays "singlet")
-pip install singlet-bio
+              code={`# Install from source (import name stays "singlet") — PyPI release coming soon
+pip install "singlet-bio @ git+https://github.com/Singlet-Bio/singlet#subdirectory=python"
 
 # Optional extras
-pip install "singlet-bio[torch]"   # PyTorch loaders
-pip install "singlet-bio[mcp]"     # MCP search & fetch tool
-pip install "singlet-bio[gpu]"     # GPU acceleration`}
+pip install "singlet-bio[torch] @ git+https://github.com/Singlet-Bio/singlet#subdirectory=python"   # PyTorch loaders
+pip install "singlet-bio[mcp] @ git+https://github.com/Singlet-Bio/singlet#subdirectory=python"     # MCP search & fetch tool
+pip install "singlet-bio[gpu] @ git+https://github.com/Singlet-Bio/singlet#subdirectory=python"     # GPU acceleration`}
               title="Terminal"
             />
 
@@ -381,7 +380,7 @@ run_pipeline("SRR11537951", "./out", organism="human")`}
             </p>
 
             <CodeBlock
-              code={`pip install "singlet-bio[torch]"`}
+              code={`pip install "singlet-bio[torch] @ git+https://github.com/Singlet-Bio/singlet#subdirectory=python"`}
               title="Terminal"
             />
 
@@ -425,7 +424,7 @@ dataset = SingletDataset(["GSE149298.singlet", "GSE184652.singlet"])`}
             </p>
 
             <CodeBlock
-              code={`pip install "singlet-bio[mcp]"
+              code={`pip install "singlet-bio[mcp] @ git+https://github.com/Singlet-Bio/singlet#subdirectory=python"
 
 # Launch the server over stdio
 python -m singlet.mcp`}
@@ -579,7 +578,7 @@ adata = singlet.load_dir("out/", layer="gene_counts")`}
           <section className="pt-20 pb-8">
             <div className="border-t border-border pt-14 text-center">
               <h2 className="font-display text-2xl font-bold text-foreground tracking-tightest mb-2">
-                <span className="font-mono">pip install singlet-bio</span> <span className="gradient-text">and go.</span>
+                <span className="font-mono">pip install from GitHub</span> <span className="gradient-text">and go.</span>
               </h2>
               <p className="text-sm text-muted-foreground mb-6 max-w-lg mx-auto">
                 Open data, open code. Download, process, and analyze — free and public.
