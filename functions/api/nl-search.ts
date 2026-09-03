@@ -29,6 +29,7 @@
  */
 import { corsOk, corsErr, handleOptions } from "../_shared/cors";
 import { safeList } from "../_shared/json";
+import { cachedJson } from "../_shared/cache";
 
 interface Env {
   DB: D1Database;
@@ -416,13 +417,14 @@ async function handle(env: Env, request: Request): Promise<Response> {
   });
 }
 
-export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
-  try {
-    return await handle(env, request);
-  } catch (e) {
-    return corsErr(String(e));
-  }
-};
+export const onRequestGet: PagesFunction<Env> = async ({ env, request, waitUntil }) =>
+  cachedJson(request, waitUntil, async () => {
+    try {
+      return await handle(env, request);
+    } catch (e) {
+      return corsErr(String(e));
+    }
+  });
 
 export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
   try {
