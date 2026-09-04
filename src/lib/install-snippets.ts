@@ -8,6 +8,11 @@
 export const PY_INSTALL = "pip install git+https://github.com/Singlet-Bio/singlet";
 export const R_INSTALL = 'remotes::install_github("Singlet-Bio/singlet", subdir = "r")';
 
+/** Python install with an extra, e.g. `pyInstallExtra("torch")`. */
+export function pyInstallExtra(extra: string): string {
+  return `pip install "singlet[${extra}] @ git+https://github.com/Singlet-Bio/singlet"`;
+}
+
 /** Standalone R snippets need `remotes` first; inline mentions do not. */
 export const R_INSTALL_STANDALONE = `install.packages("remotes")\n${R_INSTALL}`;
 

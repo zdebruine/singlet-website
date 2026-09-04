@@ -5,7 +5,7 @@ import Footer from "@/components/Footer";
 import { CodeBlock } from "@/components/CodeBlock";
 import { usePageMeta } from "@/hooks/usePageMeta";
 import { cn } from "@/lib/utils";
-import { GITHUB_ISSUES, GITHUB_REPO, PY_INSTALL, R_INSTALL, R_INSTALL_STANDALONE } from "@/lib/install-snippets";
+import { GITHUB_ISSUES, GITHUB_REPO, PY_INSTALL, R_INSTALL_STANDALONE, pyInstallExtra } from "@/lib/install-snippets";
 
 const SECTIONS = [
   { id: "install", label: "Install" },
@@ -129,7 +129,7 @@ const Docs = () => {
               </p>
               <h3>Optional extras (Python)</h3>
               <p>Extras add optional dependencies on top of the base install:</p>
-              <CodeBlock label="bash" code={`${PY_INSTALL}#egg=singlet[torch]`} />
+              <CodeBlock label="bash" code={pyInstallExtra("torch")} />
               <table>
                 <thead>
                   <tr>
@@ -536,7 +536,7 @@ accs <- find("microglia in the aging mouse brain")`}
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'`}
               />
               <p className="text-xs text-muted-foreground">
-                The package also ships a local stdio server (<Mono>{PY_INSTALL}#egg=singlet[mcp]</Mono>, then{" "}
+                The package also ships a local stdio server (<Mono>{pyInstallExtra("mcp")}</Mono>, then{" "}
                 <Mono>python -m singlet.mcp</Mono>) that loads data on your machine. Questions or problems →{" "}
                 <a href={GITHUB_ISSUES} target="_blank" rel="noopener noreferrer">GitHub Issues</a>.
               </p>
