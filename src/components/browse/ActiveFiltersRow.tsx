@@ -45,6 +45,7 @@ export function ActiveFiltersRow({ applied, ai, dropped, note, trailing, onRemov
             onClick={() => onRemove(c.field, c.value)}
             className={cn(ai ? "ai-chip" : "chip-active", "h-7 text-[12px] pl-2 pr-1.5 max-w-[320px]")}
             title={`Remove ${FIELD_LABEL[c.field] ?? c.field}: ${c.label}`}
+            aria-label={`Remove ${FIELD_LABEL[c.field] ?? c.field}: ${c.label}`}
           >
             <span className="opacity-70">{FIELD_LABEL[c.field] ?? c.field}:</span>
             <span className="truncate">{c.label}</span>
