@@ -5,13 +5,6 @@ import { componentTagger } from "lovable-tagger";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
-  // Committed non-secret build-time default for the R2 public base URL.
-  // Overridable by a VITE_R2_PUBLIC_URL env var (e.g. a Cloudflare Pages build var).
-  define: {
-    "import.meta.env.VITE_R2_PUBLIC_URL": JSON.stringify(
-      process.env.VITE_R2_PUBLIC_URL ?? "https://data.singlet.bio",
-    ),
-  },
   server: {
     host: "::",
     port: 8080,
