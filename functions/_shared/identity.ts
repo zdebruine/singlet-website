@@ -17,7 +17,7 @@
  * Downloads never need any of this; keys exist for programmatic natural-
  * language search and the MCP server.
  */
-import { cloudRpc, type CloudEnv } from "./cloud";
+import { cloudAnonKey, cloudRpc, type CloudEnv } from "./cloud";
 import { CORS_HEADERS } from "./cors";
 
 const ANON_SALT = "singlet-ai-quota-v1";
@@ -184,8 +184,7 @@ export async function resolveIdentity(
     if (!check.ok) return { ok: false, response: unauthorized(check.message, check.reason) };
     return { ok: true, identity: { kind: "api_key", key, keyId: check.keyId } };
   }
-  const anon = (await import("./cloud")).cloudAnonKey(env);
-  const token = userBearer(request, anon);
+  const token = userBearer(request, cloudAnonKey(env));
   if (token) return { ok: true, identity: { kind: "session", token } };
   return { ok: true, identity: { kind: "anonymous" } };
 }
