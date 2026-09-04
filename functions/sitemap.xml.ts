@@ -22,6 +22,7 @@ const MAX_URLS = 49_000;
 const STATIC_ROUTES: { path: string; changefreq: string; priority: string }[] = [
   { path: "/", changefreq: "weekly", priority: "1.0" },
   { path: "/browse", changefreq: "daily", priority: "0.9" },
+  { path: "/quickstart", changefreq: "weekly", priority: "0.8" },
   { path: "/docs", changefreq: "weekly", priority: "0.8" },
   { path: "/about", changefreq: "weekly", priority: "0.7" },
   { path: "/data-license", changefreq: "yearly", priority: "0.3" },

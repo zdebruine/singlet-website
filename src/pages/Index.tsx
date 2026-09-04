@@ -88,6 +88,9 @@ const Index = () => {
                 </li>
               ))}
             </ul>
+            <p className="mt-3 text-[13px]">
+              <Link to="/quickstart" className="text-primary hover:underline">New here? 5-minute quickstart →</Link>
+            </p>
           </div>
         </section>
 

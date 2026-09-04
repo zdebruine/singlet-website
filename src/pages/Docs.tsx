@@ -439,7 +439,10 @@ sc.pp.highly_variable_genes(adata, batch_key="gsm_id")`}
   "https://singlet.bio/api/nl-search?q=microglia+in+the+aging+mouse+brain"`}
               />
               <h3>In the packages</h3>
-              <div className="grid md:grid-cols-2 gap-3">
+              <p className="text-sm text-muted-foreground">
+                <code className="code-inline">find()</code> works without a key at the 10/day anonymous client limit; a key raises the limit to your account allowance (200/day).
+              </p>
+              <div className="grid md:grid-cols-2 gap-3 mt-3">
                 <CodeBlock
                   label="python"
                   code={`import singlet
@@ -450,7 +453,8 @@ accs = singlet.find("microglia in the aging mouse brain")`}
                 />
                 <CodeBlock
                   label="r"
-                  code={`Sys.setenv(SINGLET_API_KEY = "${KEY_PLACEHOLDER}")
+                  code={`set_api_key("${KEY_PLACEHOLDER}")
+# or: Sys.setenv(SINGLET_API_KEY = "${KEY_PLACEHOLDER}")
 
 library(singlet)
 accs <- find("microglia in the aging mouse brain")`}

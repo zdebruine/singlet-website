@@ -32,6 +32,8 @@ export interface StudySeries {
   bundle_key: string | null;
   bundle_bytes: number | null;
   bundle_url: string | null;
+  /** Number of samples actually present in the bundle, when indexed. Null until the packing job writes gse.r2_bundle_n_gsms. */
+  bundle_n_samples: number | null;
   submitted_date: string | null;
   last_updated: string | null;
   /** Legacy names kept for the Python/R packages. */
@@ -85,7 +87,8 @@ export async function loadStudy(db: D1Database, rawId: string): Promise<StudyDet
     db
       .prepare(
         `SELECT id, title, abstract, organism, n_gsm_total, n_gsm_done, n_gsm_failed,
-                n_cells, pubmed_ids, r2_bundle_key, r2_bundle_bytes, submitted_date, last_updated
+                n_cells, pubmed_ids, r2_bundle_key, r2_bundle_bytes,
+                r2_bundle_n_gsms, submitted_date, last_updated
            FROM gse WHERE id = ?`
       )
       .bind(id)
@@ -149,6 +152,9 @@ export async function loadStudy(db: D1Database, rawId: string): Promise<StudyDet
   const bundleBytes = seriesRow.r2_bundle_bytes != null ? Number(seriesRow.r2_bundle_bytes) : null;
   const hasBundle = metaRow ? Number(metaRow.has_bundle ?? 0) === 1 : !!bundleKey;
 
+  const bundleNSamples =
+    seriesRow.r2_bundle_n_gsms != null ? Number(seriesRow.r2_bundle_n_gsms) : null;
+
   const series: StudySeries = {
     id,
     title: (seriesRow.title as string | null) ?? null,
@@ -163,6 +169,7 @@ export async function loadStudy(db: D1Database, rawId: string): Promise<StudyDet
     bundle_key: bundleKey,
     bundle_bytes: bundleBytes,
     bundle_url: hasBundle ? bundleUrl(id) : null,
+    bundle_n_samples: bundleNSamples != null && !Number.isNaN(bundleNSamples) ? bundleNSamples : null,
     submitted_date: (seriesRow.submitted_date as string | null) ?? null,
     last_updated: (seriesRow.last_updated as string | null) ?? null,
     r2_bundle_key: bundleKey,

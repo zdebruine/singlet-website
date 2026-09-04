@@ -3,6 +3,11 @@
  * Study detail — see ../../_shared/study-core for the shape. Accepts an
  * optional API key (rejected when unknown / revoked / expired); no key is
  * needed to read or download.
+ *
+ * TODO: bundle sample count. The source of truth for how many GSMs are in the
+ * published .singlet bundle is the bundle's manifest.json → n_gsms. The packing
+ * job should read that value and write it into gse.r2_bundle_n_gsms so this
+ * endpoint can return series.bundle_n_samples without hitting R2 per request.
  */
 import { corsOk, corsErr, handleOptions } from "../../_shared/cors";
 import { cachedJson } from "../../_shared/cache";

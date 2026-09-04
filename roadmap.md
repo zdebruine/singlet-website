@@ -66,6 +66,16 @@
 ### H. Small fixes
 - [x] Study QC tiles: hide tiles with no data; "Per-sample QC metrics were not recorded for this study." when none
 
+## Stage 6 — Quickstart & bundle sample count (done)
+- [x] New `/quickstart` page with install/find/load steps, MCP config, good-to-know, GitHub Issues link
+- [x] Navbar "Quickstart" link and home hero "5-minute quickstart →" link
+- [x] `functions/_shared/study-core.ts` + `/api/gse/:id` expose `bundle_n_samples` from `gse.r2_bundle_n_gsms` (null until packing job indexes it)
+- [x] Study download panel shows "Contains N of M processed samples" only when the API provides a differing count
+- [x] `/docs` API keys section updated with R `set_api_key(...)` and keyless `find()` limit note
+- [x] `/quickstart` added to sitemap static routes
+- [x] Fix preview typecheck error: `bundle_n_samples` missing in `normalizeGseDetail`
+- [ ] Push Stage 6 commits to GitHub `main` (blocked by sandbox `git push` restriction)
+
 ## Backlog / discovered
 - `public/notebooks/*.html` are stale June exports (old `.1pz` format); unlinked but still served. Delete them or regenerate from the GitHub notebooks.
 - A revoked key keeps working for up to 60 s on an edge isolate that cached it (documented on /account). Add a "revoked" push (KV) if that window ever matters.

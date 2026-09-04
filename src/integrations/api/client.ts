@@ -409,6 +409,7 @@ export function normalizeGseDetail(raw: unknown): GseDetailResponse {
       bundle_key: strOrNull(s.bundle_key) ?? strOrNull(s.r2_bundle_key),
       bundle_bytes: numOrNull(s.bundle_bytes) ?? numOrNull(s.r2_bundle_bytes),
       bundle_url: strOrNull(s.bundle_url) ?? (strOrNull(s.bundle_key) ?? strOrNull(s.r2_bundle_key) ? bundleUrl(s.id) : null),
+      bundle_n_samples: numOrNull(s.bundle_n_samples) ?? numOrNull(s.r2_bundle_n_gsms) ?? null,
       submitted_date: strOrNull(s.submitted_date),
       last_updated: str(s.last_updated),
       organism_label: typeof s.organism_label === "string" ? s.organism_label : undefined,
