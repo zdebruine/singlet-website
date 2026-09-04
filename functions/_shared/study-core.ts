@@ -128,6 +128,13 @@ export async function loadStudy(db: D1Database, rawId: string): Promise<StudyDet
       .bind(id)
       .all<Record<string, unknown>>()
       .catch(() => ({ results: [] as Record<string, unknown>[] })),
+
+    // Bundle manifest (ingested by the packing job): reference build + actual sample count.
+    db
+      .prepare(`SELECT reference_build, n_gsms_in_bundle FROM bundle_manifest WHERE gse_id = ?`)
+      .bind(id)
+      .first<Record<string, unknown>>()
+      .catch(() => null),
   ]);
 
   if (!seriesRow) return null;
