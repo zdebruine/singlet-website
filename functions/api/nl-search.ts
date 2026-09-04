@@ -45,7 +45,7 @@ export const onRequestGet: PagesFunction<NlEnv> = async ({ env, request, waitUnt
   const id = await resolveIdentity(request, env, waitUntil);
   if (!id.ok) return id.response;
   const url = new URL(request.url);
-  const key = canonicalQuery(parseSearchParams(url));
+  const key = canonicalQuery(parseSearchParams(url)) + (url.searchParams.get("interpret") === "0" ? "&interpret=0" : "");
   return cachedJson(request, waitUntil, () => respond(env, request, waitUntil, url), { ttl: CATALOG_CACHE_TTL, key });
 };
 

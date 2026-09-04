@@ -393,9 +393,12 @@ export async function nlSearch(
   const rules = await loadRules(env.DB, waitUntil);
   const ctx: Ctx = { db: env.DB, rules, waitUntil };
 
-  // Accessions are an exact ask — no model needed.
+  // Accessions are an exact ask — no model needed. `interpret=0` is how the
+  // site re-runs a search after the visitor edited the interpretation: the
+  // filters are theirs now and `q` is plain keywords.
   const acc = extractAccessions(q);
   const isAccession = acc.gse.length > 0 || acc.gsm.length > 0;
+  const skipModel = isAccession || url.searchParams.get("interpret") === "0";
 
   let interpreted: Interpreted | null = null;
   let model: string | undefined;
@@ -407,7 +410,7 @@ export async function nlSearch(
   // moments, not facts about the catalog — never let them into the edge cache.
   let cacheable = true;
 
-  if (!isAccession) {
+  if (!skipModel) {
     const r = await interpret(env, ctx, request, q);
     if (r.ok) {
       interpreted = r.interpreted;
