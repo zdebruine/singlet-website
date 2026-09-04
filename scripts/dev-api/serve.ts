@@ -2,7 +2,7 @@
  * Run the Cloudflare Pages Functions locally against the seeded SQLite mirror.
  *
  *   bun scripts/dev-api/seed.ts            # once (fetches from singlet.bio)
- *   bun scripts/dev-api/serve.ts           # http://localhost:8788/api/...
+ *   bun scripts/dev-api/serve.ts           # http://localhost:8788/api/... and /mcp
  *
  * Point the Vite dev server at it with VITE_API_PROXY_TARGET=http://localhost:8788.
  */
@@ -38,6 +38,7 @@ const routes: Route[] = [
   { pattern: /^\/api\/gse\/([^/]+)\/?$/, paramNames: ["id"], mod: () => import("../../functions/api/gse/[id]") },
   { pattern: /^\/api\/gsm\/?$/, paramNames: [], mod: () => import("../../functions/api/gsm/index") },
   { pattern: /^\/api\/gsm\/([^/]+)\/?$/, paramNames: ["id"], mod: () => import("../../functions/api/gsm/[id]") },
+  { pattern: /^\/mcp\/?$/, paramNames: [], mod: () => import("../../functions/mcp") },
 ];
 
 const pending = new Set<Promise<unknown>>();
