@@ -486,7 +486,7 @@ python -m singlet.mcp        # starts a stdio MCP server`}
               </p>
               <CodeBlock
                 label="bash"
-                code={`pip install singlet
+                code={`pip install git+https://github.com/Singlet-Bio/singlet.git
 
 # From an SRA run accession
 singlet-process SRR11537951 --output-dir ./out --organism human --threads 8
