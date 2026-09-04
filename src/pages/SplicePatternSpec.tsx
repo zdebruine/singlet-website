@@ -14,7 +14,7 @@ const Block = ({ children }: { children: React.ReactNode }) => (
 const SplicePatternSpec = () => (
   <div className="min-h-screen bg-background">
     <Navbar />
-    <section className="pt-28 pb-16 md:pt-36 md:pb-24 px-6">
+    <section className="py-12 md:py-16 px-6">
       <div className="max-w-3xl mx-auto">
         <h1 className="font-display text-3xl md:text-4xl font-bold text-foreground tracking-tightest mb-2">
           Singlet Splice Pattern Format

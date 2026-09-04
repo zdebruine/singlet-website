@@ -1,9 +1,9 @@
 /**
- * Browse / Explorer — v0.9.0
+ * Browse — catalog explorer
  *
  * Two-column layout:
  *  Left:  Accordion filter sidebar (organism, tissue, cell_type, assay, disease,
- *          QC status, failure_reason [only when Fail/All], sex, year range,
+ *          processing status, failure_reason [only when Failed/All], sex,
  *          cell-count range slider)
  *  Right: GSE/GSM tab toggle · sortable table · pagination
  *          Live "Showing X studies · Y samples · Z cells" matching bar
@@ -18,7 +18,8 @@ import {
   Wand2, Sparkles
 } from "lucide-react";
 import Navbar from "@/components/Navbar";
-import { isSuspectCellCount, FLAGGED_CELLS_LABEL, protocolLabel, isDisplayableOrganism } from "@/lib/catalog-display";
+import { isSuspectCellCount, FLAGGED_CELLS_LABEL, protocolLabel, isDisplayableOrganism, organismLabel, failureLabel } from "@/lib/catalog-display";
+import { usePageMeta } from "@/hooks/usePageMeta";
 import Footer from "@/components/Footer";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/integrations/api/client";
@@ -37,29 +38,15 @@ function fmt(n: number | null | undefined): string {
 // ── Badges ────────────────────────────────────────────────────────────────────
 
 /**
- * Status iconography.
- *  - status === "DONE"  → green check + quality tier (gold/silver/bronze) when present
- *  - status === "FAIL"  → red X (Fail)
- *  - anything else      → amber triangle (e.g. PENDING / RUNNING)
- * D1 columns: status ∈ {DONE, FAIL, ...}; qc_flag ∈ {gold, silver, bronze, null}.
+ * Processing status.
+ *  - status === "DONE"  → Processed
+ *  - status === "FAIL"  → Failed (reason shown next to it by the caller)
+ *  - anything else      → the raw status (e.g. PENDING / RUNNING)
  */
-const TIER_STYLE: Record<string, string> = {
-  gold: "text-yellow-700 bg-yellow-50",
-  silver: "text-slate-600 bg-slate-100",
-  bronze: "text-orange-700 bg-orange-50",
-};
-function StatusBadge({ status, qcFlag }: { status: string; qcFlag?: string | null }) {
-  if (status === "DONE") {
-    const tier = (qcFlag || "").toLowerCase();
-    if (tier && TIER_STYLE[tier]) {
-      return <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${TIER_STYLE[tier]}`}><CheckCircle size={11} /> {tier.charAt(0).toUpperCase() + tier.slice(1)}</span>;
-    }
-    return <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full"><CheckCircle size={11} /> Done</span>;
-  }
-  if (status === "FAIL") {
-    return <span className="inline-flex items-center gap-1 text-xs font-medium text-red-600 bg-red-50 px-2 py-0.5 rounded-full"><XCircle size={11} /> Fail</span>;
-  }
-  return <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full"><AlertTriangle size={11} /> {status}</span>;
+function StatusBadge({ status }: { status: string }) {
+  if (status === "DONE") return <span className="status-ok"><CheckCircle size={11} /> Processed</span>;
+  if (status === "FAIL") return <span className="status-fail"><XCircle size={11} /> Failed</span>;
+  return <span className="flag"><AlertTriangle size={11} /> {status}</span>;
 }
 
 // ── Accordion Section ─────────────────────────────────────────────────────────
@@ -78,7 +65,7 @@ function AccordionSection({
     <div className="border-b border-border last:border-b-0">
       <button
         onClick={() => setOpen(!open)}
-        className="w-full flex items-center justify-between px-4 py-3 text-xs font-semibold text-foreground uppercase tracking-wider hover:bg-muted/30 transition-colors"
+        className="w-full flex items-center justify-between px-4 py-3 text-xs font-medium text-foreground uppercase tracking-wider hover:bg-background transition-colors"
       >
         {label}
         {open ? <ChevronDown size={13} className="text-muted-foreground" /> : <ChevronRt size={13} className="text-muted-foreground" />}
@@ -187,9 +174,9 @@ function CellRangeSlider({
 
 function FilterChip({ label, onRemove }: { label: string; onRemove: () => void }) {
   return (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary border border-primary/20">
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-primary/10 text-primary border border-primary/20">
       {label}
-      <button onClick={onRemove} className="ml-0.5 hover:text-primary/70">
+      <button onClick={onRemove} className="ml-0.5 hover:text-primary/70" aria-label={`Remove filter ${label}`}>
         <X size={10} />
       </button>
     </span>
@@ -315,16 +302,13 @@ const Browse = () => {
     staleTime: 60_000,
   });
 
-  // ── Derive API status / qc_flag params ────────────────────────────────────
-  // UI radios: All / Gold / Silver / Bronze / Failed.
-  // D1: status ∈ {DONE, FAIL, ...}; qc_flag (quality tier) ∈ {gold, silver, bronze, null}.
-  //   Gold/Silver/Bronze → qc_flag=<tier> · Failed → status=FAIL.
+  // ── Derive API status param ───────────────────────────────────────────────
+  // UI radios: All / Processed / Failed.
+  // D1: status ∈ {DONE, FAIL, ...}. Processed → status=DONE · Failed → status=FAIL.
   const { apiStatus, apiQcFlag } = useMemo(() => {
     if (!qcStatus || qcStatus === "All") return { apiStatus: undefined, apiQcFlag: undefined };
     if (qcStatus === "Failed") return { apiStatus: "FAIL", apiQcFlag: undefined };
-    if (["Gold", "Silver", "Bronze"].includes(qcStatus)) {
-      return { apiStatus: undefined, apiQcFlag: qcStatus.toLowerCase() };
-    }
+    if (qcStatus === "Processed") return { apiStatus: "DONE", apiQcFlag: undefined };
     return { apiStatus: qcStatus, apiQcFlag: undefined };
   }, [qcStatus]);
 
@@ -368,8 +352,9 @@ const Browse = () => {
 
   // ── NL (AI) search query ──────────────────────────────────────────────────
   // Active only when ?nl=... is present. Results render in the GSM (samples)
-  // view, replacing the faceted list. Server-side translates the query to
-  // structured filters via Claude Haiku (or degrades to keyword search).
+  // view, replacing the faceted list. Server-side turns the query into
+  // structured filters (interpret-search-query edge function; falls back to
+  // keyword search when that is unavailable).
   const { data: nlResult, isLoading: nlLoading, isError: nlError } = useQuery({
     queryKey: ["nl-search", nl, pageSize],
     queryFn: () => apiClient.nlSearch(nl!, { level: "gsm", limit: pageSize }),
@@ -417,50 +402,58 @@ const Browse = () => {
     URL.revokeObjectURL(url);
   };
 
+  usePageMeta({
+    title: "Browse",
+    description: "Filter every reprocessed single-cell study on GEO by organism, tissue, cell type, disease and assay, or ask in plain English.",
+    path: "/browse",
+  });
+
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen flex flex-col bg-background">
       <Navbar />
 
-      <section className="pt-24 pb-20 px-4 md:px-6">
-        <div className="max-w-8xl mx-auto">
+      <section className="flex-1 py-8 md:py-10">
+        <div className="container-site">
 
           {/* ── PAGE HEADER ── */}
           <div className="mb-5">
-            <h1 className="font-display text-2xl font-bold text-foreground tracking-tightest mb-1">
-              Singlet Atlas Explorer
-            </h1>
+            <h1 className="text-[28px] md:text-[32px] mb-1">Browse</h1>
             <p className="text-sm text-muted-foreground">
-              {fmt(corpusStats?.total_cells)} cells across {fmt(corpusStats?.total_samples)} samples and {fmt(corpusStats?.series_count)} GEO series.
-              {" "}<Link to="/docs/access" className="text-primary hover:underline text-xs">Load with Python →</Link>
+              {corpusStats
+                ? <>{fmt(corpusStats.total_cells)} cells across {fmt(corpusStats.total_samples)} samples in {fmt(corpusStats.series_count)} studies.</>
+                : <span className="inline-block h-4 w-64 align-middle rounded bg-secondary animate-pulse" />}
+              {" "}<Link to="/docs#load" className="text-primary hover:underline">How to load a study →</Link>
             </p>
           </div>
 
           {/* ── AI / NATURAL-LANGUAGE SEARCH ── */}
-          <div className="mb-4 rounded-xl border border-primary/30 bg-primary/[0.04] p-3">
+          <div className="mb-4 rounded border border-ai-border bg-ai-tint p-3">
             <div className="flex gap-2 items-stretch">
               <div className="relative flex-1">
-                <Sparkles size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-primary" />
+                <Sparkles size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-ai" />
                 <input
                   type="text"
                   placeholder={'"T cells from pediatric AML" — ask in plain English'}
                   value={nlInput}
                   onChange={(e) => setNlInput(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter") submitNl(nlInput); }}
-                  className="w-full pl-9 pr-4 py-2 rounded-lg border border-primary/30 bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  className="input h-9 pl-9 pr-4 border-ai-border focus:border-ai"
+                  aria-label="Ask in plain English"
                 />
               </div>
               <button
                 onClick={() => submitNl(nlInput)}
                 disabled={!nlInput.trim()}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 disabled:opacity-40"
+                className="btn-primary btn-sm"
               >
                 <Wand2 size={14} /> AI Search
               </button>
               {nl && (
                 <button
                   onClick={() => { setNlInput(""); setParam("nl", undefined); }}
-                  className="inline-flex items-center px-3 py-2 rounded-lg border border-border text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                  className="btn-secondary btn-sm px-3"
                   title="Clear AI search"
+                  aria-label="Clear AI search"
                 >
                   <X size={14} />
                 </button>
@@ -470,7 +463,8 @@ const Browse = () => {
             {/* "Interpreted as" chips — only when AI is configured and returned filters */}
             {nlActive && nlResult?.configured && nlResult.interpreted && (
               <div className="flex flex-wrap items-center gap-1.5 mt-2.5">
-                <span className="text-[11px] text-muted-foreground">Interpreted as:</span>
+                <span className="ai-badge">AI</span>
+                <span className="text-[11px] text-muted-foreground">interpreted as</span>
                 {(() => {
                   const i = nlResult.interpreted as NlSearchInterpreted;
                   const chips: { label: string; val: string }[] = [];
@@ -486,8 +480,8 @@ const Browse = () => {
                     return <span className="text-[11px] text-muted-foreground italic">no specific filters — showing all matches</span>;
                   }
                   return chips.map((c, idx) => (
-                    <span key={`${c.label}-${idx}`} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-primary/10 text-primary border border-primary/20">
-                      <span className="text-primary/60">{c.label}:</span> {c.val}
+                    <span key={`${c.label}-${idx}`} className="ai-chip">
+                      <span className="opacity-60">{c.label}:</span> {c.val}
                     </span>
                   ));
                 })()}
@@ -500,8 +494,11 @@ const Browse = () => {
                 AI search not configured yet — showing keyword matches.
               </p>
             )}
+            {nlActive && nlResult?.note && (
+              <p className="text-[11px] text-muted-foreground mt-2.5">{nlResult.note}</p>
+            )}
             {nlActive && nlError && (
-              <p className="text-[11px] text-amber-600 mt-2.5">
+              <p className="text-[11px] text-warning mt-2.5">
                 AI search is temporarily unavailable. Try the keyword search below.
               </p>
             )}
@@ -518,24 +515,26 @@ const Browse = () => {
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") { setParam("q", searchInput || undefined); } }}
-                className="w-full pl-9 pr-4 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                className="input h-9 pl-9 pr-4"
+                aria-label="Keyword search"
               />
             </div>
             <button
               onClick={() => { setParam("q", searchInput || undefined); }}
-              className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90"
+              className="btn-primary btn-sm"
             >
               Search
             </button>
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              className="btn-secondary btn-sm"
               title="Toggle filters"
+              aria-pressed={sidebarOpen}
             >
               <SlidersHorizontal size={14} />
               <span className="hidden sm:inline">Filters</span>
               {activeFilters.length > 0 && (
-                <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-primary text-primary-foreground text-[9px] font-bold">
+                <span className="inline-flex items-center justify-center min-w-4 h-4 px-1 rounded bg-primary text-primary-foreground text-[9px] font-bold">
                   {activeFilters.length}
                 </span>
               )}
@@ -546,14 +545,14 @@ const Browse = () => {
           {activeFilters.length > 0 && (
             <div className="flex flex-wrap gap-1.5 mb-4 items-center">
               <span className="text-xs text-muted-foreground">Active:</span>
-              {organism && <FilterChip label={`Organism: ${organism}`} onRemove={() => setParam("organism", undefined)} />}
+              {organism && <FilterChip label={`Organism: ${organismLabel(organism)}`} onRemove={() => setParam("organism", undefined)} />}
               {tissue && <FilterChip label={`Tissue: ${tissue}`} onRemove={() => setParam("tissue", undefined)} />}
               {cellType && <FilterChip label={`Cell type: ${cellType}`} onRemove={() => setParam("cell_type", undefined)} />}
               {protocol && <FilterChip label={`Protocol: ${protocolLabel(protocol)}`} onRemove={() => setParam("protocol", undefined)} />}
               {disease && <FilterChip label={`Disease: ${disease}`} onRemove={() => setParam("disease", undefined)} />}
               {sex && <FilterChip label={`Sex: ${sex}`} onRemove={() => setParam("sex", undefined)} />}
               {qcStatus && <FilterChip label={`Status: ${qcStatus}`} onRemove={() => setParam("status", undefined)} />}
-              {failureCategory && <FilterChip label={`Failure: ${failureCategory}`} onRemove={() => setParam("failure_category", undefined)} />}
+              {failureCategory && <FilterChip label={`Failure: ${failureLabel(failureCategory)}`} onRemove={() => setParam("failure_category", undefined)} />}
               {q && <FilterChip label={`"${q}"`} onRemove={() => { setSearchInput(""); setParam("q", undefined); }} />}
               {minCells > 0 && <FilterChip label={`Min cells: ${fmt(minCells)}`} onRemove={() => setParam("min_cells", undefined)} />}
               {maxCells < 1000000 && <FilterChip label={`Max cells: ${fmt(maxCells)}`} onRemove={() => setParam("max_cells", undefined)} />}
@@ -572,9 +571,9 @@ const Browse = () => {
 
             {/* ── LEFT SIDEBAR ── */}
             {sidebarOpen && (
-              <div className="w-56 flex-shrink-0 rounded-xl border border-border bg-card sticky top-20 overflow-hidden">
+              <div className="w-56 flex-shrink-0 surface sticky top-20 overflow-hidden">
                 <div className="px-4 py-3 border-b border-border flex items-center justify-between">
-                  <span className="text-xs font-bold text-foreground uppercase tracking-wider">Filters</span>
+                  <span className="text-xs font-medium text-foreground uppercase tracking-wider">Filters</span>
                   {activeFilters.length > 0 && (
                     <button onClick={clearAll} className="text-[10px] text-primary hover:underline">Reset</button>
                   )}
@@ -587,6 +586,7 @@ const Browse = () => {
                       options={organismFacets}
                       value={organism}
                       onChange={(v) => setParam("organism", v)}
+                      labelFn={organismLabel}
                     />
                   </AccordionSection>
                 )}
@@ -639,10 +639,10 @@ const Browse = () => {
                   </AccordionSection>
                 )}
 
-                {/* QC quality tier */}
-                <AccordionSection label="Quality" defaultOpen>
+                {/* Processing status */}
+                <AccordionSection label="Status" defaultOpen>
                   <div className="space-y-1.5">
-                    {(["All", "Gold", "Silver", "Bronze", "Failed"] as const).map((s) => (
+                    {(["All", "Processed", "Failed"] as const).map((s) => (
                       <label key={s} className="flex items-center gap-2 cursor-pointer group">
                         <input
                           type="radio"
@@ -663,6 +663,7 @@ const Browse = () => {
                       options={facets?.failure_categories ?? []}
                       value={failureCategory}
                       onChange={(v) => setParam("failure_category", v)}
+                      labelFn={failureLabel}
                     />
                   </AccordionSection>
                 )}
@@ -701,14 +702,15 @@ const Browse = () => {
 
               {/* GSE/GSM Tab toggle */}
               <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-                <div className="flex rounded-lg border border-border overflow-hidden">
+                <div className="flex rounded border border-border-strong overflow-hidden">
                   {(["gsm", "gse"] as const).map((t) => (
                     <button
                       key={t}
                       onClick={() => {
                         setSearchParams((prev) => { const n = new URLSearchParams(prev); n.set("tab", t); n.delete("page"); return n; }, { replace: true });
                       }}
-                      className={`px-4 py-1.5 text-xs font-medium transition-colors ${tab === t ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground bg-background hover:bg-muted"}`}
+                      className={`px-4 py-1.5 text-xs font-medium transition-colors ${tab === t ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground bg-card hover:bg-background"}`}
+                      aria-pressed={tab === t}
                     >
                       {t === "gsm" ? "Samples (GSM)" : "Studies (GSE)"}
                     </button>
@@ -733,7 +735,7 @@ const Browse = () => {
               </div>
 
               {/* Results table */}
-              <div className="rounded-xl border border-border bg-card overflow-hidden">
+              <div className="surface rounded-none overflow-hidden">
                 {isLoading ? (
                   <div className="p-12 text-center text-muted-foreground text-sm">Loading...</div>
                 ) : tab === "gsm" && gsmRows.length === 0 ? (
@@ -744,9 +746,9 @@ const Browse = () => {
                   /* ── GSM TABLE (md+) ── */
                   <>
                   <div className="hidden md:block overflow-x-auto">
-                    <table className="w-full text-sm">
+                    <table className="data-table">
                       <thead>
-                        <tr className="border-b border-border bg-muted/30">
+                        <tr>
                           {([
                             ["gsm_id", "Sample", "text-left px-4"],
                             ["organism", "Organism", "text-left px-3"],
@@ -759,7 +761,7 @@ const Browse = () => {
                             <th
                               key={col}
                               onClick={() => toggleSort(col)}
-                              className={`${cls} py-3 text-xs font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground`}
+                              className={`${cls} cursor-pointer select-none hover:text-foreground`}
                             >
                               <span className="inline-flex items-center gap-1">
                                 {label} <SortIcon col={col} sortBy={sortBy} sortAsc={sortAsc} />
@@ -772,29 +774,27 @@ const Browse = () => {
                         {gsmRows.map((s: GsmRow) => {
                           const isFailed = s.status === "FAIL";
                           return (
-                            <tr key={s.gsm_id} className={`border-b border-border/40 hover:bg-muted/20 transition-colors ${isFailed ? "bg-red-50/20" : ""}`}>
-                              <td className="px-4 py-2.5">
-                                <Link to={`/sample/${s.gsm_id}`} className="font-mono text-xs text-primary hover:underline">{s.gsm_id}</Link>
-                                {s.title && <div className="text-[10px] text-muted-foreground mt-0.5 truncate max-w-[200px]">{s.title}</div>}
-                                {s.gse_id && <Link to={`/series/${s.gse_id}`} className="text-[10px] text-muted-foreground/60 hover:text-primary font-mono">{s.gse_id}</Link>}
+                            <tr key={s.gsm_id} className={isFailed ? "text-muted-foreground" : ""}>
+                              <td className="px-4">
+                                <Link to={s.gse_id ? `/study/${s.gse_id}#${s.gsm_id}` : `/sample/${s.gsm_id}`} className="font-mono text-xs text-primary hover:underline">{s.gsm_id}</Link>
+                                {s.title && <div className="text-[11px] text-muted-foreground mt-0.5 truncate max-w-[220px]" title={s.title}>{s.title}</div>}
+                                {s.gse_id && <Link to={`/study/${s.gse_id}`} className="text-[11px] text-muted-foreground hover:text-primary font-mono">{s.gse_id}</Link>}
                               </td>
-                              <td className="px-3 py-2.5 text-xs italic text-muted-foreground">{s.organism}</td>
-                              <td className="px-3 py-2.5">
-                                <span className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded text-[10px]">{protocolLabel(s.protocol)}</span>
-                              </td>
-                              <td className="px-3 py-2.5">
-                                <StatusBadge status={s.status} qcFlag={s.qc_flag} />
+                              <td className="px-3 text-xs" title={s.organism ?? undefined}>{organismLabel(s.organism)}</td>
+                              <td className="px-3 text-xs whitespace-nowrap">{protocolLabel(s.protocol)}</td>
+                              <td className="px-3">
+                                <StatusBadge status={s.status} />
                                 {isFailed && s.failure_category && (
-                                  <div className="text-[10px] text-red-600/70 mt-0.5">{s.failure_category.replace(/_/g, " ")}</div>
+                                  <div className="text-[11px] text-muted-foreground mt-0.5">{failureLabel(s.failure_category)}</div>
                                 )}
                               </td>
-                              <td className="px-3 py-2.5 text-right font-mono text-xs">
+                              <td className="px-3 num text-xs">
                                 {isSuspectCellCount(s.protocol, s.n_cells)
-                                  ? <span className="text-[10px] italic text-amber-600 font-sans" title="Known plate-protocol cell-count bug — value withheld pending pipeline fix">{FLAGGED_CELLS_LABEL}</span>
+                                  ? <span className="flag font-sans" title="Known plate-protocol cell-count bug — value withheld pending pipeline fix">{FLAGGED_CELLS_LABEL}</span>
                                   : fmt(s.n_cells)}
                               </td>
-                              <td className="px-3 py-2.5 text-right font-mono text-xs">{s.mapping_rate != null ? `${(s.mapping_rate * 100).toFixed(1)}%` : "—"}</td>
-                              <td className="px-4 py-2.5 text-right font-mono text-xs">{fmt(s.median_genes)}</td>
+                              <td className="px-3 num text-xs">{s.mapping_rate != null ? `${(s.mapping_rate * 100).toFixed(1)}%` : "—"}</td>
+                              <td className="px-4 num text-xs">{fmt(s.median_genes)}</td>
                             </tr>
                           );
                         })}
@@ -803,26 +803,26 @@ const Browse = () => {
                   </div>
 
                   {/* ── GSM CARDS (mobile, <md) ── */}
-                  <div className="md:hidden divide-y divide-border/40">
+                  <div className="md:hidden divide-y divide-border">
                     {gsmRows.map((s: GsmRow) => {
                       const isFailed = s.status === "FAIL";
                       return (
-                        <div key={s.gsm_id} className={`p-4 ${isFailed ? "bg-red-50/20" : ""}`}>
+                        <div key={s.gsm_id} className={`p-4 ${isFailed ? "text-muted-foreground" : ""}`}>
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0">
-                              <Link to={`/sample/${s.gsm_id}`} className="font-mono text-sm text-primary hover:underline">{s.gsm_id}</Link>
-                              {s.gse_id && <Link to={`/series/${s.gse_id}`} className="block text-[10px] text-muted-foreground/60 hover:text-primary font-mono">{s.gse_id}</Link>}
+                              <Link to={s.gse_id ? `/study/${s.gse_id}#${s.gsm_id}` : `/sample/${s.gsm_id}`} className="font-mono text-sm text-primary hover:underline">{s.gsm_id}</Link>
+                              {s.gse_id && <Link to={`/study/${s.gse_id}`} className="block text-[11px] text-muted-foreground hover:text-primary font-mono">{s.gse_id}</Link>}
                             </div>
-                            <StatusBadge status={s.status} qcFlag={s.qc_flag} />
+                            <StatusBadge status={s.status} />
                           </div>
                           {s.title && <div className="text-[11px] text-muted-foreground mt-1 line-clamp-2">{s.title}</div>}
                           {isFailed && s.failure_category && (
-                            <div className="text-[10px] text-red-600/70 mt-0.5">{s.failure_category.replace(/_/g, " ")}</div>
+                            <div className="text-[11px] text-muted-foreground mt-0.5">{failureLabel(s.failure_category)}</div>
                           )}
                           <div className="grid grid-cols-2 gap-x-3 gap-y-1 mt-2 text-[11px]">
-                            <div><span className="text-muted-foreground">Organism: </span><span className="italic">{s.organism ?? "—"}</span></div>
-                            <div><span className="text-muted-foreground">Protocol: </span><span className="font-mono">{protocolLabel(s.protocol)}</span></div>
-                            <div><span className="text-muted-foreground">Cells: </span>{isSuspectCellCount(s.protocol, s.n_cells) ? <span className="italic text-amber-600">{FLAGGED_CELLS_LABEL}</span> : <span className="font-mono">{fmt(s.n_cells)}</span>}</div>
+                            <div><span className="text-muted-foreground">Organism: </span>{organismLabel(s.organism)}</div>
+                            <div><span className="text-muted-foreground">Protocol: </span>{protocolLabel(s.protocol)}</div>
+                            <div><span className="text-muted-foreground">Cells: </span>{isSuspectCellCount(s.protocol, s.n_cells) ? <span className="flag">{FLAGGED_CELLS_LABEL}</span> : <span className="font-mono">{fmt(s.n_cells)}</span>}</div>
                             <div><span className="text-muted-foreground">Map %: </span><span className="font-mono">{s.mapping_rate != null ? `${(s.mapping_rate * 100).toFixed(1)}%` : "—"}</span></div>
                             <div><span className="text-muted-foreground">Med. genes: </span><span className="font-mono">{fmt(s.median_genes)}</span></div>
                           </div>
@@ -834,11 +834,11 @@ const Browse = () => {
                 ) : (
                   /* ── GSE TABLE ── */
                   <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
+                    <table className="data-table">
                       <thead>
-                        <tr className="border-b border-border bg-muted/30">
+                        <tr>
                           {([
-                            ["id", "Series", "text-left px-4"],
+                            ["id", "Study", "text-left px-4"],
                             ["organism", "Organism", "text-left px-3"],
                             ["n_gsm_total", "Samples", "text-right px-3"],
                             ["n_cells", "Cells", "text-right px-3"],
@@ -847,7 +847,7 @@ const Browse = () => {
                             <th
                               key={col}
                               onClick={() => toggleSort(col)}
-                              className={`${cls} py-3 text-xs font-medium text-muted-foreground cursor-pointer select-none hover:text-foreground`}
+                              className={`${cls} cursor-pointer select-none hover:text-foreground`}
                             >
                               <span className="inline-flex items-center gap-1">
                                 {label} <SortIcon col={col} sortBy={sortBy} sortAsc={sortAsc} />
@@ -858,21 +858,21 @@ const Browse = () => {
                       </thead>
                       <tbody>
                         {gseRows.map((s: GseRow) => (
-                          <tr key={s.id} className="border-b border-border/40 hover:bg-muted/20 transition-colors">
-                            <td className="px-4 py-2.5">
-                              <Link to={`/series/${s.id}`} className="font-mono text-xs text-primary hover:underline">{s.id}</Link>
-                              {s.title && <div className="text-[10px] text-muted-foreground mt-0.5 truncate max-w-[280px]">{s.title}</div>}
+                          <tr key={s.id}>
+                            <td className="px-4">
+                              <Link to={`/study/${s.id}`} className="font-mono text-xs text-primary hover:underline">{s.id}</Link>
+                              {s.title && <div className="text-[11px] text-muted-foreground mt-0.5 truncate max-w-[360px]" title={s.title}>{s.title}</div>}
                             </td>
-                            <td className="px-3 py-2.5 text-xs italic text-muted-foreground">{s.organism}</td>
-                            <td className="px-3 py-2.5 text-right text-xs">
-                              <span className="text-emerald-600 font-mono">{s.n_gsm_done}</span>
+                            <td className="px-3 text-xs" title={s.organism ?? undefined}>{organismLabel(s.organism)}</td>
+                            <td className="px-3 num text-xs">
+                              <span className="font-mono">{s.n_gsm_done}</span>
                               <span className="text-muted-foreground font-mono">/{s.n_gsm_total}</span>
                               {s.n_gsm_failed > 0 && (
-                                <span className="text-red-500 font-mono ml-1">({s.n_gsm_failed} fail)</span>
+                                <span className="text-muted-foreground font-mono ml-1">({s.n_gsm_failed} failed)</span>
                               )}
                             </td>
-                            <td className="px-3 py-2.5 text-right font-mono text-xs">{fmt(s.n_cells)}</td>
-                            <td className="px-4 py-2.5 text-right text-xs text-muted-foreground">
+                            <td className="px-3 num text-xs">{fmt(s.n_cells)}</td>
+                            <td className="px-4 num text-xs text-muted-foreground">
                               {s.submitted_date ? new Date(s.submitted_date).getFullYear() : "—"}
                             </td>
                           </tr>
@@ -884,7 +884,7 @@ const Browse = () => {
 
                 {/* Pagination */}
                 {totalItems > 0 && !isLoading && (
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 py-3 border-t border-border bg-muted/10">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 py-3 border-t border-border bg-background">
                     <div className="flex items-center gap-3">
                       <span className="text-xs text-muted-foreground">
                         {nlActive
@@ -894,7 +894,7 @@ const Browse = () => {
                       {tab === "gsm" && (
                         <button
                           onClick={exportCSV}
-                          className="flex items-center gap-1 px-2 py-1 rounded border border-border text-xs text-muted-foreground hover:text-foreground hover:bg-muted"
+                          className="btn-secondary h-7 px-2 text-xs"
                           title="Export page to CSV"
                         >
                           <Download size={11} /> CSV
@@ -907,18 +907,18 @@ const Browse = () => {
                         <select
                           value={pageSize}
                           onChange={(e) => setSearchParams((prev) => { const n = new URLSearchParams(prev); n.set("size", e.target.value); n.delete("page"); return n; }, { replace: true })}
-                          className="px-2 py-1 rounded border border-border bg-background text-xs"
+                          className="input h-7 w-auto px-2 text-xs"
                         >
                           {[25, 50, 100].map((s) => <option key={s} value={s}>{s}</option>)}
                         </select>
                       </label>
-                      <button onClick={() => setPage(Math.max(0, page - 1))} disabled={page === 0} className="p-1.5 rounded border border-border hover:bg-muted disabled:opacity-30" title="Previous page">
+                      <button onClick={() => setPage(Math.max(0, page - 1))} disabled={page === 0} className="btn-secondary h-7 w-7 p-0" title="Previous page" aria-label="Previous page">
                         <ChevronLeft size={13} />
                       </button>
                       <span className="text-xs text-muted-foreground px-2 whitespace-nowrap">
                         Page {page + 1} of {totalPages.toLocaleString()}
                       </span>
-                      <button onClick={() => setPage(Math.min(totalPages - 1, page + 1))} disabled={page >= totalPages - 1} className="p-1.5 rounded border border-border hover:bg-muted disabled:opacity-30" title="Next page">
+                      <button onClick={() => setPage(Math.min(totalPages - 1, page + 1))} disabled={page >= totalPages - 1} className="btn-secondary h-7 w-7 p-0" title="Next page" aria-label="Next page">
                         <ChevronRight size={13} />
                       </button>
                     </div>

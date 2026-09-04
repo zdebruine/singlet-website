@@ -1,22 +1,32 @@
-import { useLocation } from "react-router-dom";
 import { useEffect } from "react";
+import { Link, useLocation } from "react-router-dom";
+import Navbar from "@/components/Navbar";
+import Footer from "@/components/Footer";
+import { usePageMeta } from "@/hooks/usePageMeta";
 
 const NotFound = () => {
   const location = useLocation();
+  usePageMeta({ title: "Page not found", noindex: true });
 
   useEffect(() => {
-    console.error("404 Error: User attempted to access non-existent route:", location.pathname);
+    console.error("404: no route for", location.pathname);
   }, [location.pathname]);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-muted">
-      <div className="text-center">
-        <h1 className="mb-4 text-4xl font-bold">404</h1>
-        <p className="mb-4 text-xl text-muted-foreground">Oops! Page not found</p>
-        <a href="/" className="text-primary underline hover:text-primary/90">
-          Return to Home
-        </a>
-      </div>
+    <div className="min-h-screen flex flex-col bg-background">
+      <Navbar />
+      <main className="container-site flex-1 py-24 text-center">
+        <p className="font-mono text-sm text-muted-foreground mb-2">404</p>
+        <h1 className="text-[28px] mb-3">Page not found</h1>
+        <p className="text-muted-foreground mb-6">
+          There is nothing at <span className="font-mono text-foreground">{location.pathname}</span>.
+        </p>
+        <div className="flex justify-center gap-3">
+          <Link to="/" className="btn-primary btn-sm">Home</Link>
+          <Link to="/browse" className="btn-secondary btn-sm">Browse the atlas</Link>
+        </div>
+      </main>
+      <Footer />
     </div>
   );
 };

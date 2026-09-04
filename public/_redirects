@@ -1,2 +1,14 @@
+# Edge redirects (Cloudflare Pages). First match wins; the SPA fallback is last.
+# Hash-fragment destinations (/docs#install etc.) are handled client-side in src/App.tsx.
+
+/series/*        /study/:splat                                              301
+/docs/access     /docs                                                      301
+/benchmarks      /                                                          301
+/blog            /                                                          301
+/blog/*          /                                                          301
+/notebooks       https://github.com/Singlet-Bio/singlet/tree/main/notebooks 302
+/validation      /browse                                                    301
+/atlas-docs      /docs                                                      301
+
 /data/*  /data/:splat  200
-/*    /index.html   200
+/*       /index.html   200
