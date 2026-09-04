@@ -15,7 +15,7 @@
  * one file; the account page reads the list through RLS.
  */
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
-import { service } from "../_shared/quota.ts";
+import { service } from "../_shared/service.ts";
 import { displayPrefix, generateApiKey, hashApiKey } from "../_shared/api-keys.ts";
 
 const MAX_ACTIVE_KEYS = 20;

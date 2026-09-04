@@ -7,7 +7,7 @@
  * display prefix ("sk_live_" + first 8 secret chars). The plain key is shown
  * exactly once, when it is created.
  */
-import { service, sha256Hex } from "./quota.ts";
+import { service, sha256Hex } from "./service.ts";
 
 export const KEY_PREFIX = "sk_live_";
 export const KEY_SECRET_LENGTH = 40;

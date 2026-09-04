@@ -2,7 +2,8 @@
  * Daily AI budgets for singlet.bio, shared by the edge functions.
  *
  * Every AI call is charged to a *subject*:
- *   - "user:<uuid>" when the request carries a valid user session token
+ *   - "user:<uuid>" when the request carries a valid user session token, or a
+ *     personal API key (charged to the key's owner)
  *   - "anon:<hash>"  otherwise — the catalog API forwards a salted hash of the
  *     visitor's IP (`X-Singlet-Anon`); direct callers are hashed here from the
  *     forwarded address. The raw address is never stored.
@@ -11,8 +12,10 @@
  * are incremented atomically by the `consume_ai_search` database function,
  * which only the service role may call. Limits reset at 00:00 UTC.
  */
-import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { keyErrorMessage, looksLikeApiKey, lookupApiKey } from "./api-keys.ts";
+import { service, sha256Hex } from "./service.ts";
+
+export { service, sha256Hex };
 
 export type QuotaKind = "search" | "explain";
 export type SubjectKind = "anon" | "user";
@@ -55,23 +58,9 @@ export function limitFor(kind: QuotaKind, subject: SubjectKind): number {
   return Number.isFinite(n) && n >= 0 ? n : DEFAULT_LIMITS[kind][subject];
 }
 
-export async function sha256Hex(text: string): Promise<string> {
-  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
-  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
-}
-
 export async function anonSubjectFromIp(ip: string): Promise<string> {
   const h = await sha256Hex(`${ANON_SALT}:${ip.trim()}`);
   return `anon:${h.slice(0, 32)}`;
-}
-
-let serviceClient: SupabaseClient | null = null;
-export function service(): SupabaseClient {
-  if (serviceClient) return serviceClient;
-  const url = Deno.env.get("SUPABASE_URL") ?? "";
-  const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-  serviceClient = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
-  return serviceClient;
 }
 
 /**
