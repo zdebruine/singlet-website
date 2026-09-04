@@ -96,6 +96,20 @@ const ORGANISM_COMMON: Record<string, string> = {
   "nothobranchius furzeri": "Turquoise killifish",
   "petromyzon marinus": "Sea lamprey",
   "ambystoma mexicanum": "Axolotl",
+  "mustela putorius furo": "Ferret",
+  "felis catus": "Cat",
+  "cavia porcellus": "Guinea pig",
+  "monodelphis domestica": "Opossum",
+  "schmidtea mediterranea": "Planarian",
+  "strongylocentrotus purpuratus": "Sea urchin",
+  "ciona intestinalis": "Sea squirt",
+  "oryza sativa": "Rice",
+  "zea mays": "Maize",
+  "plasmodium falciparum": "Malaria parasite",
+  "hydra vulgaris": "Hydra",
+  "nematostella vectensis": "Starlet sea anemone",
+  "octopus bimaculoides": "California two-spot octopus",
+  "synthetic construct": "Synthetic construct",
 };
 
 /**

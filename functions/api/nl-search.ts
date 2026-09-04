@@ -1,36 +1,52 @@
 /**
- * GET|POST /api/nl-search
+ * GET /api/nl-search?q=<plain English>&level=gse|gsm&page=&limit=&sort=&has_bundle=
+ * (POST { q, level, ... } is accepted too.)
  *
- * Natural-language ("AI") catalog search. Translates a plain-English query like
- *   "Find all T cells from pediatric AML"
- * into structured metadata filters via the `interpret-search-query` edge
- * function (Gemini through the Lovable AI Gateway), then runs a parameterized
- * D1 query and returns the matching samples (level=gsm) or series (level=gse).
+ * Natural-language search on top of /api/search:
+ *   1. The query is interpreted by the Lovable Cloud edge function
+ *      `interpret-search-query` (Gemini via the Lovable AI Gateway), grounded on
+ *      the CANONICAL vocabulary — organism common names, tissue/disease/assay
+ *      groups and the top raw cell types. Anything it returns as raw text is
+ *      mapped through the same synonym rules that built the normalised columns.
+ *   2. The resulting filters run through the shared search core with AND
+ *      semantics. A zero result is NEVER broadened silently: instead
+ *      `suggestions` lists what dropping each single filter would yield.
+ *   3. `why` holds a deterministic one-line explanation per study, built from
+ *      the structured `match` data — no second model call.
  *
- * Params (GET query string or POST JSON body):
- *   q      — the natural-language query (required)
- *   level  — "gsm" (default) | "gse"
- *   limit  — max rows (default 50, clamped 1..200)
+ * Explicit filters in the query string (organism=…, tissue_group=…, …) are
+ * merged (union per field) with the interpreted ones.
  *
- * Behavior:
- *   - Interpretation runs in the Lovable Cloud edge function
- *     `interpret-search-query`, which calls a Google Gemini model through the
- *     Lovable AI Gateway (auto-provisioned LOVABLE_API_KEY — no key to set
- *     anywhere by hand). It is grounded on the controlled vocabulary pulled
- *     live from D1 here and passed through.
- *     Response: { configured: true, interpreted: {...}, data, accessions, total }
- *   - If that call fails, degrades gracefully to a keyword (FTS/LIKE) search.
+ * Response:
+ *   { configured, interpreted, applied, level, data, total, totals, page, limit,
+ *     accessions, suggestions: [{drop:{field,value}, total}], why: {gse_id: string},
+ *     model?, note? }
  *
- * NEVER returns 500 for a model failure — it falls back instead.
- * All SQL is parameterized. Identifier interpolation uses fixed column names only.
- *
- * Stable contract: this endpoint is also consumed by the Python/R packages and
- * the MCP tool. The top-level `accessions` array (flat gsm_id / gse_id strings)
- * is the programmatic entry point — keep it stable.
+ * `accessions` (flat GSE / GSM id list) is a stable contract consumed by the
+ * Python and R packages.
  */
 import { corsOk, corsErr, handleOptions } from "../_shared/cors";
-import { safeList } from "../_shared/json";
-import { cachedJson } from "../_shared/cache";
+import { cachedJson, CATALOG_CACHE_TTL } from "../_shared/cache";
+import { loadRules, organismVocabForModel, TISSUE_GROUPS, DISEASE_GROUPS, ASSAY_FAMILIES, type VocabRule } from "../_shared/vocab";
+import { cellTypeVocab } from "../_shared/facets-core";
+import {
+  canonicalQuery,
+  countStudies,
+  emptyFilters,
+  extractAccessions,
+  hasAnyFilter,
+  normalizeFilters,
+  parseSearchParams,
+  pickFilters,
+  runSampleSearch,
+  runStudySearch,
+  tokenizeQuery,
+  type Ctx,
+  type FilterMatch,
+  type SearchFilters,
+  type SearchParams,
+  type StudyRow,
+} from "../_shared/search-core";
 
 interface Env {
   DB: D1Database;
@@ -40,432 +56,363 @@ interface Env {
 }
 
 /**
- * Lovable Cloud (Supabase) edge function that performs the AI interpretation
- * step via the Lovable AI Gateway. The anon key is public/client-safe by
- * design, so it is inlined here — AI Search must not depend on any secret that
- * has to be entered manually in the Cloudflare dashboard.
+ * Lovable Cloud edge function that performs the AI interpretation step. The
+ * anon key is public/client-safe by design, so it is inlined here — AI Search
+ * must not depend on any secret entered manually in the Cloudflare dashboard.
  */
 const DEFAULT_SUPABASE_URL = "https://vbswbitfyallghbgxkuw.supabase.co";
 const DEFAULT_SUPABASE_ANON_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZic3diaXRmeWFsbGdoYmd4a3V3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ2MjkzNDksImV4cCI6MjA5MDIwNTM0OX0.GtX_3p0L78p0KqmgNY71ENagf-lugz5FhvhYrtKqLhs";
 const INTERPRET_FN = "interpret-search-query";
+const INTERPRET_TIMEOUT_MS = 9000;
+const INTERPRET_CACHE_TTL = 3600;
+const INTERPRET_CACHE_URL = "https://singlet.bio/__internal/interpret";
+const MAX_SUGGESTIONS = 5;
 
-// Columns the model is allowed to filter on (array-valued, case-insensitive).
-const ARRAY_FIELDS = ["organism", "tissue", "cell_type", "disease", "protocol", "sex"] as const;
-type ArrayField = (typeof ARRAY_FIELDS)[number];
-
-// Per-field cap for the controlled-vocabulary lists fed to the model.
-const VOCAB_LIMIT = 60;
-
-interface Interpreted {
+export interface Interpreted {
   organism: string[];
-  tissue: string[];
+  tissue_group: string[];
+  disease_group: string[];
+  assay_family: string[];
   cell_type: string[];
-  disease: string[];
-  protocol: string[];
-  sex: string[];
   min_cells: number | null;
-  q: string | null;
+  year_min: number | null;
+  year_max: number | null;
+  q: string[];
 }
 
-interface ParsedRequest {
-  q: string;
-  level: "gsm" | "gse";
-  limit: number;
+interface Suggestion {
+  /** Remove this one filter (or `all_filters` = keep only the free text). */
+  drop?: FilterMatch | { field: "all_filters"; value: string };
+  /** Second tier, offered only when no single removal helps: keep just this filter. */
+  keep?: FilterMatch;
+  total: number;
+  /** Canonical query-string fragment the UI can apply. */
+  params: string;
 }
 
-// ── Request parsing (GET query or POST JSON) ──────────────────────────────────
-
-async function parseRequest(request: Request): Promise<ParsedRequest> {
-  const url = new URL(request.url);
-  let q = url.searchParams.get("q") ?? "";
-  let level = url.searchParams.get("level") ?? "gsm";
-  let limitRaw: string | number | null = url.searchParams.get("limit");
-
-  if (request.method === "POST") {
-    try {
-      const body = (await request.json()) as Record<string, unknown>;
-      if (typeof body.q === "string") q = body.q;
-      if (typeof body.level === "string") level = body.level;
-      if (body.limit != null) limitRaw = body.limit as string | number;
-    } catch {
-      /* ignore malformed body — fall back to query params */
-    }
-  }
-
-  const limitNum = limitRaw != null ? parseInt(String(limitRaw), 10) : 50;
-  const limit = isNaN(limitNum) ? 50 : Math.min(Math.max(1, limitNum), 200);
-  return {
-    q: q.trim(),
-    level: level === "gse" ? "gse" : "gsm",
-    limit,
-  };
-}
-
-// ── Controlled vocabulary (grounds the model) ─────────────────────────────────
-
-/** Distinct values + counts for one gsm column, top N by frequency. */
-async function vocab(db: D1Database, col: string): Promise<{ value: string; count: number }[]> {
-  const res = await db
-    .prepare(
-      `SELECT ${col} AS value, COUNT(*) AS count
-         FROM gsm
-        WHERE ${col} IS NOT NULL AND ${col} != ''
-        GROUP BY ${col}
-        ORDER BY count DESC
-        LIMIT ?`
-    )
-    .bind(VOCAB_LIMIT)
-    .all<{ value: string; count: number }>();
-  return res.results;
-}
-
-async function loadVocab(db: D1Database): Promise<Record<ArrayField, string[]>> {
-  const cols: ArrayField[] = ["organism", "tissue", "cell_type", "disease", "protocol", "sex"];
-  const lists = await Promise.all(cols.map((c) => vocab(db, c)));
-  const out = {} as Record<ArrayField, string[]>;
-  cols.forEach((c, i) => {
-    out[c] = lists[i].map((r) => r.value);
-  });
-  return out;
-}
-
-// ── Query interpretation (Lovable AI Gateway via Supabase edge function) ─────
-
-/** Extract the first balanced {...} JSON object from arbitrary text. */
-function extractJson(text: string): unknown | null {
-  const start = text.indexOf("{");
-  if (start === -1) return null;
-  let depth = 0;
-  let inStr = false;
-  let esc = false;
-  for (let i = start; i < text.length; i++) {
-    const ch = text[i];
-    if (inStr) {
-      if (esc) esc = false;
-      else if (ch === "\\") esc = true;
-      else if (ch === '"') inStr = false;
-      continue;
-    }
-    if (ch === '"') inStr = true;
-    else if (ch === "{") depth++;
-    else if (ch === "}") {
-      depth--;
-      if (depth === 0) {
-        const candidate = text.slice(start, i + 1);
-        try {
-          return JSON.parse(candidate);
-        } catch {
-          return null;
-        }
-      }
-    }
-  }
-  return null;
-}
+const emptyInterpreted = (): Interpreted => ({
+  organism: [],
+  tissue_group: [],
+  disease_group: [],
+  assay_family: [],
+  cell_type: [],
+  min_cells: null,
+  year_min: null,
+  year_max: null,
+  q: [],
+});
 
 function coerceInterpreted(raw: unknown): Interpreted {
   const obj = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
   const arr = (v: unknown): string[] =>
-    Array.isArray(v) ? v.map((x) => String(x)).filter((s) => s.trim() !== "") : [];
-  const minCellsRaw = obj.min_cells;
-  let minCells: number | null = null;
-  if (typeof minCellsRaw === "number" && !isNaN(minCellsRaw)) minCells = Math.floor(minCellsRaw);
-  else if (typeof minCellsRaw === "string" && minCellsRaw.trim() !== "") {
-    const n = parseInt(minCellsRaw, 10);
-    if (!isNaN(n)) minCells = n;
-  }
-  const qRaw = obj.q;
-  const q = typeof qRaw === "string" && qRaw.trim() !== "" ? qRaw.trim() : null;
+    Array.isArray(v)
+      ? v.map((x) => String(x).trim()).filter(Boolean)
+      : typeof v === "string" && v.trim()
+        ? [v.trim()]
+        : [];
+  const int = (v: unknown): number | null => {
+    if (typeof v === "number" && Number.isFinite(v)) return Math.floor(v);
+    if (typeof v === "string" && v.trim()) {
+      const n = parseInt(v.replace(/[,_\s]/g, ""), 10);
+      return Number.isFinite(n) ? n : null;
+    }
+    return null;
+  };
   return {
     organism: arr(obj.organism),
-    tissue: arr(obj.tissue),
+    tissue_group: arr(obj.tissue_group ?? obj.tissue),
+    disease_group: arr(obj.disease_group ?? obj.disease),
+    assay_family: arr(obj.assay_family ?? obj.protocol),
     cell_type: arr(obj.cell_type),
-    disease: arr(obj.disease),
-    protocol: arr(obj.protocol),
-    sex: arr(obj.sex),
-    min_cells: minCells,
-    q,
+    min_cells: int(obj.min_cells),
+    year_min: int(obj.year_min),
+    year_max: int(obj.year_max),
+    q: arr(obj.q),
   };
 }
 
-/**
- * Ask the Lovable Cloud edge function to translate the query.
- * Returns null on any failure so the caller can fall back to keyword search.
- */
-async function interpret(
-  env: Env,
-  query: string,
-  vocabLists: Record<ArrayField, string[]>
-): Promise<Interpreted | null> {
+/** Call the edge function (cached 1h per normalised query). Null on any failure. */
+async function interpret(env: Env, ctx: Ctx, query: string): Promise<{ interpreted: Interpreted; model?: string } | null> {
+  const normQ = query.toLowerCase().replace(/\s+/g, " ").trim();
+  const cacheKey = `${INTERPRET_CACHE_URL}?v=2&q=${encodeURIComponent(normQ)}`;
+  let cache: Cache | null = null;
+  try {
+    cache = (caches as unknown as { default?: Cache }).default ?? null;
+    const hit = cache ? await cache.match(cacheKey) : null;
+    if (hit) return (await hit.json()) as { interpreted: Interpreted; model?: string };
+  } catch {
+    /* ignore cache errors */
+  }
+
   const base = (env.SUPABASE_URL ?? DEFAULT_SUPABASE_URL).replace(/\/+$/, "");
   const anon = env.SUPABASE_ANON_KEY ?? DEFAULT_SUPABASE_ANON_KEY;
+  const cellTypes = await cellTypeVocab(ctx, 200).catch(() => [] as string[]);
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), INTERPRET_TIMEOUT_MS);
   try {
     const res = await fetch(`${base}/functions/v1/${INTERPRET_FN}`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        apikey: anon,
-        Authorization: `Bearer ${anon}`,
-      },
-      body: JSON.stringify({ q: query, vocab: vocabLists }),
+      headers: { "Content-Type": "application/json", apikey: anon, Authorization: `Bearer ${anon}` },
+      body: JSON.stringify({
+        version: 2,
+        q: query,
+        vocab: {
+          organism: organismVocabForModel(),
+          tissue_group: TISSUE_GROUPS,
+          disease_group: DISEASE_GROUPS,
+          assay_family: ASSAY_FAMILIES,
+          cell_type: cellTypes,
+        },
+      }),
+      signal: controller.signal,
     });
     if (!res.ok) return null;
-    const data = (await res.json()) as { interpreted?: unknown };
+    const data = (await res.json()) as { interpreted?: unknown; model?: string };
     if (data.interpreted == null) return null;
-    return coerceInterpreted(data.interpreted);
+    const out = { interpreted: coerceInterpreted(data.interpreted), model: data.model };
+    if (cache) {
+      ctx.waitUntil(
+        cache
+          .put(
+            cacheKey,
+            new Response(JSON.stringify(out), {
+              headers: { "Content-Type": "application/json", "Cache-Control": `public, max-age=${INTERPRET_CACHE_TTL}` },
+            })
+          )
+          .catch(() => undefined)
+      );
+    }
+    return out;
   } catch {
     return null;
+  } finally {
+    clearTimeout(timer);
   }
 }
 
-// ── SQL builders ──────────────────────────────────────────────────────────────
-
-const GSM_COLS =
-  `gsm_id, gse_id, organism, protocol, modality, tissue, cell_type, donor_id,
-   disease, sex, n_cells, mapping_rate, median_genes, median_umis, mt_pct,
-   status, qc_flag, failure_category, singlet_version, pipeline_date,
-   pz_size_bytes, title, source, srr_ids, last_updated`;
-
-const GSE_COLS =
-  `id, title, organism, n_gsm_total, n_gsm_done, n_gsm_failed, n_cells,
-   pubmed_ids, r2_bundle_key, r2_bundle_bytes, submitted_date, last_updated`;
-
-interface BuiltQuery {
-  where: string;
-  params: (string | number)[];
-}
-
-/**
- * Build the WHERE clause for the gsm table from interpreted filters.
- * `mode` controls how the metadata fields combine: "and" (strict) or "or"
- * (relaxed — used when the strict intersection is empty, which happens often
- * because catalog annotations are sparse: an AML sample may have no cell_type).
- */
-function buildGsmWhere(f: Interpreted, mode: "and" | "or" = "and"): BuiltQuery {
-  const conditions: string[] = [];
-  const params: (string | number)[] = [];
-
-  const fieldClauses: string[] = [];
-  for (const field of ARRAY_FIELDS) {
-    const vals = f[field];
-    if (vals.length) {
-      const placeholders = vals.map(() => "?").join(",");
-      fieldClauses.push(`LOWER(${field}) IN (${placeholders})`);
-      for (const v of vals) params.push(v.toLowerCase());
-    }
-  }
-  if (fieldClauses.length) {
-    conditions.push(
-      mode === "or" && fieldClauses.length > 1
-        ? `(${fieldClauses.join(" OR ")})`
-        : fieldClauses.join(" AND ")
-    );
-  }
-  if (f.min_cells != null) {
-    conditions.push("n_cells >= ?");
-    params.push(f.min_cells);
-  }
-  if (f.q) {
-    conditions.push(
-      "(gsm_id IN (SELECT gsm_id FROM fts_gsm WHERE fts_gsm MATCH ?) " +
-        "OR LOWER(title) LIKE ? OR LOWER(source) LIKE ?)"
-    );
-    const like = `%${f.q.toLowerCase()}%`;
-    params.push(f.q + "*", like, like);
-  }
-
-  return { where: conditions.length ? `WHERE ${conditions.join(" AND ")}` : "", params };
-}
-
-/** Build the WHERE clause for the gse table (only organism + min_cells + q apply). */
-function buildGseWhere(f: Interpreted): BuiltQuery {
-  const conditions: string[] = [];
-  const params: (string | number)[] = [];
-
-  if (f.organism.length) {
-    const placeholders = f.organism.map(() => "?").join(",");
-    conditions.push(`LOWER(organism) IN (${placeholders})`);
-    for (const v of f.organism) params.push(v.toLowerCase());
-  }
-  if (f.min_cells != null) {
-    conditions.push("n_cells >= ?");
-    params.push(f.min_cells);
-  }
-  if (f.q) {
-    conditions.push("(id IN (SELECT id FROM fts_gse WHERE fts_gse MATCH ?) OR LOWER(title) LIKE ?)");
-    params.push(f.q + "*", `%${f.q.toLowerCase()}%`);
-  }
-
-  return { where: conditions.length ? `WHERE ${conditions.join(" AND ")}` : "", params };
-}
-
-// ── Query execution ───────────────────────────────────────────────────────────
-
-async function runGsm(db: D1Database, f: Interpreted, limit: number, mode: "and" | "or" = "and") {
-  const { where, params } = buildGsmWhere(f, mode);
-  const [countRow, rows] = await Promise.all([
-    db.prepare(`SELECT COUNT(*) AS n FROM gsm ${where}`).bind(...params).first<{ n: number }>(),
-    db
-      .prepare(
-        `SELECT ${GSM_COLS}
-           FROM gsm ${where}
-          ORDER BY (status = 'DONE') DESC, n_cells DESC
-          LIMIT ?`
-      )
-      .bind(...params, limit)
-      .all<Record<string, unknown>>(),
-  ]);
-  const data = rows.results.map((r) => ({ ...r, srr_ids: safeList(r.srr_ids) }));
-  const accessions = rows.results.map((r) => String(r.gsm_id));
-  return { total: countRow?.n ?? 0, data, accessions };
-}
-
-async function runGse(db: D1Database, f: Interpreted, limit: number) {
-  const { where, params } = buildGseWhere(f);
-  const [countRow, rows] = await Promise.all([
-    db.prepare(`SELECT COUNT(*) AS n FROM gse ${where}`).bind(...params).first<{ n: number }>(),
-    db
-      .prepare(
-        `SELECT ${GSE_COLS}
-           FROM gse ${where}
-          ORDER BY (n_gsm_done > 0) DESC, n_cells DESC
-          LIMIT ?`
-      )
-      .bind(...params, limit)
-      .all<Record<string, unknown>>(),
-  ]);
-  const data = rows.results.map((r) => ({ ...r, pubmed_ids: safeList(r.pubmed_ids) }));
-  const accessions = rows.results.map((r) => String(r.id));
-  return { total: countRow?.n ?? 0, data, accessions };
-}
-
-/**
- * Run the query, progressively relaxing the filters until something matches.
- * The response contract is unchanged; a `note` explains any relaxation.
- */
-async function runSearch(
-  db: D1Database,
-  f: Interpreted,
-  level: "gsm" | "gse",
-  limit: number,
-  rawQuery: string
-): Promise<{ total: number; data: unknown[]; accessions: string[]; note?: string }> {
-  const run = (filters: Interpreted, mode: "and" | "or" = "and") =>
-    level === "gse" ? runGse(db, filters, limit) : runGsm(db, filters, limit, mode);
-
-  const hasFields = ARRAY_FIELDS.some((k) => f[k].length > 0);
-
-  const strict = await run(f);
-  if (strict.total > 0) return strict;
-
-  // 1) Drop the free-text term — it ANDs against title/source and is often
-  //    a qualifier ("pediatric") that annotations don't carry.
-  if (f.q && hasFields) {
-    const noText = await run({ ...f, q: null });
-    if (noText.total > 0) {
-      return { ...noText, note: `No exact match for "${rawQuery}" — showing metadata matches` };
-    }
-  }
-
-  // 2) Broaden: match ANY of the interpreted metadata fields.
-  if (hasFields) {
-    const anyField = await run({ ...f, q: null }, "or");
-    if (anyField.total > 0) {
-      return { ...anyField, note: `No exact match for "${rawQuery}" — showing broader matches` };
-    }
-  }
-
-  // 3) Last resort: plain keyword search on the raw query.
-  const keyword = await run({
-    organism: [],
-    tissue: [],
-    cell_type: [],
-    disease: [],
-    protocol: [],
-    sex: [],
-    min_cells: null,
-    q: rawQuery,
-  });
-  if (keyword.total > 0) {
-    return { ...keyword, note: `No structured match — showing keyword matches for "${rawQuery}"` };
-  }
-
-  return strict;
-}
-
-// ── Handler ───────────────────────────────────────────────────────────────────
-
-async function handle(env: Env, request: Request): Promise<Response> {
-  const { q, level, limit } = await parseRequest(request);
-
-  if (!q) {
-    return corsOk({
-      configured: true,
-      interpreted: null,
-      data: [],
-      accessions: [],
-      total: 0,
-      note: "Empty query",
-    });
-  }
-
-  // Keyword-only fallback filter (used when no key, or model fails).
-  const keywordFilter: Interpreted = {
-    organism: [],
-    tissue: [],
-    cell_type: [],
-    disease: [],
-    protocol: [],
-    sex: [],
-    min_cells: null,
-    q,
+/** Merge explicit URL filters with the interpretation (union per field). */
+function mergeFilters(explicit: SearchParams, interp: Interpreted, rules: VocabRule[]): { filters: SearchParams; dropped: FilterMatch[] } {
+  const merged: SearchParams = {
+    ...explicit,
+    q: interp.q.join(" "),
+    organism: [...explicit.organism, ...interp.organism],
+    tissue_group: [...explicit.tissue_group, ...interp.tissue_group],
+    disease_group: [...explicit.disease_group, ...interp.disease_group],
+    assay_family: [...explicit.assay_family, ...interp.assay_family],
+    cell_type: [...explicit.cell_type, ...interp.cell_type],
+    min_cells: explicit.min_cells ?? interp.min_cells,
+    year_min: explicit.year_min ?? interp.year_min,
+    year_max: explicit.year_max ?? interp.year_max,
   };
+  const { filters, dropped } = normalizeFilters(merged, rules);
+  // Values the vocabulary could not place are removed rather than left to match nothing —
+  // the interpretation row shows them as "not recognised" instead.
+  for (const d of dropped) {
+    const key = d.field as keyof SearchFilters;
+    const arr = filters[key];
+    if (Array.isArray(arr)) (filters as unknown as Record<string, string[]>)[key] = arr.filter((v) => v !== d.value);
+  }
+  return { filters, dropped };
+}
 
-  // ── Configured → ground on vocab, interpret, query ──
-  const vocabLists = await loadVocab(env.DB);
-  const interpreted = await interpret(env, q, vocabLists);
+/** Atomic filters currently applied, as (field, value) pairs. */
+function atomicFilters(f: SearchFilters): FilterMatch[] {
+  const out: FilterMatch[] = [];
+  for (const field of ["organism", "tissue_group", "disease_group", "assay_family", "cell_type"] as const) {
+    for (const v of f[field]) out.push({ field, value: v });
+  }
+  if (f.min_cells != null) out.push({ field: "min_cells", value: String(f.min_cells) });
+  if (f.year_min != null) out.push({ field: "year_min", value: String(f.year_min) });
+  if (f.year_max != null) out.push({ field: "year_max", value: String(f.year_max) });
+  if (f.q) out.push({ field: "q", value: f.q });
+  return out;
+}
 
-  if (!interpreted) {
-    // Model failed/unparseable → fall back to keyword search, still 200.
-    const result =
-      level === "gse" ? await runGse(env.DB, keywordFilter, limit) : await runGsm(env.DB, keywordFilter, limit);
-    return corsOk({
-      configured: true,
-      interpreted: null,
-      level,
-      data: result.data,
-      accessions: result.accessions,
-      total: result.total,
-      note: "Could not interpret query — showing keyword matches",
-    });
+function without(f: SearchParams, drop: FilterMatch): SearchParams {
+  const g: SearchParams = { ...f };
+  switch (drop.field) {
+    case "min_cells":
+      g.min_cells = null;
+      break;
+    case "year_min":
+      g.year_min = null;
+      break;
+    case "year_max":
+      g.year_max = null;
+      break;
+    case "q":
+      g.q = "";
+      break;
+    default: {
+      const key = drop.field as "organism" | "tissue_group" | "disease_group" | "assay_family" | "cell_type";
+      g[key] = f[key].filter((v) => v !== drop.value);
+    }
+  }
+  return g;
+}
+
+function filterParams(f: SearchFilters): string {
+  return canonicalQuery({ ...emptyFilters(), ...pickFilters(f) });
+}
+
+function onlyFilter(f: SearchParams, keep: FilterMatch): SearchParams {
+  const g: SearchParams = { ...emptyFilters(), level: f.level, sort: f.sort, page: 1, limit: f.limit, format: "json", has_bundle: f.has_bundle };
+  switch (keep.field) {
+    case "min_cells":
+      g.min_cells = Number(keep.value);
+      break;
+    case "year_min":
+      g.year_min = Number(keep.value);
+      break;
+    case "year_max":
+      g.year_max = Number(keep.value);
+      break;
+    case "q":
+      g.q = keep.value;
+      break;
+    default:
+      (g as unknown as Record<string, string[]>)[keep.field] = [keep.value];
+  }
+  return g;
+}
+
+/**
+ * What removing one filter at a time would yield (≤ MAX_SUGGESTIONS, plus
+ * "free text alone"). If no single removal helps, offer keeping just one
+ * filter instead — the user always chooses; nothing is relaxed for them.
+ */
+async function suggestions(ctx: Ctx, f: SearchParams): Promise<Suggestion[]> {
+  const atoms = atomicFilters(f);
+  const out: Suggestion[] = [];
+  const tasks: Promise<void>[] = [];
+  for (const atom of atoms.slice(0, MAX_SUGGESTIONS)) {
+    const g = without(f, atom);
+    tasks.push(
+      countStudies(ctx, g).then((total) => {
+        if (total > 0) out.push({ drop: atom, total, params: filterParams(g) });
+      })
+    );
+  }
+  if (f.q && hasAnyFilter(f)) {
+    const g: SearchParams = { ...emptyFilters(), level: f.level, sort: f.sort, page: 1, limit: f.limit, format: "json", q: f.q, has_bundle: f.has_bundle };
+    tasks.push(
+      countStudies(ctx, g).then((total) => {
+        if (total > 0) out.push({ drop: { field: "all_filters", value: f.q }, total, params: filterParams(g) });
+      })
+    );
+  }
+  await Promise.all(tasks);
+
+  if (!out.length && atoms.length > 1) {
+    const keeps: Promise<void>[] = [];
+    for (const atom of atoms.slice(0, MAX_SUGGESTIONS)) {
+      const g = onlyFilter(f, atom);
+      keeps.push(
+        countStudies(ctx, g).then((total) => {
+          if (total > 0) out.push({ keep: atom, total, params: filterParams(g) });
+        })
+      );
+    }
+    await Promise.all(keeps);
+  }
+  return out.sort((a, b) => a.total - b.total);
+}
+
+async function handle(env: Env, request: Request, waitUntil: (p: Promise<unknown>) => void, url: URL): Promise<Response> {
+  const explicit = parseSearchParams(url);
+  const q = explicit.q;
+  if (!q) return corsErr("Missing query parameter 'q'", 400);
+  const rules = await loadRules(env.DB, waitUntil);
+  const ctx: Ctx = { db: env.DB, rules, waitUntil };
+
+  // Accessions are an exact ask — no model needed.
+  const acc = extractAccessions(q);
+  const isAccession = acc.gse.length > 0 || acc.gsm.length > 0;
+
+  let interpreted: Interpreted | null = null;
+  let model: string | undefined;
+  let configured = true;
+  let note: string | undefined;
+
+  if (!isAccession) {
+    const r = await interpret(env, ctx, q);
+    if (r) {
+      interpreted = r.interpreted;
+      model = r.model;
+    } else {
+      configured = false;
+      note = "The query interpreter was unavailable, so this is a plain keyword search.";
+    }
   }
 
-  const result = await runSearch(env.DB, interpreted, level, limit, q);
+  const { filters, dropped } = interpreted
+    ? mergeFilters(explicit, interpreted, rules)
+    : normalizeFilters(explicit, rules);
+  // When the model returned nothing usable, fall back to the raw text.
+  if (interpreted && !hasAnyFilter(filters) && !filters.q) filters.q = q;
+
+  const result =
+    filters.level === "gse"
+      ? await runStudySearch(ctx, filters, { orFallback: !interpreted })
+      : await runSampleSearch(ctx, filters);
+
+  const why: Record<string, string> = {};
+  if (filters.level === "gse") for (const r of result.data as StudyRow[]) why[r.gse_id] = r.why;
+
+  let sugg: Suggestion[] = [];
+  if (result.total === 0 && filters.level === "gse") sugg = await suggestions(ctx, filters);
+
+  // Values the vocabulary could not place are reported structurally in `dropped`
+  // (the UI renders them itself), so they are deliberately not repeated in `note`.
+  if (result.any_word) {
+    note = [note, "No study mentions every word, so these match any of the words instead."].filter(Boolean).join(" ");
+  }
+  if (interpreted && filters.q) {
+    const fts = tokenizeQuery(filters.q);
+    if (!fts.terms.length) filters.q = "";
+  }
 
   return corsOk({
-    configured: true,
+    configured,
     interpreted,
-    level,
+    applied: pickFilters(filters),
+    dropped,
+    level: filters.level,
     data: result.data,
-    accessions: result.accessions,
     total: result.total,
-    ...(result.note ? { note: result.note } : {}),
+    totals: result.totals,
+    page: result.page,
+    limit: result.limit,
+    accessions: result.accessions,
+    suggestions: sugg,
+    why,
+    ...(model ? { model } : {}),
+    ...(result.any_word ? { any_word: true } : {}),
+    ...(note ? { note } : {}),
+    ...(result.accession_lookup ? { accession_lookup: result.accession_lookup } : {}),
   });
 }
 
-export const onRequestGet: PagesFunction<Env> = async ({ env, request, waitUntil }) =>
-  cachedJson(request, waitUntil, async () => {
-    try {
-      return await handle(env, request);
-    } catch (e) {
-      return corsErr(String(e));
-    }
+export const onRequestGet: PagesFunction<Env> = async ({ env, request, waitUntil }) => {
+  const url = new URL(request.url);
+  const key = canonicalQuery(parseSearchParams(url));
+  return cachedJson(request, waitUntil, () => handle(env, request, waitUntil, url).catch((e) => corsErr(String(e))), {
+    ttl: CATALOG_CACHE_TTL,
+    key,
   });
+};
 
-export const onRequestPost: PagesFunction<Env> = async ({ env, request }) => {
+export const onRequestPost: PagesFunction<Env> = async ({ env, request, waitUntil }) => {
   try {
-    return await handle(env, request);
+    const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+    const url = new URL(request.url);
+    for (const [k, v] of Object.entries(body)) {
+      if (Array.isArray(v)) v.forEach((x) => url.searchParams.append(k, String(x)));
+      else if (v != null && v !== "") url.searchParams.set(k, String(v));
+    }
+    return await handle(env, request, waitUntil, url);
   } catch (e) {
     return corsErr(String(e));
   }

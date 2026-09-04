@@ -30,8 +30,34 @@ function setCanonical(href: string) {
  * Per-route head metadata (client-side). Sets title, description, canonical and
  * the og:/twitter: equivalents. `path` should be the route path, e.g. "/docs".
  */
-export function usePageMeta(opts: { title?: string; description?: string; path?: string; noindex?: boolean }) {
-  const { title, description, path, noindex } = opts;
+export function usePageMeta(opts: {
+  title?: string;
+  description?: string;
+  path?: string;
+  noindex?: boolean;
+  /** Structured data for this route (schema.org). Removed when the route unmounts. */
+  jsonLd?: Record<string, unknown> | null;
+}) {
+  const { title, description, path, noindex, jsonLd } = opts;
+  const jsonLdText = jsonLd ? JSON.stringify(jsonLd) : null;
+  useEffect(() => {
+    const id = "route-jsonld";
+    let el = document.getElementById(id) as HTMLScriptElement | null;
+    if (!jsonLdText) {
+      el?.remove();
+      return;
+    }
+    if (!el) {
+      el = document.createElement("script");
+      el.id = id;
+      el.type = "application/ld+json";
+      document.head.appendChild(el);
+    }
+    el.textContent = jsonLdText;
+    return () => {
+      document.getElementById(id)?.remove();
+    };
+  }, [jsonLdText]);
   useEffect(() => {
     const fullTitle = title ? `${title} · singlet.bio` : DEFAULT_TITLE;
     const desc = description ?? DEFAULT_DESC;

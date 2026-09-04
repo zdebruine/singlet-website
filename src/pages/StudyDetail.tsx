@@ -1,45 +1,19 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, ChevronRight, ExternalLink } from "lucide-react";
+import { AlertTriangle, ChevronDown, ChevronRight, ExternalLink } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { DownloadPanel } from "@/components/DownloadPanel";
-import { apiClient } from "@/integrations/api/client";
+import { ConditionsPanel, type ConditionFilter } from "@/components/study/ConditionsPanel";
+import { StudySamplesTable } from "@/components/study/StudySamplesTable";
+import { apiClient, bundleUrl } from "@/integrations/api/client";
 import type { GseDetailResponse, GsmRow, PublicationRow } from "@/integrations/api/types";
 import { usePageMeta } from "@/hooks/usePageMeta";
-import {
-  FLAGGED_CELLS_LABEL,
-  failureDetail,
-  failureLabel,
-  fmtCompact,
-  fmtInt,
-  fmtPct,
-  isFailed,
-  isProcessed,
-  isSuspectCellCount,
-  organismLabel,
-  protocolLabel,
-} from "@/lib/catalog-display";
+import { failureLabel, fmtCompact, fmtInt, fmtPct, isFailed, isProcessed, organismLabel } from "@/lib/catalog-display";
 import { cn } from "@/lib/utils";
 
-function StatusCell({ s }: { s: GsmRow }) {
-  if (isProcessed(s.status)) return <span className="status-ok">Processed</span>;
-  if (isFailed(s.status)) {
-    const detail = failureDetail(s.failure_category);
-    return (
-      <span className="inline-flex flex-col items-start gap-0.5">
-        <span className="status-fail">Failed</span>
-        {s.failure_category && (
-          <span className="text-[11px] text-muted-foreground" title={detail ?? undefined}>
-            {failureLabel(s.failure_category)}
-          </span>
-        )}
-      </span>
-    );
-  }
-  return <span className="flag">{s.status}</span>;
-}
+const GEO = (acc: string) => `https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=${acc}`;
 
 function PublicationCard({ pub }: { pub: PublicationRow }) {
   const [open, setOpen] = useState(false);
@@ -77,7 +51,37 @@ function PublicationCard({ pub }: { pub: PublicationRow }) {
   );
 }
 
-type SortCol = "gsm_id" | "status" | "n_cells" | "mapping_rate" | "median_genes" | "protocol";
+function Shell({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="min-h-screen flex flex-col bg-background">
+      <Navbar />
+      <main className="container-site flex-1 py-8 md:py-10">{children}</main>
+      <Footer />
+    </div>
+  );
+}
+
+function Skeleton() {
+  return (
+    <div className="animate-pulse" aria-busy="true" aria-label="Loading study">
+      <div className="h-3 w-40 rounded bg-secondary mb-6" />
+      <div className="h-4 w-56 rounded bg-secondary mb-3" />
+      <div className="h-7 w-3/4 rounded bg-secondary mb-3" />
+      <div className="h-3 w-1/2 rounded bg-secondary mb-8" />
+      <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_380px] gap-8">
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="h-16 rounded bg-secondary" />
+            ))}
+          </div>
+          <div className="h-32 rounded bg-secondary" />
+        </div>
+        <div className="h-72 rounded bg-secondary mt-3 lg:mt-0" />
+      </div>
+    </div>
+  );
+}
 
 const StudyDetail = () => {
   const { gse } = useParams<{ gse: string }>();
@@ -88,296 +92,426 @@ const StudyDetail = () => {
   const { data, isLoading, error } = useQuery({
     queryKey: ["study", gseId],
     queryFn: () => apiClient.gse(gseId),
-    enabled: !!gseId,
-    staleTime: 60_000,
+    enabled: /^GSE\d+$/.test(gseId),
+    staleTime: 300_000,
+    retry: 1,
   });
 
-  usePageMeta({
-    title: data?.series.title ? `${gseId} — ${data.series.title}` : gseId,
-    description: data?.series.title
-      ? `${data.series.title}. Reprocessed single-cell data for ${gseId}: load it in one line with singlet.`
-      : `Reprocessed single-cell data for ${gseId}.`,
-    path: `/study/${gseId}`,
-  });
-
-  const [sortCol, setSortCol] = useState<SortCol>("gsm_id");
-  const [sortAsc, setSortAsc] = useState(true);
   const [abstractOpen, setAbstractOpen] = useState(false);
+  const [condition, setCondition] = useState<ConditionFilter | null>(null);
 
-  // Scroll to and highlight #GSM… once the table is rendered.
+  const toggleCondition = useCallback((f: ConditionFilter) => {
+    setCondition((prev) => (prev && prev.key === f.key && prev.value === f.value ? null : f));
+    // Bring the (now filtered) samples table into view.
+    setTimeout(() => document.getElementById("samples")?.scrollIntoView({ behavior: "smooth", block: "start" }), 30);
+  }, []);
+
+  // Scroll to #GSM… once the table has rendered (the table auto-expands it).
   useEffect(() => {
     if (!highlightGsm || !data) return;
     const t = setTimeout(() => {
       document.getElementById(highlightGsm)?.scrollIntoView({ block: "center" });
-    }, 60);
+    }, 120);
     return () => clearTimeout(t);
   }, [highlightGsm, data]);
 
-  const toggleSort = (col: SortCol) => {
-    if (sortCol === col) setSortAsc(!sortAsc);
-    else {
-      setSortCol(col);
-      setSortAsc(col === "gsm_id" || col === "status" || col === "protocol");
-    }
-  };
-
-  const SortIcon = ({ col }: { col: SortCol }) => {
-    if (sortCol !== col) return <ArrowUpDown size={11} className="opacity-30" />;
-    return sortAsc ? <ArrowUp size={11} /> : <ArrowDown size={11} />;
-  };
-
   const derived = useMemo(() => {
     if (!data) return null;
-    const { samples } = data as GseDetailResponse;
+    const { samples, meta, series } = data as GseDetailResponse;
     const processed = samples.filter((s) => isProcessed(s.status));
     const failed = samples.filter((s) => isFailed(s.status));
-    const countable = processed.filter((s) => !isSuspectCellCount(s.protocol, s.n_cells));
+    const countable = processed.filter((s) => !s.suspect_cells);
     const totalCells = countable.reduce((a, s) => a + (s.n_cells ?? 0), 0);
     const flagged = processed.length - countable.length;
     const withMR = processed.filter((s) => s.mapping_rate != null);
     const avgMR = withMR.length ? withMR.reduce((a, s) => a + (s.mapping_rate ?? 0), 0) / withMR.length : null;
-    const uniq = (k: keyof GsmRow) => [...new Set(samples.map((s) => s[k]).filter(Boolean) as string[])];
+    const withGenes = processed.filter((s) => s.median_genes != null);
+    const medGenes = withGenes.length
+      ? (() => {
+          const v = withGenes.map((s) => s.median_genes as number).sort((a, b) => a - b);
+          return v[Math.floor(v.length / 2)];
+        })()
+      : null;
+    const uniq = (pick: (s: GsmRow) => string | null | undefined) => [...new Set(samples.map(pick).filter(Boolean) as string[])];
     const reasons = failed.reduce((acc, s) => {
-      if (s.failure_category) acc[s.failure_category] = (acc[s.failure_category] ?? 0) + 1;
+      const k = s.failure_category ?? "unknown";
+      acc[k] = (acc[k] ?? 0) + 1;
       return acc;
     }, {} as Record<string, number>);
-    const sorted = [...samples].sort((a, b) => {
-      let va: string | number = "";
-      let vb: string | number = "";
-      if (sortCol === "gsm_id") { va = a.gsm_id; vb = b.gsm_id; }
-      else if (sortCol === "status") { va = a.status; vb = b.status; }
-      else if (sortCol === "n_cells") { va = a.n_cells ?? -1; vb = b.n_cells ?? -1; }
-      else if (sortCol === "mapping_rate") { va = a.mapping_rate ?? -1; vb = b.mapping_rate ?? -1; }
-      else if (sortCol === "median_genes") { va = a.median_genes ?? -1; vb = b.median_genes ?? -1; }
-      else if (sortCol === "protocol") { va = a.protocol ?? ""; vb = b.protocol ?? ""; }
-      const cmp = va < vb ? -1 : va > vb ? 1 : 0;
-      return sortAsc ? cmp : -cmp;
-    });
+    const organisms = meta?.organisms?.length ? meta.organisms : uniq((s) => s.organism_primary ?? s.organism);
+    const tissueGroups = meta?.tissue_groups?.length ? meta.tissue_groups : uniq((s) => s.tissue_group);
+    const diseaseGroups = meta?.disease_groups?.length ? meta.disease_groups : uniq((s) => s.disease_group);
+    const assays = meta?.assay_families?.length ? meta.assay_families : uniq((s) => s.assay_family ?? s.protocol);
+    const tissuesRaw = meta?.tissues_raw?.length ? meta.tissues_raw : uniq((s) => s.tissue);
+    const cellTypesRaw = meta?.cell_types_raw?.length ? meta.cell_types_raw : uniq((s) => s.cell_type);
+    const versions = uniq((s) => s.singlet_version);
+    const dates = samples.map((s) => s.pipeline_date).filter(Boolean).sort() as string[];
+    const nRuns = samples.reduce((a, s) => a + (s.srr_ids?.length ?? 0), 0);
+    const nWithCharacteristics = samples.filter((s) => s.characteristics && Object.keys(s.characteristics).length > 0).length;
+    const year = meta?.year ?? (series.submitted_date ? new Date(series.submitted_date).getFullYear() : null);
+    const geoTotal = Math.max(series.n_gsm_total ?? 0, samples.length);
     return {
       processed,
       failed,
       totalCells,
       flagged,
       avgMR,
-      organisms: uniq("organism"),
-      tissues: uniq("tissue"),
-      diseases: uniq("disease"),
-      protocols: uniq("protocol"),
+      medGenes,
+      organisms,
+      tissueGroups,
+      diseaseGroups,
+      assays,
+      tissuesRaw,
+      cellTypesRaw,
+      versions,
+      dateMin: dates[0] ?? null,
+      dateMax: dates[dates.length - 1] ?? null,
+      nRuns,
+      nWithCharacteristics,
+      year,
+      geoTotal,
       reasons: Object.entries(reasons).sort((a, b) => b[1] - a[1]),
-      sorted,
     };
-  }, [data, sortCol, sortAsc]);
+  }, [data]);
+
+  const series = data?.series;
+  const hasBundle = !!series?.r2_bundle_key;
+  const description = series?.title
+    ? `${series.title}. ${derived ? `${organismLabelList(derived.organisms)} · ${fmtInt(derived.processed.length)} processed samples · ${fmtCompact(derived.totalCells)} cells.` : ""} Load it in one line with singlet.`
+    : `Reprocessed single-cell data for ${gseId}.`;
+
+  usePageMeta({
+    title: series?.title ? `${gseId} — ${series.title}` : gseId,
+    description: description.slice(0, 158),
+    path: `/study/${gseId}`,
+    noindex: !!error,
+    jsonLd:
+      series && derived
+        ? {
+            "@context": "https://schema.org",
+            "@type": "Dataset",
+            name: series.title ? `${gseId}: ${series.title}` : gseId,
+            description: series.abstract ?? description,
+            identifier: gseId,
+            url: `https://singlet.bio/study/${gseId}`,
+            sameAs: GEO(gseId),
+            isBasedOn: GEO(gseId),
+            license: "https://creativecommons.org/publicdomain/zero/1.0/",
+            isAccessibleForFree: true,
+            keywords: [...derived.organisms.map(organismLabel), ...derived.tissueGroups, ...derived.diseaseGroups, ...derived.assays].filter(Boolean),
+            includedInDataCatalog: { "@type": "DataCatalog", name: "singlet.bio", url: "https://singlet.bio" },
+            ...(derived.year ? { datePublished: String(derived.year) } : {}),
+            ...(hasBundle
+              ? {
+                  distribution: [
+                    {
+                      "@type": "DataDownload",
+                      encodingFormat: "application/x-singlet",
+                      contentUrl: bundleUrl(gseId),
+                      ...(series.r2_bundle_bytes != null ? { contentSize: `${series.r2_bundle_bytes} B` } : {}),
+                    },
+                  ],
+                }
+              : {}),
+          }
+        : null,
+  });
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex flex-col bg-background">
-        <Navbar />
-        <main className="container-site flex-1 py-16 text-center text-sm text-muted-foreground">Loading {gseId}…</main>
-        <Footer />
-      </div>
+      <Shell>
+        <Skeleton />
+      </Shell>
     );
   }
 
-  if (error || !data || !derived) {
+  if (error || !data || !derived || !series) {
     return (
-      <div className="min-h-screen flex flex-col bg-background">
-        <Navbar />
-        <main className="container-site flex-1 py-20 text-center">
+      <Shell>
+        <div className="py-12 text-center">
           <h1 className="text-2xl mb-2">Study not found</h1>
           <p className="text-muted-foreground mb-5">
-            <span className="font-mono">{gseId}</span> is not in the catalog.
+            <span className="font-mono">{gseId || "This accession"}</span> is not in the catalog
+            {error && !/404/.test(String((error as Error).message)) ? " right now — the catalog may be unreachable" : ""}.
           </p>
           <div className="flex justify-center gap-3">
             <Link to="/browse" className="btn-secondary btn-sm">Browse the atlas</Link>
-            <a href={`https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=${gseId}`} target="_blank" rel="noopener noreferrer" className="btn-secondary btn-sm">
-              Look up on GEO <ExternalLink size={12} />
-            </a>
+            {/^GSE\d+$/.test(gseId) && (
+              <a href={GEO(gseId)} target="_blank" rel="noopener noreferrer" className="btn-secondary btn-sm">
+                Look up on GEO <ExternalLink size={12} />
+              </a>
+            )}
           </div>
-        </main>
-        <Footer />
-      </div>
+        </div>
+      </Shell>
     );
   }
 
-  const { series, samples, publications } = data as GseDetailResponse;
-  const { processed, failed, totalCells, flagged, avgMR, organisms, tissues, diseases, protocols, reasons, sorted } = derived;
-  const year = series.submitted_date ? new Date(series.submitted_date).getFullYear() : null;
+  const { samples, conditions, publications } = data as GseDetailResponse;
+  const {
+    processed,
+    failed,
+    totalCells,
+    flagged,
+    avgMR,
+    medGenes,
+    organisms,
+    tissueGroups,
+    diseaseGroups,
+    assays,
+    tissuesRaw,
+    cellTypesRaw,
+    versions,
+    dateMin,
+    dateMax,
+    nRuns,
+    nWithCharacteristics,
+    year,
+    geoTotal,
+    reasons,
+  } = derived;
+  const hasQc = avgMR != null || medGenes != null;
 
-  const facts: { label: string; value: string; title?: string }[] = [
-    { label: "Organism", value: organisms.map(organismLabel).join(", ") || "—", title: organisms.join(", ") },
-    { label: "Tissue", value: tissues.slice(0, 3).join(", ") + (tissues.length > 3 ? ` +${tissues.length - 3}` : "") || "—", title: tissues.join(", ") },
-    { label: "Disease", value: diseases.slice(0, 2).join(", ") + (diseases.length > 2 ? ` +${diseases.length - 2}` : "") || "—", title: diseases.join(", ") },
-    { label: "Assay", value: protocols.slice(0, 2).map(protocolLabel).join(", ") || "—", title: protocols.join(", ") },
-    { label: "Samples", value: `${samples.length} · ${processed.length} processed · ${failed.length} failed` },
-    { label: "Cells (processed)", value: totalCells > 0 ? fmtCompact(totalCells) + (flagged ? ` +${flagged} flagged` : "") : flagged ? FLAGGED_CELLS_LABEL : "—" },
-    { label: "Mean mapping rate", value: fmtPct(avgMR) },
-    { label: "Year", value: year ? String(year) : "—" },
+  const metaLine: string[] = [
+    organismLabelList(organisms) || "Unknown organism",
+    ...(tissueGroups.length ? [tissueGroups.slice(0, 2).join(", ") + (tissueGroups.length > 2 ? ` +${tissueGroups.length - 2}` : "")] : []),
+    ...(assays.length ? [assays.slice(0, 2).join(", ")] : []),
+    `${fmtInt(processed.length)} / ${fmtInt(samples.length)} samples`,
+    totalCells > 0 ? `${fmtCompact(totalCells)} cells` : flagged > 0 ? "cell count under review" : "no cells",
+    ...(year ? [String(year)] : []),
+  ];
+
+  const facts: { label: string; value: React.ReactNode; title?: string }[] = [
+    { label: "Organism", value: organismLabelList(organisms) || "—", title: organisms.join(", ") },
+    {
+      label: "Tissue",
+      value: tissueGroups.length ? tissueGroups.slice(0, 2).join(", ") + (tissueGroups.length > 2 ? ` +${tissueGroups.length - 2}` : "") : "—",
+      title: tissuesRaw.length ? `As written on GEO: ${tissuesRaw.join(", ")}` : tissueGroups.join(", "),
+    },
+    {
+      label: "Disease",
+      value: diseaseGroups.length ? diseaseGroups.slice(0, 2).join(", ") + (diseaseGroups.length > 2 ? ` +${diseaseGroups.length - 2}` : "") : "—",
+      title: diseaseGroups.join(", "),
+    },
+    { label: "Assay", value: assays.length ? assays.slice(0, 2).join(", ") + (assays.length > 2 ? ` +${assays.length - 2}` : "") : "—", title: assays.join(", ") },
+    {
+      label: "Samples",
+      value: (
+        <>
+          {fmtInt(processed.length)} processed
+          {failed.length > 0 && <span className="text-muted-foreground font-normal"> · {fmtInt(failed.length)} failed</span>}
+        </>
+      ),
+      title: geoTotal > samples.length ? `${samples.length} of ${geoTotal} GEO samples are catalogued` : `${samples.length} samples`,
+    },
+    {
+      label: "Cells in file",
+      value:
+        totalCells === 0 && flagged > 0 ? (
+          <span className="inline-flex items-center gap-1 text-warning font-normal text-[13px]" title="The reported cell counts for these plate-based samples are implausible and are under review.">
+            <AlertTriangle size={12} /> under review
+          </span>
+        ) : (
+          <>
+            {totalCells > 0 ? fmtCompact(totalCells) : "—"}
+            {flagged > 0 && (
+              <span className="ml-1.5 inline-flex items-center gap-1 text-warning font-normal text-[12px]" title="Cell counts for some plate-based samples are implausible and are under review; they are excluded from this total.">
+                <AlertTriangle size={11} /> {flagged} flagged
+              </span>
+            )}
+          </>
+        ),
+      title:
+        flagged > 0
+          ? `${flagged} of ${processed.length} processed samples report implausible cell counts (a known plate-based pipeline issue). They are excluded from this total.`
+          : undefined,
+    },
+    ...(hasQc
+      ? [
+          { label: "Mean mapping rate", value: fmtPct(avgMR) },
+          { label: "Median genes / cell", value: fmtInt(medGenes) },
+        ]
+      : [{ label: "Year", value: year ? String(year) : "—" }]),
   ];
 
   return (
-    <div className="min-h-screen flex flex-col bg-background">
-      <Navbar />
-      <main className="container-site flex-1 py-8 md:py-10">
-        {/* Breadcrumb */}
-        <nav className="text-[13px] text-muted-foreground mb-5" aria-label="Breadcrumb">
-          <Link to="/browse" className="hover:text-foreground">Browse</Link>
-          <span className="mx-2">/</span>
-          <span className="font-mono text-foreground">{gseId}</span>
-        </nav>
+    <Shell>
+      {/* Breadcrumb */}
+      <nav className="text-[13px] text-muted-foreground mb-5" aria-label="Breadcrumb">
+        <Link to="/browse" className="hover:text-foreground">Browse</Link>
+        <span className="mx-2">/</span>
+        <span className="font-mono text-foreground">{gseId}</span>
+      </nav>
 
-        {/* Header */}
-        <header className="mb-6">
-          <div className="flex items-center gap-3 flex-wrap">
-            <h1 className="font-mono text-[28px] md:text-[32px] font-semibold tracking-tight">{gseId}</h1>
-            <a
-              href={`https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=${gseId}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-[13px] text-primary hover:underline"
-            >
-              GEO <ExternalLink size={11} />
-            </a>
-          </div>
-          {series.title && <p className="mt-2 text-[17px] text-foreground/90 max-w-[820px] leading-snug">{series.title}</p>}
-        </header>
-
-        {/* Facts */}
-        <dl className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-6">
-          {facts.map((f) => (
-            <div key={f.label} className="surface px-3.5 py-3">
-              <dt className="text-[11px] uppercase tracking-wider text-muted-foreground mb-1">{f.label}</dt>
-              <dd className="text-sm font-medium text-foreground truncate" title={f.title ?? f.value}>{f.value}</dd>
-            </div>
+      {/* Header */}
+      <header className="mb-6">
+        <div className="flex items-center gap-3 flex-wrap text-[13px]">
+          <span className="font-mono text-[15px] font-semibold text-primary">{gseId}</span>
+          <a href={GEO(gseId)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-muted-foreground hover:text-primary">
+            View on GEO <ExternalLink size={11} />
+          </a>
+          {year && <span className="font-mono text-muted-foreground tabular">{year}</span>}
+        </div>
+        <h1 className="mt-1.5 text-[24px] md:text-[28px] font-semibold tracking-tight leading-snug max-w-[900px]">{series.title ?? "Untitled study"}</h1>
+        <p className="mt-2 text-[14px] text-muted-foreground tabular">
+          {metaLine.map((p, i) => (
+            <span key={i}>
+              {i > 0 && <span className="mx-1.5 text-border-strong">·</span>}
+              {p}
+            </span>
           ))}
-        </dl>
+        </p>
+      </header>
 
-        {/* Failed note */}
-        {failed.length > 0 && (
-          <div className="warning-surface px-4 py-3 mb-6 text-[13.5px]">
-            <p className="font-medium">
-              {failed.length} of {samples.length} samples did not complete processing and are not in the bundle.
-            </p>
-            {reasons.length > 0 && (
-              <p className="mt-1 text-warning/90">
-                Reasons: {reasons.map(([r, n]) => `${failureLabel(r)} (${n})`).join(", ")}.{" "}
-                <Link to="/about#failed" className="underline">What failed means →</Link>
+      <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-8 items-start">
+        {/* Main column */}
+        <div className="min-w-0">
+          {/* Failed note */}
+          {failed.length > 0 && (
+            <div className="warning-surface px-4 py-3 mb-4 text-[13.5px]">
+              <p className="font-medium">
+                {failed.length} of {samples.length} samples did not complete processing and are not in the file.
               </p>
-            )}
-          </div>
-        )}
+              {reasons.length > 0 && (
+                <p className="mt-1 text-warning/90">
+                  {reasons.map(([r, n]) => `${failureLabel(r === "unknown" ? null : r)} (${n})`).join(", ")}.{" "}
+                  <Link to="/about#failed" className="underline">What failed means →</Link>
+                </p>
+              )}
+            </div>
+          )}
 
-        {/* Download */}
-        <section className="mb-8" aria-labelledby="download-h">
-          <h2 id="download-h" className="text-[18px] mb-3">Load or download</h2>
+          {/* Facts */}
+          <dl className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-6">
+            {facts.map((f) => (
+              <div key={f.label} className="surface px-3.5 py-3 min-w-0">
+                <dt className="text-[11px] uppercase tracking-wider text-muted-foreground mb-1">{f.label}</dt>
+                <dd className="text-sm font-medium text-foreground leading-snug line-clamp-2" title={f.title ?? (typeof f.value === "string" ? f.value : undefined)}>
+                  {f.value}
+                </dd>
+              </div>
+            ))}
+          </dl>
+
+          {/* Conditions */}
+          <section className="mb-6" aria-labelledby="conditions-h">
+            <div className="flex items-baseline justify-between gap-3 mb-2">
+              <h2 id="conditions-h" className="text-[18px]">Experimental design</h2>
+              <span className="text-[12px] text-muted-foreground">
+                read from GEO sample characteristics{nWithCharacteristics < samples.length ? ` (${fmtInt(nWithCharacteristics)} of ${fmtInt(samples.length)} samples annotated)` : ""}
+              </span>
+            </div>
+            <ConditionsPanel
+              conditions={conditions}
+              nWithCharacteristics={nWithCharacteristics}
+              nSamples={samples.length}
+              active={condition}
+              onToggle={toggleCondition}
+              onClear={() => setCondition(null)}
+            />
+            {(cellTypesRaw.length > 0 || tissuesRaw.length > 1) && (
+              <dl className="mt-3 grid gap-2 text-[13px]">
+                {tissuesRaw.length > 1 && (
+                  <div className="flex gap-3">
+                    <dt className="text-muted-foreground shrink-0 w-[92px]">Tissues</dt>
+                    <dd className="text-foreground/85">{tissuesRaw.slice(0, 12).join(", ")}{tissuesRaw.length > 12 ? ` +${tissuesRaw.length - 12} more` : ""}</dd>
+                  </div>
+                )}
+                {cellTypesRaw.length > 0 && (
+                  <div className="flex gap-3">
+                    <dt className="text-muted-foreground shrink-0 w-[92px]">Cell types</dt>
+                    <dd className="text-foreground/85">{cellTypesRaw.slice(0, 12).join(", ")}{cellTypesRaw.length > 12 ? ` +${cellTypesRaw.length - 12} more` : ""}</dd>
+                  </div>
+                )}
+              </dl>
+            )}
+          </section>
+
+          {/* Abstract */}
+          {series.abstract && (
+            <section className="mb-6" aria-labelledby="abstract-h">
+              <h2 id="abstract-h" className="text-[18px] mb-2">Abstract</h2>
+              <div className="surface px-4 py-3">
+                <p className={cn("text-[14px] text-foreground/85 leading-relaxed", !abstractOpen && "line-clamp-4")}>{series.abstract}</p>
+                {series.abstract.length > 420 && (
+                  <button onClick={() => setAbstractOpen(!abstractOpen)} className="mt-2 inline-flex items-center gap-1 text-[13px] text-primary hover:underline">
+                    {abstractOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                    {abstractOpen ? "Show less" : "Read the full abstract"}
+                  </button>
+                )}
+                <p className="mt-2 text-[11px] text-muted-foreground">From the GEO series record.</p>
+              </div>
+            </section>
+          )}
+
+          {/* Publications */}
+          {publications.length > 0 && (
+            <section className="mb-6" aria-labelledby="pubs-h">
+              <h2 id="pubs-h" className="text-[18px] mb-2">Publication{publications.length !== 1 ? "s" : ""}</h2>
+              <div className="space-y-2">
+                {publications.map((p) => (
+                  <PublicationCard key={p.pmid} pub={p} />
+                ))}
+              </div>
+            </section>
+          )}
+        </div>
+
+        {/* Aside: load / download + provenance */}
+        <aside className="mt-2 lg:mt-0 lg:sticky lg:top-20 space-y-3" aria-labelledby="download-h">
+          <h2 id="download-h" className="text-[18px] lg:sr-only">Load or download</h2>
           {processed.length > 0 ? (
-            <DownloadPanel accession={gseId} r2BundleKey={series.r2_bundle_key} r2BundleBytes={series.r2_bundle_bytes} />
+            <DownloadPanel accession={gseId} r2BundleKey={series.r2_bundle_key} r2BundleBytes={series.r2_bundle_bytes} stacked />
           ) : (
             <div className="surface px-4 py-3 text-sm text-muted-foreground">
               No samples in this study completed processing, so there is no <code className="code-inline">.singlet</code> file.
             </div>
           )}
-        </section>
+          <dl className="surface px-4 py-3 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-1.5 text-[12.5px]">
+            <dt className="text-muted-foreground">Pipeline</dt>
+            <dd className="text-foreground font-mono">{versions.length ? versions.join(", ") : "—"}</dd>
+            <dt className="text-muted-foreground">Processed</dt>
+            <dd className="text-foreground tabular">{dateMin ? (dateMin === dateMax || !dateMax ? dateMin : `${dateMin} – ${dateMax}`) : "—"}</dd>
+            <dt className="text-muted-foreground">Raw reads</dt>
+            <dd className="text-foreground tabular">{nRuns > 0 ? `${fmtInt(nRuns)} SRA run${nRuns === 1 ? "" : "s"}` : "—"}</dd>
+            <dt className="text-muted-foreground">Catalog updated</dt>
+            <dd className="text-foreground tabular">{series.last_updated ? series.last_updated.slice(0, 10) : "—"}</dd>
+            <dt className="text-muted-foreground">License</dt>
+            <dd>
+              <Link to="/data-license" className="text-primary hover:underline">CC0 data · MIT code</Link>
+            </dd>
+          </dl>
+          <p className="text-[12px] text-muted-foreground leading-relaxed px-0.5">
+            Every study is run through the same pipeline from raw reads, so this file compares directly with any other on the site.{" "}
+            <Link to="/about#pipeline" className="text-primary hover:underline">How processing works →</Link>
+          </p>
+        </aside>
+      </div>
 
-        {/* Publications */}
-        {publications.length > 0 && (
-          <section className="mb-8">
-            <h2 className="text-[18px] mb-3">Publication{publications.length !== 1 ? "s" : ""}</h2>
-            <div className="space-y-2">
-              {publications.map((p) => (
-                <PublicationCard key={p.pmid} pub={p} />
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* Abstract */}
-        {series.abstract && (
-          <section className="mb-8 surface overflow-hidden">
-            <button onClick={() => setAbstractOpen(!abstractOpen)} className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-background transition-colors">
-              <span className="text-sm font-medium">Abstract (from GEO)</span>
-              {abstractOpen ? <ChevronDown size={14} className="text-muted-foreground" /> : <ChevronRight size={14} className="text-muted-foreground" />}
-            </button>
-            {abstractOpen && (
-              <div className="px-4 pb-4 border-t border-border">
-                <p className="text-sm text-foreground/85 leading-relaxed mt-3">{series.abstract}</p>
-              </div>
-            )}
-          </section>
-        )}
-
-        {/* Samples */}
-        <section className="mb-4">
-          <div className="flex items-baseline justify-between mb-3 gap-3 flex-wrap">
-            <h2 className="text-[18px]">Samples ({samples.length})</h2>
-            <span className="text-xs text-muted-foreground">
-              {processed.length} processed · {failed.length} failed
-            </span>
-          </div>
-          <div className="surface rounded-none overflow-x-auto">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  {(
-                    [
-                      ["gsm_id", "Sample", ""],
-                      ["status", "Status", ""],
-                      ["n_cells", "Cells", "num"],
-                      ["mapping_rate", "Mapped", "num"],
-                      ["median_genes", "Median genes", "num"],
-                      ["protocol", "Protocol", ""],
-                    ] as [SortCol, string, string][]
-                  ).map(([col, label, cls]) => (
-                    <th key={col} onClick={() => toggleSort(col)} className={cn("cursor-pointer select-none hover:text-foreground", cls)}>
-                      <span className="inline-flex items-center gap-1">
-                        {label} <SortIcon col={col} />
-                      </span>
-                    </th>
-                  ))}
-                  <th>Source / title</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sorted.map((s) => {
-                  const failedRow = isFailed(s.status);
-                  const hl = highlightGsm === s.gsm_id.toUpperCase();
-                  return (
-                    <tr key={s.gsm_id} id={s.gsm_id} className={cn(hl && "bg-primary/[0.06]", failedRow && "text-muted-foreground")}>
-                      <td>
-                        <a
-                          href={`https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=${s.gsm_id}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="font-mono text-xs text-primary hover:underline"
-                          title="Open on GEO"
-                        >
-                          {s.gsm_id}
-                        </a>
-                      </td>
-                      <td><StatusCell s={s} /></td>
-                      <td className="num text-xs">
-                        {isSuspectCellCount(s.protocol, s.n_cells) ? (
-                          <span className="flag font-sans" title="Known plate-protocol counting bug — value withheld until the pipeline fix lands">{FLAGGED_CELLS_LABEL}</span>
-                        ) : (
-                          fmtInt(s.n_cells)
-                        )}
-                      </td>
-                      <td className="num text-xs">{fmtPct(s.mapping_rate)}</td>
-                      <td className="num text-xs">{fmtInt(s.median_genes)}</td>
-                      <td className="text-xs whitespace-nowrap">{protocolLabel(s.protocol)}</td>
-                      <td className="text-xs text-muted-foreground max-w-[260px] truncate" title={s.source ?? s.title ?? undefined}>
-                        {s.source ?? s.title ?? "—"}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      </main>
-      <Footer />
-    </div>
+      {/* Samples */}
+      <section id="samples" className="mt-8 scroll-mt-20" aria-labelledby="samples-h">
+        <div className="flex items-baseline justify-between mb-3 gap-3 flex-wrap">
+          <h2 id="samples-h" className="text-[18px]">Samples</h2>
+          <span className="text-[12px] text-muted-foreground">
+            Click a row for its GEO characteristics, QC and raw-read records.
+            {geoTotal > samples.length ? ` ${fmtInt(samples.length)} of ${fmtInt(geoTotal)} GEO samples are catalogued.` : ""}
+          </span>
+        </div>
+        <StudySamplesTable
+          gseId={gseId}
+          studyTitle={series.title}
+          samples={samples}
+          highlightGsm={highlightGsm}
+          condition={condition}
+          onClearCondition={() => setCondition(null)}
+        />
+      </section>
+    </Shell>
   );
 };
+
+function organismLabelList(organisms: string[]): string {
+  return [...new Set(organisms.map(organismLabel).filter(Boolean))].join(", ");
+}
 
 export default StudyDetail;

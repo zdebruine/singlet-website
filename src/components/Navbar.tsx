@@ -36,6 +36,8 @@ const Navbar = () => {
   const location = useLocation();
   const [open, setOpen] = useState(false);
   const isHome = location.pathname === "/";
+  // Home has the hero box and /browse has its own sticky search bar.
+  const showSearch = !isHome && location.pathname !== "/browse";
 
   useEffect(() => {
     setOpen(false);
@@ -77,7 +79,7 @@ const Navbar = () => {
 
         {/* Right: compact search (not on home) + sign in */}
         <div className="hidden md:flex items-center gap-4">
-          {!isHome && <SearchBox variant="compact" className="w-64 lg:w-72" />}
+          {showSearch && <SearchBox variant="compact" className="w-64 lg:w-72" />}
           <SignInPlaceholder />
         </div>
 
@@ -97,7 +99,7 @@ const Navbar = () => {
       {open && (
         <div className="md:hidden border-t border-border bg-card">
           <div className="container-site py-4 flex flex-col gap-3">
-            {!isHome && <SearchBox variant="compact" className="w-full" onSubmitted={() => setOpen(false)} />}
+            {showSearch && <SearchBox variant="compact" className="w-full" onSubmitted={() => setOpen(false)} />}
             {NAV.map((l) => (
               <Link
                 key={l.to}
