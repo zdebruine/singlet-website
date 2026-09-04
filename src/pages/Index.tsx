@@ -8,17 +8,11 @@ import { apiClient } from "@/integrations/api/client";
 import { usePageMeta } from "@/hooks/usePageMeta";
 import { fmtCompact, fmtInt } from "@/lib/catalog-display";
 import { EXAMPLE_QUERIES, searchDestination } from "@/lib/search-routing";
+import { pySnippet, rSnippet } from "@/lib/install-snippets";
 
-// Canonical install lines: PyPI project `singlet` and CRAN package `singlet`.
-const PY_SNIPPET = `pip install singlet
-
-import singlet
-adata = singlet.load("GSE178957")   # AnnData`;
-
-const R_SNIPPET = `install.packages("singlet")
-
-library(singlet)
-sce <- load("GSE178957")   # SingleCellExperiment`;
+// Install + load, from the single source of truth in lib/install-snippets.
+const PY_SNIPPET = pySnippet("GSE178957");
+const R_SNIPPET = rSnippet("GSE178957");
 
 interface StartTile {
   label: string;

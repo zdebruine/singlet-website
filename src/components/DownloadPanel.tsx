@@ -1,38 +1,37 @@
 /**
  * DownloadPanel — download UX for a study's .singlet bundle.
  *
- * Shows the bundle size, license note, a Download button (public R2 URL), and
- * copy-able Python / R / curl one-liners. Only per-study (GSE) bundles exist.
+ * Shows the bundle size, license note, a Download button (public data URL),
+ * and copy-able Python / R / curl one-liners. Only per-study (GSE) bundles exist.
  */
 import { Download } from "lucide-react";
 import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { CodeBlock } from "@/components/CodeBlock";
 import { fmtBytes } from "@/lib/catalog-display";
-
-const R2_BASE = (import.meta.env.VITE_R2_PUBLIC_URL as string | undefined) ?? "https://data.singlet.bio";
+import { PY_INSTALL, R_INSTALL } from "@/lib/install-snippets";
 
 interface DownloadPanelProps {
   /** GSE accession */
   accession: string;
-  /** R2 object key — null means no bundle has been published yet */
-  r2BundleKey: string | null | undefined;
+  /** Public download URL — null means no bundle has been published yet */
+  bundleUrl: string | null | undefined;
   /** Bundle size in bytes */
-  r2BundleBytes: number | null | undefined;
+  bundleBytes: number | null | undefined;
   /** Single-column layout for a narrow sidebar. */
   stacked?: boolean;
   className?: string;
 }
 
-export function DownloadPanel({ accession, r2BundleKey, r2BundleBytes, stacked = false, className }: DownloadPanelProps) {
-  const downloadUrl = r2BundleKey ? `${R2_BASE}/${r2BundleKey}` : null;
+export function DownloadPanel({ accession, bundleUrl, bundleBytes, stacked = false, className }: DownloadPanelProps) {
+  const downloadUrl = bundleUrl || null;
   // In the narrow sidebar the trailing comments don't fit; drop them there.
   const py = stacked
-    ? `import singlet\nadata = singlet.load("${accession}")`
-    : `import singlet\nadata = singlet.load("${accession}")   # AnnData`;
+    ? `# ${PY_INSTALL}\nimport singlet\nadata = singlet.load("${accession}")`
+    : `# ${PY_INSTALL}\nimport singlet\nadata = singlet.load("${accession}")   # AnnData`;
   const r = stacked
-    ? `library(singlet)\nsce <- load("${accession}")`
-    : `library(singlet)\nsce <- load("${accession}")   # SingleCellExperiment`;
+    ? `# ${R_INSTALL}\nlibrary(singlet)\nsce <- load("${accession}")`
+    : `# ${R_INSTALL}\nlibrary(singlet)\nsce <- load("${accession}")   # SingleCellExperiment`;
   const curl = downloadUrl ? `curl -L "${downloadUrl}" -o "${accession}.singlet"` : `# No bundle published yet for ${accession}`;
 
   return (
@@ -40,19 +39,19 @@ export function DownloadPanel({ accession, r2BundleKey, r2BundleBytes, stacked =
       <div className={cn("px-4 py-3 border-b border-border flex gap-3", stacked ? "flex-col" : "items-center justify-between flex-wrap")}>
         <div className="flex items-center gap-x-3 gap-y-1 flex-wrap text-[13px] text-muted-foreground min-w-0">
           <span className="font-mono text-foreground truncate">{accession}.singlet</span>
-          {downloadUrl && <span className="tabular">{r2BundleBytes != null ? fmtBytes(r2BundleBytes) : "size unknown"}</span>}
+          {downloadUrl && <span className="tabular">{bundleBytes != null ? fmtBytes(bundleBytes) : "size unknown"}</span>}
           <span aria-hidden="true">·</span>
           <Link to="/data-license" className="hover:text-foreground">CC0</Link>
           {!stacked && (
             <>
               <span aria-hidden="true">·</span>
-              <span>Cloudflare R2, no egress fees</span>
+              <span>Free download, no account</span>
             </>
           )}
         </div>
         {downloadUrl ? (
           <a href={downloadUrl} download className={cn("btn-primary", stacked ? "w-full" : "btn-sm")}>
-            <Download size={14} /> Download{stacked && r2BundleBytes != null ? ` · ${fmtBytes(r2BundleBytes)}` : ""}
+            <Download size={14} /> Download{stacked && bundleBytes != null ? ` · ${fmtBytes(bundleBytes)}` : ""}
           </a>
         ) : (
           <span className="flag self-start">File not built yet</span>

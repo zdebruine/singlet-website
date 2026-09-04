@@ -3,6 +3,7 @@ import { Check, Copy, Download, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { fmtBytes, fmtCompact, fmtInt } from "@/lib/catalog-display";
 import { bundleUrl } from "@/integrations/api/client";
+import { PY_INSTALL, R_INSTALL } from "@/lib/install-snippets";
 import type { Selection } from "./useSelection";
 
 type Tab = "python" | "r" | "curl";
@@ -15,12 +16,12 @@ const TABS: { id: Tab; label: string }[] = [
 
 export function snippetFor(tab: Tab, ids: string[]): string {
   if (tab === "python") {
-    if (ids.length === 1) return `import singlet\nadata = singlet.load("${ids[0]}")`;
-    return `import singlet\nids = [${ids.map((i) => `"${i}"`).join(", ")}]\nadatas = {g: singlet.load(g) for g in ids}`;
+    if (ids.length === 1) return `# ${PY_INSTALL}\nimport singlet\nadata = singlet.load("${ids[0]}")`;
+    return `# ${PY_INSTALL}\nimport singlet\nids = [${ids.map((i) => `"${i}"`).join(", ")}]\nadatas = {g: singlet.load(g) for g in ids}`;
   }
   if (tab === "r") {
-    if (ids.length === 1) return `library(singlet)\nsce <- load("${ids[0]}")`;
-    return `library(singlet)\nids <- c(${ids.map((i) => `"${i}"`).join(", ")})\nsces <- lapply(ids, load)`;
+    if (ids.length === 1) return `# ${R_INSTALL}\nlibrary(singlet)\nsce <- load("${ids[0]}")`;
+    return `# ${R_INSTALL}\nlibrary(singlet)\nids <- c(${ids.map((i) => `"${i}"`).join(", ")})\nsces <- lapply(ids, load)`;
   }
   return ids.map((i) => `curl -O ${bundleUrl(i)}`).join("\n");
 }
