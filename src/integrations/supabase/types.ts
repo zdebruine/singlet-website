@@ -14,6 +14,36 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_search_usage: {
+        Row: {
+          count: number
+          day: string
+          first_at: string
+          kind: string
+          last_at: string
+          subject: string
+          user_id: string | null
+        }
+        Insert: {
+          count?: number
+          day?: string
+          first_at?: string
+          kind?: string
+          last_at?: string
+          subject: string
+          user_id?: string | null
+        }
+        Update: {
+          count?: number
+          day?: string
+          first_at?: string
+          kind?: string
+          last_at?: string
+          subject?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       e2e_results: {
         Row: {
           external_tool: string
@@ -50,6 +80,33 @@ export type Database = {
           singlet_commit?: string
           status?: string
           threshold?: number
+        }
+        Relationships: []
+      }
+      explanations: {
+        Row: {
+          cache_key: string
+          created_at: string
+          explanation: string
+          gse_id: string
+          model: string | null
+          query_norm: string
+        }
+        Insert: {
+          cache_key: string
+          created_at?: string
+          explanation: string
+          gse_id: string
+          model?: string | null
+          query_norm: string
+        }
+        Update: {
+          cache_key?: string
+          created_at?: string
+          explanation?: string
+          gse_id?: string
+          model?: string | null
+          query_norm?: string
         }
         Relationships: []
       }
@@ -131,6 +188,33 @@ export type Database = {
           samples_total?: number
           slurm_job_id?: string | null
           submitted_at?: string | null
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          display_name: string | null
+          email: string | null
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          email?: string | null
+          id: string
+          updated_at?: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          email?: string | null
+          id?: string
+          updated_at?: string
         }
         Relationships: []
       }
@@ -257,6 +341,27 @@ export type Database = {
       }
     }
     Functions: {
+      consume_ai_search: {
+        Args: {
+          _kind: string
+          _limit: number
+          _subject: string
+          _user_id: string
+        }
+        Returns: {
+          allowed: boolean
+          limit: number
+          resets_at: string
+          used: number
+        }[]
+      }
+      my_ai_usage_today: {
+        Args: never
+        Returns: {
+          kind: string
+          used: number
+        }[]
+      }
       refresh_corpus_stats: { Args: never; Returns: undefined }
     }
     Enums: {
