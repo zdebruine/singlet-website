@@ -4,6 +4,7 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { SearchBox } from "@/components/SearchBox";
 import { usePageMeta } from "@/hooks/usePageMeta";
+import { GITHUB_ISSUES } from "@/lib/install-snippets";
 
 /** Looks like a GEO accession the visitor may have typed into the URL bar. */
 const ACCESSION_RE = /\b(GSE\d{3,7}|GSM\d{3,8})\b/i;
@@ -21,7 +22,7 @@ const NotFound = () => {
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
-      <Navbar />
+      <Navbar search={false} />
       <main className="container-site flex-1 py-20 md:py-24">
         <div className="mx-auto max-w-[720px] text-center">
           <p className="font-mono text-sm text-muted-foreground mb-2">404</p>
@@ -43,7 +44,7 @@ const NotFound = () => {
             <SearchBox variant="hero" />
           </div>
           <p className="mt-2.5 text-[13px] text-muted-foreground">
-            Search by GEO accession (GSE…, GSM…), keyword, or plain English.
+            Plain English works. So do GEO accessions (GSE…, GSM…) and keywords.
           </p>
           <div className="mt-6 flex justify-center gap-3">
             <Link to="/" className="btn-primary btn-sm">
@@ -53,6 +54,13 @@ const NotFound = () => {
               Browse the atlas
             </Link>
           </div>
+          <p className="mt-8 text-[12.5px] text-muted-foreground">
+            Followed a link from the site to get here?{" "}
+            <a href={GITHUB_ISSUES} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+              Tell us on GitHub Issues
+            </a>
+            .
+          </p>
         </div>
       </main>
       <Footer />

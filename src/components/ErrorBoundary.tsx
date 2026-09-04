@@ -1,5 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { Link } from "react-router-dom";
+import { GITHUB_ISSUES } from "@/lib/install-snippets";
 
 interface Props {
   children: ReactNode;
@@ -77,6 +78,13 @@ export class ErrorBoundary extends Component<Props, State> {
               Home
             </Link>
           </div>
+          <p className="mt-4 text-[12.5px] text-muted-foreground">
+            Keeps happening?{" "}
+            <a href={GITHUB_ISSUES} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+              Report it on GitHub Issues
+            </a>{" "}
+            with the page address and the message above.
+          </p>
         </div>
       </div>
     );

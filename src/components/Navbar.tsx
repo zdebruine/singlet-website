@@ -14,12 +14,15 @@ const NAV = [
 
 const GITHUB = "https://github.com/Singlet-Bio/singlet";
 
-const Navbar = () => {
+/**
+ * Exactly one search input per page: the header search is hidden on pages
+ * that render their own (home hero, /browse sticky bar, 404 page).
+ */
+const Navbar = ({ search = true }: { search?: boolean }) => {
   const location = useLocation();
   const [open, setOpen] = useState(false);
   const isHome = location.pathname === "/";
-  // Home has the hero box and /browse has its own sticky search bar.
-  const showSearch = !isHome && location.pathname !== "/browse";
+  const showSearch = search && !isHome && location.pathname !== "/browse";
 
   useEffect(() => {
     setOpen(false);
