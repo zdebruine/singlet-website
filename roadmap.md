@@ -1,42 +1,54 @@
 # singlet.bio rebuild — roadmap
 
-## Stage 1 — done (restored to working tree 2026-09-04; had been stranded on a side branch)
+## Stage 1 — done
 - [x] Design system, Logo, Navbar/Footer, Home, Docs, About, Browse re-skin, Study page re-skin, redirects, sitemap, OG image
-- [x] Correction: install lines are exactly `pip install singlet` / `install.packages("singlet")` (+ muted GitHub fallback note for R) everywhere
+- [x] Install lines are exactly `pip install singlet` / `install.packages("singlet")`
 
-## Stage 2 — search API + /browse (this run)
-- [x] `functions/_shared/vocab.ts` — canonical groups, organism alias maps, `loadRules`, `toGroup`
-- [x] `functions/_shared/conditions.ts` — `summarizeConditions`, `conditionsLabel`
-- [x] `functions/_shared/search-core.ts` — param parsing, FTS tokenizer, SQL builders, study/sample row shaping, `why` text
-- [x] `/api/facets` rewrite — contextual counts, level=gse|gsm, meta_cache precompute for the unfiltered catalog
-- [x] `/api/search` rewrite — AND across groups / OR within, bm25 ranking, accession short-circuit, `match`, `conditions`, `format=accessions`
-- [x] `/api/nl-search` rewrite — canonical grounding, no silent relaxation, `suggestions`, `applied`, `why`
-- [x] `/api/gse/:id` — add `conditions`, parsed characteristics; drop qc_flag
-- [x] Edge function `interpret-search-query` v2 schema (organism sci names, canonical groups, cell_type free text, year range, residual q)
-- [x] Frontend types/client, `/browse` rebuild (sticky search, interpretation row, facet rail, cards/table/samples, selection bar, empty state + suggestions, export accessions)
-- [x] Home tiles → study counts from new facets; API base falls back to https://singlet.bio when not served from a first-party host
-- [x] Local API harness (`scripts/dev-api`) for acceptance checks; remove dead `useDatabase.ts`
-- [x] Acceptance checks G1–G5
-- [x] Any-word fallback surfaced (`any_word` + note) on /api/search and /api/nl-search; interpreter model ladder (flash-lite → flash) with per-model timeouts
-- [x] Browse fails into its error state (not a blank page) when the API answers with the pre-Stage-2 shape
+## Stage 2 — search API + /browse (done)
+- [x] vocab / conditions / search-core / facets-core / search / nl-search / gse detail / interpreter v2 / browse rebuild / dev harness
 
 ## Stage 3 — study page (done)
-- [x] Study page on the new API shape: header + meta line, facts, conditions table (click a value → filter samples), abstract, download aside (stacked `DownloadPanel`, provenance card)
-- [x] Samples table: sort, status/condition/text filters, expandable rows (all characteristics, QC, SRA runs, pipeline provenance), `#GSM` anchor auto-expands (`/sample/GSM…` → `/study/GSE…#GSM…`)
-- [x] JSON-LD `Dataset` + SEO title/description per study (`usePageMeta({ jsonLd })`, mounted as `#route-jsonld`)
-- [x] Publications once `publications` is populated (component kept; renders when present)
-- [x] "Cells in file" says "under review" when every processed sample's count is flagged (plate-based bug) instead of "0 cells"
+- [x] Header, facts, conditions table, abstract, download aside, samples table, JSON-LD
 
-## Stage 3b — polish / discovered while building the study page
-- [ ] Failed-sample callout is untested locally (seed has only `DONE` rows) — verify against production once Stage 2/3 deploys
-- [ ] Study page: "Similar studies" strip (same tissue_group + disease_group, via `/api/search?limit=4`) below the abstract
-- [ ] `/api/gsm/:id` is the only uncached catalog read (used by the `/sample/GSM…` redirect); wrap in `cachedJson`
+## Audit fixes (done)
+- [x] Recover Stage 2/3 files (main had been overwritten by the HPC snapshot bot)
+- [x] BUG 1: `/api/facets` — split into ≤ 4-term statements in one `db.batch` (D1 compound-select limit), shim emulates the limit
+- [x] BUG 2a: API base — same-origin by default; only `lovable.app` / `lovableproject.com` / `lovable.dev` hosts fall back to singlet.bio
+- [x] BUG 2b: pathname-keyed error boundary; every client response goes through a normaliser with defaults
+- [x] BUG 2c: client types aligned with live responses
+- [x] BUG 2d: page smoke test (`/tmp/browser/smoke/smoke.py <base>`)
 
-## Stage 4 — accounts
-- Sign in (Google + email), saved searches, model-written "why it matches" for signed-in users, higher AI-search limits
+## Stage 4 — accounts, quotas, AI explanations, cleanup
+### A. Auth (done)
+- [x] Migration: `profiles` (+ trigger), `ai_search_usage`, `explanations`, `consume_ai_search`, `my_ai_usage_today`
+- [x] `AuthProvider` (lazy client), `SignInDialog` (Google + email link), `AccountMenu` (usage today · sign out), `/auth/callback`
+- [x] Google: Lovable broker on lovable-hosted previews; elsewhere the GoTrue 400 is turned into "not available on this site yet — use email"
+- [ ] Operator: enable a native Google OAuth client (Lovable Cloud → Auth settings → Google) so Google works on singlet.bio; add `https://singlet.bio/auth/callback` + `https://*.singlet.pages.dev/auth/callback` to redirect URLs
+### B. AI-search quota (done)
+- [x] `_shared/quota.ts` (subject resolution, `consume`, env-tunable limits: anon 10 / user 200 search, user 100 explain)
+- [x] `interpret-search-query`: budget gate before the model call; 429 `{error:"quota_exceeded", message, quota}`; `quota` on every reply
+- [x] `/api/nl-search` forwards bearer / salted IP hash, keyword fallback when exhausted, `quota_exceeded` + `quota` in body, `X-Singlet-Quota` header (never cached), degraded answers not cached
+- [x] UI: `AiQuotaBadge` counter, `AiQuotaExceeded` card with sign-in CTA, localStorage-backed `aiQuotaStore`
+### C. Model-written "why it matches" (done)
+- [x] `explain-results` edge function (signed-in, ≤ 10 studies/call, grounded one-liners, cached in `explanations`)
+- [x] Browse: "Explain matches" button in the AI row; violet AI-badged "Why it matches" on cards and table
+### D. Cleanup
+- [x] Gold/Silver/Bronze, "1B+ cells", "Free for academic research", Benchmarks / Blog / Notebooks references removed; HPC dashboard unlinked but reachable
+- [x] 404 page with search box; per-page titles; robots.txt allows all
+- [x] Docs: search section documents the daily AI limits and what is stored
+- [x] `sitemap.xml` Pages Function (static routes + `/study/<gse>` with has_bundle=1), edge-cached 1 day; static file removed
+- [ ] Accessibility pass (labels, teal focus rings, contrast) on the new auth dialog + account menu
+### E. Acceptance (after the Cloudflare deploy picks up the new Pages Functions)
+- [ ] Anonymous on pages.dev: 10 AI searches → exhausted card; keyword search still works; `X-Singlet-Quota` present on fresh answers, absent on cache hits
+- [ ] Signed-in (email link): counter shows n / 200; "Explain matches" writes AI lines; second click is free (cached)
+- [ ] Python `singlet.find()` unauthenticated still works (same endpoint, per-IP budget)
+- [ ] Study Table view at 1280 / 390: File column + year, no right-edge overflow
 
 ## Backlog / discovered
-- Cell-type filter uses FTS on `{cell_type characteristics}` (prefix match) rather than a LIKE scan of `gsm.cell_type`, to keep rows_read low; revisit if recall is a problem
-- HPC snapshot bot commits to `main` every 15 min; keep an eye on sync conflicts (it stranded Stage 1 once)
-- `gse_meta.year` is null for most studies (only ~2.5K have `submitted_date`); year facet is sparse until the ETL backfills it
-- Precomputed `meta_cache` rows (`facets:gse:all`, `facets:gsm:all`, `vocab:cell_type:top`) are refreshed lazily after 24h; an ETL hook could refresh them eagerly
+- Sync hazard: the HPC bot commits to GitHub `main` every 15 min and races Lovable's push. Move the bot to its own branch (or a data-only repo).
+- Direct callers of `interpret-search-query` bypass the per-visitor budget (they are metered per IP instead). Add a shared secret between the Pages Function and the edge function once a Cloudflare env var can be set.
+- Cell-type filter uses FTS on `{cell_type characteristics}` (prefix match); revisit if recall is a problem
+- `gse_meta.year` is null for most studies; year facet is sparse until the ETL backfills it
+- `meta_cache` rows refreshed lazily after 24h; an ETL hook could refresh them eagerly
+- Study page: "Similar studies" strip; `/api/gsm/:id` should be edge-cached
+- Account page: let signed-in users delete their account (profiles + usage rows) from the menu
