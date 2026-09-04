@@ -3,8 +3,9 @@
  * shareable link and the back button works.
  *
  *   q            free text (plain English or keywords)
- *   mode         "ai" (default when q is set: /api/nl-search interprets q)
- *                "filters" (explicit filters + q as keywords → /api/search)
+ *   mode         "ai" (default when q is set: the interpreter reads q)
+ *                "filters" (the visitor edited the interpretation: the filters
+ *                are theirs and q is plain keywords — same endpoint, no model)
  *   raw          original plain-English text kept for the search box once the
  *                user has edited the interpretation (mode=filters)
  *   level        gse (studies, default) | gsm (samples)

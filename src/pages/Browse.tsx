@@ -1,9 +1,12 @@
 /**
  * /browse — find studies.
  *
- * Plain English or explicit filters → a short, correct list of studies with a
- * one-line reason each matched. AND across filter groups, any-of within a
- * group, never loosened silently. All state lives in the URL.
+ * One search bar. Whatever is typed goes to /api/nl-search, which reads plain
+ * English, keywords and accessions. The interpretation comes back as chips;
+ * editing a chip or a rail checkbox re-runs the same search with the adjusted
+ * filters (URL state) and no second model call. Filter-only views (no text)
+ * list studies through /api/search. AND across filter groups, any-of within a
+ * group, never loosened silently.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -15,6 +18,7 @@ import { cn } from "@/lib/utils";
 import { usePageMeta } from "@/hooks/usePageMeta";
 import { fmtCompact, fmtInt } from "@/lib/catalog-display";
 import { searchDestination } from "@/lib/search-routing";
+import { SEARCH_PLACEHOLDER } from "@/components/SearchBox";
 import { apiClient, isApiError } from "@/integrations/api/client";
 import type { AppliedFilters, NlSearchResponse, SampleRow, SearchResponse, Sort, StudyRow } from "@/integrations/api/types";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -124,9 +128,13 @@ const Browse = () => {
   // ── Results ───────────────────────────────────────────────────────────────
   const query = useMemo(() => toSearchQuery(state, PAGE_SIZE), [state]);
   const result = useQuery<Result>({
-    queryKey: ["browse", aiMode ? "nl" : "search", stateKey],
+    queryKey: ["browse", state.q ? (aiMode ? "nl" : "nl-edited") : "list", stateKey],
     queryFn: async ({ signal }) => {
-      const res = aiMode ? await apiClient.nlSearch({ ...query, q: state.q }, signal) : await apiClient.search(query, signal);
+      // Text always goes to the one search endpoint; `interpret: false` marks
+      // a search whose filters the visitor has already edited.
+      const res = state.q
+        ? await apiClient.nlSearch({ ...query, q: state.q, interpret: aiMode }, signal)
+        : await apiClient.search(query, signal);
       // Guard against an older API deployment (or a proxy pointing at one):
       // fail into the error state instead of crashing on a missing `applied`.
       if (!res || !Array.isArray(res.data) || !res.applied || !res.level) {
@@ -157,7 +165,7 @@ const Browse = () => {
     staleTime: 300_000,
   });
 
-  // ── Filter edits (always land in explicit mode) ───────────────────────────
+  // ── Filter edits (the filters become the visitor's own from here on) ─────
   const explicitBase = useCallback((): BrowseState => {
     if (aiMode && fresh) return appliedToState(fresh.applied, state);
     return { ...state, page: 1 };
@@ -275,7 +283,8 @@ const Browse = () => {
               spellCheck={false}
               value={text}
               onChange={(e) => setText(e.target.value)}
-              placeholder="Plain English, keywords or a GEO accession — e.g. microglia in the aging mouse brain"
+              placeholder={SEARCH_PLACEHOLDER}
+              title={SEARCH_PLACEHOLDER}
               className="input h-10 pl-9 pr-3 text-[14px] [&::-webkit-search-cancel-button]:appearance-none"
             />
           </div>
@@ -396,7 +405,7 @@ const Browse = () => {
                 <label className="inline-flex items-center gap-1.5 text-[12.5px] text-muted-foreground">
                   <span className="sr-only sm:not-sr-only">Sort</span>
                   <select value={state.sort} onChange={(e) => setSort(e.target.value as Sort)} className="input h-8 w-auto px-2 text-[12.5px]">
-                    {SORTS.filter((s) => s.value !== "relevance" || !!applied.q || aiMode || true).map((s) => (
+                    {SORTS.map((s) => (
                       <option key={s.value} value={s.value}>
                         {s.label}
                       </option>
