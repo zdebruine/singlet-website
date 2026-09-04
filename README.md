@@ -50,6 +50,9 @@ Pages Functions read these environment variables (all non-secret): `SUPABASE_URL
 ## Accounts, API keys and MCP
 
 - Sign-in (Google, GitHub, email link) is handled by Lovable Cloud auth. It is optional and only raises the AI-search allowance (10/day anonymous → 200/day signed in).
+  - Google: Lovable's managed Google app on Lovable-hosted previews; on singlet.bio and `*.pages.dev` the project's own Google OAuth client (configured in the Cloud auth settings) is used.
+  - GitHub: the hosted auth settings cannot hold a GitHub app, so `supabase/functions/github-oauth` runs the OAuth exchange itself. Register one GitHub OAuth App with callback `https://singlet.bio/auth/github/callback` (served by `functions/auth/github/callback.ts`, which relays to the origin that started the sign-in) and add `GITHUB_OAUTH_CLIENT_ID` / `GITHUB_OAUTH_CLIENT_SECRET` as runtime secrets. Until both exist the button reports that GitHub sign-in is unavailable.
+  - The auth redirect allow-list must include `https://singlet.bio/**`, `https://www.singlet.bio/**` and `https://*.singlet-4gc.pages.dev/**` for email links and Google on previews.
 - `/account` lets a signed-in user create and revoke API keys (`sk_live_…`). Only a SHA-256 hash and the first 8 characters are stored (`api_keys` table; writes go through the `api-keys` edge function).
 - The catalog API accepts `Authorization: Bearer sk_live_…` or `X-API-Key`; requests are charged to the key's owner. Validation is cached 60 s per isolate and `last_used_at` is touched at most every 5 minutes.
 - `/mcp` exposes `search_datasets`, `get_study`, `get_download_url` and `get_atlas_stats`. Client configs are documented at `/docs#api-keys`.
