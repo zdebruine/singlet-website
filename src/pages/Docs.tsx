@@ -5,6 +5,7 @@ import Footer from "@/components/Footer";
 import { CodeBlock } from "@/components/CodeBlock";
 import { usePageMeta } from "@/hooks/usePageMeta";
 import { cn } from "@/lib/utils";
+import { GITHUB_ISSUES, GITHUB_REPO, PY_INSTALL, R_INSTALL, R_INSTALL_STANDALONE } from "@/lib/install-snippets";
 
 const SECTIONS = [
   { id: "install", label: "Install" },
@@ -13,9 +14,12 @@ const SECTIONS = [
   { id: "singlet-file", label: "What's in a .singlet file" },
   { id: "r", label: "R" },
   { id: "python", label: "Python API" },
-  { id: "mcp", label: "MCP server" },
+  { id: "api-keys", label: "API keys & MCP" },
   { id: "pipeline", label: "Bring your own data" },
 ] as const;
+
+const MCP_URL = "https://singlet.bio/mcp";
+const KEY_PLACEHOLDER = "sk_live_…";
 
 type SectionId = (typeof SECTIONS)[number]["id"];
 
@@ -115,21 +119,17 @@ const Docs = () => {
             {/* ── Install ── */}
             <Section id="install" title="Install">
               <p>Python 3.9 or newer.</p>
-              <CodeBlock label="bash" code={`pip install singlet`} />
+              <CodeBlock label="bash" code={PY_INSTALL} />
               <p className="mt-4">R 4.2 or newer.</p>
-              <CodeBlock label="r" code={`install.packages("singlet")`} />
-              <p className="mt-2 text-xs text-muted-foreground">
-                Until CRAN accepts the release:{" "}
-                <Mono>remotes::install_github("Singlet-Bio/singlet", subdir = "r")</Mono>
-              </p>
+              <CodeBlock label="r" code={R_INSTALL_STANDALONE} />
               <p className="mt-4">
-                No account, API key or configuration is needed. Files are fetched from{" "}
-                <a href="https://data.singlet.bio" rel="noopener noreferrer">data.singlet.bio</a> (Cloudflare R2) on first
-                use and cached locally.
+                No account, API key or configuration is needed to load data. Files are fetched from{" "}
+                <a href="https://data.singlet.bio" rel="noopener noreferrer">data.singlet.bio</a> on first use and cached
+                locally.
               </p>
               <h3>Optional extras (Python)</h3>
               <p>Extras add optional dependencies on top of the base install:</p>
-              <CodeBlock label="bash" code={`pip install "singlet[torch]"`} />
+              <CodeBlock label="bash" code={`${PY_INSTALL}#egg=singlet[torch]`} />
               <table>
                 <thead>
                   <tr>
@@ -148,7 +148,7 @@ const Docs = () => {
                   </tr>
                   <tr>
                     <td><Mono>[mcp]</Mono></td>
-                    <td>The MCP server (see <a href="#mcp">MCP server</a>).</td>
+                    <td>A local MCP server (the hosted one at <Mono>singlet.bio/mcp</Mono> needs no install; see <a href="#api-keys">API keys &amp; MCP</a>).</td>
                   </tr>
                   <tr>
                     <td><Mono>[all]</Mono></td>
@@ -235,11 +235,12 @@ sce  <- find_load("human PBMC, COVID-19, 10x 5'")`}
               </p>
               <p>
                 Interpreting plain English costs a model call, so it is rate-limited: <strong>10 AI searches a day</strong>{" "}
-                without an account (per network address) and <strong>200 a day</strong> signed in (free, email link or
-                Google). Repeated questions come from cache and don't count. When the budget is spent the endpoint still
-                answers with a plain keyword search and sets <Mono>quota_exceeded: true</Mono>; accessions, filters in
-                the rail and the catalog itself are never limited. Signed-in users can also ask for a one-sentence,
-                metadata-grounded explanation of why each study matched (100 a day).
+                without an account (per network address) and <strong>200 a day</strong> signed in (free — Google, GitHub or
+                an email link). Repeated questions come from cache and don't count. When the budget is spent the endpoint
+                still answers with a plain keyword search and sets <Mono>quota_exceeded: true</Mono>; accessions, filters
+                in the rail and the catalog itself are never limited. Signed-in users can also ask for a one-sentence,
+                metadata-grounded explanation of why each study matched (100 a day). From a script or an assistant, use
+                an <a href="#api-keys">API key</a> to search under your own allowance.
               </p>
             </Section>
 
@@ -407,36 +408,95 @@ sc.pp.highly_variable_genes(adata, batch_key="gsm_id")`}
               </p>
             </Section>
 
-            {/* ── MCP ── */}
-            <Section id="mcp" title="MCP server">
+            {/* ── API keys & MCP ── */}
+            <Section id="api-keys" title="API keys & MCP">
               <p>
-                The package ships a Model Context Protocol server so an assistant (Claude Desktop, Claude Code, Cursor, VS
-                Code) can search the atlas and load studies for you.
+                Loading and downloading data never needs a key. A key is for two things: running natural-language searches
+                from code under your own daily allowance (200 a day, shared with the website), and connecting an assistant
+                to the atlas through the MCP server.
+              </p>
+              <h3>Create a key</h3>
+              <ol>
+                <li>
+                  <Link to="/account">Sign in</Link> (free — Google, GitHub or an email link) and open{" "}
+                  <Link to="/account#api-keys">Account → API keys</Link>.
+                </li>
+                <li>Give the key a name (and an expiry if you like) and click <strong>Create key</strong>.</li>
+                <li>
+                  Copy it right away. The full key is shown once; afterwards only its first characters are visible. Revoke
+                  it from the same page at any time.
+                </li>
+              </ol>
+              <p>
+                Send the key as <Mono>Authorization: Bearer {KEY_PLACEHOLDER}</Mono> or as an <Mono>X-API-Key</Mono> header.
+                It is accepted by <Mono>/api/nl-search</Mono>, <Mono>/api/search</Mono>, <Mono>/api/facets</Mono> and{" "}
+                <Mono>/api/gse/:id</Mono>; searches count against the owner's allowance and an invalid, expired or revoked
+                key is answered with <Mono>401</Mono>.
               </p>
               <CodeBlock
                 label="bash"
-                code={`pip install "singlet[mcp]"
-python -m singlet.mcp        # starts a stdio MCP server`}
+                code={`curl -H "Authorization: Bearer ${KEY_PLACEHOLDER}" \\
+  "https://singlet.bio/api/nl-search?q=microglia+in+the+aging+mouse+brain"`}
               />
-              <p className="mt-4">Register it with your client, for example:</p>
+              <h3>In the packages</h3>
               <div className="grid md:grid-cols-2 gap-3">
                 <CodeBlock
-                  label="claude code"
-                  code={`claude mcp add singlet -- python -m singlet.mcp`}
+                  label="python"
+                  code={`import singlet
+singlet.set_api_key("${KEY_PLACEHOLDER}")
+# or: export SINGLET_API_KEY=${KEY_PLACEHOLDER}
+
+accs = singlet.find("microglia in the aging mouse brain")`}
                 />
                 <CodeBlock
-                  label="mcp.json"
+                  label="r"
+                  code={`Sys.setenv(SINGLET_API_KEY = "${KEY_PLACEHOLDER}")
+
+library(singlet)
+accs <- find("microglia in the aging mouse brain")`}
+                />
+              </div>
+
+              <h3>MCP server</h3>
+              <p>
+                <Mono>{MCP_URL}</Mono> is a hosted Model Context Protocol server (Streamable HTTP, stateless) that lets an
+                assistant — Claude Desktop, Claude Code, Cursor, VS Code — search the atlas, read a study's metadata and
+                hand back a download URL or a loader snippet. Listing the tools works without a key; calling one requires
+                your API key in the <Mono>Authorization</Mono> header.
+              </p>
+              <div className="grid md:grid-cols-2 gap-3">
+                <CodeBlock
+                  label="claude desktop (claude_desktop_config.json)"
                   code={`{
   "mcpServers": {
     "singlet": {
-      "command": "python",
-      "args": ["-m", "singlet.mcp"]
+      "command": "npx",
+      "args": [
+        "-y", "mcp-remote", "${MCP_URL}",
+        "--header", "Authorization: Bearer ${KEY_PLACEHOLDER}"
+      ]
+    }
+  }
+}`}
+                />
+                <CodeBlock
+                  label="cursor (.cursor/mcp.json)"
+                  code={`{
+  "mcpServers": {
+    "singlet": {
+      "url": "${MCP_URL}",
+      "headers": { "Authorization": "Bearer ${KEY_PLACEHOLDER}" }
     }
   }
 }`}
                 />
               </div>
-              <h3>Tools</h3>
+              <CodeBlock
+                className="mt-3"
+                label="claude code"
+                code={`claude mcp add --transport http singlet ${MCP_URL} \\
+  --header "Authorization: Bearer ${KEY_PLACEHOLDER}"`}
+              />
               <table>
                 <thead>
                   <tr>
@@ -446,31 +506,40 @@ python -m singlet.mcp        # starts a stdio MCP server`}
                 </thead>
                 <tbody>
                   <tr>
-                    <td><Mono>singlet_nl_search</Mono></td>
-                    <td>Plain-English search; returns accessions and the interpreted filters.</td>
+                    <td><Mono>search_datasets</Mono></td>
+                    <td>
+                      Plain English, keywords or an accession → matching studies (or samples) with the interpreted filters, a
+                      one-line reason per study and its download URL. Optional extra filters: organism, tissue, disease,
+                      assay, min_cells.
+                    </td>
                   </tr>
                   <tr>
-                    <td><Mono>singlet_search</Mono></td>
-                    <td>Keyword / accession search.</td>
+                    <td><Mono>get_study</Mono></td>
+                    <td>Everything the study page shows for one GSE: title, abstract, organisms, tissues, design, samples, QC.</td>
                   </tr>
                   <tr>
-                    <td><Mono>singlet_browse</Mono></td>
-                    <td>Filter the catalog by organism, tissue, protocol, disease.</td>
+                    <td><Mono>get_download_url</Mono></td>
+                    <td>The <Mono>.singlet</Mono> URL for a GSE plus the Python and R one-liners to load it.</td>
                   </tr>
                   <tr>
-                    <td><Mono>singlet_qc</Mono></td>
-                    <td>Per-sample QC metrics and processing status for a study.</td>
-                  </tr>
-                  <tr>
-                    <td><Mono>singlet_load</Mono></td>
-                    <td>Download a study and return a summary of the loaded object.</td>
-                  </tr>
-                  <tr>
-                    <td><Mono>singlet_stats</Mono>, <Mono>singlet_species</Mono>, <Mono>singlet_tissues</Mono>, <Mono>singlet_protocols</Mono>, <Mono>singlet_cell_types</Mono>, <Mono>singlet_failures</Mono></td>
-                    <td>Atlas-wide counts and vocabularies.</td>
+                    <td><Mono>get_atlas_stats</Mono></td>
+                    <td>Live corpus numbers: studies, samples processed, cells, species.</td>
                   </tr>
                 </tbody>
               </table>
+              <p>
+                Try it from a terminal (no key needed for this call):
+              </p>
+              <CodeBlock
+                label="bash"
+                code={`curl -X POST ${MCP_URL} -H "Content-Type: application/json" -H "Accept: application/json" \\
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'`}
+              />
+              <p className="text-xs text-muted-foreground">
+                The package also ships a local stdio server (<Mono>{PY_INSTALL}#egg=singlet[mcp]</Mono>, then{" "}
+                <Mono>python -m singlet.mcp</Mono>) that loads data on your machine. Questions or problems →{" "}
+                <a href={GITHUB_ISSUES} target="_blank" rel="noopener noreferrer">GitHub Issues</a>.
+              </p>
             </Section>
 
             {/* ── BYOD / pipeline ── */}
@@ -482,7 +551,7 @@ python -m singlet.mcp        # starts a stdio MCP server`}
               </p>
               <CodeBlock
                 label="bash"
-                code={`pip install singlet
+                code={`${PY_INSTALL}
 
 # From an SRA run accession
 singlet-process SRR11537951 --output-dir ./out --organism human --threads 8
@@ -502,7 +571,7 @@ adata = singlet.load_dir(result.output_dir)`}
                 <li>Supported organisms today: human (GRCh38) and mouse (GRCm39). See <Link to="/about#references">About the data</Link> for the exact builds.</li>
                 <li>Protocol (10x chemistry, Drop-seq, …) is detected from the reads and the run metadata.</li>
                 <li>The output directory contains the same matrices listed under <a href="#singlet-file">What's in a .singlet file</a>, plus the run log and per-cell QC table.</li>
-                <li>Source, issues and the full CLI reference are on <a href="https://github.com/Singlet-Bio/singlet" target="_blank" rel="noopener noreferrer">GitHub</a>.</li>
+                <li>Source and the full CLI reference are on <a href={GITHUB_REPO} target="_blank" rel="noopener noreferrer">GitHub</a>; questions and bugs go to <a href={GITHUB_ISSUES} target="_blank" rel="noopener noreferrer">GitHub Issues</a>.</li>
               </ul>
             </Section>
           </article>
