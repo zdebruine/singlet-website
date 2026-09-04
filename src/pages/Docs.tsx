@@ -114,35 +114,22 @@ const Docs = () => {
 
             {/* ── Install ── */}
             <Section id="install" title="Install">
-              <p>
-                Python 3.9 or newer. The package is installed from GitHub until its first PyPI release; the install builds
-                a small C++ extension, so a C++17 compiler is required.
+              <p>Python 3.9 or newer.</p>
+              <CodeBlock label="bash" code={`pip install singlet`} />
+              <p className="mt-4">R 4.2 or newer.</p>
+              <CodeBlock label="r" code={`install.packages("singlet")`} />
+              <p className="mt-2 text-xs text-muted-foreground">
+                Until CRAN accepts the release:{" "}
+                <Mono>remotes::install_github("Singlet-Bio/singlet", subdir = "r")</Mono>
               </p>
-              <CodeBlock label="bash" code={`pip install git+https://github.com/Singlet-Bio/singlet.git`} />
-              <p className="mt-4">
-                The distribution name will be <Mono>singlet-bio</Mono> once it is on PyPI. Do not{" "}
-                <Mono>pip install singlet</Mono>: that name on PyPI belongs to an unrelated project. In both cases the
-                importable module is <Mono>singlet</Mono>.
-              </p>
-              <p className="mt-4">
-                R 4.2 or newer. The R package lives in the same repository under <Mono>r/</Mono> and is not on CRAN;
-                install it with <Mono>remotes</Mono> (or <Mono>devtools</Mono>).
-              </p>
-              <CodeBlock label="r" code={`remotes::install_github("Singlet-Bio/singlet", subdir = "r")`} />
               <p className="mt-4">
                 No account, API key or configuration is needed. Files are fetched from{" "}
                 <a href="https://data.singlet.bio" rel="noopener noreferrer">data.singlet.bio</a> (Cloudflare R2) on first
                 use and cached locally.
               </p>
               <h3>Optional extras (Python)</h3>
-              <p>
-                Extras are declared on the <Mono>singlet-bio</Mono> distribution. With a GitHub install, request them with
-                a direct reference:
-              </p>
-              <CodeBlock
-                label="bash"
-                code={`pip install "singlet-bio[torch] @ git+https://github.com/Singlet-Bio/singlet.git"`}
-              />
+              <p>Extras add optional dependencies on top of the base install:</p>
+              <CodeBlock label="bash" code={`pip install "singlet[torch]"`} />
               <table>
                 <thead>
                   <tr>
@@ -419,7 +406,7 @@ sc.pp.highly_variable_genes(adata, batch_key="gsm_id")`}
               </p>
               <CodeBlock
                 label="bash"
-                code={`pip install "singlet-bio[mcp] @ git+https://github.com/Singlet-Bio/singlet.git"
+                code={`pip install "singlet[mcp]"
 python -m singlet.mcp        # starts a stdio MCP server`}
               />
               <p className="mt-4">Register it with your client, for example:</p>
@@ -486,7 +473,7 @@ python -m singlet.mcp        # starts a stdio MCP server`}
               </p>
               <CodeBlock
                 label="bash"
-                code={`pip install git+https://github.com/Singlet-Bio/singlet.git
+                code={`pip install singlet
 
 # From an SRA run accession
 singlet-process SRR11537951 --output-dir ./out --organism human --threads 8

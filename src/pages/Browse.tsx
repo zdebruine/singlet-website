@@ -1,935 +1,517 @@
 /**
- * Browse — catalog explorer
+ * /browse — find studies.
  *
- * Two-column layout:
- *  Left:  Accordion filter sidebar (organism, tissue, cell_type, assay, disease,
- *          processing status, failure_reason [only when Failed/All], sex,
- *          cell-count range slider)
- *  Right: GSE/GSM tab toggle · sortable table · pagination
- *          Live "Showing X studies · Y samples · Z cells" matching bar
- *          Active filters shown as removable chips
- *          Filter state mirrored in URL query params
+ * Plain English or explicit filters → a short, correct list of studies with a
+ * one-line reason each matched. AND across filter groups, any-of within a
+ * group, never loosened silently. All state lives in the URL.
  */
-import { useState, useCallback, useEffect, useRef, useMemo } from "react";
-import { Link, useSearchParams } from "react-router-dom";
-import {
-  Search, ChevronLeft, ChevronRight, CheckCircle, AlertTriangle, XCircle,
-  ArrowUpDown, ArrowUp, ArrowDown, Download, X, ChevronDown, ChevronRight as ChevronRt, SlidersHorizontal,
-  Wand2, Sparkles
-} from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { ChevronLeft, ChevronRight, Download, LayoutGrid, List, Loader2, Search, SlidersHorizontal, Sparkles } from "lucide-react";
 import Navbar from "@/components/Navbar";
-import { isSuspectCellCount, FLAGGED_CELLS_LABEL, protocolLabel, isDisplayableOrganism, organismLabel, failureLabel } from "@/lib/catalog-display";
-import { usePageMeta } from "@/hooks/usePageMeta";
 import Footer from "@/components/Footer";
-import { useQuery } from "@tanstack/react-query";
-import { apiClient } from "@/integrations/api/client";
-import type { GsmListParams, GseListParams, GsmRow, GseRow, FacetOption, NlSearchInterpreted } from "@/integrations/api/types";
+import { cn } from "@/lib/utils";
+import { usePageMeta } from "@/hooks/usePageMeta";
+import { fmtCompact, fmtInt } from "@/lib/catalog-display";
+import { searchDestination } from "@/lib/search-routing";
+import { apiClient, isApiError } from "@/integrations/api/client";
+import type { AppliedFilters, NlSearchResponse, SampleRow, SearchResponse, Sort, StudyRow } from "@/integrations/api/types";
+import { useAuth } from "@/components/auth/AuthProvider";
+import { AiQuotaBadge, AiQuotaExceeded } from "@/components/browse/AiQuotaNotice";
+import {
+  DEFAULT_STATE,
+  PAGE_SIZE,
+  SORTS,
+  appliedToQuery,
+  appliedToState,
+  browseHref,
+  hasExplicitFilters,
+  isAiMode,
+  parseBrowseState,
+  serializeBrowseState,
+  stateFromParams,
+  stateToApplied,
+  toSearchQuery,
+  toggleValue,
+  withoutFilter,
+  type ArrayField,
+  type BrowseState,
+  type View,
+} from "@/components/browse/browse-state";
+import { FilterRail } from "@/components/browse/FilterRail";
+import { ActiveFiltersRow } from "@/components/browse/ActiveFiltersRow";
+import { StudyCard, StudyCardSkeleton } from "@/components/browse/StudyCard";
+import { StudyTable } from "@/components/browse/StudyTable";
+import { SampleTable } from "@/components/browse/SampleTable";
+import { SelectionBar } from "@/components/browse/SelectionBar";
+import { EmptyState } from "@/components/browse/EmptyState";
+import { useSelection } from "@/components/browse/useSelection";
 
-// ── Formatters ────────────────────────────────────────────────────────────────
+type Result = SearchResponse | NlSearchResponse;
 
-function fmt(n: number | null | undefined): string {
-  if (n == null) return "—";
-  if (n >= 1e9) return (n / 1e9).toFixed(1) + "B";
-  if (n >= 1e6) return (n / 1e6).toFixed(1) + "M";
-  if (n >= 1e3) return (n / 1e3).toFixed(1) + "K";
-  return n.toLocaleString();
+function isNl(r: Result | undefined): r is NlSearchResponse {
+  return !!r && "interpreted" in r;
 }
 
-// ── Badges ────────────────────────────────────────────────────────────────────
-
-/**
- * Processing status.
- *  - status === "DONE"  → Processed
- *  - status === "FAIL"  → Failed (reason shown next to it by the caller)
- *  - anything else      → the raw status (e.g. PENDING / RUNNING)
- */
-function StatusBadge({ status }: { status: string }) {
-  if (status === "DONE") return <span className="status-ok"><CheckCircle size={11} /> Processed</span>;
-  if (status === "FAIL") return <span className="status-fail"><XCircle size={11} /> Failed</span>;
-  return <span className="flag"><AlertTriangle size={11} /> {status}</span>;
-}
-
-// ── Accordion Section ─────────────────────────────────────────────────────────
-
-function AccordionSection({
-  label,
-  defaultOpen = false,
-  children,
-}: {
-  label: string;
-  defaultOpen?: boolean;
-  children: React.ReactNode;
-}) {
-  const [open, setOpen] = useState(defaultOpen);
-  return (
-    <div className="border-b border-border last:border-b-0">
-      <button
-        onClick={() => setOpen(!open)}
-        className="w-full flex items-center justify-between px-4 py-3 text-xs font-medium text-foreground uppercase tracking-wider hover:bg-background transition-colors"
-      >
-        {label}
-        {open ? <ChevronDown size={13} className="text-muted-foreground" /> : <ChevronRt size={13} className="text-muted-foreground" />}
-      </button>
-      {open && <div className="px-4 pb-3">{children}</div>}
-    </div>
-  );
-}
-
-// ── Facet Checkbox List ───────────────────────────────────────────────────────
-
-function FacetList({
+function Segmented<T extends string>({
+  value,
   options,
-  value,
   onChange,
-  max = 8,
-  labelFn,
+  ariaLabel,
 }: {
-  options: FacetOption[];
-  value: string | undefined;
-  onChange: (v: string | undefined) => void;
-  max?: number;
-  /** Display-only relabelling; the stored facet value is unchanged. */
-  labelFn?: (v: string) => string;
+  value: T;
+  options: { value: T; label: string; icon?: React.ReactNode }[];
+  onChange: (v: T) => void;
+  ariaLabel: string;
 }) {
-  const [showAll, setShowAll] = useState(false);
-  const visible = showAll ? options : options.slice(0, max);
-  const groupName = `facet-${options[0]?.value ?? "empty"}`;
   return (
-    <div className="space-y-1.5">
-      {visible.map((opt) => (
-        <label key={opt.value} className="flex items-center gap-2 cursor-pointer group">
-          <input
-            type="radio"
-            name={groupName}
-            checked={value === opt.value}
-            onChange={() => onChange(value === opt.value ? undefined : opt.value)}
-            onClick={() => { if (value === opt.value) onChange(undefined); }}
-            className="accent-primary"
-          />
-          <span className={`text-xs truncate flex-1 group-hover:text-foreground transition-colors ${value === opt.value ? "text-foreground font-medium" : "text-muted-foreground"}`}>{labelFn ? labelFn(opt.value) : opt.value}</span>
-          <span className="text-[10px] tabular-nums text-muted-foreground/60 flex-shrink-0">{opt.count.toLocaleString()}</span>
-        </label>
-      ))}
-      {options.length > max && (
+    <div className="inline-flex rounded border border-border overflow-hidden" role="group" aria-label={ariaLabel}>
+      {options.map((o) => (
         <button
-          onClick={() => setShowAll(!showAll)}
-          className="text-[10px] text-primary hover:underline mt-1"
+          key={o.value}
+          type="button"
+          aria-pressed={value === o.value}
+          onClick={() => onChange(o.value)}
+          className={cn(
+            "inline-flex items-center gap-1.5 h-8 px-2.5 text-[12.5px] font-medium transition-colors border-r border-border last:border-r-0",
+            value === o.value ? "bg-secondary text-foreground" : "bg-card text-muted-foreground hover:text-foreground"
+          )}
         >
-          {showAll ? "Show less" : `+${options.length - max} more`}
+          {o.icon}
+          {o.label}
         </button>
-      )}
+      ))}
     </div>
   );
 }
-
-// ── Range Slider (cells) ─────────────────────────────────────────────────────
-
-function CellRangeSlider({
-  value,
-  onChange,
-}: {
-  value: [number, number];
-  onChange: (v: [number, number]) => void;
-}) {
-  const [local, setLocal] = useState(value);
-  const STEPS = [0, 100, 500, 1000, 5000, 10000, 50000, 100000, 500000, 1000000];
-
-  return (
-    <div className="space-y-2">
-      <div className="flex justify-between text-[10px] text-muted-foreground">
-        <span>{fmt(local[0])}</span>
-        <span>{local[1] >= 1000000 ? "1M+" : fmt(local[1])}</span>
-      </div>
-      <input
-        type="range"
-        min={0}
-        max={STEPS.length - 1}
-        value={STEPS.indexOf(STEPS.reduce((prev, cur) => Math.abs(cur - local[0]) < Math.abs(prev - local[0]) ? cur : prev))}
-        onChange={(e) => {
-          const newMin = STEPS[Number(e.target.value)];
-          const newVal: [number, number] = [newMin, Math.max(newMin, local[1])];
-          setLocal(newVal);
-          onChange(newVal);
-        }}
-        className="w-full accent-primary"
-      />
-      <input
-        type="range"
-        min={0}
-        max={STEPS.length - 1}
-        value={STEPS.indexOf(STEPS.reduce((prev, cur) => Math.abs(cur - local[1]) < Math.abs(prev - local[1]) ? cur : prev))}
-        onChange={(e) => {
-          const newMax = STEPS[Number(e.target.value)];
-          const newVal: [number, number] = [Math.min(local[0], newMax), newMax];
-          setLocal(newVal);
-          onChange(newVal);
-        }}
-        className="w-full accent-primary"
-      />
-    </div>
-  );
-}
-
-// ── Filter Chip ───────────────────────────────────────────────────────────────
-
-function FilterChip({ label, onRemove }: { label: string; onRemove: () => void }) {
-  return (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-primary/10 text-primary border border-primary/20">
-      {label}
-      <button onClick={onRemove} className="ml-0.5 hover:text-primary/70" aria-label={`Remove filter ${label}`}>
-        <X size={10} />
-      </button>
-    </span>
-  );
-}
-
-// ── Sort icon helper ──────────────────────────────────────────────────────────
-
-function SortIcon({ col, sortBy, sortAsc }: { col: string; sortBy: string | undefined; sortAsc: boolean }) {
-  if (sortBy !== col) return <ArrowUpDown size={11} className="opacity-30" />;
-  return sortAsc ? <ArrowUp size={11} /> : <ArrowDown size={11} />;
-}
-
-// ── Main component ────────────────────────────────────────────────────────────
 
 const Browse = () => {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const searchRef = useRef<HTMLInputElement>(null);
+  const [sp] = useSearchParams();
+  const navigate = useNavigate();
+  const state = useMemo(() => parseBrowseState(sp), [sp]);
+  const aiMode = isAiMode(state);
+  const stateKey = serializeBrowseState(state).toString();
 
-  // ── Parse URL → filter state ──────────────────────────────────────────────
-  const tab = (searchParams.get("tab") ?? "gsm") as "gsm" | "gse";
-  const organism = searchParams.get("organism") || undefined;
-  const tissue = searchParams.get("tissue") || undefined;
-  const cellType = searchParams.get("cell_type") || undefined;
-  const protocol = searchParams.get("protocol") || undefined;
-  const disease = searchParams.get("disease") || undefined;
-  const sex = searchParams.get("sex") || undefined;
-  const qcStatus = searchParams.get("status") || undefined;          // Pass / Warn / Fail / All
-  const failureCategory = searchParams.get("failure_category") || undefined;
-  const q = searchParams.get("q") || undefined;
-  const nl = searchParams.get("nl") || undefined;
-  const page = Number(searchParams.get("page")) || 0;
-  const pageSize = Number(searchParams.get("size")) || 50;
-  const sortBy = searchParams.get("sort") || undefined;
-  const sortAsc = searchParams.get("asc") === "1";
-  const minCells = Number(searchParams.get("min_cells")) || 0;
-  const maxCells = Number(searchParams.get("max_cells")) || 1000000;
+  usePageMeta({
+    title: state.q ? `${state.raw || state.q} — search` : "Browse studies",
+    description: "Search every uniformly reprocessed public scRNA-seq study by organism, tissue, disease, assay, cell type, or in plain English.",
+    path: "/browse",
+    noindex: !!state.q || hasExplicitFilters(state),
+  });
 
-  const [searchInput, setSearchInput] = useState(q ?? "");
-  const [nlInput, setNlInput] = useState(nl ?? "");
+  const go = useCallback((next: BrowseState) => navigate(browseHref(next)), [navigate]);
 
-  // ── Sync searchInput when URL changes ─────────────────────────────────────
-  useEffect(() => { setSearchInput(q ?? ""); }, [q]);
-  useEffect(() => { setNlInput(nl ?? ""); }, [nl]);
+  // ── Search input ──────────────────────────────────────────────────────────
+  const [text, setText] = useState(state.raw || state.q);
+  useEffect(() => setText(state.raw || state.q), [state.raw, state.q]);
+  const submit = (e?: FormEvent) => {
+    e?.preventDefault();
+    const t = text.trim();
+    if (!t) {
+      go({ ...DEFAULT_STATE, level: state.level, view: state.view });
+      return;
+    }
+    const dest = searchDestination(t);
+    if (dest && !dest.startsWith("/browse")) {
+      navigate(dest);
+      return;
+    }
+    // A new question starts clean: the interpreter (or you, via the rail) adds filters back.
+    go({ ...DEFAULT_STATE, q: t, level: state.level, view: state.view });
+  };
 
-  // ── Push filters → URL ────────────────────────────────────────────────────
-  // Using a normal facet/keyword filter clears any active NL query so the two
-  // entry points don't fight; the NL submit handler manages `nl` itself.
-  const setParam = useCallback((key: string, val: string | undefined) => {
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      if (val) next.set(key, val); else next.delete(key);
-      next.delete("nl"); // facet/keyword use clears the NL query
-      next.delete("page"); // reset page on filter change
-      return next;
-    }, { replace: true });
-  }, [setSearchParams]);
-
-  // ── Submit an NL query → URL (?nl=...) ────────────────────────────────────
-  const submitNl = useCallback((text: string) => {
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      const t = text.trim();
-      if (t) next.set("nl", t); else next.delete("nl");
-      next.set("tab", "gsm"); // NL results render in the samples view
-      next.delete("page");
-      return next;
-    }, { replace: true });
-  }, [setSearchParams]);
-
-  const resetPage = useCallback(() => {
-    setSearchParams((prev) => { const n = new URLSearchParams(prev); n.delete("page"); return n; }, { replace: true });
-  }, [setSearchParams]);
-
-  const setPage = useCallback((p: number) => {
-    setSearchParams((prev) => { const n = new URLSearchParams(prev); if (p > 0) n.set("page", String(p)); else n.delete("page"); return n; }, { replace: true });
-  }, [setSearchParams]);
-
-  const toggleSort = useCallback((col: string) => {
-    setSearchParams((prev) => {
-      const n = new URLSearchParams(prev);
-      const prevSort = n.get("sort");
-      const prevAsc = n.get("asc") === "1";
-      if (prevSort === col) {
-        n.set("asc", prevAsc ? "0" : "1");
-      } else {
-        n.set("sort", col);
-        n.set("asc", col === "gsm_id" || col === "id" ? "1" : "0");
+  // ── Results ───────────────────────────────────────────────────────────────
+  const query = useMemo(() => toSearchQuery(state, PAGE_SIZE), [state]);
+  const result = useQuery<Result>({
+    queryKey: ["browse", aiMode ? "nl" : "search", stateKey],
+    queryFn: async ({ signal }) => {
+      const res = aiMode ? await apiClient.nlSearch({ ...query, q: state.q }, signal) : await apiClient.search(query, signal);
+      // Guard against an older API deployment (or a proxy pointing at one):
+      // fail into the error state instead of crashing on a missing `applied`.
+      if (!res || !Array.isArray(res.data) || !res.applied || !res.level) {
+        throw new Error("The catalog API returned an unexpected response. It may be mid-deploy — try again in a minute.");
       }
-      n.delete("page");
-      return n;
-    }, { replace: true });
-  }, [setSearchParams]);
+      return res;
+    },
+    placeholderData: keepPreviousData,
+    staleTime: 120_000,
+    retry: 1,
+  });
+  const data = result.data;
+  // While a new AI query is in flight, previous data belongs to another question.
+  const fresh = data && !result.isPlaceholderData ? data : undefined;
+  // Keep the previous page on screen while refreshing — unless it is the other
+  // result level, in which case its totals/rows would be mislabelled.
+  const shown = fresh ?? (data && data.level === state.level ? data : undefined);
 
-  const clearAll = useCallback(() => {
-    setSearchInput("");
-    setSearchParams(new URLSearchParams({ tab }), { replace: true });
-  }, [setSearchParams, tab]);
+  const applied: AppliedFilters = useMemo(() => fresh?.applied ?? stateToApplied(state), [fresh, state]);
+  const appliedQuery = useMemo(() => appliedToQuery(applied, state.level), [applied, state.level]);
+  const appliedKey = JSON.stringify(appliedQuery);
 
-  // ── Keyboard shortcuts ────────────────────────────────────────────────────
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      const tgt = e.target as HTMLElement;
-      if (tgt.tagName === "INPUT" || tgt.tagName === "TEXTAREA" || tgt.tagName === "SELECT") return;
-      if (e.key === "/" || e.key === "s") { e.preventDefault(); searchRef.current?.focus(); }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, []);
-
-  // ── Facets data ───────────────────────────────────────────────────────────
-  const { data: facets } = useQuery({
-    queryKey: ["facets"],
-    queryFn: () => apiClient.facets(),
+  const facets = useQuery({
+    queryKey: ["facets", appliedKey],
+    queryFn: ({ signal }) => apiClient.facets(appliedQuery, signal),
+    enabled: !aiMode || !!fresh,
+    placeholderData: keepPreviousData,
     staleTime: 300_000,
   });
 
-  // ── Corpus stats ──────────────────────────────────────────────────────────
-  const { data: corpusStats } = useQuery({
-    queryKey: ["corpus-stats"],
-    queryFn: () => apiClient.stats(),
-    staleTime: 60_000,
-  });
+  // ── Filter edits (always land in explicit mode) ───────────────────────────
+  const explicitBase = useCallback((): BrowseState => {
+    if (aiMode && fresh) return appliedToState(fresh.applied, state);
+    return { ...state, page: 1 };
+  }, [aiMode, fresh, state]);
 
-  // ── Derive API status param ───────────────────────────────────────────────
-  // UI radios: All / Processed / Failed.
-  // D1: status ∈ {DONE, FAIL, ...}. Processed → status=DONE · Failed → status=FAIL.
-  const { apiStatus, apiQcFlag } = useMemo(() => {
-    if (!qcStatus || qcStatus === "All") return { apiStatus: undefined, apiQcFlag: undefined };
-    if (qcStatus === "Failed") return { apiStatus: "FAIL", apiQcFlag: undefined };
-    if (qcStatus === "Processed") return { apiStatus: "DONE", apiQcFlag: undefined };
-    return { apiStatus: qcStatus, apiQcFlag: undefined };
-  }, [qcStatus]);
-
-  const showFailureCategory = qcStatus === "Failed" || qcStatus === "All" || !qcStatus;
-
-  // ── GSM query ─────────────────────────────────────────────────────────────
-  const gsmParams: GsmListParams = {
-    organism, protocol, tissue, cell_type: cellType, disease, sex,
-    status: apiStatus,
-    qc_flag: apiQcFlag,
-    failure_category: failureCategory,
-    q,
-    page, page_size: pageSize,
-    sort: sortBy,
-    asc: sortBy ? sortAsc : undefined,
-    min_cells: minCells > 0 ? minCells : undefined,
-    max_cells: maxCells < 1000000 ? maxCells : undefined,
+  const onToggle = (field: ArrayField, value: string) => go(toggleValue(explicitBase(), field, value));
+  const onAddCellType = (v: string) => {
+    const b = explicitBase();
+    if (b.cell_type.includes(v)) return;
+    go({ ...b, cell_type: [...b.cell_type, v] });
   };
-  const { data: gsmResult, isLoading: gsmLoading } = useQuery({
-    queryKey: ["gsm-list", gsmParams],
-    queryFn: () => apiClient.gsmList(gsmParams),
-    staleTime: 30_000,
-    enabled: tab === "gsm" && !nl,
-  });
-
-  // ── GSE query ─────────────────────────────────────────────────────────────
-  const gseParams: GseListParams = {
-    organism, q,
-    page, page_size: pageSize,
-    sort: sortBy,
-    asc: sortBy ? sortAsc : undefined,
-    min_cells: minCells > 0 ? minCells : undefined,
-    max_cells: maxCells < 1000000 ? maxCells : undefined,
+  const onMinCells = (n: number | null) => go({ ...explicitBase(), min_cells: n });
+  const onYear = (min: number | null, max: number | null) => go({ ...explicitBase(), year_min: min, year_max: max });
+  const onBundle = (only: boolean) => go({ ...explicitBase(), has_bundle: only });
+  const onRemove = (field: string, value: string) => go(withoutFilter(explicitBase(), field, value));
+  const onClear = () => go({ ...DEFAULT_STATE, level: state.level, view: state.view });
+  const setLevel = (level: "gse" | "gsm") => go({ ...state, level, page: 1, view: level === "gsm" ? state.view : state.view });
+  const setView = (view: View) => go({ ...state, view });
+  const setSort = (sort: Sort) => go({ ...state, sort, page: 1 });
+  const setPage = (page: number) => {
+    go({ ...state, page });
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
-  const { data: gseResult, isLoading: gseLoading } = useQuery({
-    queryKey: ["gse-list", gseParams],
-    queryFn: () => apiClient.gseList(gseParams),
-    staleTime: 30_000,
-    enabled: tab === "gse",
-  });
+  const applySuggestion = (params: string) => go(stateFromParams(params, state));
 
-  // ── NL (AI) search query ──────────────────────────────────────────────────
-  // Active only when ?nl=... is present. Results render in the GSM (samples)
-  // view, replacing the faceted list. Server-side turns the query into
-  // structured filters (interpret-search-query edge function; falls back to
-  // keyword search when that is unavailable).
-  const { data: nlResult, isLoading: nlLoading, isError: nlError } = useQuery({
-    queryKey: ["nl-search", nl, pageSize],
-    queryFn: () => apiClient.nlSearch(nl!, { level: "gsm", limit: pageSize }),
-    staleTime: 60_000,
-    enabled: !!nl && tab === "gsm",
-  });
-  const nlActive = !!nl && tab === "gsm";
-
-  const isLoading = nlActive ? nlLoading : tab === "gsm" ? gsmLoading : gseLoading;
-  const totalItems = nlActive
-    ? (nlResult?.total ?? 0)
-    : tab === "gsm" ? (gsmResult?.total ?? 0) : (gseResult?.total ?? 0);
-  // NL search returns a single capped page (server has no offset paging), so
-  // pagination collapses to one page in that mode.
-  const totalPages = nlActive ? 1 : Math.ceil(totalItems / pageSize);
-  const gsmRows = (nlActive ? (nlResult?.data as GsmRow[] | undefined) : gsmResult?.data) ?? [];
-  const gseRows = gseResult?.data ?? [];
-
-  // ── Total cells in current GSM result (summed) ────────────────────────────
-  const resultCells = useMemo(
-    () => gsmRows.reduce((a, s) => a + (isSuspectCellCount(s.protocol, s.n_cells) ? 0 : (s.n_cells ?? 0)), 0),
-    [gsmRows]
-  );
-  const organismFacets = useMemo(
-    () => (facets?.organisms ?? []).filter((o) => isDisplayableOrganism(o.value)),
-    [facets]
-  );
-
-  // ── Active filter count ───────────────────────────────────────────────────
-  const activeFilters = [organism, tissue, cellType, protocol, disease, sex, qcStatus, failureCategory, q, minCells > 0 ? "min_cells" : null, maxCells < 1000000 ? "max_cells" : null].filter(Boolean);
-
-  // ── CSV export ────────────────────────────────────────────────────────────
-  const exportCSV = () => {
-    if (!gsmRows.length) return;
-    const cols = ["gsm_id", "gse_id", "organism", "protocol", "tissue", "cell_type", "disease", "sex", "status", "n_cells", "mapping_rate", "median_genes", "failure_category"];
-    const rows = gsmRows.map((s: GsmRow) => cols.map((c) => {
-      const v = (s as unknown as Record<string, unknown>)[c];
-      if (v == null) return "";
-      const str = String(v);
-      return str.includes(",") ? `"${str}"` : str;
-    }).join(","));
-    const blob = new Blob([[cols.join(","), ...rows].join("\n")], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a"); a.href = url; a.download = "singlet_samples.csv"; a.click();
-    URL.revokeObjectURL(url);
+  // ── Selection ─────────────────────────────────────────────────────────────
+  const selection = useSelection();
+  const barRef = useRef<HTMLDivElement>(null);
+  const railRef = useRef<HTMLDivElement>(null);
+  const [railOpen, setRailOpen] = useState(false);
+  const focusRail = () => {
+    setRailOpen(true);
+    setTimeout(() => railRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 30);
   };
 
-  usePageMeta({
-    title: "Browse",
-    description: "Filter every reprocessed single-cell study on GEO by organism, tissue, cell type, disease and assay, or ask in plain English.",
-    path: "/browse",
-  });
+  const studies = (shown?.level === "gse" ? (shown.data as StudyRow[]) : []) ?? [];
+  const samples = (shown?.level === "gsm" ? (shown.data as SampleRow[]) : []) ?? [];
+  const totals = shown?.totals;
+  const total = shown?.total ?? 0;
+  const pages = shown ? Math.max(1, Math.ceil(shown.total / shown.limit)) : 1;
+  const nl = isNl(fresh) ? fresh : undefined;
+  const showAiRow = aiMode && !!nl?.interpreted;
+  const quotaExceeded = !!nl?.quota_exceeded && !!nl.quota;
+  const hasActive = !!fresh && (hasExplicitFilters(appliedToState(fresh.applied, state)) || !!fresh.applied.q);
+  const loadingInitial = result.isLoading && !shown;
+  const refreshing = result.isFetching && !!shown;
+  const chipsApplied = fresh ? fresh.applied : applied;
+
+  const exportHref = apiClient.exportAccessionsUrl(appliedQuery);
+
+  // ── AI explanations (signed in) ───────────────────────────────────────────
+  // One sentence per study from the model, replacing the rule-based "why".
+  // Never automatic: each uncached batch spends one unit of the daily budget.
+  const { user, openSignIn } = useAuth();
+  const [explained, setExplained] = useState<{ key: string; map: Record<string, string> }>({ key: "", map: {} });
+  const [explaining, setExplaining] = useState(false);
+  const [explainError, setExplainError] = useState<string | null>(null);
+  const explanations = explained.key === stateKey ? explained.map : {};
+  const pendingExplain = studies.filter((r) => !explanations[r.gse_id]);
+  const canExplain = showAiRow && state.level === "gse" && studies.length > 0;
+
+  const explain = async () => {
+    if (!user) {
+      openSignIn({ reason: "AI explanations are free with an account: one grounded sentence per study on why it does or doesn't answer your question." });
+      return;
+    }
+    if (!pendingExplain.length || explaining) return;
+    setExplaining(true);
+    setExplainError(null);
+    const key = stateKey;
+    try {
+      for (let i = 0; i < pendingExplain.length; i += 10) {
+        const batch = pendingExplain.slice(i, i + 10);
+        const r = await apiClient.explain(state.q, batch);
+        setExplained((prev) => ({ key, map: { ...(prev.key === key ? prev.map : {}), ...r.explanations } }));
+      }
+    } catch (e) {
+      if (isApiError(e) && e.status === 401) openSignIn();
+      setExplainError(e instanceof Error ? e.message : "AI explanations are unavailable right now.");
+    } finally {
+      setExplaining(false);
+    }
+  };
+  useEffect(() => setExplainError(null), [stateKey]);
+
+  const explainButton = canExplain ? (
+    <button
+      type="button"
+      onClick={explain}
+      disabled={explaining || (!!user && pendingExplain.length === 0)}
+      className="inline-flex items-center gap-1.5 text-[12px] font-medium text-ai hover:underline underline-offset-2 disabled:opacity-60 disabled:no-underline"
+      title={user ? "One grounded sentence per study, written by the model from its metadata. Costs one AI explanation per 10 studies; repeats are free." : "Sign in (free) to get AI explanations"}
+    >
+      {explaining ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+      {explaining ? "Explaining…" : !user ? "Sign in for AI explanations" : pendingExplain.length === 0 ? "Explained" : `Explain ${pendingExplain.length === studies.length ? "matches" : `${pendingExplain.length} more`}`}
+    </button>
+  ) : null;
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <Navbar />
 
-      <section className="flex-1 py-8 md:py-10">
-        <div className="container-site">
-
-          {/* ── PAGE HEADER ── */}
-          <div className="mb-5">
-            <h1 className="text-[28px] md:text-[32px] mb-1">Browse</h1>
-            <p className="text-sm text-muted-foreground">
-              {corpusStats
-                ? <>{fmt(corpusStats.total_cells)} cells across {fmt(corpusStats.total_samples)} samples in {fmt(corpusStats.series_count)} studies.</>
-                : <span className="inline-block h-4 w-64 align-middle rounded bg-secondary animate-pulse" />}
-              {" "}<Link to="/docs#load" className="text-primary hover:underline">How to load a study →</Link>
-            </p>
+      {/* Sticky search */}
+      <div className="sticky top-14 z-20 bg-background/95 backdrop-blur border-b border-border">
+        <form onSubmit={submit} role="search" className="container-site py-3 flex items-center gap-2">
+          <div className="relative flex-1 min-w-0">
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+            <label htmlFor="browse-search" className="sr-only">
+              Search studies
+            </label>
+            <input
+              id="browse-search"
+              type="search"
+              autoComplete="off"
+              spellCheck={false}
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder="Plain English, keywords or a GEO accession — e.g. microglia in the aging mouse brain"
+              className="input h-10 pl-9 pr-3 text-[14px] [&::-webkit-search-cancel-button]:appearance-none"
+            />
           </div>
+          <button type="submit" className="btn-primary h-10 px-5">
+            Search
+          </button>
+          <button
+            type="button"
+            className="btn-secondary h-10 px-3 lg:hidden"
+            onClick={() => setRailOpen((v) => !v)}
+            aria-expanded={railOpen}
+            aria-controls="browse-filters"
+          >
+            <SlidersHorizontal size={15} />
+            <span className="sr-only sm:not-sr-only">Filters</span>
+          </button>
+        </form>
+      </div>
 
-          {/* ── AI / NATURAL-LANGUAGE SEARCH ── */}
-          <div className="mb-4 rounded border border-ai-border bg-ai-tint p-3">
-            <div className="flex gap-2 items-stretch">
-              <div className="relative flex-1">
-                <Sparkles size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-ai" />
-                <input
-                  type="text"
-                  placeholder={'"T cells from pediatric AML" — ask in plain English'}
-                  value={nlInput}
-                  onChange={(e) => setNlInput(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter") submitNl(nlInput); }}
-                  className="input h-9 pl-9 pr-4 border-ai-border focus:border-ai"
-                  aria-label="Ask in plain English"
-                />
-              </div>
-              <button
-                onClick={() => submitNl(nlInput)}
-                disabled={!nlInput.trim()}
-                className="btn-primary btn-sm"
-              >
-                <Wand2 size={14} /> AI Search
-              </button>
-              {nl && (
-                <button
-                  onClick={() => { setNlInput(""); setParam("nl", undefined); }}
-                  className="btn-secondary btn-sm px-3"
-                  title="Clear AI search"
-                  aria-label="Clear AI search"
-                >
-                  <X size={14} />
-                </button>
-              )}
-            </div>
-
-            {/* "Interpreted as" chips — only when AI is configured and returned filters */}
-            {nlActive && nlResult?.configured && nlResult.interpreted && (
-              <div className="flex flex-wrap items-center gap-1.5 mt-2.5">
-                <span className="ai-badge">AI</span>
-                <span className="text-[11px] text-muted-foreground">interpreted as</span>
-                {(() => {
-                  const i = nlResult.interpreted as NlSearchInterpreted;
-                  const chips: { label: string; val: string }[] = [];
-                  i.organism.forEach((v) => chips.push({ label: "Organism", val: v }));
-                  i.tissue.forEach((v) => chips.push({ label: "Tissue", val: v }));
-                  i.cell_type.forEach((v) => chips.push({ label: "Cell type", val: v }));
-                  i.disease.forEach((v) => chips.push({ label: "Disease", val: v }));
-                  i.protocol.forEach((v) => chips.push({ label: "Protocol", val: protocolLabel(v) }));
-                  i.sex.forEach((v) => chips.push({ label: "Sex", val: v }));
-                  if (i.min_cells != null) chips.push({ label: "Min cells", val: fmt(i.min_cells) });
-                  if (i.q) chips.push({ label: "Keywords", val: i.q });
-                  if (chips.length === 0) {
-                    return <span className="text-[11px] text-muted-foreground italic">no specific filters — showing all matches</span>;
-                  }
-                  return chips.map((c, idx) => (
-                    <span key={`${c.label}-${idx}`} className="ai-chip">
-                      <span className="opacity-60">{c.label}:</span> {c.val}
-                    </span>
-                  ));
-                })()}
-              </div>
-            )}
-
-            {/* Not-configured note — subtle, not broken-looking */}
-            {nlActive && nlResult && nlResult.configured === false && (
-              <p className="text-[11px] text-muted-foreground mt-2.5">
-                AI search not configured yet — showing keyword matches.
-              </p>
-            )}
-            {nlActive && nlResult?.note && (
-              <p className="text-[11px] text-muted-foreground mt-2.5">{nlResult.note}</p>
-            )}
-            {nlActive && nlError && (
-              <p className="text-[11px] text-warning mt-2.5">
-                AI search is temporarily unavailable. Try the keyword search below.
-              </p>
-            )}
-          </div>
-
-          {/* ── SEARCH BAR ── */}
-          <div className="flex gap-2 mb-4">
-            <div className="relative flex-1">
-              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <input
-                ref={searchRef}
-                type="text"
-                placeholder="Search GSM, GSE, tissue, cell type... (press / to focus)"
-                value={searchInput}
-                onChange={(e) => setSearchInput(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") { setParam("q", searchInput || undefined); } }}
-                className="input h-9 pl-9 pr-4"
-                aria-label="Keyword search"
+      <main className="container-site flex-1 py-5 pb-40">
+        <div className="lg:grid lg:grid-cols-[240px_minmax(0,1fr)] lg:gap-8">
+          {/* Left rail */}
+          <div id="browse-filters" ref={railRef} className={cn("lg:block scroll-mt-32", railOpen ? "block mb-6" : "hidden")}>
+            <div className="lg:sticky lg:top-[120px] lg:max-h-[calc(100vh-136px)] lg:overflow-y-auto lg:pr-2 no-scrollbar">
+              <FilterRail
+                facets={facets.data}
+                loading={facets.isFetching && !facets.data}
+                level={state.level}
+                current={chipsApplied}
+                onToggle={onToggle}
+                onAddCellType={onAddCellType}
+                onMinCells={onMinCells}
+                onYear={onYear}
+                onBundle={onBundle}
               />
             </div>
-            <button
-              onClick={() => { setParam("q", searchInput || undefined); }}
-              className="btn-primary btn-sm"
-            >
-              Search
-            </button>
-            <button
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="btn-secondary btn-sm"
-              title="Toggle filters"
-              aria-pressed={sidebarOpen}
-            >
-              <SlidersHorizontal size={14} />
-              <span className="hidden sm:inline">Filters</span>
-              {activeFilters.length > 0 && (
-                <span className="inline-flex items-center justify-center min-w-4 h-4 px-1 rounded bg-primary text-primary-foreground text-[9px] font-bold">
-                  {activeFilters.length}
-                </span>
-              )}
-            </button>
           </div>
 
-          {/* ── ACTIVE FILTER CHIPS ── */}
-          {activeFilters.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 mb-4 items-center">
-              <span className="text-xs text-muted-foreground">Active:</span>
-              {organism && <FilterChip label={`Organism: ${organismLabel(organism)}`} onRemove={() => setParam("organism", undefined)} />}
-              {tissue && <FilterChip label={`Tissue: ${tissue}`} onRemove={() => setParam("tissue", undefined)} />}
-              {cellType && <FilterChip label={`Cell type: ${cellType}`} onRemove={() => setParam("cell_type", undefined)} />}
-              {protocol && <FilterChip label={`Protocol: ${protocolLabel(protocol)}`} onRemove={() => setParam("protocol", undefined)} />}
-              {disease && <FilterChip label={`Disease: ${disease}`} onRemove={() => setParam("disease", undefined)} />}
-              {sex && <FilterChip label={`Sex: ${sex}`} onRemove={() => setParam("sex", undefined)} />}
-              {qcStatus && <FilterChip label={`Status: ${qcStatus}`} onRemove={() => setParam("status", undefined)} />}
-              {failureCategory && <FilterChip label={`Failure: ${failureLabel(failureCategory)}`} onRemove={() => setParam("failure_category", undefined)} />}
-              {q && <FilterChip label={`"${q}"`} onRemove={() => { setSearchInput(""); setParam("q", undefined); }} />}
-              {minCells > 0 && <FilterChip label={`Min cells: ${fmt(minCells)}`} onRemove={() => setParam("min_cells", undefined)} />}
-              {maxCells < 1000000 && <FilterChip label={`Max cells: ${fmt(maxCells)}`} onRemove={() => setParam("max_cells", undefined)} />}
-              <button onClick={clearAll} className="text-xs text-muted-foreground hover:text-foreground underline ml-1">Clear all</button>
-              <button
-                onClick={() => navigator.clipboard.writeText(window.location.href)}
-                className="text-xs text-muted-foreground hover:text-foreground underline ml-1"
-              >
-                Copy URL
-              </button>
-            </div>
-          )}
+          {/* Results */}
+          <section aria-label="Results" className="min-w-0">
+            {quotaExceeded && nl?.quota && <AiQuotaExceeded quota={nl.quota} message={nl.note ?? "Today's free AI searches are used up."} />}
 
-          {/* ── TWO COLUMN LAYOUT ── */}
-          <div className="flex gap-5 items-start">
-
-            {/* ── LEFT SIDEBAR ── */}
-            {sidebarOpen && (
-              <div className="w-56 flex-shrink-0 surface sticky top-20 overflow-hidden">
-                <div className="px-4 py-3 border-b border-border flex items-center justify-between">
-                  <span className="text-xs font-medium text-foreground uppercase tracking-wider">Filters</span>
-                  {activeFilters.length > 0 && (
-                    <button onClick={clearAll} className="text-[10px] text-primary hover:underline">Reset</button>
-                  )}
-                </div>
-
-                {/* Organism */}
-                {organismFacets.length > 0 && (
-                  <AccordionSection label="Organism" defaultOpen>
-                    <FacetList
-                      options={organismFacets}
-                      value={organism}
-                      onChange={(v) => setParam("organism", v)}
-                      labelFn={organismLabel}
-                    />
-                  </AccordionSection>
-                )}
-
-                {/* Tissue */}
-                {(facets?.tissues ?? []).length > 0 && (
-                  <AccordionSection label="Tissue" defaultOpen>
-                    <FacetList
-                      options={facets?.tissues ?? []}
-                      value={tissue}
-                      onChange={(v) => setParam("tissue", v)}
-                      max={6}
-                    />
-                  </AccordionSection>
-                )}
-
-                {/* Cell Type */}
-                {(facets?.cell_types ?? []).length > 0 && (
-                  <AccordionSection label="Cell Type">
-                    <FacetList
-                      options={facets?.cell_types ?? []}
-                      value={cellType}
-                      onChange={(v) => setParam("cell_type", v)}
-                      max={6}
-                    />
-                  </AccordionSection>
-                )}
-
-                {/* Assay / Protocol */}
-                {(facets?.protocols ?? []).length > 0 && (
-                  <AccordionSection label="Assay / Protocol">
-                    <FacetList
-                      options={facets?.protocols ?? []}
-                      value={protocol}
-                      onChange={(v) => setParam("protocol", v)}
-                      labelFn={protocolLabel}
-                    />
-                  </AccordionSection>
-                )}
-
-                {/* Disease */}
-                {(facets?.diseases ?? []).length > 0 && (
-                  <AccordionSection label="Disease">
-                    <FacetList
-                      options={facets?.diseases ?? []}
-                      value={disease}
-                      onChange={(v) => setParam("disease", v)}
-                      max={6}
-                    />
-                  </AccordionSection>
-                )}
-
-                {/* Processing status */}
-                <AccordionSection label="Status" defaultOpen>
-                  <div className="space-y-1.5">
-                    {(["All", "Processed", "Failed"] as const).map((s) => (
-                      <label key={s} className="flex items-center gap-2 cursor-pointer group">
-                        <input
-                          type="radio"
-                          checked={(!qcStatus && s === "All") || qcStatus === s}
-                          onChange={() => setParam("status", s === "All" ? undefined : s)}
-                          className="accent-primary"
-                        />
-                        <span className={`text-xs ${(!qcStatus && s === "All") || qcStatus === s ? "text-foreground font-medium" : "text-muted-foreground"}`}>{s}</span>
-                      </label>
-                    ))}
-                  </div>
-                </AccordionSection>
-
-                {/* Failure Reason — only when Fail / All */}
-                {showFailureCategory && (facets?.failure_categories ?? []).length > 0 && (
-                  <AccordionSection label="Failure Reason">
-                    <FacetList
-                      options={facets?.failure_categories ?? []}
-                      value={failureCategory}
-                      onChange={(v) => setParam("failure_category", v)}
-                      labelFn={failureLabel}
-                    />
-                  </AccordionSection>
-                )}
-
-                {/* Sex */}
-                {(facets?.sexes ?? []).length > 0 && (
-                  <AccordionSection label="Sex">
-                    <FacetList
-                      options={facets?.sexes ?? []}
-                      value={sex}
-                      onChange={(v) => setParam("sex", v)}
-                    />
-                  </AccordionSection>
-                )}
-
-                {/* Cell count range */}
-                <AccordionSection label="Cell Count Range">
-                  <CellRangeSlider
-                    value={[minCells, maxCells]}
-                    onChange={([mn, mx]) => {
-                      setSearchParams((prev) => {
-                        const n = new URLSearchParams(prev);
-                        if (mn > 0) n.set("min_cells", String(mn)); else n.delete("min_cells");
-                        if (mx < 1000000) n.set("max_cells", String(mx)); else n.delete("max_cells");
-                        n.delete("page");
-                        return n;
-                      }, { replace: true });
-                    }}
-                  />
-                </AccordionSection>
-              </div>
+            <ActiveFiltersRow
+              applied={chipsApplied}
+              ai={showAiRow}
+              dropped={fresh?.dropped}
+              note={
+                quotaExceeded
+                  ? undefined
+                  : (fresh?.note ?? (fresh?.any_word ? "No study mentions every word, so these match any of the words instead." : undefined))
+              }
+              trailing={
+                aiMode ? (
+                  <>
+                    {explainButton}
+                    <AiQuotaBadge />
+                  </>
+                ) : undefined
+              }
+              onRemove={onRemove}
+              onAddFilter={focusRail}
+              onClear={onClear}
+              className="mb-3"
+            />
+            {explainError && (
+              <p role="alert" className="mb-3 text-[12.5px] text-warning">
+                {explainError}
+              </p>
             )}
 
-            {/* ── RIGHT RESULTS AREA ── */}
-            <div className="flex-1 min-w-0">
-
-              {/* GSE/GSM Tab toggle */}
-              <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-                <div className="flex rounded border border-border-strong overflow-hidden">
-                  {(["gsm", "gse"] as const).map((t) => (
-                    <button
-                      key={t}
-                      onClick={() => {
-                        setSearchParams((prev) => { const n = new URLSearchParams(prev); n.set("tab", t); n.delete("page"); return n; }, { replace: true });
-                      }}
-                      className={`px-4 py-1.5 text-xs font-medium transition-colors ${tab === t ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground bg-card hover:bg-background"}`}
-                      aria-pressed={tab === t}
-                    >
-                      {t === "gsm" ? "Samples (GSM)" : "Studies (GSE)"}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Live matching bar */}
-                <div className="text-xs text-muted-foreground">
-                  {!isLoading && tab === "gsm" && (nlActive ? nlResult : gsmResult) && (
-                    <span>
-                      <span className="font-semibold text-foreground">{totalItems.toLocaleString()}</span> samples ·{" "}
-                      <span className="font-semibold text-foreground">{fmt(resultCells)}</span> cells on this page
-                    </span>
-                  )}
-                  {!isLoading && tab === "gse" && gseResult && (
-                    <span>
-                      <span className="font-semibold text-foreground">{gseResult.total.toLocaleString()}</span> studies
-                    </span>
-                  )}
-                  {isLoading && <span className="animate-pulse">Loading...</span>}
-                </div>
-              </div>
-
-              {/* Results table */}
-              <div className="surface rounded-none overflow-hidden">
-                {isLoading ? (
-                  <div className="p-12 text-center text-muted-foreground text-sm">Loading...</div>
-                ) : tab === "gsm" && gsmRows.length === 0 ? (
-                  <div className="p-12 text-center text-muted-foreground text-sm">No samples match your filters.</div>
-                ) : tab === "gse" && gseRows.length === 0 ? (
-                  <div className="p-12 text-center text-muted-foreground text-sm">No studies match your filters.</div>
-                ) : tab === "gsm" ? (
-                  /* ── GSM TABLE (md+) ── */
+            {/* Header */}
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mb-3">
+              <h1 className="text-[15px] font-sans font-semibold tracking-normal text-foreground tabular" aria-live="polite">
+                {loadingInitial ? (
+                  <span className="inline-block h-4 w-56 rounded bg-secondary animate-pulse align-middle" />
+                ) : totals ? (
                   <>
-                  <div className="hidden md:block overflow-x-auto">
-                    <table className="data-table">
-                      <thead>
-                        <tr>
-                          {([
-                            ["gsm_id", "Sample", "text-left px-4"],
-                            ["organism", "Organism", "text-left px-3"],
-                            ["protocol", "Protocol", "text-left px-3"],
-                            ["status", "Status", "text-left px-3"],
-                            ["n_cells", "Cells", "text-right px-3"],
-                            ["mapping_rate", "Map %", "text-right px-3"],
-                            ["median_genes", "Med. Genes", "text-right px-4"],
-                          ] as [string, string, string][]).map(([col, label, cls]) => (
-                            <th
-                              key={col}
-                              onClick={() => toggleSort(col)}
-                              className={`${cls} cursor-pointer select-none hover:text-foreground`}
-                            >
-                              <span className="inline-flex items-center gap-1">
-                                {label} <SortIcon col={col} sortBy={sortBy} sortAsc={sortAsc} />
-                              </span>
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {gsmRows.map((s: GsmRow) => {
-                          const isFailed = s.status === "FAIL";
-                          return (
-                            <tr key={s.gsm_id} className={isFailed ? "text-muted-foreground" : ""}>
-                              <td className="px-4">
-                                <Link to={s.gse_id ? `/study/${s.gse_id}#${s.gsm_id}` : `/sample/${s.gsm_id}`} className="font-mono text-xs text-primary hover:underline">{s.gsm_id}</Link>
-                                {s.title && <div className="text-[11px] text-muted-foreground mt-0.5 truncate max-w-[220px]" title={s.title}>{s.title}</div>}
-                                {s.gse_id && <Link to={`/study/${s.gse_id}`} className="text-[11px] text-muted-foreground hover:text-primary font-mono">{s.gse_id}</Link>}
-                              </td>
-                              <td className="px-3 text-xs" title={s.organism ?? undefined}>{organismLabel(s.organism)}</td>
-                              <td className="px-3 text-xs whitespace-nowrap">{protocolLabel(s.protocol)}</td>
-                              <td className="px-3">
-                                <StatusBadge status={s.status} />
-                                {isFailed && s.failure_category && (
-                                  <div className="text-[11px] text-muted-foreground mt-0.5">{failureLabel(s.failure_category)}</div>
-                                )}
-                              </td>
-                              <td className="px-3 num text-xs">
-                                {isSuspectCellCount(s.protocol, s.n_cells)
-                                  ? <span className="flag font-sans" title="Known plate-protocol cell-count bug — value withheld pending pipeline fix">{FLAGGED_CELLS_LABEL}</span>
-                                  : fmt(s.n_cells)}
-                              </td>
-                              <td className="px-3 num text-xs">{s.mapping_rate != null ? `${(s.mapping_rate * 100).toFixed(1)}%` : "—"}</td>
-                              <td className="px-4 num text-xs">{fmt(s.median_genes)}</td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  {/* ── GSM CARDS (mobile, <md) ── */}
-                  <div className="md:hidden divide-y divide-border">
-                    {gsmRows.map((s: GsmRow) => {
-                      const isFailed = s.status === "FAIL";
-                      return (
-                        <div key={s.gsm_id} className={`p-4 ${isFailed ? "text-muted-foreground" : ""}`}>
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="min-w-0">
-                              <Link to={s.gse_id ? `/study/${s.gse_id}#${s.gsm_id}` : `/sample/${s.gsm_id}`} className="font-mono text-sm text-primary hover:underline">{s.gsm_id}</Link>
-                              {s.gse_id && <Link to={`/study/${s.gse_id}`} className="block text-[11px] text-muted-foreground hover:text-primary font-mono">{s.gse_id}</Link>}
-                            </div>
-                            <StatusBadge status={s.status} />
-                          </div>
-                          {s.title && <div className="text-[11px] text-muted-foreground mt-1 line-clamp-2">{s.title}</div>}
-                          {isFailed && s.failure_category && (
-                            <div className="text-[11px] text-muted-foreground mt-0.5">{failureLabel(s.failure_category)}</div>
-                          )}
-                          <div className="grid grid-cols-2 gap-x-3 gap-y-1 mt-2 text-[11px]">
-                            <div><span className="text-muted-foreground">Organism: </span>{organismLabel(s.organism)}</div>
-                            <div><span className="text-muted-foreground">Protocol: </span>{protocolLabel(s.protocol)}</div>
-                            <div><span className="text-muted-foreground">Cells: </span>{isSuspectCellCount(s.protocol, s.n_cells) ? <span className="flag">{FLAGGED_CELLS_LABEL}</span> : <span className="font-mono">{fmt(s.n_cells)}</span>}</div>
-                            <div><span className="text-muted-foreground">Map %: </span><span className="font-mono">{s.mapping_rate != null ? `${(s.mapping_rate * 100).toFixed(1)}%` : "—"}</span></div>
-                            <div><span className="text-muted-foreground">Med. genes: </span><span className="font-mono">{fmt(s.median_genes)}</span></div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                    {state.level === "gse" ? (
+                      <>
+                        {fmtInt(total)} {total === 1 ? "study" : "studies"}
+                        {totals.samples != null && <span className="text-muted-foreground font-normal"> · {fmtInt(totals.samples)} samples</span>}
+                      </>
+                    ) : (
+                      <>
+                        {fmtInt(total)} {total === 1 ? "sample" : "samples"}
+                        {totals.studies != null && <span className="text-muted-foreground font-normal"> · {fmtInt(totals.studies)} studies</span>}
+                      </>
+                    )}
+                    {totals.cells != null && <span className="text-muted-foreground font-normal"> · {fmtCompact(totals.cells)} cells</span>}
+                    <span className="text-muted-foreground font-normal"> match</span>
                   </>
                 ) : (
-                  /* ── GSE TABLE ── */
-                  <div className="overflow-x-auto">
-                    <table className="data-table">
-                      <thead>
-                        <tr>
-                          {([
-                            ["id", "Study", "text-left px-4"],
-                            ["organism", "Organism", "text-left px-3"],
-                            ["n_gsm_total", "Samples", "text-right px-3"],
-                            ["n_cells", "Cells", "text-right px-3"],
-                            ["submitted_date", "Year", "text-right px-4"],
-                          ] as [string, string, string][]).map(([col, label, cls]) => (
-                            <th
-                              key={col}
-                              onClick={() => toggleSort(col)}
-                              className={`${cls} cursor-pointer select-none hover:text-foreground`}
-                            >
-                              <span className="inline-flex items-center gap-1">
-                                {label} <SortIcon col={col} sortBy={sortBy} sortAsc={sortAsc} />
-                              </span>
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {gseRows.map((s: GseRow) => (
-                          <tr key={s.id}>
-                            <td className="px-4">
-                              <Link to={`/study/${s.id}`} className="font-mono text-xs text-primary hover:underline">{s.id}</Link>
-                              {s.title && <div className="text-[11px] text-muted-foreground mt-0.5 truncate max-w-[360px]" title={s.title}>{s.title}</div>}
-                            </td>
-                            <td className="px-3 text-xs" title={s.organism ?? undefined}>{organismLabel(s.organism)}</td>
-                            <td className="px-3 num text-xs">
-                              <span className="font-mono">{s.n_gsm_done}</span>
-                              <span className="text-muted-foreground font-mono">/{s.n_gsm_total}</span>
-                              {s.n_gsm_failed > 0 && (
-                                <span className="text-muted-foreground font-mono ml-1">({s.n_gsm_failed} failed)</span>
-                              )}
-                            </td>
-                            <td className="px-3 num text-xs">{fmt(s.n_cells)}</td>
-                            <td className="px-4 num text-xs text-muted-foreground">
-                              {s.submitted_date ? new Date(s.submitted_date).getFullYear() : "—"}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                  "Studies"
+                )}
+              </h1>
+
+              <div className="ml-auto flex flex-wrap items-center gap-2">
+                <Segmented
+                  ariaLabel="Result level"
+                  value={state.level}
+                  onChange={setLevel}
+                  options={[
+                    { value: "gse", label: "Studies" },
+                    { value: "gsm", label: "Samples" },
+                  ]}
+                />
+                {state.level === "gse" && (
+                  <Segmented
+                    ariaLabel="Layout"
+                    value={state.view}
+                    onChange={setView}
+                    options={[
+                      { value: "cards", label: "Cards", icon: <LayoutGrid size={13} /> },
+                      { value: "table", label: "Table", icon: <List size={13} /> },
+                    ]}
+                  />
+                )}
+                <label className="inline-flex items-center gap-1.5 text-[12.5px] text-muted-foreground">
+                  <span className="sr-only sm:not-sr-only">Sort</span>
+                  <select value={state.sort} onChange={(e) => setSort(e.target.value as Sort)} className="input h-8 w-auto px-2 text-[12.5px]">
+                    {SORTS.filter((s) => s.value !== "relevance" || !!applied.q || aiMode || true).map((s) => (
+                      <option key={s.value} value={s.value}>
+                        {s.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {state.level === "gse" && total > 0 && (
+                  <a href={exportHref} download="singlet-accessions.txt" className="btn-secondary btn-sm" title="Text file of matching accessions (up to 5,000)">
+                    <Download size={13} />
+                    Export accessions
+                  </a>
+                )}
+                <button
+                  type="button"
+                  className="btn-primary btn-sm"
+                  disabled={!selection.items.length}
+                  onClick={() => barRef.current?.focus()}
+                >
+                  Load selected ({fmtInt(selection.items.length)})
+                </button>
+              </div>
+            </div>
+
+            {/* Body */}
+            {result.isError && !shown ? (
+              <div className="surface px-5 py-8 text-center">
+                <p className="text-[14px] text-foreground">The catalog did not answer.</p>
+                <p className="mt-1 text-[13px] text-muted-foreground">{(result.error as Error)?.message}</p>
+                <button type="button" onClick={() => result.refetch()} className="btn-secondary btn-sm mt-4">
+                  Try again
+                </button>
+              </div>
+            ) : loadingInitial ? (
+              <div className="space-y-3" aria-busy="true">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <StudyCardSkeleton key={i} />
+                ))}
+              </div>
+            ) : shown && shown.total === 0 ? (
+              <EmptyState
+                level={state.level}
+                suggestions={nl?.suggestions ?? []}
+                hasFilters={hasActive}
+                onApply={applySuggestion}
+                onClear={onClear}
+                onSamples={state.level === "gse" ? () => setLevel("gsm") : undefined}
+              />
+            ) : (
+              <div className={cn("transition-opacity", refreshing && "opacity-60 pointer-events-none")} aria-busy={refreshing || undefined}>
+                {state.level === "gsm" ? (
+                  <SampleTable rows={samples} />
+                ) : state.view === "table" ? (
+                  <StudyTable
+                    rows={studies}
+                    selectedIds={selection.ids}
+                    onToggle={selection.toggle}
+                    onTogglePage={(rows, select) => (select ? selection.addMany(rows) : selection.removeMany(rows.map((r) => r.gse_id)))}
+                    sort={state.sort}
+                    onSort={setSort}
+                    ai={showAiRow}
+                    why={Object.keys(explanations).length ? { ...(nl?.why ?? {}), ...explanations } : nl?.why}
+                    aiWhyIds={explanations}
+                  />
+                ) : (
+                  <>
+                    {studies.length > 1 && (
+                      <div className="flex items-center gap-2 mb-2 text-[12.5px] text-muted-foreground">
+                        <label className="inline-flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            className="h-3.5 w-3.5 rounded-[2px]"
+                            checked={studies.every((r) => selection.ids.has(r.gse_id))}
+                            onChange={(e) => (e.target.checked ? selection.addMany(studies) : selection.removeMany(studies.map((r) => r.gse_id)))}
+                          />
+                          Select all on this page
+                        </label>
+                      </div>
+                    )}
+                    <div className="space-y-3">
+                      {studies.map((r) => (
+                        <StudyCard
+                          key={r.gse_id}
+                          row={r}
+                          selected={selection.ids.has(r.gse_id)}
+                          onToggle={selection.toggle}
+                          ai={showAiRow}
+                          why={explanations[r.gse_id] ?? nl?.why?.[r.gse_id]}
+                          aiWhy={!!explanations[r.gse_id]}
+                        />
+                      ))}
+                    </div>
+                  </>
                 )}
 
                 {/* Pagination */}
-                {totalItems > 0 && !isLoading && (
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 py-3 border-t border-border bg-background">
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs text-muted-foreground">
-                        {nlActive
-                          ? <>Showing {gsmRows.length.toLocaleString()} of {totalItems.toLocaleString()} matching samples</>
-                          : <>Showing {(page * pageSize + 1).toLocaleString()}–{Math.min((page + 1) * pageSize, totalItems).toLocaleString()} of {totalItems.toLocaleString()} {tab === "gsm" ? "samples" : "studies"}</>}
-                      </span>
-                      {tab === "gsm" && (
-                        <button
-                          onClick={exportCSV}
-                          className="btn-secondary h-7 px-2 text-xs"
-                          title="Export page to CSV"
-                        >
-                          <Download size={11} /> CSV
-                        </button>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                        <span className="hidden sm:inline">Rows</span>
-                        <select
-                          value={pageSize}
-                          onChange={(e) => setSearchParams((prev) => { const n = new URLSearchParams(prev); n.set("size", e.target.value); n.delete("page"); return n; }, { replace: true })}
-                          className="input h-7 w-auto px-2 text-xs"
-                        >
-                          {[25, 50, 100].map((s) => <option key={s} value={s}>{s}</option>)}
-                        </select>
-                      </label>
-                      <button onClick={() => setPage(Math.max(0, page - 1))} disabled={page === 0} className="btn-secondary h-7 w-7 p-0" title="Previous page" aria-label="Previous page">
-                        <ChevronLeft size={13} />
-                      </button>
-                      <span className="text-xs text-muted-foreground px-2 whitespace-nowrap">
-                        Page {page + 1} of {totalPages.toLocaleString()}
-                      </span>
-                      <button onClick={() => setPage(Math.min(totalPages - 1, page + 1))} disabled={page >= totalPages - 1} className="btn-secondary h-7 w-7 p-0" title="Next page" aria-label="Next page">
-                        <ChevronRight size={13} />
-                      </button>
-                    </div>
-                  </div>
+                {pages > 1 && (
+                  <nav className="mt-5 flex items-center justify-between text-[13px]" aria-label="Pagination">
+                    <button type="button" className="btn-secondary btn-sm" disabled={state.page <= 1} onClick={() => setPage(state.page - 1)}>
+                      <ChevronLeft size={13} /> Previous
+                    </button>
+                    <span className="text-muted-foreground tabular">
+                      Page <span className="font-mono text-foreground">{fmtInt(state.page)}</span> of <span className="font-mono text-foreground">{fmtInt(pages)}</span>
+                    </span>
+                    <button type="button" className="btn-secondary btn-sm" disabled={state.page >= pages} onClick={() => setPage(state.page + 1)}>
+                      Next <ChevronRight size={13} />
+                    </button>
+                  </nav>
                 )}
               </div>
-            </div>
-          </div>
+            )}
+          </section>
         </div>
-      </section>
+      </main>
 
+      <SelectionBar ref={barRef} selection={selection} />
       <Footer />
     </div>
   );

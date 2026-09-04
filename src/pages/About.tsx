@@ -52,10 +52,9 @@ const About = () => {
   useHashScroll();
 
   const { data: stats } = useQuery({ queryKey: ["corpus-stats"], queryFn: () => apiClient.stats(), staleTime: 120_000 });
-  const { data: facets } = useQuery({ queryKey: ["facets"], queryFn: () => apiClient.facets(), staleTime: 300_000 });
 
   const failed = stats ? stats.total_samples - stats.success_samples : null;
-  const failureFacets = (facets?.failure_categories ?? []).slice().sort((a, b) => b.count - a.count);
+  const failureFacets = (stats?.failure_categories ?? []).slice().sort((a, b) => b.count - a.count);
   const failureTotal = failureFacets.reduce((a, f) => a + f.count, 0);
   const year = new Date().getFullYear();
 

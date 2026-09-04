@@ -1,41 +1,45 @@
-# singlet-website
+# singlet.bio
 
-[![Documentation](https://img.shields.io/badge/docs-singlet--ai.github.io-blue)](https://singlet-ai.github.io/singlet-website/)
+Website and catalog API for the **singlet** atlas — every public single-cell RNA-seq study on GEO, reprocessed the same way, one `.singlet` file per study. Data is CC0, code is MIT.
 
-React + TypeScript website and dashboard for [SingletDB](https://singletdb.com) — the world's largest uniformly processed single-cell database.
+```bash
+pip install singlet
+```
 
-## Features
+```r
+install.packages("singlet")
+# Until CRAN accepts the release: remotes::install_github("Singlet-Bio/singlet", subdir = "r")
+```
 
-- **Landing page** with interactive floating cells animation
-- **Investor pitch** — 8-section scrollspy with market, technology, business, and team sections
-- **API documentation** — Code examples, rate limits, auth
-- **Gene Programs** — 10,000+ biological process dictionary
-- **Pricing** — Free/Pro/Enterprise tiers
-- **Dashboard** — Protected user area
+```python
+import singlet
+adata = singlet.load("GSE178957")
+```
 
-## Tech Stack
+## What is in this repository
 
-React 18 · TypeScript · Vite · Tailwind CSS · shadcn/ui · Supabase · Recharts · KaTeX
+| Path | Purpose |
+|------|---------|
+| `src/` | React 18 + TypeScript + Vite + Tailwind front end (home, `/browse`, `/docs`, `/about`, `/study/:gse`) |
+| `functions/api/` | Cloudflare Pages Functions — the catalog API (`/api/search`, `/api/facets`, `/api/nl-search`, `/api/gse/:id`, `/api/stats`) backed by D1 |
+| `functions/_shared/` | Shared helpers: edge caching, controlled vocabulary normalizer, condition summariser, suspect-cell guard |
+| `supabase/functions/` | Lovable Cloud edge functions (AI query interpretation) |
+| `schema/` | D1 schema and local seed scripts |
+| `public/` | Static assets, `_redirects`, sitemap |
 
 ## Development
 
 ```bash
-bun install
-bun run dev
+npm install
+npm run dev        # Vite on :8080, /api/* proxied to https://singlet.bio
 ```
 
-## Documentation
+Set `VITE_API_PROXY_TARGET` to point the dev proxy at another API host.
 
-Operational docs at [singlet-ai.github.io/singlet-website](https://singlet-ai.github.io/singlet-website/).
+## Deployment
 
-## Part of Singlet Bio
+Cloudflare Pages project `singlet`, auto-deployed from `main`. The D1 database `singlet-catalog` is bound as `DB`; study bundles live in the public R2 bucket at `https://data.singlet.bio`.
 
-| Repository | Purpose |
-|-----------|---------|
-| [geo-reprocess](https://github.com/Singlet-AI/geo-reprocess) | HPC pipeline |
-| [singlet](https://github.com/Singlet-AI/singlet) | Python client |
-| [singlepress](https://github.com/Singlet-AI/singlepress) | Compression |
-| [singlet-intelligence](https://github.com/Singlet-AI/singlet-intelligence) | ML models |
-| [singlet-strategy](https://github.com/Singlet-AI/singlet-strategy) | Strategic planning |
-| **singlet-website** | Website & dashboard |
-| [papers](https://github.com/Singlet-AI/papers) | Manuscripts & reports |
+## Related
+
+- [Singlet-Bio/singlet](https://github.com/Singlet-Bio/singlet) — Python and R client packages
