@@ -17,16 +17,25 @@
  * Explicit filters in the query string (organism=…, tissue_group=…, …) are
  * merged (union per field) with the interpreted ones.
  *
+ * Budgets: each *fresh* interpretation (not served from the 1 h interpretation
+ * cache or the response cache) spends one unit of the visitor's daily AI
+ * budget — 10/day anonymous (by salted IP hash), 200/day signed in. The
+ * browser's session token is forwarded as-is; the edge function validates it.
+ * The remaining budget comes back in the `X-Singlet-Quota` header (never
+ * cached). When the budget is spent the request still succeeds as a plain
+ * keyword search with `quota_exceeded: true`, `quota` and a human `note`.
+ *
  * Response:
  *   { configured, interpreted, applied, level, data, total, totals, page, limit,
  *     accessions, suggestions: [{drop:{field,value}, total}], why: {gse_id: string},
- *     model?, note? }
+ *     model?, note?, quota_exceeded?, quota? }
  *
  * `accessions` (flat GSE / GSM id list) is a stable contract consumed by the
  * Python and R packages.
  */
 import { corsOk, corsErr, handleOptions } from "../_shared/cors";
-import { cachedJson, CATALOG_CACHE_TTL } from "../_shared/cache";
+import { cachedJson, CATALOG_CACHE_TTL, NO_CACHE_HEADER } from "../_shared/cache";
+import { identityHeaders, QUOTA_HEADER } from "../_shared/identity";
 import { loadRules, organismVocabForModel, TISSUE_GROUPS, DISEASE_GROUPS, ASSAY_FAMILIES, type VocabRule } from "../_shared/vocab";
 import { cellTypeVocab } from "../_shared/facets-core";
 import {
@@ -132,29 +141,55 @@ function coerceInterpreted(raw: unknown): Interpreted {
   };
 }
 
-/** Call the edge function (cached 1h per normalised query). Null on any failure. */
-async function interpret(env: Env, ctx: Ctx, query: string): Promise<{ interpreted: Interpreted; model?: string } | null> {
+/** Remaining AI budget for the requesting visitor, as reported by the edge function. */
+export interface Quota {
+  kind: "anon" | "user";
+  used: number;
+  limit: number;
+  resets_at: string;
+  exceeded: boolean;
+}
+
+type InterpretOutcome =
+  | { ok: true; interpreted: Interpreted; model?: string; quota?: Quota; cached: boolean }
+  | { ok: false; reason: "quota"; quota: Quota; message: string }
+  | { ok: false; reason: "busy" | "unavailable" };
+
+const isQuota = (v: unknown): v is Quota =>
+  !!v && typeof v === "object" && typeof (v as Quota).used === "number" && typeof (v as Quota).limit === "number";
+
+/**
+ * Call the edge function on the visitor's behalf. Interpretations are cached
+ * 1 h per normalised query — a cache hit costs nobody any budget.
+ */
+async function interpret(env: Env, ctx: Ctx, request: Request, query: string): Promise<InterpretOutcome> {
   const normQ = query.toLowerCase().replace(/\s+/g, " ").trim();
   const cacheKey = `${INTERPRET_CACHE_URL}?v=2&q=${encodeURIComponent(normQ)}`;
   let cache: Cache | null = null;
   try {
     cache = (caches as unknown as { default?: Cache }).default ?? null;
     const hit = cache ? await cache.match(cacheKey) : null;
-    if (hit) return (await hit.json()) as { interpreted: Interpreted; model?: string };
+    if (hit) {
+      const c = (await hit.json()) as { interpreted: Interpreted; model?: string };
+      return { ok: true, interpreted: c.interpreted, model: c.model, cached: true };
+    }
   } catch {
     /* ignore cache errors */
   }
 
   const base = (env.SUPABASE_URL ?? DEFAULT_SUPABASE_URL).replace(/\/+$/, "");
   const anon = env.SUPABASE_ANON_KEY ?? DEFAULT_SUPABASE_ANON_KEY;
-  const cellTypes = await cellTypeVocab(ctx, 200).catch(() => [] as string[]);
+  const [cellTypes, identity] = await Promise.all([
+    cellTypeVocab(ctx, 200).catch(() => [] as string[]),
+    identityHeaders(request, anon),
+  ]);
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), INTERPRET_TIMEOUT_MS);
   try {
     const res = await fetch(`${base}/functions/v1/${INTERPRET_FN}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", apikey: anon, Authorization: `Bearer ${anon}` },
+      headers: { "Content-Type": "application/json", ...identity },
       body: JSON.stringify({
         version: 2,
         q: query,
@@ -168,25 +203,33 @@ async function interpret(env: Env, ctx: Ctx, query: string): Promise<{ interpret
       }),
       signal: controller.signal,
     });
-    if (!res.ok) return null;
-    const data = (await res.json()) as { interpreted?: unknown; model?: string };
-    if (data.interpreted == null) return null;
-    const out = { interpreted: coerceInterpreted(data.interpreted), model: data.model };
+    if (res.status === 429) {
+      const body = (await res.json().catch(() => ({}))) as { quota?: unknown; message?: string };
+      if (isQuota(body.quota)) {
+        return { ok: false, reason: "quota", quota: body.quota, message: body.message ?? "Today's free AI searches are used up." };
+      }
+      return { ok: false, reason: "busy" };
+    }
+    if (res.status === 503) return { ok: false, reason: "busy" };
+    if (!res.ok) return { ok: false, reason: "unavailable" };
+    const data = (await res.json()) as { interpreted?: unknown; model?: string; quota?: unknown };
+    if (data.interpreted == null) return { ok: false, reason: "unavailable" };
+    const stored = { interpreted: coerceInterpreted(data.interpreted), model: data.model };
     if (cache) {
       ctx.waitUntil(
         cache
           .put(
             cacheKey,
-            new Response(JSON.stringify(out), {
+            new Response(JSON.stringify(stored), {
               headers: { "Content-Type": "application/json", "Cache-Control": `public, max-age=${INTERPRET_CACHE_TTL}` },
             })
           )
           .catch(() => undefined)
       );
     }
-    return out;
+    return { ok: true, ...stored, quota: isQuota(data.quota) ? data.quota : undefined, cached: false };
   } catch {
-    return null;
+    return { ok: false, reason: "unavailable" };
   } finally {
     clearTimeout(timer);
   }
@@ -335,15 +378,30 @@ async function handle(env: Env, request: Request, waitUntil: (p: Promise<unknown
   let model: string | undefined;
   let configured = true;
   let note: string | undefined;
+  let quota: Quota | undefined;
+  let quotaExceeded = false;
+  // Degraded answers (interpreter down, budget spent) are visitor-specific
+  // moments, not facts about the catalog — never let them into the edge cache.
+  let cacheable = true;
 
   if (!isAccession) {
-    const r = await interpret(env, ctx, q);
-    if (r) {
+    const r = await interpret(env, ctx, request, q);
+    if (r.ok) {
       interpreted = r.interpreted;
       model = r.model;
+      quota = r.quota;
+    } else if (r.reason === "quota") {
+      quota = r.quota;
+      quotaExceeded = true;
+      cacheable = false;
+      note = `${r.message} Meanwhile this is a plain keyword search.`;
     } else {
       configured = false;
-      note = "The query interpreter was unavailable, so this is a plain keyword search.";
+      cacheable = false;
+      note =
+        r.reason === "busy"
+          ? "AI search is busy right now, so this is a plain keyword search — try again in a minute."
+          : "The query interpreter was unavailable, so this is a plain keyword search.";
     }
   }
 
@@ -374,25 +432,33 @@ async function handle(env: Env, request: Request, waitUntil: (p: Promise<unknown
     if (!fts.terms.length) filters.q = "";
   }
 
-  return corsOk({
-    configured,
-    interpreted,
-    applied: pickFilters(filters),
-    dropped,
-    level: filters.level,
-    data: result.data,
-    total: result.total,
-    totals: result.totals,
-    page: result.page,
-    limit: result.limit,
-    accessions: result.accessions,
-    suggestions: sugg,
-    why,
-    ...(model ? { model } : {}),
-    ...(result.any_word ? { any_word: true } : {}),
-    ...(note ? { note } : {}),
-    ...(result.accession_lookup ? { accession_lookup: result.accession_lookup } : {}),
-  });
+  const headers: Record<string, string> = {};
+  if (quota && !quotaExceeded) headers[QUOTA_HEADER] = JSON.stringify(quota);
+  if (!cacheable) headers[NO_CACHE_HEADER] = "1";
+
+  return corsOk(
+    {
+      configured,
+      interpreted,
+      applied: pickFilters(filters),
+      dropped,
+      level: filters.level,
+      data: result.data,
+      total: result.total,
+      totals: result.totals,
+      page: result.page,
+      limit: result.limit,
+      accessions: result.accessions,
+      suggestions: sugg,
+      why,
+      ...(model ? { model } : {}),
+      ...(result.any_word ? { any_word: true } : {}),
+      ...(note ? { note } : {}),
+      ...(quotaExceeded && quota ? { quota_exceeded: true, quota } : {}),
+      ...(result.accession_lookup ? { accession_lookup: result.accession_lookup } : {}),
+    },
+    { headers }
+  );
 }
 
 export const onRequestGet: PagesFunction<Env> = async ({ env, request, waitUntil }) => {
