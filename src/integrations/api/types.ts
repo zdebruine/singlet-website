@@ -249,6 +249,8 @@ export interface GseRow {
   bundle_bytes: number | null;
   /** Public download URL (https://data.singlet.bio/…), null until the bundle exists. */
   bundle_url: string | null;
+  /** Number of samples actually present in the bundle, when indexed by the packing job. */
+  bundle_n_samples: number | null;
   submitted_date: string | null;
   last_updated: string;
   /** Common name for the study's primary organism (e.g. "Human"). */

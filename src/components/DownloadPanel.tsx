@@ -18,13 +18,18 @@ interface DownloadPanelProps {
   bundleUrl: string | null | undefined;
   /** Bundle size in bytes */
   bundleBytes: number | null | undefined;
+  /** Number of samples actually present in the bundle, when known. */
+  bundleNSamples?: number | null;
+  /** Number of processed samples in the catalog (for "N of M" messaging). */
+  processedSamples?: number | null;
   /** Single-column layout for a narrow sidebar. */
   stacked?: boolean;
   className?: string;
 }
 
-export function DownloadPanel({ accession, bundleUrl, bundleBytes, stacked = false, className }: DownloadPanelProps) {
+export function DownloadPanel({ accession, bundleUrl, bundleBytes, bundleNSamples, processedSamples, stacked = false, className }: DownloadPanelProps) {
   const downloadUrl = bundleUrl || null;
+  const showSampleCount = downloadUrl && bundleNSamples != null && processedSamples != null && bundleNSamples !== processedSamples;
   // In the narrow sidebar the trailing comments don't fit; drop them there.
   const py = stacked
     ? `# ${PY_INSTALL}\nimport singlet\nadata = singlet.load("${accession}")`
@@ -64,6 +69,7 @@ export function DownloadPanel({ accession, bundleUrl, bundleBytes, stacked = fal
       </div>
       {downloadUrl ? (
         <p className="px-4 pb-3 text-xs text-muted-foreground leading-relaxed">
+          {showSampleCount ? `Contains ${bundleNSamples} of ${processedSamples} processed samples. ` : ""}
           One file holds every processed sample in the study; select samples with <code className="code-inline">gsm_id</code> after
           loading. <Link to="/docs#singlet-file" className="text-primary hover:underline">What's inside →</Link>
         </p>
