@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown, Check, ChevronDown, ChevronRight, Copy, ExternalLink, Search, X } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown, Check, ChevronDown, ChevronRight, Copy, ExternalLink, ListFilter, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   FLAGGED_CELLS_LABEL,
@@ -351,9 +351,10 @@ export function StudySamplesTable({ gseId, studyTitle, samples, highlightGsm, co
         </div>
 
         <label className="relative flex-1 min-w-[200px] max-w-[360px]">
-          <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+          <ListFilter size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
           <input
-            type="search"
+            type="text"
+            autoComplete="off"
             value={text}
             onChange={(e) => setText(e.target.value)}
             placeholder="Filter samples (accession, source, characteristics…)"
