@@ -82,7 +82,7 @@ const DataLicense = () => (
                             </li>
                             <li className="flex items-start gap-2">
                                 <span className="text-primary font-bold mt-0.5">•</span>
-                                <span><span className="text-foreground font-medium">Format and access:</span> Bundles are served publicly from Cloudflare R2 with no egress fees. No account or API key is required to download.</span>
+                                <span><span className="text-foreground font-medium">Format and access:</span> Bundles are served publicly from our CDN at no cost. No account or API key is required to download.</span>
                             </li>
                         </ul>
                     </div>
@@ -142,10 +142,12 @@ const DataLicense = () => (
                         We're happy to clarify anything about how the data and software are licensed.
                     </p>
                     <a
-                        href="mailto:hello@singlet.bio?subject=License%20Inquiry"
-                        className="inline-flex items-center gap-2 px-6 py-2.5 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity"
+                        href="https://github.com/Singlet-Bio/singlet/issues"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="btn-primary h-10 px-6"
                     >
-                        Contact Us <ArrowRight size={14} />
+                        Ask on GitHub Issues <ArrowRight size={14} />
                     </a>
                 </div>
             </div>

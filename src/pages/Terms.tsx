@@ -24,8 +24,9 @@ const Terms = () => (
             <p className="text-sm leading-relaxed">
               Singlet Bio is an open single-cell resource. It consists of a public single-cell dataset (the atlas),
               the open-source <span className="font-mono">singlet</span> software package (Python, R, and C++), and this website,
-              which lets you browse and download the data. There are no paid tiers, accounts, or subscriptions.
-              Data downloads are public and free, served from Cloudflare R2 with no egress fees and no API key required.
+              which lets you browse and download the data. There are no paid tiers or subscriptions. Data downloads are
+              public and free, served from our CDN with no account and no API key required. A free account exists only to
+              raise the daily limit on AI-assisted searches and to issue API keys for programmatic search.
             </p>
           </section>
 
@@ -77,8 +78,8 @@ const Terms = () => (
           <section>
             <h2 className="font-display text-lg font-bold text-foreground mb-3">8. Contact</h2>
             <p className="text-sm leading-relaxed">
-              Questions about these Terms? Email us at{" "}
-              <a href="mailto:hello@singlet.bio" className="text-primary hover:underline">hello@singlet.bio</a>.
+              Questions about these Terms? Open an issue on{" "}
+              <a href="https://github.com/Singlet-Bio/singlet/issues" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">GitHub Issues</a>.
             </p>
           </section>
         </div>

@@ -15,8 +15,9 @@ const Privacy = () => (
           <section>
             <h2 className="font-display text-lg font-bold text-foreground mb-3">1. No Account Required</h2>
             <p className="text-sm leading-relaxed">
-              You do not need an account to browse this website or to download the atlas. Data downloads are public
-              and free, served from Cloudflare R2. We do not require you to register, log in, or provide any personal information.
+              You do not need an account to browse this website, to search it, or to download the atlas. Data downloads
+              are public and free, served from our CDN. An account is optional and exists only to raise the daily limit on
+              AI-assisted searches and to issue API keys.
             </p>
           </section>
 
@@ -32,8 +33,8 @@ const Privacy = () => (
           <section>
             <h2 className="font-display text-lg font-bold text-foreground mb-3">3. Information We Collect</h2>
             <p className="text-sm leading-relaxed mb-2">
-              Because there are no accounts, we collect very little. Like most websites, our hosting and content-delivery
-              providers automatically record standard technical logs when you visit or download files, which may include:
+              We collect very little. Like most websites, our hosting and content-delivery providers automatically record
+              standard technical logs when you visit or download files, which may include:
             </p>
             <ul className="list-disc list-inside text-sm space-y-1">
               <li>IP address and approximate region</li>
@@ -42,6 +43,27 @@ const Privacy = () => (
             </ul>
             <p className="text-sm leading-relaxed mt-2">
               We use this only in aggregate to understand traffic, keep the site reliable, and protect against abuse.
+            </p>
+            <p className="text-sm leading-relaxed mt-3 mb-2">
+              AI-assisted search is rate-limited per day. To enforce that limit we keep:
+            </p>
+            <ul className="list-disc list-inside text-sm space-y-1">
+              <li>
+                Without an account: a daily count keyed to a salted, one-way hash of your network address. The address
+                itself is not stored and the hash cannot be reversed.
+              </li>
+              <li>
+                With an account: your email address (or the address your Google or GitHub account provides) and a daily
+                count of AI requests. Nothing else about your account is stored.
+              </li>
+              <li>
+                API keys you create: a name, the first characters of the key, a one-way hash of the key, and when it was
+                created, last used, expires and was revoked. The key itself is shown to you once and never stored.
+              </li>
+            </ul>
+            <p className="text-sm leading-relaxed mt-2">
+              The text of a plain-English search is sent to a language model to turn it into catalog filters. The
+              interpretation is cached for a short time by question text alone; it is not linked to you or your account.
             </p>
           </section>
 
@@ -56,9 +78,9 @@ const Privacy = () => (
           <section>
             <h2 className="font-display text-lg font-bold text-foreground mb-3">5. Third-Party Services</h2>
             <p className="text-sm leading-relaxed">
-              We rely on infrastructure providers to host the website and serve downloads (including Cloudflare for
-              content delivery and object storage). These providers process standard request logs under their own
-              privacy policies. We do not sell or share your data with advertisers.
+              We rely on infrastructure providers to host the website, run sign-in, and serve downloads (content delivery,
+              object storage, authentication and a language-model gateway). These providers process standard request
+              logs under their own privacy policies. We do not sell or share your data with advertisers.
             </p>
           </section>
 
@@ -80,8 +102,8 @@ const Privacy = () => (
           <section>
             <h2 className="font-display text-lg font-bold text-foreground mb-3">8. Contact</h2>
             <p className="text-sm leading-relaxed">
-              For privacy-related questions, email{" "}
-              <a href="mailto:hello@singlet.bio" className="text-primary hover:underline">hello@singlet.bio</a>.
+              For privacy-related questions, open an issue on{" "}
+              <a href="https://github.com/Singlet-Bio/singlet/issues" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">GitHub Issues</a>.
             </p>
           </section>
         </div>
