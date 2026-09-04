@@ -419,7 +419,7 @@ sc.pp.highly_variable_genes(adata, batch_key="gsm_id")`}
               </p>
               <CodeBlock
                 label="bash"
-                code={`pip install "singlet[mcp]"
+                code={`pip install "singlet-bio[mcp] @ git+https://github.com/Singlet-Bio/singlet.git"
 python -m singlet.mcp        # starts a stdio MCP server`}
               />
               <p className="mt-4">Register it with your client, for example:</p>
