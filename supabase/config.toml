@@ -1,1 +1,10 @@
 project_id = "vbswbitfyallghbgxkuw"
+
+# Both functions accept anonymous callers (the catalog API forwards the
+# visitor's session token when there is one) and validate user tokens
+# themselves, so the platform-level JWT gate stays off.
+[functions.interpret-search-query]
+verify_jwt = false
+
+[functions.explain-results]
+verify_jwt = false
