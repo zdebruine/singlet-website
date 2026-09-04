@@ -3,7 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import { Github, Menu, X } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { SearchBox } from "@/components/SearchBox";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { AccountMenu } from "@/components/auth/AccountMenu";
 import { cn } from "@/lib/utils";
 
 const NAV = [
@@ -13,24 +13,6 @@ const NAV = [
 ];
 
 const GITHUB = "https://github.com/Singlet-Bio/singlet";
-
-function SignInPlaceholder({ className }: { className?: string }) {
-  return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <button type="button" className={cn("text-[13px] text-muted-foreground hover:text-foreground transition-colors rounded px-1", className)}>
-          Sign in
-        </button>
-      </PopoverTrigger>
-      <PopoverContent align="end" className="w-64 p-3 rounded border-border">
-        <p className="text-[13px] font-medium text-foreground mb-1">Coming soon</p>
-        <p className="text-xs text-muted-foreground leading-relaxed">
-          Accounts are optional and only needed for saved searches and higher AI-search limits. Browsing and downloading never require one.
-        </p>
-      </PopoverContent>
-    </Popover>
-  );
-}
 
 const Navbar = () => {
   const location = useLocation();
@@ -77,10 +59,10 @@ const Navbar = () => {
 
         <div className="flex-1" />
 
-        {/* Right: compact search (not on home) + sign in */}
+        {/* Right: compact search (not on home) + account */}
         <div className="hidden md:flex items-center gap-4">
           {showSearch && <SearchBox variant="compact" className="w-64 lg:w-72" />}
-          <SignInPlaceholder />
+          <AccountMenu />
         </div>
 
         {/* Mobile toggle */}
@@ -113,7 +95,7 @@ const Navbar = () => {
               <Github size={15} /> GitHub
             </a>
             <div className="border-t border-border pt-3">
-              <SignInPlaceholder className="text-sm" />
+              <AccountMenu className="text-sm" variant="menu" />
             </div>
           </div>
         </div>
