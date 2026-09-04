@@ -349,6 +349,11 @@ const StudyDetail = () => {
             View on GEO <ExternalLink size={11} />
           </a>
           {year && <span className="font-mono text-muted-foreground tabular">{year}</span>}
+          {series.reference_build && (
+            <span className="text-muted-foreground">
+              Reference: <span className="font-mono">{series.reference_build}</span>
+            </span>
+          )}
           {series.pubmed_ids.length > 0 && (
             <span className="text-muted-foreground">
               PubMed:{" "}
