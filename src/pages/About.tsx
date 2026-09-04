@@ -29,7 +29,7 @@ const STEPS = [
   },
   {
     title: "One .singlet bundle per study",
-    body: "All processed samples of a study are packed into one .singlet file (a ZIP64 archive of sparse matrices and JSON metadata) and published to Cloudflare R2. Nothing is re-normalised or batch-corrected; you get raw counts.",
+    body: "All processed samples of a study are packed into one .singlet file (a ZIP64 archive of sparse matrices and JSON metadata) and published for free download. Nothing is re-normalised or batch-corrected; you get raw counts.",
   },
 ];
 
@@ -231,10 +231,9 @@ Singlet Bio. singlet atlas, release <singlet_version>. https://singlet.bio (acce
           <section id="contact" className="scroll-mt-20">
             <h2>Contact</h2>
             <p>
-              Questions, a study that looks wrong, or a protocol we should support: email{" "}
-              <a href="mailto:hello@singlet.bio">hello@singlet.bio</a> or open an issue on{" "}
-              <a href="https://github.com/Singlet-Bio/singlet/issues" target="_blank" rel="noopener noreferrer">GitHub</a>.
-              Processing runs on NSF ACCESS allocations; the data is served from Cloudflare R2 at no cost to you.
+              Questions, a study that looks wrong, or a protocol we should support: open an issue on{" "}
+              <a href="https://github.com/Singlet-Bio/singlet/issues" target="_blank" rel="noopener noreferrer">GitHub Issues</a>.
+              Processing runs on NSF ACCESS allocations; the data is served from our CDN at no cost to you.
             </p>
           </section>
         </article>
