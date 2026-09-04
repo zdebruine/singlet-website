@@ -18,6 +18,16 @@ export default defineConfig(({ mode }) => ({
     hmr: {
       overlay: false,
     },
+    // The /api/* routes are Cloudflare Pages Functions (functions/api/*), which
+    // do not run under the Vite dev server. Proxy them to production so the
+    // local preview shows live data. Override with VITE_API_PROXY_TARGET.
+    proxy: {
+      "/api": {
+        target: process.env.VITE_API_PROXY_TARGET ?? "https://singlet.bio",
+        changeOrigin: true,
+        secure: true,
+      },
+    },
   },
   plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
   resolve: {
