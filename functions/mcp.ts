@@ -146,6 +146,13 @@ function toolError(text: string, extra?: Record<string, unknown>) {
   return { content: [{ type: "text", text }], isError: true, ...(extra ? { _meta: extra } : {}) };
 }
 
+/** 9700031412 → "9.7 GB"; 512000 → "0.5 MB". */
+function fmtBytes(n: number): string {
+  if (n >= 1e9) return `${(n / 1e9).toFixed(n >= 1e10 ? 0 : 1)} GB`;
+  if (n >= 1e6) return `${(n / 1e6).toFixed(n >= 1e8 ? 0 : 1)} MB`;
+  return `${Math.max(1, Math.round(n / 1e3))} KB`;
+}
+
 function rateLimitMeta(quota?: Quota) {
   return quota
     ? { rate_limit: { used: quota.used, limit: quota.limit, remaining: Math.max(0, quota.limit - quota.used), resets_at: quota.resets_at } }
@@ -327,7 +334,7 @@ function studyText(d: StudyDetail): string {
   lines.push(`${fmt(s.n_gsm_done)} of ${fmt(s.n_gsm_total)} samples processed · ${fmt(s.n_cells)} cells${s.n_gsm_failed ? ` · ${fmt(s.n_gsm_failed)} failed` : ""}`);
   if (d.conditions_label) lines.push(`Conditions: ${d.conditions_label}`);
   if (m?.cell_types_raw.length) lines.push(`Cell types recorded: ${m.cell_types_raw.slice(0, 15).join(", ")}`);
-  lines.push(s.bundle_url ? `File: ${s.bundle_url}${s.bundle_bytes ? ` (${(s.bundle_bytes / 1e6).toFixed(1)} MB)` : ""}` : "File: not built yet");
+  lines.push(s.bundle_url ? `File: ${s.bundle_url}${s.bundle_bytes ? ` (${fmtBytes(s.bundle_bytes)})` : ""}` : "File: not built yet");
   lines.push(`Load: singlet.load("${s.id}")  /  R: load("${s.id}")`);
   lines.push(`${SITE}/study/${s.id}`);
   if (s.abstract) {
@@ -412,7 +419,7 @@ async function getDownloadUrl(env: Env, args: Record<string, unknown>) {
     curl: available ? `curl -L -O ${url}` : null,
   };
   const text = available
-    ? `${id}: ${url}${row.bundle_bytes ? ` (${(row.bundle_bytes / 1e6).toFixed(1)} MB)` : ""}\nCC0 — no account or key needed to download.\nPython: singlet.load("${id}")   R: load("${id}")`
+    ? `${id}: ${url}${row.bundle_bytes ? ` (${fmtBytes(row.bundle_bytes)})` : ""}\nCC0 — no account or key needed to download.\nPython: singlet.load("${id}")   R: load("${id}")`
     : `${id} is in the catalog but its .singlet file has not been built yet.`;
   return toolResult(text, structured);
 }
