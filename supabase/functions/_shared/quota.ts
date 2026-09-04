@@ -30,6 +30,14 @@ export interface Subject {
   kind: SubjectKind;
   userId: string | null;
   email: string | null;
+  /** How the caller identified themselves. */
+  via: "session" | "api_key" | "anonymous";
+  /**
+   * Set when the request carried an API key that could not be accepted. The
+   * caller should answer 401 with `invalidKey.message` rather than fall back
+   * to anonymous accounting.
+   */
+  invalidKey?: { reason: "unknown" | "revoked" | "expired" | "unavailable"; message: string };
 }
 
 /** Default daily limits; override with env AI_LIMIT_<KIND>_<SUBJECT> (e.g. AI_LIMIT_SEARCH_ANON). */
