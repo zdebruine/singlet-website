@@ -20,11 +20,17 @@
 - [x] Any-word fallback surfaced (`any_word` + note) on /api/search and /api/nl-search; interpreter model ladder (flash-lite → flash) with per-model timeouts
 - [x] Browse fails into its error state (not a blank page) when the API answers with the pre-Stage-2 shape
 
-## Stage 3 — study page (in progress)
-- [ ] Study page on the new API shape: header + meta line, facts, conditions table (click a value → filter samples), abstract, download aside
-- [ ] Samples table: sort, status/condition/text filters, expandable rows (all characteristics, QC, SRA runs, pipeline provenance), `#GSM` anchor auto-expands
-- [ ] JSON-LD `Dataset` + SEO title/description per study
-- [ ] Publications once `publications` is populated (component kept; renders when present)
+## Stage 3 — study page (done)
+- [x] Study page on the new API shape: header + meta line, facts, conditions table (click a value → filter samples), abstract, download aside (stacked `DownloadPanel`, provenance card)
+- [x] Samples table: sort, status/condition/text filters, expandable rows (all characteristics, QC, SRA runs, pipeline provenance), `#GSM` anchor auto-expands (`/sample/GSM…` → `/study/GSE…#GSM…`)
+- [x] JSON-LD `Dataset` + SEO title/description per study (`usePageMeta({ jsonLd })`, mounted as `#route-jsonld`)
+- [x] Publications once `publications` is populated (component kept; renders when present)
+- [x] "Cells in file" says "under review" when every processed sample's count is flagged (plate-based bug) instead of "0 cells"
+
+## Stage 3b — polish / discovered while building the study page
+- [ ] Failed-sample callout is untested locally (seed has only `DONE` rows) — verify against production once Stage 2/3 deploys
+- [ ] Study page: "Similar studies" strip (same tissue_group + disease_group, via `/api/search?limit=4`) below the abstract
+- [ ] `/api/gse/:id` edge cache (120s) — page loads hit D1 for `gsm` per study; wrap in `cachedJson` like search
 
 ## Stage 4 — accounts
 - Sign in (Google + email), saved searches, model-written "why it matches" for signed-in users, higher AI-search limits
