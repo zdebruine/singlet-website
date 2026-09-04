@@ -331,7 +331,7 @@ const Browse = () => {
                 aiMode ? (
                   <>
                     {explainButton}
-                    <AiQuotaBadge />
+                    {!quotaExceeded && <AiQuotaBadge />}
                   </>
                 ) : undefined
               }
