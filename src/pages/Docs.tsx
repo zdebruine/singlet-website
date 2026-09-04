@@ -405,7 +405,7 @@ sc.pp.highly_variable_genes(adata, batch_key="gsm_id")`}
               />
               <h3>PyTorch</h3>
               <p>
-                The <Mono>singlet[torch]</Mono> extra adds dataset helpers that stream cells from <Mono>.singlet</Mono> files
+                The <Mono>[torch]</Mono> extra adds dataset helpers that stream cells from <Mono>.singlet</Mono> files
                 as sparse tensors, so a training loop never has to densify a whole study. See the package README for the
                 current API.
               </p>
