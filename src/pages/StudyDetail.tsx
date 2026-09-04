@@ -386,7 +386,7 @@ const StudyDetail = () => {
             {facts.map((f) => (
               <div key={f.label} className="surface px-3.5 py-3 min-w-0">
                 <dt className="text-[11px] uppercase tracking-wider text-muted-foreground mb-1">{f.label}</dt>
-                <dd className="text-sm font-medium text-foreground truncate" title={f.title ?? (typeof f.value === "string" ? f.value : undefined)}>
+                <dd className="text-sm font-medium text-foreground leading-snug line-clamp-2" title={f.title ?? (typeof f.value === "string" ? f.value : undefined)}>
                   {f.value}
                 </dd>
               </div>
