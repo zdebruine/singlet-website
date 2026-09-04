@@ -31,20 +31,18 @@ export function CodeBlock({
   const lines = code.replace(/\n$/, "").split("\n");
   return (
     <div className={cn("code-block relative", className)}>
-      {(label || true) && (
-        <div className="flex items-center justify-between px-3 h-8 border-b border-dark-border">
-          <span className="text-[11px] uppercase tracking-wider text-dark-muted font-sans">{label ?? ""}</span>
-          <button
-            type="button"
-            onClick={copy}
-            className="inline-flex items-center gap-1 text-[11px] font-sans text-dark-muted hover:text-dark-foreground transition-colors rounded px-1.5 h-6"
-            aria-label="Copy code"
-          >
-            {copied ? <Check size={12} /> : <Copy size={12} />}
-            {copied ? "Copied" : "Copy"}
-          </button>
-        </div>
-      )}
+      <div className="flex items-center justify-between px-3 h-8 border-b border-dark-border">
+        <span className="text-[11px] uppercase tracking-wider text-dark-muted font-sans">{label ?? ""}</span>
+        <button
+          type="button"
+          onClick={copy}
+          className="inline-flex items-center gap-1 text-[11px] font-sans text-dark-muted hover:text-dark-foreground transition-colors rounded px-1.5 h-6"
+          aria-label="Copy code"
+        >
+          {copied ? <Check size={12} /> : <Copy size={12} />}
+          {copied ? "Copied" : "Copy"}
+        </button>
+      </div>
       <pre
         className={cn(
           "m-0",
