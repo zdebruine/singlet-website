@@ -16,6 +16,8 @@
  * payload degrades to an empty section instead of a crash.
  */
 import type {
+  ApiKeyCreated,
+  ApiKeySummary,
   Condition,
   CorpusStats,
   ExplainResponse,
@@ -23,6 +25,7 @@ import type {
   GseDetailResponse,
   GsmDetailResponse,
   GsmRow,
+  NlSearchQuery,
   NlSearchResponse,
   QuotaInfo,
   SampleRow,
@@ -403,8 +406,9 @@ export function normalizeGseDetail(raw: unknown): GseDetailResponse {
       n_gsm_failed: num(s.n_gsm_failed),
       n_cells: num(s.n_cells),
       pubmed_ids: strArr(s.pubmed_ids),
-      r2_bundle_key: strOrNull(s.r2_bundle_key),
-      r2_bundle_bytes: numOrNull(s.r2_bundle_bytes),
+      bundle_key: strOrNull(s.bundle_key) ?? strOrNull(s.r2_bundle_key),
+      bundle_bytes: numOrNull(s.bundle_bytes) ?? numOrNull(s.r2_bundle_bytes),
+      bundle_url: strOrNull(s.bundle_url) ?? (strOrNull(s.bundle_key) ?? strOrNull(s.r2_bundle_key) ? bundleUrl(s.id) : null),
       submitted_date: strOrNull(s.submitted_date),
       last_updated: str(s.last_updated),
       organism_label: typeof s.organism_label === "string" ? s.organism_label : undefined,
@@ -470,6 +474,33 @@ function normalizeGsmDetail(raw: unknown): GsmDetailResponse {
   };
 }
 
+function normalizeApiKey(raw: unknown): ApiKeySummary | null {
+  const r = rec(raw);
+  if (typeof r.id !== "string") return null;
+  return {
+    id: r.id,
+    name: str(r.name, "Untitled key"),
+    key_prefix: str(r.key_prefix),
+    created_at: str(r.created_at),
+    last_used_at: strOrNull(r.last_used_at),
+    expires_at: strOrNull(r.expires_at),
+    revoked_at: strOrNull(r.revoked_at),
+  };
+}
+
+/** POST a JSON body to a Lovable Cloud function as the signed-in visitor. */
+async function cloudPost(fn: string, body: unknown, signal?: AbortSignal): Promise<unknown> {
+  const token = authToken.get();
+  if (!token) throw new ApiError(401, "Sign in to manage API keys.");
+  const res = await fetch(`${CLOUD_URL}/functions/v1/${fn}`, {
+    method: "POST",
+    signal,
+    headers: { "Content-Type": "application/json", apikey: CLOUD_KEY, Authorization: `Bearer ${token}` },
+    body: JSON.stringify(body),
+  });
+  return readJson(res);
+}
+
 function normalizeStats(raw: unknown): CorpusStats {
   const r = rec(raw);
   return {
@@ -523,9 +554,14 @@ export const apiClient = {
     return normalizeSearch<T>(await get<unknown>("/api/search", searchParams(q), signal), q.level ?? "gse");
   },
 
-  /** GET /api/nl-search — plain-English search with interpretation + suggestions. */
-  async nlSearch<T = StudyRow | SampleRow>(q: SearchQuery & { q: string }, signal?: AbortSignal): Promise<NlSearchResponse<T>> {
-    const { json, headers } = await getWithHeaders<unknown>("/api/nl-search", searchParams(q), { signal, withAuth: true });
+  /**
+   * GET /api/nl-search — the site's one search. Plain English, keywords and
+   * accessions all go here; `interpret: false` re-runs an edited search with
+   * the visitor's own filters and no model call.
+   */
+  async nlSearch<T = StudyRow | SampleRow>(q: NlSearchQuery, signal?: AbortSignal): Promise<NlSearchResponse<T>> {
+    const params = { ...searchParams(q), ...(q.interpret === false ? { interpret: "0" } : {}) };
+    const { json, headers } = await getWithHeaders<unknown>("/api/nl-search", params, { signal, withAuth: true });
     const out = normalizeNlSearch<T>(json, q.level ?? "gse");
     // The budget rides in a per-request header on fresh AI answers, and in the
     // body when it has just run out. Cached answers carry neither.
@@ -582,6 +618,23 @@ export const apiClient = {
       quota: quota ?? undefined,
       model: typeof r.model === "string" ? r.model : undefined,
     };
+  },
+
+  /** API keys for scripts and the MCP server — signed-in only; writes happen in one Cloud function. */
+  apiKeys: {
+    async list(): Promise<ApiKeySummary[]> {
+      const r = rec(await cloudPost("api-keys", { action: "list" }));
+      return arr<unknown>(r.keys).map(normalizeApiKey).filter((k): k is ApiKeySummary => k !== null);
+    },
+    async create(name: string, expiresInDays?: number | null): Promise<ApiKeyCreated> {
+      const r = rec(await cloudPost("api-keys", { action: "create", name, expires_in_days: expiresInDays ?? null }));
+      const key = normalizeApiKey(r.key);
+      if (!key || typeof r.secret !== "string") throw new ApiError(502, "The key was created but could not be read back. Refresh the page.");
+      return { key, secret: r.secret };
+    },
+    async revoke(id: string): Promise<void> {
+      await cloudPost("api-keys", { action: "revoke", id });
+    },
   },
 
   /** URL for the accession export (text/plain, ≤ 5,000 studies). */

@@ -161,6 +161,15 @@ export interface QuotaInfo {
   exceeded: boolean;
 }
 
+export interface NlSearchQuery extends SearchQuery {
+  q: string;
+  /**
+   * false = do not run the interpreter; the filters are already the visitor's
+   * own (they edited a chip or a checkbox) and `q` is plain keywords.
+   */
+  interpret?: boolean;
+}
+
 export interface NlSearchResponse<T = StudyRow | SampleRow> extends SearchResponse<T> {
   configured: boolean;
   interpreted: Interpreted | null;
@@ -235,8 +244,11 @@ export interface GseRow {
   n_gsm_failed: number;
   n_cells: number;
   pubmed_ids: string[];
-  r2_bundle_key: string | null;
-  r2_bundle_bytes: number | null;
+  /** Object key of the per-study `.singlet` bundle; null when not published yet. */
+  bundle_key: string | null;
+  bundle_bytes: number | null;
+  /** Public download URL (https://data.singlet.bio/…), null until the bundle exists. */
+  bundle_url: string | null;
   submitted_date: string | null;
   last_updated: string;
   /** Common name for the study's primary organism (e.g. "Human"). */
@@ -338,4 +350,23 @@ export interface SearchQuery {
   sort?: Sort;
   page?: number;
   limit?: number;
+}
+
+// ── API keys (account page; managed by the Lovable Cloud `api-keys` function) ─
+
+export interface ApiKeySummary {
+  id: string;
+  name: string;
+  /** First characters of the key, e.g. "sk_live_a1b2c3d4"; the rest is never stored. */
+  key_prefix: string;
+  created_at: string;
+  last_used_at: string | null;
+  expires_at: string | null;
+  revoked_at: string | null;
+}
+
+export interface ApiKeyCreated {
+  key: ApiKeySummary;
+  /** The full secret. Shown once; never retrievable again. */
+  secret: string;
 }
