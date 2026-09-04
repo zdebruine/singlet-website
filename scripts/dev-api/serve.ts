@@ -39,6 +39,7 @@ const routes: Route[] = [
   { pattern: /^\/api\/gsm\/?$/, paramNames: [], mod: () => import("../../functions/api/gsm/index") },
   { pattern: /^\/api\/gsm\/([^/]+)\/?$/, paramNames: ["id"], mod: () => import("../../functions/api/gsm/[id]") },
   { pattern: /^\/mcp\/?$/, paramNames: [], mod: () => import("../../functions/mcp") },
+  { pattern: /^\/auth\/github\/callback\/?$/, paramNames: [], mod: () => import("../../functions/auth/github/callback") },
 ];
 
 const pending = new Set<Promise<unknown>>();
