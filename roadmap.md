@@ -30,7 +30,7 @@
 ## Stage 3b — polish / discovered while building the study page
 - [ ] Failed-sample callout is untested locally (seed has only `DONE` rows) — verify against production once Stage 2/3 deploys
 - [ ] Study page: "Similar studies" strip (same tissue_group + disease_group, via `/api/search?limit=4`) below the abstract
-- [ ] `/api/gse/:id` edge cache (120s) — page loads hit D1 for `gsm` per study; wrap in `cachedJson` like search
+- [ ] `/api/gsm/:id` is the only uncached catalog read (used by the `/sample/GSM…` redirect); wrap in `cachedJson`
 
 ## Stage 4 — accounts
 - Sign in (Google + email), saved searches, model-written "why it matches" for signed-in users, higher AI-search limits
