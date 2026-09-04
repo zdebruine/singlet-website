@@ -187,6 +187,7 @@ export async function loadStudy(db: D1Database, rawId: string): Promise<StudyDet
     bundle_bytes: bundleBytes,
     bundle_url: hasBundle ? bundleUrl(id) : null,
     bundle_n_samples: bundleNSamples != null && !Number.isNaN(bundleNSamples) ? bundleNSamples : null,
+    reference_build: referenceBuild,
     submitted_date: (seriesRow.submitted_date as string | null) ?? null,
     last_updated: (seriesRow.last_updated as string | null) ?? null,
     r2_bundle_key: bundleKey,
