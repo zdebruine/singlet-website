@@ -277,7 +277,7 @@ const StudyDetail = () => {
     ...(tissueGroups.length ? [tissueGroups.slice(0, 2).join(", ") + (tissueGroups.length > 2 ? ` +${tissueGroups.length - 2}` : "")] : []),
     ...(assays.length ? [assays.slice(0, 2).join(", ")] : []),
     `${fmtInt(processed.length)} / ${fmtInt(samples.length)} samples`,
-    `${fmtCompact(totalCells)} cells`,
+    totalCells > 0 ? `${fmtCompact(totalCells)} cells` : flagged > 0 ? "cell count under review" : "no cells",
     ...(year ? [String(year)] : []),
   ];
 
