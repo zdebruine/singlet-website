@@ -175,7 +175,7 @@ const StudyDetail = () => {
   }, [data]);
 
   const series = data?.series;
-  const hasBundle = !!series?.r2_bundle_key;
+  const hasBundle = !!series?.bundle_url;
   const description = series?.title
     ? `${series.title}. ${derived ? `${organismLabelList(derived.organisms)} · ${fmtInt(derived.processed.length)} processed samples · ${fmtCompact(derived.totalCells)} cells.` : ""} Load it in one line with singlet.`
     : `Reprocessed single-cell data for ${gseId}.`;
@@ -207,8 +207,8 @@ const StudyDetail = () => {
                     {
                       "@type": "DataDownload",
                       encodingFormat: "application/x-singlet",
-                      contentUrl: bundleUrl(gseId),
-                      ...(series.r2_bundle_bytes != null ? { contentSize: `${series.r2_bundle_bytes} B` } : {}),
+                      contentUrl: series.bundle_url ?? bundleUrl(gseId),
+                      ...(series.bundle_bytes != null ? { contentSize: `${series.bundle_bytes} B` } : {}),
                     },
                   ],
                 }
@@ -326,12 +326,10 @@ const StudyDetail = () => {
           ? `${flagged} of ${processed.length} processed samples report implausible cell counts (a known plate-based pipeline issue). They are excluded from this total.`
           : undefined,
     },
-    ...(hasQc
-      ? [
-          { label: "Mean mapping rate", value: fmtPct(avgMR) },
-          { label: "Median genes / cell", value: fmtInt(medGenes) },
-        ]
-      : [{ label: "Year", value: year ? String(year) : "—" }]),
+    // QC tiles only for metrics that were actually recorded; a study with none
+    // gets one sentence instead (below the grid), never an em-dash tile.
+    ...(avgMR != null ? [{ label: "Mean mapping rate", value: fmtPct(avgMR) }] : []),
+    ...(medGenes != null ? [{ label: "Median genes / cell", value: fmtInt(medGenes) }] : []),
   ];
 
   return (
@@ -382,7 +380,7 @@ const StudyDetail = () => {
           )}
 
           {/* Facts */}
-          <dl className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-6">
+          <dl className={cn("grid grid-cols-2 md:grid-cols-4 gap-2", hasQc || processed.length === 0 ? "mb-6" : "mb-2")}>
             {facts.map((f) => (
               <div key={f.label} className="surface px-3.5 py-3 min-w-0">
                 <dt className="text-[11px] uppercase tracking-wider text-muted-foreground mb-1">{f.label}</dt>
@@ -392,6 +390,9 @@ const StudyDetail = () => {
               </div>
             ))}
           </dl>
+          {!hasQc && processed.length > 0 && (
+            <p className="mb-6 text-[12.5px] text-muted-foreground">Per-sample QC metrics were not recorded for this study.</p>
+          )}
 
           {/* Conditions */}
           <section className="mb-6" aria-labelledby="conditions-h">
@@ -461,7 +462,7 @@ const StudyDetail = () => {
         <aside className="mt-2 lg:mt-0 lg:sticky lg:top-20 space-y-3" aria-labelledby="download-h">
           <h2 id="download-h" className="text-[18px] lg:sr-only">Load or download</h2>
           {processed.length > 0 ? (
-            <DownloadPanel accession={gseId} r2BundleKey={series.r2_bundle_key} r2BundleBytes={series.r2_bundle_bytes} stacked />
+            <DownloadPanel accession={gseId} bundleUrl={series.bundle_url} bundleBytes={series.bundle_bytes} stacked />
           ) : (
             <div className="surface px-4 py-3 text-sm text-muted-foreground">
               No samples in this study completed processing, so there is no <code className="code-inline">.singlet</code> file.
