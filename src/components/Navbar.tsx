@@ -1,101 +1,124 @@
+import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { useState, useEffect } from "react";
-import { Menu, X, Github } from "lucide-react";
+import { Github, Menu, X } from "lucide-react";
+import { Logo } from "@/components/Logo";
+import { SearchBox } from "@/components/SearchBox";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 
-const navLinks = [
+const NAV = [
   { to: "/browse", label: "Browse" },
-  { to: "/docs/access", label: "Download" },
-  { to: "/docs", label: "Quickstart" },
-  { to: "/byod", label: "Bring your data" },
-  { to: "/pipeline", label: "Pipeline" },
-  { to: "/notebooks", label: "Notebooks" },
+  { to: "/docs", label: "Docs" },
+  { to: "/about", label: "About the data" },
 ];
+
+const GITHUB = "https://github.com/Singlet-Bio/singlet";
+
+function SignInPlaceholder({ className }: { className?: string }) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button type="button" className={cn("text-[13px] text-muted-foreground hover:text-foreground transition-colors rounded px-1", className)}>
+          Sign in
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-64 p-3 rounded border-border">
+        <p className="text-[13px] font-medium text-foreground mb-1">Coming soon</p>
+        <p className="text-xs text-muted-foreground leading-relaxed">
+          Accounts are optional and only needed for saved searches and higher AI-search limits. Browsing and downloading never require one.
+        </p>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 const Navbar = () => {
   const location = useLocation();
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const [scrolled, setScrolled] = useState(false);
+  const [open, setOpen] = useState(false);
+  const isHome = location.pathname === "/";
+  // Home has the hero box and /browse has its own sticky search bar.
+  const showSearch = !isHome && location.pathname !== "/browse";
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 20);
-    window.addEventListener("scroll", onScroll);
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
+    setOpen(false);
+  }, [location.pathname]);
+
+  const isActive = (to: string) => location.pathname === to || location.pathname.startsWith(to + "/");
 
   return (
-    <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled ? "glass-dark" : "bg-transparent"}`}>
-      <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-        {/* Logo */}
-        <Link to="/" className="flex items-center gap-0">
-          <span className="font-display font-bold text-[1.45rem] tracking-tightest text-foreground">singlet</span>
-          <span className="inline-flex items-center justify-center" style={{ width: '1ch', paddingLeft: '0.15ch' }}>
-            <svg className="inline-block" style={{ height: '0.52em', width: '0.52em' }} viewBox="0 0 10 10" xmlns="http://www.w3.org/2000/svg">
-              <circle cx="5" cy="5" r="5" fill="hsl(174 84% 32%)" />
-            </svg>
-          </span>
-          <span className="font-display font-bold text-[1.45rem] tracking-tightest text-primary">bio</span>
-        </Link>
+    <header className="sticky top-0 z-40 bg-background/95 backdrop-blur-sm border-b border-border">
+      <nav className="container-site h-14 flex items-center gap-6" aria-label="Main">
+        <Logo size={20} />
 
-        {/* Desktop Nav */}
-        <div className="hidden lg:flex items-center gap-6">
-          {navLinks.map((link) => (
+        {/* Desktop links */}
+        <div className="hidden md:flex items-center gap-5 ml-2">
+          {NAV.map((l) => (
             <Link
-              key={link.to}
-              to={link.to}
-              className={`text-sm transition-colors ${location.pathname === link.to || location.pathname.startsWith(link.to + "/") ? "text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+              key={l.to}
+              to={l.to}
+              className={cn(
+                "text-[13.5px] transition-colors rounded px-0.5",
+                isActive(l.to) ? "text-foreground font-medium" : "text-muted-foreground hover:text-foreground",
+              )}
             >
-              {link.label}
+              {l.label}
             </Link>
           ))}
           <a
-            href="https://github.com/Singlet-Bio/singlet"
+            href={GITHUB}
             target="_blank"
             rel="noopener noreferrer"
             className="text-muted-foreground hover:text-foreground transition-colors"
+            aria-label="GitHub repository"
           >
-            <Github size={18} />
+            <Github size={17} />
           </a>
         </div>
 
-        {/* Desktop Right */}
-        <div className="hidden lg:flex items-center gap-3">
-          <Link to="/docs" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-            Quickstart
-          </Link>
-          <Link
-            to="/browse"
-            className="inline-flex items-center px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity"
-          >
-            Browse the atlas
-          </Link>
+        <div className="flex-1" />
+
+        {/* Right: compact search (not on home) + sign in */}
+        <div className="hidden md:flex items-center gap-4">
+          {showSearch && <SearchBox variant="compact" className="w-64 lg:w-72" />}
+          <SignInPlaceholder />
         </div>
 
-        {/* Mobile Toggle */}
-        <button className="lg:hidden text-foreground" onClick={() => setMobileOpen(!mobileOpen)}>
-          {mobileOpen ? <X size={20} /> : <Menu size={20} />}
+        {/* Mobile toggle */}
+        <button
+          type="button"
+          className="md:hidden text-foreground p-1 rounded"
+          onClick={() => setOpen(!open)}
+          aria-expanded={open}
+          aria-label={open ? "Close menu" : "Open menu"}
+        >
+          {open ? <X size={20} /> : <Menu size={20} />}
         </button>
-      </div>
+      </nav>
 
-      {/* Mobile Menu */}
-      {mobileOpen && (
-        <div className="lg:hidden glass-dark px-6 py-4 flex flex-col gap-3 animate-fade-in">
-          {navLinks.map((link) => (
-            <Link key={link.to} to={link.to} className="text-sm text-foreground py-1" onClick={() => setMobileOpen(false)}>
-              {link.label}
-            </Link>
-          ))}
-          <a href="https://github.com/Singlet-Bio" target="_blank" rel="noopener noreferrer" className="text-sm text-muted-foreground py-1">
-            GitHub
-          </a>
-          <div className="border-t border-border pt-3 mt-1 flex flex-col gap-3">
-            <Link to="/docs" className="text-sm text-muted-foreground" onClick={() => setMobileOpen(false)}>Quickstart</Link>
-            <Link to="/browse" className="inline-flex items-center justify-center px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm font-medium" onClick={() => setMobileOpen(false)}>
-              Browse the atlas
-            </Link>
+      {/* Mobile menu */}
+      {open && (
+        <div className="md:hidden border-t border-border bg-card">
+          <div className="container-site py-4 flex flex-col gap-3">
+            {showSearch && <SearchBox variant="compact" className="w-full" onSubmitted={() => setOpen(false)} />}
+            {NAV.map((l) => (
+              <Link
+                key={l.to}
+                to={l.to}
+                className={cn("text-sm py-1", isActive(l.to) ? "text-foreground font-medium" : "text-muted-foreground")}
+              >
+                {l.label}
+              </Link>
+            ))}
+            <a href={GITHUB} target="_blank" rel="noopener noreferrer" className="text-sm text-muted-foreground py-1 inline-flex items-center gap-2">
+              <Github size={15} /> GitHub
+            </a>
+            <div className="border-t border-border pt-3">
+              <SignInPlaceholder className="text-sm" />
+            </div>
           </div>
         </div>
       )}
-    </nav>
+    </header>
   );
 };
 

@@ -6,7 +6,7 @@ const DataLicense = () => (
     <div className="min-h-screen bg-background">
         <Navbar />
 
-        <div className="pt-32 pb-20 px-6">
+        <div className="py-12 md:py-16 px-6">
             <div className="max-w-3xl mx-auto">
                 {/* Header */}
                 <div className="mb-16">
@@ -49,7 +49,7 @@ const DataLicense = () => (
                     <h2 className="font-display text-2xl font-bold text-foreground mb-4">Data — CC0 1.0</h2>
                     <div className="rounded-xl border border-primary/30 bg-primary/[0.04] p-6">
                         <div className="flex items-center gap-2 mb-3">
-                            <span className="px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-600 text-xs font-mono font-bold uppercase">CC0 1.0</span>
+                            <span className="px-2.5 py-1 rounded bg-primary/10 text-primary text-xs font-mono font-bold uppercase">CC0 1.0</span>
                             <span className="text-sm text-muted-foreground">Public domain — no rights reserved</span>
                         </div>
                         <p className="text-sm text-muted-foreground leading-relaxed mb-4">
@@ -93,7 +93,7 @@ const DataLicense = () => (
                     <h2 className="font-display text-2xl font-bold text-foreground mb-4">Software — MIT</h2>
                     <div className="rounded-xl border border-border bg-card p-6">
                         <div className="flex items-center gap-2 mb-3">
-                            <span className="px-2.5 py-1 rounded-full bg-primary/15 text-primary text-xs font-mono font-bold uppercase">MIT</span>
+                            <span className="px-2.5 py-1 rounded bg-primary/10 text-primary text-xs font-mono font-bold uppercase">MIT</span>
                             <span className="text-sm text-muted-foreground">Free for any use, including commercial</span>
                         </div>
                         <p className="text-sm text-muted-foreground leading-relaxed mb-4">
@@ -136,7 +136,7 @@ const DataLicense = () => (
                 </section>
 
                 {/* Contact */}
-                <div className="rounded-xl border-2 border-primary/20 bg-primary/[0.04] p-6 text-center">
+                <div className="rounded-xl border border-primary/20 bg-primary/[0.04] p-6 text-center">
                     <h3 className="font-display text-base font-bold text-foreground mb-2">Questions about licensing?</h3>
                     <p className="text-sm text-muted-foreground mb-4">
                         We're happy to clarify anything about how the data and software are licensed.
