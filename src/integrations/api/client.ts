@@ -501,6 +501,17 @@ async function cloudPost(fn: string, body: unknown, signal?: AbortSignal): Promi
   return readJson(res);
 }
 
+/** POST a JSON body to a Lovable Cloud function anonymously (public key only). */
+async function cloudPostAnon(fn: string, body: unknown, signal?: AbortSignal): Promise<unknown> {
+  const res = await fetch(`${CLOUD_URL}/functions/v1/${fn}`, {
+    method: "POST",
+    signal,
+    headers: { "Content-Type": "application/json", apikey: CLOUD_KEY },
+    body: JSON.stringify(body),
+  });
+  return readJson(res);
+}
+
 function normalizeStats(raw: unknown): CorpusStats {
   const r = rec(raw);
   return {
@@ -634,6 +645,24 @@ export const apiClient = {
     },
     async revoke(id: string): Promise<void> {
       await cloudPost("api-keys", { action: "revoke", id });
+    },
+  },
+
+  /**
+   * "Continue with GitHub". The hosted auth settings can't hold a GitHub app,
+   * so one Cloud function runs the OAuth exchange and mints a one-time sign-in
+   * token; the browser finishes with auth.verifyOtp(token_hash).
+   */
+  githubOAuth: {
+    async start(origin: string, returnTo: string): Promise<{ url: string; nonce: string }> {
+      const r = rec(await cloudPostAnon("github-oauth", { action: "start", origin, return_to: returnTo }));
+      if (typeof r.url !== "string" || typeof r.nonce !== "string") throw new ApiError(502, "GitHub sign-in could not start.");
+      return { url: r.url, nonce: r.nonce };
+    },
+    async exchange(code: string, state: string): Promise<{ tokenHash: string; returnTo: string; nonce: string }> {
+      const r = rec(await cloudPostAnon("github-oauth", { action: "exchange", code, state }));
+      if (typeof r.token_hash !== "string") throw new ApiError(502, "GitHub sign-in could not be completed.");
+      return { tokenHash: r.token_hash, returnTo: typeof r.return_to === "string" ? r.return_to : "/browse", nonce: typeof r.nonce === "string" ? r.nonce : "" };
     },
   },
 
