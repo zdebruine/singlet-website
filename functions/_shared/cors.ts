@@ -1,10 +1,12 @@
 export const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  // Authorization carries the optional user session for AI-search budgets.
-  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  // Authorization carries the optional user session (or `sk_live_…` key) for
+  // AI-search budgets; X-API-Key is the alternative spelling for scripts.
+  // MCP clients send Mcp-Session-Id / MCP-Protocol-Version.
+  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-API-Key, Accept, Mcp-Session-Id, MCP-Protocol-Version",
   // Per-request budget + cache diagnostics, readable from cross-origin previews.
-  "Access-Control-Expose-Headers": "X-Singlet-Quota, X-Edge-Cache",
+  "Access-Control-Expose-Headers": "X-Singlet-Quota, X-Edge-Cache, X-Total-Count, X-Export-Limit",
   "Access-Control-Max-Age": "86400",
   "Content-Type": "application/json",
 };
