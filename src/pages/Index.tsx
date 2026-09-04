@@ -150,14 +150,10 @@ const Index = () => {
                 <Link to="/docs#r" className="text-[13px] text-primary hover:underline">R package →</Link>
               </div>
               <CodeBlock code={R_SNIPPET} label="r" />
-              <p className="mt-2 text-xs text-muted-foreground">
-                Until CRAN accepts the release:{" "}
-                <code className="code-inline">remotes::install_github("Singlet-Bio/singlet", subdir = "r")</code>
-              </p>
             </div>
           </div>
           <p className="mt-4 text-[13px] text-muted-foreground">
-            One <code className="code-inline">.singlet</code> file per study, served from Cloudflare R2 at no cost. Data is CC0; code is MIT.{" "}
+            One <code className="code-inline">.singlet</code> file per study, free to download, no account. Data is CC0; code is MIT.{" "}
             <Link to="/about" className="text-primary hover:underline">How the data is processed →</Link>
           </p>
         </section>
