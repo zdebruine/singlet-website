@@ -85,7 +85,7 @@ export async function loadStudy(db: D1Database, rawId: string): Promise<StudyDet
   const id = rawId.trim().toUpperCase();
   if (!GSE_RE.test(id)) return null;
 
-  const [seriesRow, metaRow, samplesResult, pubsResult] = await Promise.all([
+  const [seriesRow, metaRow, samplesResult, pubsResult, manifestRow] = await Promise.all([
     db
       .prepare(
         `SELECT id, title, abstract, organism, n_gsm_total, n_gsm_done, n_gsm_failed,
