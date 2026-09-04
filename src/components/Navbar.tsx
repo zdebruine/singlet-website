@@ -84,7 +84,7 @@ const Navbar = ({ search = true }: { search?: boolean }) => {
       {open && (
         <div className="md:hidden border-t border-border bg-card">
           <div className="container-site py-4 flex flex-col gap-3">
-            {showSearch && <SearchBox variant="compact" className="w-full" onSubmitted={() => setOpen(false)} />}
+            {showSearch && <SearchBox id="site-search-mobile" variant="compact" className="w-full" onSubmitted={() => setOpen(false)} />}
             {NAV.map((l) => (
               <Link
                 key={l.to}

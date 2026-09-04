@@ -22,6 +22,7 @@ export function SearchBox({
   className,
   autoFocus,
   onSubmitted,
+  id,
 }: {
   variant?: "hero" | "compact";
   initialValue?: string;
@@ -29,7 +30,10 @@ export function SearchBox({
   className?: string;
   autoFocus?: boolean;
   onSubmitted?: (text: string) => void;
+  /** Override the input id when two compact boxes could be mounted at once (desktop + open mobile menu). */
+  id?: string;
 }) {
+  const inputId = id ?? (variant === "hero" ? "hero-search" : "site-search");
   const navigate = useNavigate();
   const [value, setValue] = useState(initialValue);
 
@@ -48,11 +52,11 @@ export function SearchBox({
           className="flex items-stretch bg-card rounded overflow-hidden"
           style={{ border: "1.5px solid #0E8C7E" }}
         >
-          <label htmlFor="hero-search" className="sr-only">
+          <label htmlFor={inputId} className="sr-only">
             Search the atlas
           </label>
           <input
-            id="hero-search"
+            id={inputId}
             type="search"
             autoFocus={autoFocus}
             autoComplete="off"
@@ -77,12 +81,12 @@ export function SearchBox({
 
   return (
     <form onSubmit={submit} role="search" className={cn("relative", className)}>
-      <label htmlFor="site-search" className="sr-only">
+      <label htmlFor={inputId} className="sr-only">
         Search the atlas
       </label>
       <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
       <input
-        id="site-search"
+        id={inputId}
         type="search"
         autoComplete="off"
         spellCheck={false}
