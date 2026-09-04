@@ -93,12 +93,13 @@ function CheckList({
     <div>
       {(showAll || ordered.length > TOP_N) && (
         <input
-          type="search"
+          type="text"
+          autoComplete="off"
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
           placeholder={searchPlaceholder}
           aria-label={searchPlaceholder}
-          className="input h-7 px-2 text-xs mb-2 [&::-webkit-search-cancel-button]:appearance-none"
+          className="input h-7 px-2 text-xs mb-2"
         />
       )}
       <ul className={cn("space-y-1", showAll && "max-h-[280px] overflow-y-auto pr-1")}>
@@ -190,12 +191,13 @@ function CellTypeSection({
       )}
       <form onSubmit={submit}>
         <input
-          type="search"
+          type="text"
+          autoComplete="off"
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder="e.g. microglia, cd8 t cells"
-          aria-label="Cell type"
-          className="input h-8 px-2 text-[13px] [&::-webkit-search-cancel-button]:appearance-none"
+          aria-label="Add a cell type filter"
+          className="input h-8 px-2 text-[13px]"
         />
       </form>
       {suggestions.length > 0 && (
