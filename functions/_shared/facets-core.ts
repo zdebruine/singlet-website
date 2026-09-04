@@ -6,8 +6,12 @@
  * list still shows the alternatives). Study level counts DISTINCT studies via
  * `gse_meta` + json_each; sample level counts `gsm` rows.
  *
- * All facets for one request are computed in a single SQL statement (one CTE
- * per "all filters except X" base). The unfiltered catalog is precomputed into
+ * D1 rejects compound SELECTs with more than 5 terms ("too many terms in
+ * compound SELECT"), so the facets are NOT one big UNION ALL. Facets that share
+ * the same "all filters except X" base are grouped into statements of at most
+ * MAX_COMPOUND_TERMS terms (each statement carries its own copy of the base
+ * CTE) and every statement for a request runs in ONE `db.batch()` round trip;
+ * the rows are merged afterwards. The unfiltered catalog is precomputed into
  * `meta_cache` (keys `facets:gse:all*` / `facets:gsm:all*`) and refreshed when
  * older than a day, so no request ever runs an unfiltered GROUP BY over `gsm`.
  */
@@ -25,6 +29,10 @@ import {
   type SearchFilters,
 } from "./search-core";
 import { ASSAY_FAMILIES, DISEASE_GROUPS, TISSUE_GROUPS, organismToCommon } from "./vocab";
+import { D1_MAX_COMPOUND_TERMS } from "./d1-limits";
+
+/** D1's hard limit is 5 terms per compound SELECT; stay one under it. */
+export const MAX_COMPOUND_TERMS = D1_MAX_COMPOUND_TERMS - 1;
 
 export interface FacetOption {
   value: string;
@@ -62,6 +70,51 @@ interface FacetRow {
   n: number;
 }
 
+/** One SQL statement ready for `db.prepare(sql).bind(...params)`. */
+export interface FacetStatement {
+  sql: string;
+  params: (string | number)[];
+  /** Number of compound SELECT terms in `sql` (always ≤ MAX_COMPOUND_TERMS). */
+  terms: number;
+}
+
+interface Base {
+  name: string;
+  cte: string;
+  params: (string | number)[];
+}
+
+/**
+ * Group SELECT terms by the base CTE they read from and emit statements with at
+ * most MAX_COMPOUND_TERMS terms each. Every statement embeds its own copy of
+ * the base CTE so it is self-contained (D1 batches are independent statements).
+ */
+function chunkIntoStatements(items: { base: Base; select: string }[]): FacetStatement[] {
+  const byBase = new Map<string, { base: Base; selects: string[] }>();
+  for (const it of items) {
+    const g = byBase.get(it.base.name) ?? { base: it.base, selects: [] };
+    g.selects.push(it.select);
+    byBase.set(it.base.name, g);
+  }
+  const out: FacetStatement[] = [];
+  for (const { base, selects } of byBase.values()) {
+    for (let i = 0; i < selects.length; i += MAX_COMPOUND_TERMS) {
+      const chunk = selects.slice(i, i + MAX_COMPOUND_TERMS);
+      out.push({
+        sql: `WITH ${base.cte}\n${chunk.join("\nUNION ALL\n")}`,
+        params: [...base.params],
+        terms: chunk.length,
+      });
+    }
+  }
+  return out;
+}
+
+/** Is the constraint for `facet` currently active (so its own counts must exclude it)? */
+function facetActive(f: SearchFilters, facet: FacetName): boolean {
+  return facet === "year" ? f.year_min != null || f.year_max != null : f[facet].length > 0;
+}
+
 // ── Study level ─────────────────────────────────────────────────────────────
 
 const STUDY_FACETS: { name: FacetName; col: string; lower?: boolean; limit?: number }[] = [
@@ -72,99 +125,95 @@ const STUDY_FACETS: { name: FacetName; col: string; lower?: boolean; limit?: num
   { name: "cell_type", col: "cell_types_raw", lower: true, limit: CELL_TYPE_FACET_LIMIT },
 ];
 
-function studyFacetSql(f: SearchFilters, gseIds: string[] | null): { sql: string; params: (string | number)[] } {
-  const params: (string | number)[] = [];
-  const ctes: string[] = [];
-  const baseName = new Map<string, string>();
-
-  const baseFor = (exclude: FacetName | "none"): string => {
-    const active = exclude !== "none" && exclude !== "year" ? f[exclude].length > 0 : exclude === "year" && (f.year_min != null || f.year_max != null);
+export function studyFacetStatements(f: SearchFilters, gseIds: string[] | null): FacetStatement[] {
+  const bases = new Map<string, Base>();
+  const baseFor = (exclude: FacetName | "none"): Base => {
+    const active = exclude !== "none" && facetActive(f, exclude);
     const key = active ? exclude : "all";
-    const existing = baseName.get(key);
+    const existing = bases.get(key);
     if (existing) return existing;
-    const name = `b_${key}`;
     const w = buildStudyWhere(f, { exclude: active ? (exclude as FacetName) : undefined, gseIds });
-    ctes.push(
-      `${name} AS (SELECT m.gse_id, m.organisms, m.tissue_groups, m.disease_groups, m.assay_families, m.cell_types_raw, m.year
-                   FROM gse_meta m${w.clauses.length ? ` WHERE ${w.clauses.join(" AND ")}` : ""})`
-    );
-    params.push(...w.params);
-    baseName.set(key, name);
-    return name;
+    const base: Base = {
+      name: `b_${key}`,
+      cte: `b_${key} AS (SELECT m.gse_id, m.organisms, m.tissue_groups, m.disease_groups, m.assay_families, m.cell_types_raw, m.year
+                   FROM gse_meta m${w.clauses.length ? ` WHERE ${w.clauses.join(" AND ")}` : ""})`,
+      params: w.params,
+    };
+    bases.set(key, base);
+    return base;
   };
 
-  const selects: string[] = [];
+  const items: { base: Base; select: string }[] = [];
   for (const fc of STUDY_FACETS) {
-    const b = baseFor(fc.name);
+    const base = baseFor(fc.name);
     const valueExpr = fc.lower ? "lower(trim(je.value))" : "je.value";
     const inner = `SELECT '${fc.name}' AS facet, ${valueExpr} AS value, COUNT(DISTINCT b.gse_id) AS n
-                     FROM ${b} b, json_each(b.${fc.col}) je
+                     FROM ${base.name} b, json_each(b.${fc.col}) je
                     WHERE je.value IS NOT NULL AND trim(je.value) != ''
                     GROUP BY ${valueExpr}`;
-    selects.push(fc.limit ? `SELECT * FROM (${inner} ORDER BY n DESC LIMIT ${fc.limit})` : inner);
+    items.push({ base, select: fc.limit ? `SELECT * FROM (${inner} ORDER BY n DESC LIMIT ${fc.limit})` : inner });
   }
   const by = baseFor("year");
-  selects.push(
-    `SELECT * FROM (SELECT 'year' AS facet, CAST(b.year AS TEXT) AS value, COUNT(*) AS n FROM ${by} b WHERE b.year IS NOT NULL GROUP BY b.year ORDER BY b.year DESC LIMIT ${YEAR_FACET_LIMIT})`
-  );
+  items.push({
+    base: by,
+    select: `SELECT * FROM (SELECT 'year' AS facet, CAST(b.year AS TEXT) AS value, COUNT(*) AS n FROM ${by.name} b WHERE b.year IS NOT NULL GROUP BY b.year ORDER BY b.year DESC LIMIT ${YEAR_FACET_LIMIT})`,
+  });
   const ball = baseFor("none");
-  selects.push(`SELECT '_total' AS facet, NULL AS value, COUNT(*) AS n FROM ${ball}`);
+  items.push({ base: ball, select: `SELECT '_total' AS facet, NULL AS value, COUNT(*) AS n FROM ${ball.name}` });
 
-  return { sql: `WITH ${ctes.join(",\n")}\n${selects.join("\nUNION ALL\n")}`, params };
+  return chunkIntoStatements(items);
 }
 
 // ── Sample level ────────────────────────────────────────────────────────────
 
 const SAMPLE_FACETS: { name: FacetName; expr: string; limit?: number }[] = [
-  { name: "organism", expr: "s.organism_primary" },
-  { name: "tissue_group", expr: "s.tissue_group" },
-  { name: "disease_group", expr: "s.disease_group" },
-  { name: "assay_family", expr: "s.assay_family" },
-  { name: "cell_type", expr: "lower(trim(s.cell_type))", limit: CELL_TYPE_FACET_LIMIT },
+  { name: "organism", expr: "b.organism_primary" },
+  { name: "tissue_group", expr: "b.tissue_group" },
+  { name: "disease_group", expr: "b.disease_group" },
+  { name: "assay_family", expr: "b.assay_family" },
+  { name: "cell_type", expr: "lower(trim(b.cell_type))", limit: CELL_TYPE_FACET_LIMIT },
 ];
 
-function sampleFacetSql(f: SearchFilters, gsmIds: string[] | null, gseIds: string[] | null): { sql: string; params: (string | number)[] } {
-  const params: (string | number)[] = [];
-  const ctes: string[] = [];
-  const baseName = new Map<string, string>();
-
-  const baseFor = (exclude: FacetName | "none"): string => {
-    const active = exclude !== "none" && exclude !== "year" ? f[exclude].length > 0 : exclude === "year" && (f.year_min != null || f.year_max != null);
+export function sampleFacetStatements(f: SearchFilters, gsmIds: string[] | null, gseIds: string[] | null): FacetStatement[] {
+  const bases = new Map<string, Base>();
+  const baseFor = (exclude: FacetName | "none"): Base => {
+    const active = exclude !== "none" && facetActive(f, exclude);
     const key = active ? exclude : "all";
-    const existing = baseName.get(key);
+    const existing = bases.get(key);
     if (existing) return existing;
-    const name = `b_${key}`;
     const w = buildSampleWhere(f, { exclude: active ? (exclude as FacetName) : undefined, gseIds });
     const clauses = [...w.clauses];
-    const p = [...w.params];
+    const params = [...w.params];
     if (gsmIds) {
       clauses.push("s.gsm_id IN (SELECT value FROM json_each(?))");
-      p.push(JSON.stringify(gsmIds));
+      params.push(JSON.stringify(gsmIds));
     }
-    ctes.push(
-      `${name} AS (SELECT s.gsm_id, s.organism_primary, s.tissue_group, s.disease_group, s.assay_family, s.cell_type, m.year
-                   FROM gsm s LEFT JOIN gse_meta m ON m.gse_id = s.gse_id${clauses.length ? ` WHERE ${clauses.join(" AND ")}` : ""})`
-    );
-    params.push(...p);
-    baseName.set(key, name);
-    return name;
+    const base: Base = {
+      name: `b_${key}`,
+      cte: `b_${key} AS (SELECT s.gsm_id, s.organism_primary, s.tissue_group, s.disease_group, s.assay_family, s.cell_type, m.year
+                   FROM gsm s LEFT JOIN gse_meta m ON m.gse_id = s.gse_id${clauses.length ? ` WHERE ${clauses.join(" AND ")}` : ""})`,
+      params,
+    };
+    bases.set(key, base);
+    return base;
   };
 
-  const selects: string[] = [];
+  const items: { base: Base; select: string }[] = [];
   for (const fc of SAMPLE_FACETS) {
-    const b = baseFor(fc.name);
-    const expr = fc.expr.replace("s.", "b.");
-    const inner = `SELECT '${fc.name}' AS facet, ${expr} AS value, COUNT(*) AS n FROM ${b} b
-                    WHERE ${expr} IS NOT NULL AND ${expr} != '' GROUP BY ${expr}`;
-    selects.push(fc.limit ? `SELECT * FROM (${inner} ORDER BY n DESC LIMIT ${fc.limit})` : inner);
+    const base = baseFor(fc.name);
+    const inner = `SELECT '${fc.name}' AS facet, ${fc.expr} AS value, COUNT(*) AS n FROM ${base.name} b
+                    WHERE ${fc.expr} IS NOT NULL AND ${fc.expr} != '' GROUP BY ${fc.expr}`;
+    items.push({ base, select: fc.limit ? `SELECT * FROM (${inner} ORDER BY n DESC LIMIT ${fc.limit})` : inner });
   }
   const by = baseFor("year");
-  selects.push(
-    `SELECT * FROM (SELECT 'year' AS facet, CAST(b.year AS TEXT) AS value, COUNT(*) AS n FROM ${by} b WHERE b.year IS NOT NULL GROUP BY b.year ORDER BY b.year DESC LIMIT ${YEAR_FACET_LIMIT})`
-  );
+  items.push({
+    base: by,
+    select: `SELECT * FROM (SELECT 'year' AS facet, CAST(b.year AS TEXT) AS value, COUNT(*) AS n FROM ${by.name} b WHERE b.year IS NOT NULL GROUP BY b.year ORDER BY b.year DESC LIMIT ${YEAR_FACET_LIMIT})`,
+  });
   const ball = baseFor("none");
-  selects.push(`SELECT '_total' AS facet, NULL AS value, COUNT(*) AS n FROM ${ball}`);
-  return { sql: `WITH ${ctes.join(",\n")}\n${selects.join("\nUNION ALL\n")}`, params };
+  items.push({ base: ball, select: `SELECT '_total' AS facet, NULL AS value, COUNT(*) AS n FROM ${ball.name}` });
+
+  return chunkIntoStatements(items);
 }
 
 // ── Assemble ────────────────────────────────────────────────────────────────
@@ -243,10 +292,25 @@ export async function computeFacets(ctx: Ctx, f: SearchFilters, level: Level): P
 async function computeFacetsLive(ctx: Ctx, f: SearchFilters, level: Level): Promise<FacetsResponse> {
   const scope = await textScope(ctx, f, level);
   if (scope.empty) return emptyFacets(level);
-  const { sql, params } =
-    level === "gse" ? studyFacetSql(f, scope.gseIds) : sampleFacetSql(f, scope.gsmIds, scope.gseIds);
-  const res = await ctx.db.prepare(sql).bind(...params).all<FacetRow>();
-  return assemble(level, res.results);
+  const statements =
+    level === "gse" ? studyFacetStatements(f, scope.gseIds) : sampleFacetStatements(f, scope.gsmIds, scope.gseIds);
+  const rows = await runFacetStatements(ctx.db, statements);
+  return assemble(level, rows);
+}
+
+/**
+ * Execute every facet statement in one D1 batch (a single round trip) and
+ * concatenate the rows. Each statement is guaranteed ≤ MAX_COMPOUND_TERMS
+ * compound terms, which is under D1's hard limit of 5.
+ */
+export async function runFacetStatements(db: D1Database, statements: FacetStatement[]): Promise<FacetRow[]> {
+  for (const s of statements) {
+    if (s.terms > MAX_COMPOUND_TERMS) throw new Error(`facet statement has ${s.terms} compound terms (max ${MAX_COMPOUND_TERMS})`);
+  }
+  const results = await db.batch<FacetRow>(statements.map((s) => db.prepare(s.sql).bind(...s.params)));
+  const rows: FacetRow[] = [];
+  for (const r of results) rows.push(...(r.results ?? []));
+  return rows;
 }
 
 // ── Vocabulary for the query interpreter ────────────────────────────────────

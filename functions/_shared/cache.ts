@@ -21,6 +21,30 @@ export interface CachedJsonOpts {
 }
 
 /**
+ * A producer sets this header on a 200 it does not want stored — e.g. a
+ * degraded answer (interpreter unavailable, AI budget exhausted) that must not
+ * be served to the next visitor for the whole TTL. Stripped before sending.
+ */
+export const NO_CACHE_HEADER = "X-Singlet-No-Cache";
+
+/**
+ * Headers that describe the *requesting visitor* rather than the result
+ * (their remaining AI budget). Kept on the live response, never stored, so a
+ * cache hit can't show one visitor another visitor's counter.
+ */
+const PRIVATE_HEADERS = ["X-Singlet-Quota"];
+
+/** Strip the internal no-cache marker and mark the response as uncacheable. */
+function bypass(res: Response): Response {
+  if (!res.headers.has(NO_CACHE_HEADER)) return res;
+  const headers = new Headers(res.headers);
+  headers.delete(NO_CACHE_HEADER);
+  headers.set("Cache-Control", "no-store");
+  headers.set("X-Edge-Cache", "BYPASS");
+  return new Response(res.body, { status: res.status, headers });
+}
+
+/**
  * Serve `producer()` through Cloudflare's Cache API, keyed on the request URL
  * (or a canonical key). The cache write happens in `waitUntil` so the response
  * isn't delayed.
@@ -35,7 +59,7 @@ export async function cachedJson(
   const ttl = opts.ttl ?? CATALOG_CACHE_TTL;
 
   // Only GETs are cacheable; POST bodies aren't part of the cache key.
-  if (request.method !== "GET") return producer();
+  if (request.method !== "GET") return bypass(await producer());
 
   let cache: Cache | null = null;
   try {
@@ -43,7 +67,7 @@ export async function cachedJson(
   } catch {
     cache = null;
   }
-  if (!cache) return producer();
+  if (!cache) return bypass(await producer());
 
   const url = new URL(request.url);
   const keyUrl = opts.key != null ? `${url.origin}${url.pathname}?${opts.key}` : url.toString();
@@ -58,9 +82,12 @@ export async function cachedJson(
 
   const fresh = await producer();
   if (fresh.status === 200) {
+    if (fresh.headers.has(NO_CACHE_HEADER)) return bypass(fresh);
     const headers = new Headers(fresh.headers);
     headers.set("Cache-Control", `public, max-age=${ttl}, s-maxage=${ttl}`);
-    const toCache = new Response(fresh.clone().body, { status: 200, headers });
+    const cacheHeaders = new Headers(headers);
+    for (const h of PRIVATE_HEADERS) cacheHeaders.delete(h);
+    const toCache = new Response(fresh.clone().body, { status: 200, headers: cacheHeaders });
     waitUntil(cache.put(cacheKey, toCache).catch(() => undefined));
     headers.set("X-Edge-Cache", "MISS");
     return new Response(fresh.body, { status: 200, headers });

@@ -1,7 +1,11 @@
 export const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type",
+  // Authorization carries the optional user session for AI-search budgets.
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  // Per-request budget + cache diagnostics, readable from cross-origin previews.
+  "Access-Control-Expose-Headers": "X-Singlet-Quota, X-Edge-Cache",
+  "Access-Control-Max-Age": "86400",
   "Content-Type": "application/json",
 };
 
