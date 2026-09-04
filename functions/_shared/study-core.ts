@@ -162,7 +162,15 @@ export async function loadStudy(db: D1Database, rawId: string): Promise<StudyDet
   const hasBundle = metaRow ? Number(metaRow.has_bundle ?? 0) === 1 : !!bundleKey;
 
   const bundleNSamples =
-    seriesRow.r2_bundle_n_gsms != null ? Number(seriesRow.r2_bundle_n_gsms) : null;
+    manifestRow?.n_gsms_in_bundle != null
+      ? Number(manifestRow.n_gsms_in_bundle)
+      : seriesRow.r2_bundle_n_gsms != null
+        ? Number(seriesRow.r2_bundle_n_gsms)
+        : null;
+  const referenceBuild =
+    typeof manifestRow?.reference_build === "string" && manifestRow.reference_build
+      ? manifestRow.reference_build
+      : null;
 
   const series: StudySeries = {
     id,
