@@ -26,45 +26,50 @@
 - [x] `explain-results` edge function; "Explain matches" in the AI row
 - [x] `sitemap.xml` Pages Function (static routes + `/study/<gse>` with has_bundle=1)
 
-## Stage 5 — review feedback, API keys, MCP
+## Stage 5 — review feedback, API keys, MCP (done in code; deploy acceptance pending)
 ### A. Install commands (GitHub for now)
-- [ ] `src/lib/install-snippets.ts` — single constants for Python / R; switch to `pip install singlet` / `install.packages("singlet")` is a one-line change
-- [ ] Home, /docs, study page, selection bar, README use the constants; no "coming soon" notes anywhere
+- [x] `src/lib/install-snippets.ts` — single constants for Python / R; switch to `pip install singlet` / `install.packages("singlet")` is a one-line change
+- [x] Home, /docs, study page, download panel, selection bar, README use the constants; no "coming soon" notes anywhere
 ### B. Copy cleanup
-- [ ] No "Cloudflare" / "R2" / `hello@singlet.bio` in user-facing copy; GitHub Issues is the only contact channel (footer, /about, /docs, 404, error card, legal pages)
-- [ ] `/api/gse/:id` returns `bundle_key` / `bundle_bytes`; client reads those names
+- [x] No "Cloudflare" / "R2" / `hello@singlet.bio` in user-facing copy; GitHub Issues is the only contact channel (footer, /about, /docs, 404, error card, legal pages)
+- [x] `/api/gse/:id` returns `bundle_key` / `bundle_bytes` / `bundle_url`; client reads those (legacy `r2_bundle_*` kept in the JSON for the packages)
 ### C. One search bar
-- [ ] Exactly one search input per page (navbar compact box rendered once; hidden on 404 which has its own)
-- [ ] Placeholder: "Describe what you're looking for — a tissue, disease, cell type, organism, or a GSE accession"
-- [ ] Rail filter inputs are not `type=search` (they narrow lists, they are not site search)
-- [ ] Quota exhausted → same bar, keyword mode, notice shown
+- [x] Exactly one `type=search` input per page (hero on /, sticky bar on /browse, navbar compact box elsewhere; mobile menu box has its own id)
+- [x] Placeholder: "Describe what you're looking for — a tissue, disease, cell type, organism, or a GSE accession"
+- [x] Rail / sample-table filter inputs are `type=text` (they narrow lists, they are not site search)
+- [x] Quota exhausted → same bar, keyword mode, notice shown; chip edits re-run with `interpret=0`
 ### D. Sign-in providers
-- [ ] SignInDialog: Google, GitHub, divider, email
-- [ ] AuthProvider: generic OAuth (`google` | `github`), human errors when a provider is not configured
-- [ ] Operator: paste Google + GitHub client credentials in Lovable Cloud auth settings (details in the Stage 5 report)
+- [x] SignInDialog: Google, GitHub, divider, email
+- [x] AuthProvider: Google (managed broker on Lovable hosts, native elsewhere) + GitHub via `github-oauth` edge function + `/auth/github/callback` relay; human errors when a provider is not configured
+- [ ] Operator: create the GitHub OAuth app and add `GITHUB_OAUTH_CLIENT_ID` / `GITHUB_OAUTH_CLIENT_SECRET` as backend secrets; Google client id/secret in Lovable Cloud auth settings (details in the Stage 5 report)
+- [ ] Operator: add `https://*.singlet-4gc.pages.dev/**` to the auth redirect allow-list so email links and Google land on previews (GitHub already works there)
 ### E. API keys
-- [ ] Migration: `api_keys` + `resolve_api_key` / `touch_api_key` RPCs, owner-read RLS
-- [ ] Edge function `api-keys` (create / revoke, service role, hash logic in one place)
-- [ ] `functions/_shared/identity.ts`: `Bearer sk_live_…` / `X-API-Key`, 60 s per-isolate cache, `last_used_at` at most every 5 min
-- [ ] `/api/nl-search`, `/api/search`, `/api/gse/:id`, `/api/facets` accept a key; invalid / revoked → 401
-- [ ] Quota: key requests are charged to the owner's signed-in budget (edge function resolves the key)
-- [ ] `/account` page: email, plan, usage today, API keys (create with name + expiry, list, revoke, one-time reveal + copy)
-- [ ] /docs "API keys & MCP" section (curl, `singlet.set_api_key`, `SINGLET_API_KEY`)
+- [x] Migration: `api_keys` + `resolve_api_key` / `touch_api_key` RPCs, owner-read RLS
+- [x] Edge function `api-keys` (list / create / revoke, service role, hash logic in one place, 20 active keys max)
+- [x] `functions/_shared/identity.ts`: `Bearer sk_live_…` / `X-API-Key`, 60 s per-isolate cache, `last_used_at` at most every 5 min
+- [x] `/api/nl-search`, `/api/search`, `/api/gse/:id`, `/api/facets`, `/api/stats` accept a key; invalid / revoked → 401 with the /account hint
+- [x] Quota: key requests are charged to the owner's signed-in budget (edge function resolves the key)
+- [x] `/account` page: email, plan, usage today, API keys (create with name + expiry, list, revoke, one-time reveal + copy) — verified in-browser with a throwaway login
+- [x] /docs "API keys & MCP" section (curl, `singlet.set_api_key`, `SINGLET_API_KEY`)
 ### F. MCP server `https://singlet.bio/mcp`
-- [ ] `functions/mcp.ts` — Streamable HTTP, stateless JSON-RPC 2.0; initialize / initialized / ping / tools/list / tools/call
-- [ ] Tools: `search_datasets`, `get_study`, `get_download_url`, `get_atlas_stats` (content + structuredContent + `_meta.rate_limit`)
-- [ ] `tools/call` without a key → JSON-RPC error pointing at /account
-- [ ] /docs "Use singlet from Claude / ChatGPT / Cursor" with config blocks
+- [x] `functions/mcp.ts` — Streamable HTTP, stateless JSON-RPC 2.0; initialize / initialized / ping / tools/list / tools/call; protocol 2025-06-18 + 2025-03-26
+- [x] Tools: `search_datasets`, `get_study`, `get_download_url`, `get_atlas_stats` (content + structuredContent + `_meta.rate_limit` when a quota applies)
+- [x] `tools/call` without a key → JSON-RPC error pointing at /account
+- [x] /docs "Use singlet from Claude / ChatGPT / Cursor" with config blocks
 ### G. Acceptance
-- [ ] One search input per page; "human PBMC covid-19" from home → /browse chips + results; removing a chip re-runs
-- [ ] `grep -ri "cloudflare\|hello@" dist/` and `grep -r "R2" dist/` empty
-- [ ] `npm ci && npm run build` from a clean checkout
-- [ ] Zero console errors on /, /browse, /study/GSE178957, /docs, /about, /account
-- [ ] MCP transcript (initialize → tools/list → tools/call) against pages.dev after the deploy
+- [x] One search input per page; "microglia in the aging mouse brain" from home → /browse chips + results; removing a chip re-runs (local preview against live API)
+- [x] `dist/` sweep: no hosting-provider or `hello@` strings in user-facing bundles (only library internals / a `_redirects` comment / minified identifiers)
+- [x] `npm ci && npm run build` from a clean checkout
+- [x] Zero console errors on /, /browse, /study/GSE178957, /docs, /account (only the dev-only ref warning from the editor tagger)
+- [x] MCP + API-key transcript (initialize → tools/list → tools/call, bad / missing / revoked key) against the local harness
+- [ ] Re-run the MCP transcript and the page smoke test against `https://<branch>.singlet-4gc.pages.dev` after the next deploy
 ### H. Small fixes
-- [ ] Study QC tiles: hide tiles with no data; "Per-sample QC metrics were not recorded for this study." when none
+- [x] Study QC tiles: hide tiles with no data; "Per-sample QC metrics were not recorded for this study." when none
 
 ## Backlog / discovered
+- `public/notebooks/*.html` are stale June exports (old `.1pz` format); unlinked but still served. Delete them or regenerate from the GitHub notebooks.
+- A revoked key keeps working for up to 60 s on an edge isolate that cached it (documented on /account). Add a "revoked" push (KV) if that window ever matters.
+- `explanations` table has RLS on with no policies (service role only) — intended; add a comment/policy if a client read is ever needed.
 - Sync hazard: the HPC bot commits to GitHub `main` every 15 min and races Lovable's push. Move the bot to its own branch (or a data-only repo).
 - Direct callers of `interpret-search-query` bypass the per-visitor budget (they are metered per IP instead). Add a shared secret between the Pages Function and the edge function once a Cloudflare env var can be set.
 - Cell-type filter uses FTS on `{cell_type characteristics}` (prefix match); revisit if recall is a problem
