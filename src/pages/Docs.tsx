@@ -557,7 +557,7 @@ accs <- find("microglia in the aging mouse brain")`}
 singlet-process SRR11537951 --output-dir ./out --organism human --threads 8
 
 # From local FASTQ files
-singlet-process --reads R1.fastq.gz R2.fastq.gz --output-dir ./out --organism mouse`}
+singlet-process --reads reads_1.fastq.gz reads_2.fastq.gz --output-dir ./out --organism mouse`}
               />
               <CodeBlock
                 className="mt-3"
