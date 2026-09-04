@@ -1,3 +1,4 @@
+// Shared MCP config snippets used by /docs and /quickstart.
 export const MCP_URL = "https://singlet.bio/mcp";
 
 export function claudeDesktopConfig(key: string): string {
