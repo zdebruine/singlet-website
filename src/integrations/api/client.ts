@@ -81,9 +81,9 @@ export const apiClient = {
 
   /**
    * GET /api/nl-search?q=... — natural-language ("AI") search.
-   * Translates plain English into structured filters server-side (Claude Haiku)
-   * and returns matching samples/series. Degrades to keyword search when the
-   * Anthropic key isn't configured (configured: false).
+   * Turns plain English into structured filters server-side (the
+   * interpret-search-query edge function) and returns matching samples/series.
+   * Degrades to keyword search when interpretation is unavailable.
    */
   nlSearch(
     q: string,
