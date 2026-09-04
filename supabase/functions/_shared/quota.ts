@@ -12,6 +12,7 @@
  * which only the service role may call. Limits reset at 00:00 UTC.
  */
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
+import { keyErrorMessage, looksLikeApiKey, lookupApiKey } from "./api-keys.ts";
 
 export type QuotaKind = "search" | "explain";
 export type SubjectKind = "anon" | "user";
@@ -74,20 +75,43 @@ export function service(): SupabaseClient {
 }
 
 /**
- * Work out who is asking. A bearer token that is not the project's anon key
- * is validated as a user session; anything else (missing, anon key, invalid)
- * falls back to the forwarded anonymous subject, then to the caller's IP.
+ * Work out who is asking.
+ *   - `Bearer sk_live_…` (or `X-API-Key`) is a personal API key: it resolves to
+ *     its OWNER, so key usage is charged to the owner's signed-in budget.
+ *     A key that is unknown / revoked / expired sets `invalidKey` — callers
+ *     answer 401 instead of quietly metering the request as anonymous.
+ *   - Any other bearer token that is not the project's anon key is validated
+ *     as a user session.
+ *   - Everything else falls back to the forwarded anonymous subject, then to
+ *     the caller's IP.
  */
 export async function resolveSubject(req: Request): Promise<Subject> {
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
   const auth = req.headers.get("Authorization") ?? "";
-  const token = auth.replace(/^Bearer\s+/i, "").trim();
+  const bearer = auth.replace(/^Bearer\s+/i, "").trim();
+  const headerKey = (req.headers.get("X-API-Key") ?? "").trim();
+  const apiKey = looksLikeApiKey(headerKey) ? headerKey : looksLikeApiKey(bearer) ? bearer : null;
 
-  if (token && token !== anonKey && token.split(".").length === 3) {
+  if (apiKey) {
+    const found = await lookupApiKey(apiKey);
+    if (found.ok) {
+      return { subject: `user:${found.owner.userId}`, kind: "user", userId: found.owner.userId, email: null, via: "api_key" };
+    }
+    return {
+      subject: "invalid-key",
+      kind: "anon",
+      userId: null,
+      email: null,
+      via: "api_key",
+      invalidKey: { reason: found.reason, message: keyErrorMessage(found.reason) },
+    };
+  }
+
+  if (bearer && bearer !== anonKey && bearer.split(".").length === 3) {
     try {
-      const { data, error } = await service().auth.getUser(token);
+      const { data, error } = await service().auth.getUser(bearer);
       if (!error && data.user) {
-        return { subject: `user:${data.user.id}`, kind: "user", userId: data.user.id, email: data.user.email ?? null };
+        return { subject: `user:${data.user.id}`, kind: "user", userId: data.user.id, email: data.user.email ?? null, via: "session" };
       }
     } catch {
       /* fall through to anonymous accounting */
@@ -95,13 +119,13 @@ export async function resolveSubject(req: Request): Promise<Subject> {
   }
 
   const forwarded = (req.headers.get("X-Singlet-Anon") ?? "").trim();
-  if (/^anon:[0-9a-f]{16,64}$/.test(forwarded)) return { subject: forwarded, kind: "anon", userId: null, email: null };
+  if (/^anon:[0-9a-f]{16,64}$/.test(forwarded)) return { subject: forwarded, kind: "anon", userId: null, email: null, via: "anonymous" };
 
   const ip =
     req.headers.get("CF-Connecting-IP") ??
     (req.headers.get("X-Forwarded-For") ?? "").split(",")[0].trim() ??
     "";
-  return { subject: await anonSubjectFromIp(ip || "unknown"), kind: "anon", userId: null, email: null };
+  return { subject: await anonSubjectFromIp(ip || "unknown"), kind: "anon", userId: null, email: null, via: "anonymous" };
 }
 
 /** Charge one unit. Never throws: if the database is unreachable the call is allowed (fail open). */

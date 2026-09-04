@@ -252,9 +252,12 @@ Deno.serve(async (req) => {
     if (!apiKey) return json({ error: "LOVABLE_API_KEY not configured" }, 500);
 
     // Daily budget: 10 interpretations/day per anonymous visitor, 200 when
-    // signed in. Cached interpretations never reach this function, so the
-    // counter reflects real model calls only.
+    // signed in (an API key counts against its owner). Cached interpretations
+    // never reach this function, so the counter reflects real model calls only.
     const subject = await resolveSubject(req);
+    if (subject.invalidKey) {
+      return json({ error: "invalid_api_key", message: subject.invalidKey.message, reason: subject.invalidKey.reason }, 401);
+    }
     const quota = await consume(subject, "search");
     if (quota.exceeded) {
       return json({ error: "quota_exceeded", message: quotaMessage(quota, "AI searches"), quota }, 429);

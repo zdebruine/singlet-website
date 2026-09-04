@@ -152,6 +152,9 @@ Deno.serve(async (req) => {
 
   try {
     const subject = await resolveSubject(req);
+    if (subject.invalidKey) {
+      return json({ error: "invalid_api_key", message: subject.invalidKey.message, reason: subject.invalidKey.reason }, 401);
+    }
     if (subject.kind !== "user") {
       return json({ error: "sign_in_required", message: "AI explanations are available when you are signed in (free)." }, 401);
     }
