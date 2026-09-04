@@ -4,6 +4,10 @@
  * API keys for scripts and the MCP server. Browsing, searching and
  * downloading never need it.
  *
+ * Providers: Google (Lovable's managed app on Lovable hosts, the project's own
+ * Google app elsewhere), GitHub (own OAuth app driven by the `github-oauth`
+ * Cloud function) and an emailed sign-in link.
+ *
  * The auth client is loaded lazily so anonymous page views never pay for it.
  * The provider is the single writer of the module-level `authToken`, which the
  * API client attaches to AI requests.
@@ -31,6 +35,8 @@ interface AuthContextValue {
   loading: boolean;
   signInWithEmail: (email: string) => Promise<SignInResult>;
   signInWithOAuth: (provider: OAuthProviderName) => Promise<SignInResult>;
+  /** Second half of "Continue with GitHub", run by /auth/callback. */
+  finishGitHubSignIn: (code: string, state: string) => Promise<SignInResult>;
   signOut: () => Promise<void>;
   /** Open the sign-in dialog from anywhere (quota cards, nav). */
   openSignIn: (opts?: { reason?: string }) => void;
@@ -39,6 +45,7 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 const RETURN_KEY = "singlet:auth:return";
+const GITHUB_NONCE_KEY = "singlet:auth:github-nonce";
 const PROVIDER_LABEL: Record<OAuthProviderName, string> = { google: "Google", github: "GitHub" };
 
 function unavailable(provider: OAuthProviderName): string {
@@ -254,8 +261,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const openSignIn = useCallback((opts?: { reason?: string }) => setDialog({ open: true, reason: opts?.reason }), []);
 
   const value = useMemo<AuthContextValue>(
-    () => ({ user, loading, signInWithEmail, signInWithOAuth, signOut, openSignIn }),
-    [user, loading, signInWithEmail, signInWithOAuth, signOut, openSignIn],
+    () => ({ user, loading, signInWithEmail, signInWithOAuth, finishGitHubSignIn, signOut, openSignIn }),
+    [user, loading, signInWithEmail, signInWithOAuth, finishGitHubSignIn, signOut, openSignIn],
   );
 
   // Signing in while the dialog is open (e.g. OAuth popup) closes it.
