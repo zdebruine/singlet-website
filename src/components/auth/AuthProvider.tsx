@@ -153,22 +153,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       rememberReturnPath();
       const redirect = `${window.location.origin}/auth/callback`;
 
-      // Lovable-hosted previews sign in with Google through Lovable's managed
-      // Google app (GitHub is not brokered, so it always uses the route below).
-      if (provider === "google" && isLovableHost()) {
+      // GitHub: the hosted auth settings can't hold a GitHub app, so a Cloud
+      // function runs the OAuth exchange. The callback lands on
+      // /auth/callback?provider=github&code=…&state=… (see finishGitHubSignIn).
+      if (provider === "github") {
         try {
-          const { lovable } = await import("@/integrations/lovable");
-          const r = await lovable.auth.signInWithOAuth("google", { redirect_uri: redirect });
-          if ("error" in r && r.error) return { error: humanAuthError(String((r.error as Error).message ?? r.error), provider) };
+          const { apiClient } = await import("@/integrations/api/client");
+          const { pathname, search, hash } = window.location;
+          const { url, nonce } = await apiClient.githubOAuth.start(window.location.origin, pathname.startsWith("/auth/") ? "/browse" : pathname + search + hash);
+          try {
+            window.sessionStorage.setItem(GITHUB_NONCE_KEY, nonce);
+          } catch {
+            /* private mode — the exchange still verifies the signed state */
+          }
+          window.location.assign(url);
           return {};
         } catch (e) {
+          const status = (e as { status?: number }).status;
+          if (status === 503) return { error: unavailable("github") };
           return { error: humanAuthError(e instanceof Error ? e.message : String(e), provider) };
         }
       }
 
-      // singlet.bio and *.pages.dev previews: the provider's OAuth app must be
-      // configured for this project. Probe before redirecting so a missing
-      // configuration shows a sentence here instead of a bare error page.
+      // Lovable-hosted previews sign in with Google through Lovable's managed
+      // Google app; if that broker declines, fall through to the project's own
+      // Google app below.
+      if (isLovableHost()) {
+        try {
+          const { lovable } = await import("@/integrations/lovable");
+          const r = await lovable.auth.signInWithOAuth("google", { redirect_uri: redirect });
+          if (!("error" in r && r.error)) return {};
+        } catch {
+          /* fall through */
+        }
+      }
+
+      // singlet.bio and *.pages.dev previews: the project's own Google app must
+      // be configured. Probe before redirecting so a missing configuration
+      // shows a sentence here instead of a bare error page.
       const sb = await client();
       const { data, error } = await sb.auth.signInWithOAuth({
         provider,
@@ -183,6 +205,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       window.location.assign(data.url);
       return {};
+    },
+    [client],
+  );
+
+  const finishGitHubSignIn = useCallback(
+    async (code: string, state: string): Promise<SignInResult> => {
+      let expectedNonce: string | null = null;
+      try {
+        expectedNonce = window.sessionStorage.getItem(GITHUB_NONCE_KEY);
+        window.sessionStorage.removeItem(GITHUB_NONCE_KEY);
+      } catch {
+        /* ignore */
+      }
+      try {
+        const { apiClient } = await import("@/integrations/api/client");
+        const { tokenHash, returnTo, nonce } = await apiClient.githubOAuth.exchange(code, state);
+        // A callback this browser never started (login CSRF) is refused.
+        if (expectedNonce && nonce && expectedNonce !== nonce) {
+          return { error: "This sign-in was started in a different browser tab or window. Please try again from here." };
+        }
+        const sb = await client();
+        const { error } = await sb.auth.verifyOtp({ token_hash: tokenHash, type: "magiclink" });
+        if (error) return { error: humanAuthError(error.message, "github") };
+        try {
+          window.localStorage.setItem(RETURN_KEY, returnTo);
+        } catch {
+          /* ignore */
+        }
+        return {};
+      } catch (e) {
+        const status = (e as { status?: number }).status;
+        if (status === 503) return { error: unavailable("github") };
+        return { error: humanAuthError(e instanceof Error ? e.message : String(e), "github") };
+      }
     },
     [client],
   );
