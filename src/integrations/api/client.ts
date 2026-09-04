@@ -624,13 +624,13 @@ export const apiClient = {
   apiKeys: {
     async list(): Promise<ApiKeySummary[]> {
       const r = rec(await cloudPost("api-keys", { action: "list" }));
-      return arr<unknown>(r.keys).map(normalizeApiKey).filter((k): k is ApiKeySummary => k !== null);
+      return arr<unknown>(r.items).map(normalizeApiKey).filter((k): k is ApiKeySummary => k !== null);
     },
     async create(name: string, expiresInDays?: number | null): Promise<ApiKeyCreated> {
       const r = rec(await cloudPost("api-keys", { action: "create", name, expires_in_days: expiresInDays ?? null }));
-      const key = normalizeApiKey(r.key);
-      if (!key || typeof r.secret !== "string") throw new ApiError(502, "The key was created but could not be read back. Refresh the page.");
-      return { key, secret: r.secret };
+      const key = normalizeApiKey(r.item);
+      if (!key || typeof r.key !== "string") throw new ApiError(502, "The key was created but could not be read back. Refresh the page.");
+      return { key, secret: r.key };
     },
     async revoke(id: string): Promise<void> {
       await cloudPost("api-keys", { action: "revoke", id });
