@@ -3,7 +3,8 @@
  *
  * Natural-language ("AI") catalog search. Translates a plain-English query like
  *   "Find all T cells from pediatric AML"
- * into structured metadata filters via Claude Haiku, then runs a parameterized
+ * into structured metadata filters via the `interpret-search-query` edge
+ * function (Gemini through the Lovable AI Gateway), then runs a parameterized
  * D1 query and returns the matching samples (level=gsm) or series (level=gse).
  *
  * Params (GET query string or POST JSON body):
