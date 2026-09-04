@@ -40,7 +40,7 @@ export function DownloadPanel({ accession, r2BundleKey, r2BundleBytes, stacked =
       <div className={cn("px-4 py-3 border-b border-border flex gap-3", stacked ? "flex-col" : "items-center justify-between flex-wrap")}>
         <div className="flex items-center gap-x-3 gap-y-1 flex-wrap text-[13px] text-muted-foreground min-w-0">
           <span className="font-mono text-foreground truncate">{accession}.singlet</span>
-          <span className="tabular">{r2BundleBytes != null ? fmtBytes(r2BundleBytes) : "size unknown"}</span>
+          {downloadUrl && <span className="tabular">{r2BundleBytes != null ? fmtBytes(r2BundleBytes) : "size unknown"}</span>}
           <span aria-hidden="true">·</span>
           <Link to="/data-license" className="hover:text-foreground">CC0</Link>
           {!stacked && (
@@ -55,7 +55,7 @@ export function DownloadPanel({ accession, r2BundleKey, r2BundleBytes, stacked =
             <Download size={14} /> Download{stacked && r2BundleBytes != null ? ` · ${fmtBytes(r2BundleBytes)}` : ""}
           </a>
         ) : (
-          <span className="flag self-start">No file built yet</span>
+          <span className="flag self-start">File not built yet</span>
         )}
       </div>
       <div className={cn("p-4 grid gap-3", stacked ? "grid-cols-1" : "md:grid-cols-2")}>
@@ -63,10 +63,17 @@ export function DownloadPanel({ accession, r2BundleKey, r2BundleBytes, stacked =
         <CodeBlock code={r} label="r" compact />
         <CodeBlock code={curl} label="curl" compact wrap={stacked} className={cn(!stacked && "md:col-span-2")} />
       </div>
-      <p className="px-4 pb-3 text-xs text-muted-foreground leading-relaxed">
-        One file holds every processed sample in the study; select samples with <code className="code-inline">gsm_id</code> after
-        loading. <Link to="/docs#singlet-file" className="text-primary hover:underline">What's inside →</Link>
-      </p>
+      {downloadUrl ? (
+        <p className="px-4 pb-3 text-xs text-muted-foreground leading-relaxed">
+          One file holds every processed sample in the study; select samples with <code className="code-inline">gsm_id</code> after
+          loading. <Link to="/docs#singlet-file" className="text-primary hover:underline">What's inside →</Link>
+        </p>
+      ) : (
+        <p className="px-4 pb-3 text-xs text-muted-foreground leading-relaxed">
+          The samples are processed but the study file hasn't been assembled yet, so <code className="code-inline">load("{accession}")</code> will
+          not work until it is. Files are built in batches; check back soon.
+        </p>
+      )}
     </div>
   );
 }
