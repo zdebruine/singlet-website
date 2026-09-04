@@ -48,6 +48,8 @@ const TABLES: Record<string, TableSpec> = {
       manifest_n_gsms: "int",
       gsm_ids: "text",
       manifest_created_at: "text",
+      reference_build: "text",
+      singlet_version: "text",
     },
     stamp: "audited_at",
   },

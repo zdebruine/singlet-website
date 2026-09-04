@@ -34,6 +34,8 @@ export interface StudySeries {
   bundle_url: string | null;
   /** Number of samples actually present in the bundle, when indexed. Null until the packing job writes gse.r2_bundle_n_gsms. */
   bundle_n_samples: number | null;
+  /** Reference genome build of the bundle, e.g. "GRCm39-2024-A". Null until the packing job ingests it via bundle_manifest. */
+  reference_build: string | null;
   submitted_date: string | null;
   last_updated: string | null;
   /** Legacy names kept for the Python/R packages. */
