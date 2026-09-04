@@ -20,6 +20,7 @@
  *     model: string }
  */
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
+import { consume, quotaMessage, resolveSubject } from "../_shared/quota.ts";
 
 const FACETS_URL = "https://singlet.bio/api/facets?level=gsm";
 /**
@@ -250,6 +251,15 @@ Deno.serve(async (req) => {
     const apiKey = Deno.env.get("LOVABLE_API_KEY");
     if (!apiKey) return json({ error: "LOVABLE_API_KEY not configured" }, 500);
 
+    // Daily budget: 10 interpretations/day per anonymous visitor, 200 when
+    // signed in. Cached interpretations never reach this function, so the
+    // counter reflects real model calls only.
+    const subject = await resolveSubject(req);
+    const quota = await consume(subject, "search");
+    if (quota.exceeded) {
+      return json({ error: "quota_exceeded", message: quotaMessage(quota, "AI searches"), quota }, 429);
+    }
+
     const vocab = body.vocab ? coerceVocab(body.vocab) : await loadVocab();
     const vocabText = LIST_FIELDS.map((f) => `${f}: ${vocab[f].length ? vocab[f].join(" | ") : "(none)"}`).join("\n\n");
     const messages = [
@@ -265,17 +275,17 @@ Deno.serve(async (req) => {
       const outcome = await askModel(apiKey, model, messages);
       last = outcome;
       if (outcome.ok) {
-        return json({ interpreted: coerceInterpreted(outcome.parsed, vocab), model: outcome.model, version: 2 });
+        return json({ interpreted: coerceInterpreted(outcome.parsed, vocab), model: outcome.model, version: 2, quota });
       }
       // Quota / billing problems apply to every model — don't burn a second call.
       if (outcome.status === 429 || outcome.status === 402) break;
     }
 
     if (last && !last.ok && (last.status === 429 || last.status === 402)) {
-      return json({ error: `AI gateway ${last.status}`, detail: last.detail }, last.status);
+      return json({ error: `AI gateway ${last.status}`, detail: last.detail, quota }, last.status === 429 ? 503 : last.status);
     }
     return json(
-      { error: "AI gateway unavailable", detail: last && !last.ok ? `${last.model}: ${last.detail}` : "" },
+      { error: "AI gateway unavailable", detail: last && !last.ok ? `${last.model}: ${last.detail}` : "", quota },
       502,
     );
   } catch (e) {
