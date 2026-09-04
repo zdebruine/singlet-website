@@ -36,7 +36,7 @@
 - [x] Gold/Silver/Bronze, "1B+ cells", "Free for academic research", Benchmarks / Blog / Notebooks references removed; HPC dashboard unlinked but reachable
 - [x] 404 page with search box; per-page titles; robots.txt allows all
 - [x] Docs: search section documents the daily AI limits and what is stored
-- [ ] `sitemap.xml` as a Pages Function (static routes + `/study/<gse>` with has_bundle=1), cached 1 day — static file today
+- [x] `sitemap.xml` Pages Function (static routes + `/study/<gse>` with has_bundle=1), edge-cached 1 day; static file removed
 - [ ] Accessibility pass (labels, teal focus rings, contrast) on the new auth dialog + account menu
 ### E. Acceptance (after the Cloudflare deploy picks up the new Pages Functions)
 - [ ] Anonymous on pages.dev: 10 AI searches → exhausted card; keyword search still works; `X-Singlet-Quota` present on fresh answers, absent on cache hits
