@@ -114,16 +114,35 @@ const Docs = () => {
 
             {/* ── Install ── */}
             <Section id="install" title="Install">
-              <p>Python 3.9 or newer. The package name on PyPI is <Mono>singlet</Mono>.</p>
-              <CodeBlock label="bash" code={`pip install singlet`} />
-              <p className="mt-4">R 4.2 or newer. The CRAN package name is also <Mono>singlet</Mono>.</p>
-              <CodeBlock label="r" code={`install.packages("singlet")`} />
+              <p>
+                Python 3.9 or newer. The package is installed from GitHub until its first PyPI release; the install builds
+                a small C++ extension, so a C++17 compiler is required.
+              </p>
+              <CodeBlock label="bash" code={`pip install git+https://github.com/Singlet-Bio/singlet.git`} />
+              <p className="mt-4">
+                The distribution name will be <Mono>singlet-bio</Mono> once it is on PyPI. Do not{" "}
+                <Mono>pip install singlet</Mono>: that name on PyPI belongs to an unrelated project. In both cases the
+                importable module is <Mono>singlet</Mono>.
+              </p>
+              <p className="mt-4">
+                R 4.2 or newer. The R package lives in the same repository under <Mono>r/</Mono> and is not on CRAN;
+                install it with <Mono>remotes</Mono> (or <Mono>devtools</Mono>).
+              </p>
+              <CodeBlock label="r" code={`remotes::install_github("Singlet-Bio/singlet", subdir = "r")`} />
               <p className="mt-4">
                 No account, API key or configuration is needed. Files are fetched from{" "}
                 <a href="https://data.singlet.bio" rel="noopener noreferrer">data.singlet.bio</a> (Cloudflare R2) on first
                 use and cached locally.
               </p>
               <h3>Optional extras (Python)</h3>
+              <p>
+                Extras are declared on the <Mono>singlet-bio</Mono> distribution. With a GitHub install, request them with
+                a direct reference:
+              </p>
+              <CodeBlock
+                label="bash"
+                code={`pip install "singlet-bio[torch] @ git+https://github.com/Singlet-Bio/singlet.git"`}
+              />
               <table>
                 <thead>
                   <tr>
@@ -133,15 +152,19 @@ const Docs = () => {
                 </thead>
                 <tbody>
                   <tr>
-                    <td><Mono>singlet[torch]</Mono></td>
+                    <td><Mono>[torch]</Mono></td>
                     <td>PyTorch dataset / dataloader helpers for training on atlas data.</td>
                   </tr>
                   <tr>
-                    <td><Mono>singlet[mcp]</Mono></td>
+                    <td><Mono>[gpu]</Mono></td>
+                    <td>CuPy (CUDA 12) for GPU-accelerated analysis.</td>
+                  </tr>
+                  <tr>
+                    <td><Mono>[mcp]</Mono></td>
                     <td>The MCP server (see <a href="#mcp">MCP server</a>).</td>
                   </tr>
                   <tr>
-                    <td><Mono>singlet[all]</Mono></td>
+                    <td><Mono>[all]</Mono></td>
                     <td>Every optional dependency.</td>
                   </tr>
                 </tbody>
