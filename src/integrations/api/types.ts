@@ -152,12 +152,33 @@ export interface Suggestion {
   params: string;
 }
 
+/** Remaining AI budget for the requesting visitor, as reported by the API. */
+export interface QuotaInfo {
+  kind: "anon" | "user";
+  used: number;
+  limit: number;
+  resets_at: string;
+  exceeded: boolean;
+}
+
 export interface NlSearchResponse<T = StudyRow | SampleRow> extends SearchResponse<T> {
   configured: boolean;
   interpreted: Interpreted | null;
   suggestions: Suggestion[];
   /** gse_id → deterministic one-line explanation (study level only). */
   why: Record<string, string>;
+  model?: string;
+  /** True when today's AI-search budget is spent; the answer is a plain keyword search. */
+  quota_exceeded?: boolean;
+  quota?: QuotaInfo;
+}
+
+/** Reply from the signed-in "explain these matches" call. */
+export interface ExplainResponse {
+  explanations: Record<string, string>;
+  cached: number;
+  generated: number;
+  quota?: QuotaInfo;
   model?: string;
 }
 
