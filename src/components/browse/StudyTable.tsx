@@ -14,6 +14,8 @@ interface Props {
   onSort: (s: Sort) => void;
   ai: boolean;
   why?: Record<string, string>;
+  /** Studies whose `why` was written by the model (signed-in explanations). */
+  aiWhyIds?: Record<string, unknown>;
 }
 
 function SortTh({
@@ -45,7 +47,7 @@ function SortTh({
   );
 }
 
-export function StudyTable({ rows, selectedIds, onToggle, onTogglePage, sort, onSort, ai, why }: Props) {
+export function StudyTable({ rows, selectedIds, onToggle, onTogglePage, sort, onSort, ai, why, aiWhyIds }: Props) {
   const allSelected = rows.length > 0 && rows.every((r) => selectedIds.has(r.gse_id));
   const someSelected = rows.some((r) => selectedIds.has(r.gse_id));
 
@@ -91,6 +93,7 @@ export function StudyTable({ rows, selectedIds, onToggle, onTogglePage, sort, on
           {rows.map((r) => {
             const selected = selectedIds.has(r.gse_id);
             const explanation = why?.[r.gse_id] ?? r.why;
+            const modelWritten = !!aiWhyIds?.[r.gse_id];
             return (
               <tr key={r.gse_id} className={cn(selected && "bg-primary/[0.03]")}>
                 <td className="align-top">
@@ -115,7 +118,8 @@ export function StudyTable({ rows, selectedIds, onToggle, onTogglePage, sort, on
                   {r.conditions_label && <div className="mt-0.5 text-[12px] text-warning truncate">{r.conditions_label}</div>}
                   {explanation && (
                     <div className="mt-0.5 text-[12px] text-muted-foreground line-clamp-1" title={explanation}>
-                      <span className={cn("font-medium", ai ? "text-ai" : "")}>{ai ? "Why: " : ""}</span>
+                      {modelWritten && <span className="ai-badge mr-1 align-[1px]">AI</span>}
+                      <span className={cn("font-medium", ai || modelWritten ? "text-ai" : "")}>{ai || modelWritten ? "Why: " : ""}</span>
                       {explanation}
                     </div>
                   )}

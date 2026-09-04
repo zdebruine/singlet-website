@@ -13,6 +13,8 @@ interface Props {
   /** Violet label when the explanation belongs to an interpreted query. */
   ai: boolean;
   why?: string;
+  /** True when `why` was written by the model (signed-in explanations), not derived from the filters. */
+  aiWhy?: boolean;
 }
 
 export function metaLine(r: StudyRow): string[] {
@@ -49,7 +51,7 @@ function LoadSnippet({ gseId }: { gseId: string }) {
   );
 }
 
-export function StudyCard({ row, selected, onToggle, ai, why }: Props) {
+export function StudyCard({ row, selected, onToggle, ai, why, aiWhy }: Props) {
   const conditions = row.conditions.slice(0, 3);
   const explanation = why ?? row.why;
   const failed = row.n_failed ?? Math.max(0, row.n_total - row.n_done);
@@ -123,7 +125,12 @@ export function StudyCard({ row, selected, onToggle, ai, why }: Props) {
 
           {explanation && (
             <p className="mt-2.5 text-[13px] leading-snug">
-              <span className={cn("font-medium", ai ? "text-ai" : "text-muted-foreground")}>{ai ? "Why it matches:" : "Matches:"}</span>{" "}
+              {aiWhy && (
+                <span className="ai-badge mr-1.5 align-[1px]" title="Written by the model from this study's metadata">
+                  AI
+                </span>
+              )}
+              <span className={cn("font-medium", ai || aiWhy ? "text-ai" : "text-muted-foreground")}>{ai || aiWhy ? "Why it matches:" : "Matches:"}</span>{" "}
               <span className="text-foreground/85">{explanation}</span>
             </p>
           )}

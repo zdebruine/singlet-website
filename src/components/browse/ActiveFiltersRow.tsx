@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Plus, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { organismLabel } from "@/lib/catalog-display";
@@ -10,6 +11,8 @@ interface Props {
   ai: boolean;
   dropped?: DroppedValue[];
   note?: string;
+  /** Right-aligned extras (AI budget counter, explain button). */
+  trailing?: ReactNode;
   onRemove: (field: string, value: string) => void;
   onAddFilter: () => void;
   onClear: () => void;
@@ -20,7 +23,7 @@ interface Props {
  * "We read that as …" row. Violet only when the chips are AI-derived; explicit
  * filters use the teal active-chip style.
  */
-export function ActiveFiltersRow({ applied, ai, dropped, note, onRemove, onAddFilter, onClear, className }: Props) {
+export function ActiveFiltersRow({ applied, ai, dropped, note, trailing, onRemove, onAddFilter, onClear, className }: Props) {
   const chips = activeFilters(applied, organismLabel);
   if (!chips.length && !note && !dropped?.length) return null;
 
@@ -57,7 +60,10 @@ export function ActiveFiltersRow({ applied, ai, dropped, note, onRemove, onAddFi
             clear all
           </button>
         )}
-        <span className="ml-auto text-[11px] text-muted-foreground whitespace-nowrap">AND across groups · any-of within a group</span>
+        <span className="ml-auto inline-flex flex-wrap items-center gap-x-3 gap-y-1">
+          {trailing}
+          <span className="text-[11px] text-muted-foreground whitespace-nowrap">AND across groups · any-of within a group</span>
+        </span>
       </div>
       {(note || (dropped && dropped.length > 0)) && (
         <p className="mt-1.5 text-[12px] text-muted-foreground leading-snug">
