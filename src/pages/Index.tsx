@@ -55,7 +55,7 @@ const Index = () => {
   });
 
   const studyCount = (t: StartTile): number | undefined =>
-    facets?.[t.field].find((o) => o.value === t.value)?.count;
+    facets?.[t.field]?.find((o) => o.value === t.value)?.count;
 
   const statItems = [
     { value: stats ? fmtInt(stats.series_count) : null, label: "studies" },

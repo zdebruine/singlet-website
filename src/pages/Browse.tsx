@@ -8,15 +8,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, Download, LayoutGrid, List, Search, SlidersHorizontal } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, LayoutGrid, List, Loader2, Search, SlidersHorizontal, Sparkles } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { cn } from "@/lib/utils";
 import { usePageMeta } from "@/hooks/usePageMeta";
 import { fmtCompact, fmtInt } from "@/lib/catalog-display";
 import { searchDestination } from "@/lib/search-routing";
-import { apiClient } from "@/integrations/api/client";
+import { apiClient, isApiError } from "@/integrations/api/client";
 import type { AppliedFilters, NlSearchResponse, SampleRow, SearchResponse, Sort, StudyRow } from "@/integrations/api/types";
+import { useAuth } from "@/components/auth/AuthProvider";
+import { AiQuotaBadge, AiQuotaExceeded } from "@/components/browse/AiQuotaNotice";
 import {
   DEFAULT_STATE,
   PAGE_SIZE,
@@ -198,12 +200,61 @@ const Browse = () => {
   const pages = shown ? Math.max(1, Math.ceil(shown.total / shown.limit)) : 1;
   const nl = isNl(fresh) ? fresh : undefined;
   const showAiRow = aiMode && !!nl?.interpreted;
+  const quotaExceeded = !!nl?.quota_exceeded && !!nl.quota;
   const hasActive = !!fresh && (hasExplicitFilters(appliedToState(fresh.applied, state)) || !!fresh.applied.q);
   const loadingInitial = result.isLoading && !shown;
   const refreshing = result.isFetching && !!shown;
   const chipsApplied = fresh ? fresh.applied : applied;
 
   const exportHref = apiClient.exportAccessionsUrl(appliedQuery);
+
+  // ── AI explanations (signed in) ───────────────────────────────────────────
+  // One sentence per study from the model, replacing the rule-based "why".
+  // Never automatic: each uncached batch spends one unit of the daily budget.
+  const { user, openSignIn } = useAuth();
+  const [explained, setExplained] = useState<{ key: string; map: Record<string, string> }>({ key: "", map: {} });
+  const [explaining, setExplaining] = useState(false);
+  const [explainError, setExplainError] = useState<string | null>(null);
+  const explanations = explained.key === stateKey ? explained.map : {};
+  const pendingExplain = studies.filter((r) => !explanations[r.gse_id]);
+  const canExplain = showAiRow && state.level === "gse" && studies.length > 0;
+
+  const explain = async () => {
+    if (!user) {
+      openSignIn({ reason: "AI explanations are free with an account: one grounded sentence per study on why it does or doesn't answer your question." });
+      return;
+    }
+    if (!pendingExplain.length || explaining) return;
+    setExplaining(true);
+    setExplainError(null);
+    const key = stateKey;
+    try {
+      for (let i = 0; i < pendingExplain.length; i += 10) {
+        const batch = pendingExplain.slice(i, i + 10);
+        const r = await apiClient.explain(state.q, batch);
+        setExplained((prev) => ({ key, map: { ...(prev.key === key ? prev.map : {}), ...r.explanations } }));
+      }
+    } catch (e) {
+      if (isApiError(e) && e.status === 401) openSignIn();
+      setExplainError(e instanceof Error ? e.message : "AI explanations are unavailable right now.");
+    } finally {
+      setExplaining(false);
+    }
+  };
+  useEffect(() => setExplainError(null), [stateKey]);
+
+  const explainButton = canExplain ? (
+    <button
+      type="button"
+      onClick={explain}
+      disabled={explaining || (!!user && pendingExplain.length === 0)}
+      className="inline-flex items-center gap-1.5 text-[12px] font-medium text-ai hover:underline underline-offset-2 disabled:opacity-60 disabled:no-underline"
+      title={user ? "One grounded sentence per study, written by the model from its metadata. Costs one AI explanation per 10 studies; repeats are free." : "Sign in (free) to get AI explanations"}
+    >
+      {explaining ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+      {explaining ? "Explaining…" : !user ? "Sign in for AI explanations" : pendingExplain.length === 0 ? "Explained" : `Explain ${pendingExplain.length === studies.length ? "matches" : `${pendingExplain.length} more`}`}
+    </button>
+  ) : null;
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -265,19 +316,35 @@ const Browse = () => {
 
           {/* Results */}
           <section aria-label="Results" className="min-w-0">
+            {quotaExceeded && nl?.quota && <AiQuotaExceeded quota={nl.quota} message={nl.note ?? "Today's free AI searches are used up."} />}
+
             <ActiveFiltersRow
               applied={chipsApplied}
               ai={showAiRow}
               dropped={fresh?.dropped}
               note={
-                fresh?.note ??
-                (fresh?.any_word ? "No study mentions every word, so these match any of the words instead." : undefined)
+                quotaExceeded
+                  ? undefined
+                  : (fresh?.note ?? (fresh?.any_word ? "No study mentions every word, so these match any of the words instead." : undefined))
+              }
+              trailing={
+                aiMode ? (
+                  <>
+                    {explainButton}
+                    {!quotaExceeded && <AiQuotaBadge />}
+                  </>
+                ) : undefined
               }
               onRemove={onRemove}
               onAddFilter={focusRail}
               onClear={onClear}
               className="mb-3"
             />
+            {explainError && (
+              <p role="alert" className="mb-3 text-[12.5px] text-warning">
+                {explainError}
+              </p>
+            )}
 
             {/* Header */}
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mb-3">
@@ -390,7 +457,8 @@ const Browse = () => {
                     sort={state.sort}
                     onSort={setSort}
                     ai={showAiRow}
-                    why={nl?.why}
+                    why={Object.keys(explanations).length ? { ...(nl?.why ?? {}), ...explanations } : nl?.why}
+                    aiWhyIds={explanations}
                   />
                 ) : (
                   <>
@@ -409,7 +477,15 @@ const Browse = () => {
                     )}
                     <div className="space-y-3">
                       {studies.map((r) => (
-                        <StudyCard key={r.gse_id} row={r} selected={selection.ids.has(r.gse_id)} onToggle={selection.toggle} ai={showAiRow} why={nl?.why?.[r.gse_id]} />
+                        <StudyCard
+                          key={r.gse_id}
+                          row={r}
+                          selected={selection.ids.has(r.gse_id)}
+                          onToggle={selection.toggle}
+                          ai={showAiRow}
+                          why={explanations[r.gse_id] ?? nl?.why?.[r.gse_id]}
+                          aiWhy={!!explanations[r.gse_id]}
+                        />
                       ))}
                     </div>
                   </>

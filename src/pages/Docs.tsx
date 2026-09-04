@@ -230,7 +230,16 @@ sce  <- find_load("human PBMC, COVID-19, 10x 5'")`}
               <p>
                 Search on this website, in the packages and in the MCP server all call the same public endpoint,{" "}
                 <Mono>GET https://singlet.bio/api/nl-search?q=…</Mono>, which returns the matched accessions and the
-                filters it interpreted. Results are catalog metadata; nothing about your query is stored.
+                filters it interpreted. Results are catalog metadata. Interpretations are cached for an hour per
+                question text and are not tied to you; the only thing kept per visitor is a daily count of AI requests.
+              </p>
+              <p>
+                Interpreting plain English costs a model call, so it is rate-limited: <strong>10 AI searches a day</strong>{" "}
+                without an account (per network address) and <strong>200 a day</strong> signed in (free, email link or
+                Google). Repeated questions come from cache and don't count. When the budget is spent the endpoint still
+                answers with a plain keyword search and sets <Mono>quota_exceeded: true</Mono>; accessions, filters in
+                the rail and the catalog itself are never limited. Signed-in users can also ask for a one-sentence,
+                metadata-grounded explanation of why each study matched (100 a day).
               </p>
             </Section>
 
