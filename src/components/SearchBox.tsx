@@ -4,11 +4,16 @@ import { Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { searchDestination } from "@/lib/search-routing";
 
+/** The one placeholder used by every search input on the site. */
+export const SEARCH_PLACEHOLDER = "Describe what you're looking for — a tissue, disease, cell type, organism, or a GSE accession";
+
 /**
- * Site search. Two sizes:
+ * Site search. There is exactly one search input per page; this component
+ * renders it in two sizes:
  *  - "hero": the home page box (1.5px teal border, attached gradient button)
- *  - "compact": the header input on every other page
- * Submitting navigates via `searchDestination` (accessions go straight to a study).
+ *  - "compact": the header input on pages that have no search of their own
+ * Everything typed here is sent to the same AI-interpreted search (/browse?q=…);
+ * accessions go straight to the study.
  */
 export function SearchBox({
   variant = "compact",
@@ -54,7 +59,7 @@ export function SearchBox({
             spellCheck={false}
             value={value}
             onChange={(e) => setValue(e.target.value)}
-            placeholder={placeholder ?? "Describe what you're looking for — a tissue, disease, cell type, organism…"}
+            placeholder={placeholder ?? SEARCH_PLACEHOLDER}
             className="flex-1 min-w-0 bg-transparent px-4 h-[52px] text-[15px] text-foreground placeholder:text-muted-foreground focus:outline-none [&::-webkit-search-cancel-button]:appearance-none"
           />
           <button
@@ -83,7 +88,8 @@ export function SearchBox({
         spellCheck={false}
         value={value}
         onChange={(e) => setValue(e.target.value)}
-        placeholder={placeholder ?? "Search studies, GSE, GSM…"}
+        placeholder={placeholder ?? SEARCH_PLACEHOLDER}
+        title={SEARCH_PLACEHOLDER}
         className="input h-9 pl-8 pr-3 text-[13px] [&::-webkit-search-cancel-button]:appearance-none"
       />
     </form>
