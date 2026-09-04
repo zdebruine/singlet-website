@@ -9,12 +9,15 @@ import { usePageMeta } from "@/hooks/usePageMeta";
 import { fmtCompact, fmtInt } from "@/lib/catalog-display";
 import { EXAMPLE_QUERIES, searchDestination } from "@/lib/search-routing";
 
-const PY_SNIPPET = `pip install singlet
+// Install lines must match the package as it is actually distributed today:
+// the Python distribution ("singlet-bio") is not on PyPI yet and "singlet" on
+// PyPI is an unrelated project; the R package is GitHub-only (not on CRAN).
+const PY_SNIPPET = `pip install git+https://github.com/Singlet-Bio/singlet.git
 
 import singlet
 adata = singlet.load("GSE178957")   # AnnData`;
 
-const R_SNIPPET = `install.packages("singlet")
+const R_SNIPPET = `remotes::install_github("Singlet-Bio/singlet", subdir = "r")
 
 library(singlet)
 sce <- load("GSE178957")   # SingleCellExperiment`;
