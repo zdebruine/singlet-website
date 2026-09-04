@@ -1,18 +1,19 @@
 import { useEffect, useState } from "react";
-import { LogOut } from "lucide-react";
+import { Link } from "react-router-dom";
+import { KeyRound, LogOut, UserRound } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { fmtInt } from "@/lib/catalog-display";
 import { useAiQuota } from "@/lib/ai-quota";
 import { useAuth } from "./AuthProvider";
 
-interface UsageToday {
+export interface UsageToday {
   search: number;
   explain: number;
 }
 
 /** Today's counters straight from the database (the local copy can be stale on a new device). */
-function useUsageToday(enabled: boolean): UsageToday | null {
+export function useUsageToday(enabled: boolean): UsageToday | null {
   const [usage, setUsage] = useState<UsageToday | null>(null);
   useEffect(() => {
     if (!enabled) {
@@ -111,7 +112,15 @@ export function AccountMenu({ className, variant = "nav" }: { className?: string
           </div>
           <p className="pt-1 text-[11.5px] text-muted-foreground leading-snug">Counts reset at 00:00 UTC. Repeated questions are served from cache and don't count.</p>
         </dl>
-        <div className="border-t border-border p-1.5">
+        <div className="border-t border-border p-1.5 space-y-0.5">
+          <Link to="/account" onClick={() => setOpen(false)} className="btn-ghost w-full justify-start">
+            <UserRound size={14} />
+            Account
+          </Link>
+          <Link to="/account#api-keys" onClick={() => setOpen(false)} className="btn-ghost w-full justify-start">
+            <KeyRound size={14} />
+            API keys
+          </Link>
           <button
             type="button"
             onClick={() => {

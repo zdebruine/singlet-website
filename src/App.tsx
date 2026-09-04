@@ -19,6 +19,7 @@ import Privacy from "./pages/Privacy.tsx";
 import SplicePatternSpec from "./pages/SplicePatternSpec.tsx";
 import HpcDashboard from "./pages/HpcDashboard.tsx";
 import AuthCallback from "./pages/AuthCallback.tsx";
+import Account from "./pages/Account.tsx";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -85,9 +86,10 @@ const App = () => (
               <Route path="/series/:gseId" element={<SeriesRedirect />} />
               <Route path="/sample/:gsmId" element={<SampleRedirect />} />
 
-              {/* Sign-in round-trip (email link / Google) */}
+              {/* Sign-in round-trip (email link / Google / GitHub) + account page */}
               <Route path="/auth/callback" element={<AuthCallback />} />
               <Route path="/auth" element={<Navigate to="/auth/callback" replace />} />
+              <Route path="/account" element={<Account />} />
 
               {/* Legal + technical reference (linked from footer / docs) */}
               <Route path="/data-license" element={<DataLicense />} />
