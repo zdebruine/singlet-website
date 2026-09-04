@@ -34,6 +34,8 @@ export interface StudySeries {
   bundle_url: string | null;
   /** Number of samples actually present in the bundle, when indexed. Null until the packing job writes gse.r2_bundle_n_gsms. */
   bundle_n_samples: number | null;
+  /** Reference genome build of the bundle, e.g. "GRCm39-2024-A". Null until the packing job ingests it via bundle_manifest. */
+  reference_build: string | null;
   submitted_date: string | null;
   last_updated: string | null;
   /** Legacy names kept for the Python/R packages. */
@@ -83,7 +85,7 @@ export async function loadStudy(db: D1Database, rawId: string): Promise<StudyDet
   const id = rawId.trim().toUpperCase();
   if (!GSE_RE.test(id)) return null;
 
-  const [seriesRow, metaRow, samplesResult, pubsResult] = await Promise.all([
+  const [seriesRow, metaRow, samplesResult, pubsResult, manifestRow] = await Promise.all([
     db
       .prepare(
         `SELECT id, title, abstract, organism, n_gsm_total, n_gsm_done, n_gsm_failed,
@@ -126,6 +128,13 @@ export async function loadStudy(db: D1Database, rawId: string): Promise<StudyDet
       .bind(id)
       .all<Record<string, unknown>>()
       .catch(() => ({ results: [] as Record<string, unknown>[] })),
+
+    // Bundle manifest (ingested by the packing job): reference build + actual sample count.
+    db
+      .prepare(`SELECT reference_build, n_gsms_in_bundle FROM bundle_manifest WHERE gse_id = ?`)
+      .bind(id)
+      .first<Record<string, unknown>>()
+      .catch(() => null),
   ]);
 
   if (!seriesRow) return null;
@@ -153,7 +162,15 @@ export async function loadStudy(db: D1Database, rawId: string): Promise<StudyDet
   const hasBundle = metaRow ? Number(metaRow.has_bundle ?? 0) === 1 : !!bundleKey;
 
   const bundleNSamples =
-    seriesRow.r2_bundle_n_gsms != null ? Number(seriesRow.r2_bundle_n_gsms) : null;
+    manifestRow?.n_gsms_in_bundle != null
+      ? Number(manifestRow.n_gsms_in_bundle)
+      : seriesRow.r2_bundle_n_gsms != null
+        ? Number(seriesRow.r2_bundle_n_gsms)
+        : null;
+  const referenceBuild =
+    typeof manifestRow?.reference_build === "string" && manifestRow.reference_build
+      ? manifestRow.reference_build
+      : null;
 
   const series: StudySeries = {
     id,
@@ -170,6 +187,7 @@ export async function loadStudy(db: D1Database, rawId: string): Promise<StudyDet
     bundle_bytes: bundleBytes,
     bundle_url: hasBundle ? bundleUrl(id) : null,
     bundle_n_samples: bundleNSamples != null && !Number.isNaN(bundleNSamples) ? bundleNSamples : null,
+    reference_build: referenceBuild,
     submitted_date: (seriesRow.submitted_date as string | null) ?? null,
     last_updated: (seriesRow.last_updated as string | null) ?? null,
     r2_bundle_key: bundleKey,
