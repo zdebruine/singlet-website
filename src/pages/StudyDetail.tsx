@@ -306,16 +306,25 @@ const StudyDetail = () => {
     },
     {
       label: "Cells in file",
-      value: (
-        <>
-          {totalCells > 0 ? fmtCompact(totalCells) : "—"}
-          {flagged > 0 && (
-            <span className="ml-1.5 inline-flex items-center gap-1 text-warning font-normal text-[12px]" title="Cell counts for some plate-based samples are implausible and are under review; they are excluded from this total.">
-              <AlertTriangle size={11} /> {flagged} flagged
-            </span>
-          )}
-        </>
-      ),
+      value:
+        totalCells === 0 && flagged > 0 ? (
+          <span className="inline-flex items-center gap-1 text-warning font-normal text-[13px]" title="The reported cell counts for these plate-based samples are implausible and are under review.">
+            <AlertTriangle size={12} /> under review
+          </span>
+        ) : (
+          <>
+            {totalCells > 0 ? fmtCompact(totalCells) : "—"}
+            {flagged > 0 && (
+              <span className="ml-1.5 inline-flex items-center gap-1 text-warning font-normal text-[12px]" title="Cell counts for some plate-based samples are implausible and are under review; they are excluded from this total.">
+                <AlertTriangle size={11} /> {flagged} flagged
+              </span>
+            )}
+          </>
+        ),
+      title:
+        flagged > 0
+          ? `${flagged} of ${processed.length} processed samples report implausible cell counts (a known plate-based pipeline issue). They are excluded from this total.`
+          : undefined,
     },
     ...(hasQc
       ? [
