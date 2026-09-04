@@ -1,15 +1,15 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
-import { Loader2, Mail } from "lucide-react";
+import { Github, Loader2, Mail } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import type { SignInResult } from "./AuthProvider";
+import type { OAuthProviderName, SignInResult } from "./AuthProvider";
 
 interface Props {
   open: boolean;
   reason?: string;
   onOpenChange: (open: boolean) => void;
   signInWithEmail: (email: string) => Promise<SignInResult>;
-  signInWithGoogle: () => Promise<SignInResult>;
+  signInWithOAuth: (provider: OAuthProviderName) => Promise<SignInResult>;
 }
 
 function GoogleMark() {
@@ -25,9 +25,9 @@ function GoogleMark() {
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
-export function SignInDialog({ open, reason, onOpenChange, signInWithEmail, signInWithGoogle }: Props) {
+export function SignInDialog({ open, reason, onOpenChange, signInWithEmail, signInWithOAuth }: Props) {
   const [email, setEmail] = useState("");
-  const [busy, setBusy] = useState<"email" | "google" | null>(null);
+  const [busy, setBusy] = useState<"email" | OAuthProviderName | null>(null);
   const [sentTo, setSentTo] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -54,10 +54,10 @@ export function SignInDialog({ open, reason, onOpenChange, signInWithEmail, sign
     else setSentTo(addr);
   };
 
-  const google = async () => {
+  const oauth = async (provider: OAuthProviderName) => {
     setError(null);
-    setBusy("google");
-    const r = await signInWithGoogle();
+    setBusy(provider);
+    const r = await signInWithOAuth(provider);
     // On success the page navigates away; only failures come back here.
     setBusy(null);
     if (r.error) setError(r.error);
@@ -69,7 +69,7 @@ export function SignInDialog({ open, reason, onOpenChange, signInWithEmail, sign
         <DialogHeader className="text-left space-y-1.5">
           <DialogTitle className="font-display text-[19px] font-semibold tracking-tight">Sign in to singlet.bio</DialogTitle>
           <DialogDescription className="text-[13px] leading-relaxed text-muted-foreground">
-            {reason ?? "Free, and only needed for more AI: 200 AI searches a day instead of 10, plus AI explanations of why a study matches."}{" "}
+            {reason ?? "Free, and only needed for more AI: 200 AI searches a day instead of 10, AI explanations of why a study matches, and API keys for scripts."}{" "}
             Browsing and downloading never need an account.
           </DialogDescription>
         </DialogHeader>
@@ -98,10 +98,16 @@ export function SignInDialog({ open, reason, onOpenChange, signInWithEmail, sign
           </div>
         ) : (
           <div className="mt-5 space-y-4">
-            <button type="button" onClick={google} disabled={busy !== null} className="btn-secondary w-full h-10">
-              {busy === "google" ? <Loader2 size={15} className="animate-spin" /> : <GoogleMark />}
-              Continue with Google
-            </button>
+            <div className="space-y-2">
+              <button type="button" onClick={() => oauth("google")} disabled={busy !== null} className="btn-secondary w-full h-10">
+                {busy === "google" ? <Loader2 size={15} className="animate-spin" /> : <GoogleMark />}
+                Continue with Google
+              </button>
+              <button type="button" onClick={() => oauth("github")} disabled={busy !== null} className="btn-secondary w-full h-10">
+                {busy === "github" ? <Loader2 size={15} className="animate-spin" /> : <Github size={16} aria-hidden="true" />}
+                Continue with GitHub
+              </button>
+            </div>
 
             <div className="flex items-center gap-3 text-[11px] uppercase tracking-wide text-muted-foreground" aria-hidden="true">
               <span className="h-px flex-1 bg-border" />
@@ -140,7 +146,7 @@ export function SignInDialog({ open, reason, onOpenChange, signInWithEmail, sign
         )}
 
         <p className="mt-5 text-[11.5px] leading-relaxed text-muted-foreground">
-          We store your email and a daily count of AI requests, nothing else. See the{" "}
+          We store your email, a daily count of AI requests and the API keys you create, nothing else. See the{" "}
           <Link to="/privacy" className="underline underline-offset-2 hover:text-foreground" onClick={() => onOpenChange(false)}>
             privacy policy
           </Link>{" "}

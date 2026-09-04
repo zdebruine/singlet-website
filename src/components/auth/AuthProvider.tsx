@@ -1,7 +1,8 @@
 /**
  * Optional accounts. Signing in is free and only changes AI budgets
- * (200 AI searches a day instead of 10, plus AI explanations). Browsing,
- * searching and downloading never need it.
+ * (200 AI searches a day instead of 10, plus AI explanations) and unlocks
+ * API keys for scripts and the MCP server. Browsing, searching and
+ * downloading never need it.
  *
  * The auth client is loaded lazily so anonymous page views never pay for it.
  * The provider is the single writer of the module-level `authToken`, which the
@@ -22,12 +23,14 @@ export interface SignInResult {
   error?: string;
 }
 
+export type OAuthProviderName = "google" | "github";
+
 interface AuthContextValue {
   user: AuthUser | null;
   /** True until the stored session (if any) has been read once. */
   loading: boolean;
   signInWithEmail: (email: string) => Promise<SignInResult>;
-  signInWithGoogle: () => Promise<SignInResult>;
+  signInWithOAuth: (provider: OAuthProviderName) => Promise<SignInResult>;
   signOut: () => Promise<void>;
   /** Open the sign-in dialog from anywhere (quota cards, nav). */
   openSignIn: (opts?: { reason?: string }) => void;
@@ -36,7 +39,11 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 const RETURN_KEY = "singlet:auth:return";
-const GOOGLE_UNAVAILABLE = "Google sign-in isn't available on this site yet — use your email instead.";
+const PROVIDER_LABEL: Record<OAuthProviderName, string> = { google: "Google", github: "GitHub" };
+
+function unavailable(provider: OAuthProviderName): string {
+  return `${PROVIDER_LABEL[provider]} sign-in isn't available on this site yet — use your email instead.`;
+}
 
 function isLovableHost(host = typeof window !== "undefined" ? window.location.hostname : ""): boolean {
   return /(^|\.)(lovable\.app|lovableproject\.com|lovable\.dev)$/.test(host);
@@ -69,12 +76,14 @@ function toUser(session: Session | null): AuthUser | null {
   return { id: session.user.id, email: session.user.email ?? null };
 }
 
-function humanAuthError(message: string): string {
+function humanAuthError(message: string, provider?: OAuthProviderName): string {
   const m = message.toLowerCase();
   if (m.includes("rate limit") || m.includes("too many")) return "Too many sign-in emails were requested just now — please try again in a few minutes.";
   if (m.includes("invalid") && m.includes("email")) return "That doesn't look like a valid email address.";
   if (m.includes("signups not allowed") || m.includes("signup")) return "New accounts are closed at the moment.";
-  if (m.includes("unsupported provider") || m.includes("oauth secret") || m.includes("provider is not enabled")) return GOOGLE_UNAVAILABLE;
+  if (m.includes("unsupported provider") || m.includes("oauth secret") || m.includes("provider is not enabled")) {
+    return unavailable(provider ?? "google");
+  }
   return message;
 }
 
@@ -139,40 +148,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [client],
   );
 
-  const signInWithGoogle = useCallback(async (): Promise<SignInResult> => {
-    rememberReturnPath();
-    const redirect = `${window.location.origin}/auth/callback`;
+  const signInWithOAuth = useCallback(
+    async (provider: OAuthProviderName): Promise<SignInResult> => {
+      rememberReturnPath();
+      const redirect = `${window.location.origin}/auth/callback`;
 
-    // Lovable-hosted previews sign in through Lovable's managed Google app.
-    if (isLovableHost()) {
-      try {
-        const { lovable } = await import("@/integrations/lovable");
-        const r = await lovable.auth.signInWithOAuth("google", { redirect_uri: redirect });
-        if ("error" in r && r.error) return { error: humanAuthError(String((r.error as Error).message ?? r.error)) };
-        return {};
-      } catch (e) {
-        return { error: humanAuthError(e instanceof Error ? e.message : String(e)) };
+      // Lovable-hosted previews sign in with Google through Lovable's managed
+      // Google app (GitHub is not brokered, so it always uses the route below).
+      if (provider === "google" && isLovableHost()) {
+        try {
+          const { lovable } = await import("@/integrations/lovable");
+          const r = await lovable.auth.signInWithOAuth("google", { redirect_uri: redirect });
+          if ("error" in r && r.error) return { error: humanAuthError(String((r.error as Error).message ?? r.error), provider) };
+          return {};
+        } catch (e) {
+          return { error: humanAuthError(e instanceof Error ? e.message : String(e), provider) };
+        }
       }
-    }
 
-    // Everywhere else (singlet.bio) a Google client has to be configured for
-    // this project. Probe before redirecting so a missing configuration shows
-    // a sentence here instead of a bare error page on the auth server.
-    const sb = await client();
-    const { data, error } = await sb.auth.signInWithOAuth({
-      provider: "google",
-      options: { redirectTo: redirect, skipBrowserRedirect: true },
-    });
-    if (error || !data?.url) return { error: humanAuthError(error?.message ?? "Google sign-in could not start.") };
-    try {
-      const probe = await fetch(data.url, { redirect: "manual", credentials: "omit" });
-      if (probe.status >= 400) return { error: GOOGLE_UNAVAILABLE };
-    } catch {
-      /* opaque redirect or network hiccup — let the real navigation decide */
-    }
-    window.location.assign(data.url);
-    return {};
-  }, [client]);
+      // singlet.bio and *.pages.dev previews: the provider's OAuth app must be
+      // configured for this project. Probe before redirecting so a missing
+      // configuration shows a sentence here instead of a bare error page.
+      const sb = await client();
+      const { data, error } = await sb.auth.signInWithOAuth({
+        provider,
+        options: { redirectTo: redirect, skipBrowserRedirect: true },
+      });
+      if (error || !data?.url) return { error: humanAuthError(error?.message ?? `${PROVIDER_LABEL[provider]} sign-in could not start.`, provider) };
+      try {
+        const probe = await fetch(data.url, { redirect: "manual", credentials: "omit" });
+        if (probe.status >= 400) return { error: unavailable(provider) };
+      } catch {
+        /* opaque redirect or network hiccup — let the real navigation decide */
+      }
+      window.location.assign(data.url);
+      return {};
+    },
+    [client],
+  );
 
   const signOut = useCallback(async () => {
     const sb = await client();
@@ -185,8 +198,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const openSignIn = useCallback((opts?: { reason?: string }) => setDialog({ open: true, reason: opts?.reason }), []);
 
   const value = useMemo<AuthContextValue>(
-    () => ({ user, loading, signInWithEmail, signInWithGoogle, signOut, openSignIn }),
-    [user, loading, signInWithEmail, signInWithGoogle, signOut, openSignIn],
+    () => ({ user, loading, signInWithEmail, signInWithOAuth, signOut, openSignIn }),
+    [user, loading, signInWithEmail, signInWithOAuth, signOut, openSignIn],
   );
 
   // Signing in while the dialog is open (e.g. OAuth popup) closes it.
@@ -202,7 +215,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         reason={dialog.reason}
         onOpenChange={(open) => setDialog((d) => ({ ...d, open }))}
         signInWithEmail={signInWithEmail}
-        signInWithGoogle={signInWithGoogle}
+        signInWithOAuth={signInWithOAuth}
       />
     </AuthContext.Provider>
   );
