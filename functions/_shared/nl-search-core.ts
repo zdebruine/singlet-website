@@ -131,6 +131,7 @@ export interface Quota {
 type InterpretOutcome =
   | { ok: true; interpreted: Interpreted; model?: string; quota?: Quota; cached: boolean }
   | { ok: false; reason: "quota"; quota: Quota; message: string }
+  | { ok: false; reason: "invalid_key"; message: string }
   | { ok: false; reason: "busy" | "unavailable" };
 
 const isQuota = (v: unknown): v is Quota =>
@@ -187,6 +188,14 @@ async function interpret(env: NlEnv, ctx: Ctx, request: Request, query: string):
         return { ok: false, reason: "quota", quota: body.quota, message: body.message ?? "Today's free AI searches are used up." };
       }
       return { ok: false, reason: "busy" };
+    }
+    if (res.status === 401) {
+      // Only an API key can be rejected here (sessions degrade to anonymous).
+      const body = (await res.json().catch(() => ({}))) as { error?: string; message?: string };
+      if (body.error === "invalid_api_key") {
+        return { ok: false, reason: "invalid_key", message: body.message ?? "This API key is not valid." };
+      }
+      return { ok: false, reason: "unavailable" };
     }
     if (res.status === 503) return { ok: false, reason: "busy" };
     if (!res.ok) return { ok: false, reason: "unavailable" };
@@ -341,10 +350,46 @@ async function suggestions(ctx: Ctx, f: SearchParams): Promise<Suggestion[]> {
   return out.sort((a, b) => a.total - b.total);
 }
 
-async function handle(env: Env, request: Request, waitUntil: (p: Promise<unknown>) => void, url: URL): Promise<Response> {
+export interface NlSearchBody {
+  configured: boolean;
+  interpreted: Interpreted | null;
+  applied: ReturnType<typeof pickFilters>;
+  dropped: FilterMatch[];
+  level: SearchParams["level"];
+  data: unknown[];
+  total: number;
+  totals: { studies: number | null; samples: number | null; cells: number | null };
+  page: number;
+  limit: number;
+  accessions: string[];
+  suggestions: Suggestion[];
+  why: Record<string, string>;
+  model?: string;
+  any_word?: boolean;
+  note?: string;
+  quota_exceeded?: boolean;
+  quota?: Quota;
+  accession_lookup?: string[];
+}
+
+export type NlSearchOutcome =
+  | { ok: true; body: NlSearchBody; headers: Record<string, string>; quota?: Quota }
+  | { ok: false; status: number; error: string; message: string };
+
+/**
+ * Run a natural-language search. `url` carries the same parameters as
+ * /api/search plus `q`; `request` supplies the caller's identity (session,
+ * API key or anonymous) for budgeting.
+ */
+export async function nlSearch(
+  env: NlEnv,
+  request: Request,
+  waitUntil: (p: Promise<unknown>) => void,
+  url: URL
+): Promise<NlSearchOutcome> {
   const explicit = parseSearchParams(url);
   const q = explicit.q;
-  if (!q) return corsErr("Missing query parameter 'q'", 400);
+  if (!q) return { ok: false, status: 400, error: "missing_query", message: "Missing query parameter 'q'" };
   const rules = await loadRules(env.DB, waitUntil);
   const ctx: Ctx = { db: env.DB, rules, waitUntil };
 
@@ -373,6 +418,8 @@ async function handle(env: Env, request: Request, waitUntil: (p: Promise<unknown
       quotaExceeded = true;
       cacheable = false;
       note = `${r.message} Meanwhile this is a plain keyword search.`;
+    } else if (r.reason === "invalid_key") {
+      return { ok: false, status: 401, error: "invalid_api_key", message: r.message };
     } else {
       configured = false;
       cacheable = false;
@@ -414,27 +461,25 @@ async function handle(env: Env, request: Request, waitUntil: (p: Promise<unknown
   if (quota && !quotaExceeded) headers[QUOTA_HEADER] = JSON.stringify(quota);
   if (!cacheable) headers[NO_CACHE_HEADER] = "1";
 
-  return corsOk(
-    {
-      configured,
-      interpreted,
-      applied: pickFilters(filters),
-      dropped,
-      level: filters.level,
-      data: result.data,
-      total: result.total,
-      totals: result.totals,
-      page: result.page,
-      limit: result.limit,
-      accessions: result.accessions,
-      suggestions: sugg,
-      why,
-      ...(model ? { model } : {}),
-      ...(result.any_word ? { any_word: true } : {}),
-      ...(note ? { note } : {}),
-      ...(quotaExceeded && quota ? { quota_exceeded: true, quota } : {}),
-      ...(result.accession_lookup ? { accession_lookup: result.accession_lookup } : {}),
-    },
-    { headers }
-  );
+  const body: NlSearchBody = {
+    configured,
+    interpreted,
+    applied: pickFilters(filters),
+    dropped,
+    level: filters.level,
+    data: result.data,
+    total: result.total,
+    totals: result.totals,
+    page: result.page,
+    limit: result.limit,
+    accessions: result.accessions,
+    suggestions: sugg,
+    why,
+    ...(model ? { model } : {}),
+    ...(result.any_word ? { any_word: true } : {}),
+    ...(note ? { note } : {}),
+    ...(quotaExceeded && quota ? { quota_exceeded: true, quota } : {}),
+    ...(result.accession_lookup ? { accession_lookup: result.accession_lookup } : {}),
+  };
+  return { ok: true, body, headers, quota };
 }
