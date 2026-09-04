@@ -15,15 +15,20 @@
  */
 import { corsOk, corsErr, handleOptions } from "../_shared/cors";
 import { cachedJson, FACETS_CACHE_TTL } from "../_shared/cache";
+import { type CloudEnv } from "../_shared/cloud";
+import { resolveIdentity } from "../_shared/identity";
 import { loadRules } from "../_shared/vocab";
 import { canonicalQuery, normalizeFilters, parseSearchParams, pickFilters } from "../_shared/search-core";
 import { computeFacets } from "../_shared/facets-core";
 
-interface Env {
+interface Env extends CloudEnv {
   DB: D1Database;
 }
 
 export const onRequestGet: PagesFunction<Env> = async ({ env, request, waitUntil }) => {
+  const id = await resolveIdentity(request, env, waitUntil);
+  if (!id.ok) return id.response;
+
   const url = new URL(request.url);
   const params = parseSearchParams(url);
   const rules = await loadRules(env.DB, waitUntil);

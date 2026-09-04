@@ -29,6 +29,8 @@
  */
 import { CORS_HEADERS, corsOk, corsErr, handleOptions } from "../_shared/cors";
 import { cachedJson, CATALOG_CACHE_TTL } from "../_shared/cache";
+import { type CloudEnv } from "../_shared/cloud";
+import { resolveIdentity } from "../_shared/identity";
 import { loadRules } from "../_shared/vocab";
 import {
   canonicalQuery,
@@ -42,11 +44,16 @@ import {
   MAX_EXPORT,
 } from "../_shared/search-core";
 
-interface Env {
+interface Env extends CloudEnv {
   DB: D1Database;
 }
 
 export const onRequestGet: PagesFunction<Env> = async ({ env, request, waitUntil }) => {
+  // Keys are optional here (no AI budget is spent), but a key that is sent
+  // must be a real one — a revoked key never quietly works.
+  const id = await resolveIdentity(request, env, waitUntil);
+  if (!id.ok) return id.response;
+
   const url = new URL(request.url);
   const params = parseSearchParams(url);
   const rules = await loadRules(env.DB, waitUntil);
