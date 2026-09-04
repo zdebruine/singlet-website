@@ -349,6 +349,24 @@ const StudyDetail = () => {
             View on GEO <ExternalLink size={11} />
           </a>
           {year && <span className="font-mono text-muted-foreground tabular">{year}</span>}
+          {series.pubmed_ids.length > 0 && (
+            <span className="text-muted-foreground">
+              PubMed:{" "}
+              {series.pubmed_ids.map((pmid, i) => (
+                <span key={pmid}>
+                  {i > 0 && ", "}
+                  <a
+                    href={`https://pubmed.ncbi.nlm.nih.gov/${pmid}/`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-mono hover:text-primary"
+                  >
+                    {pmid}
+                  </a>
+                </span>
+              ))}
+            </span>
+          )}
         </div>
         <h1 className="mt-1.5 text-[24px] md:text-[28px] font-semibold tracking-tight leading-snug max-w-[900px]">{series.title ?? "Untitled study"}</h1>
         <p className="mt-2 text-[14px] text-muted-foreground tabular">
