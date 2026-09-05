@@ -220,7 +220,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { error: humanAuthError(e instanceof Error ? e.message : String(e), provider) };
       }
     },
-    [client],
+    [],
   );
 
   const finishGitHubSignIn = useCallback(
