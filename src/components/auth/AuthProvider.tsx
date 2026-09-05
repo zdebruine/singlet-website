@@ -4,8 +4,9 @@
  * API keys for scripts and the MCP server. Browsing, searching and
  * downloading never need it.
  *
- * Providers: Google (Lovable's managed app on Lovable hosts, the project's own
- * Google app elsewhere), GitHub (own OAuth app driven by the `github-oauth`
+ * Providers: Google (Lovable Cloud's managed Google app — no client id/secret
+ * of ours; the broker is used on Lovable hosts, the hosted auth endpoint
+ * elsewhere), GitHub (own OAuth app driven by the `github-oauth`
  * Cloud function) and an emailed sign-in link.
  *
  * The auth client is loaded lazily so anonymous page views never pay for it.
@@ -98,7 +99,7 @@ function toUser(session: Session | null): AuthUser | null {
  * rather than an auth trigger, and failures are ignored — a profile is
  * cosmetic, never a gate on signing in.
  */
-async function ensureProfile(sb: SupabaseClient, session: Session, u: AuthUser): Promise<void> {
+async function ensureProfile(sb: SupabaseClient, u: AuthUser): Promise<void> {
   try {
     await sb.from("profiles").upsert(
       { id: u.id, email: u.email, display_name: u.displayName, avatar_url: u.avatarUrl, updated_at: new Date().toISOString() },
@@ -147,7 +148,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (lastUserId.current !== undefined && lastUserId.current !== (u?.id ?? null)) aiQuotaStore.clear();
       const changed = lastUserId.current !== (u?.id ?? null);
       lastUserId.current = u?.id ?? null;
-      if (u && session && changed) void client().then((sb) => ensureProfile(sb, session, u));
+      if (u && session && changed) void client().then((sb) => ensureProfile(sb, u));
     };
 
     client()
