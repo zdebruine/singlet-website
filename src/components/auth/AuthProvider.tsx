@@ -211,36 +211,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      // Lovable-hosted previews sign in with Google through Lovable's managed
-      // Google app; if that broker declines, fall through to the project's own
-      // Google app below.
-      if (isLovableHost()) {
-        try {
-          const { lovable } = await import("@/integrations/lovable");
-          const r = await lovable.auth.signInWithOAuth("google", { redirect_uri: redirect });
-          if (!("error" in r && r.error)) return {};
-        } catch {
-          /* fall through */
-        }
-      }
-
-      // singlet.bio and *.pages.dev previews: the project's own Google app must
-      // be configured. Probe before redirecting so a missing configuration
-      // shows a sentence here instead of a bare error page.
-      const sb = await client();
-      const { data, error } = await sb.auth.signInWithOAuth({
-        provider,
-        options: { redirectTo: redirect, skipBrowserRedirect: true },
-      });
-      if (error || !data?.url) return { error: humanAuthError(error?.message ?? `${PROVIDER_LABEL[provider]} sign-in could not start.`, provider) };
+      // Google: Lovable Cloud's managed Google app, reached through the
+      // hosted broker. Same-origin `/~oauth/initiate` is intercepted on
+      // Lovable hosts and proxied by functions/~oauth/initiate.ts on
+      // singlet.bio, so one code path covers every host.
       try {
-        const probe = await fetch(data.url, { redirect: "manual", credentials: "omit" });
-        if (probe.status >= 400) return { error: unavailable(provider) };
-      } catch {
-        /* opaque redirect or network hiccup — let the real navigation decide */
+        const { lovable } = await import("@/integrations/lovable");
+        const r = await lovable.auth.signInWithOAuth("google", { redirect_uri: redirect });
+        if ("error" in r && r.error) return { error: humanAuthError(r.error.message, provider) };
+        return {};
+      } catch (e) {
+        return { error: humanAuthError(e instanceof Error ? e.message : String(e), provider) };
       }
-      window.location.assign(data.url);
-      return {};
     },
     [client],
   );
