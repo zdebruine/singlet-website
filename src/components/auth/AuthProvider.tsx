@@ -21,6 +21,8 @@ import { SignInDialog } from "./SignInDialog";
 export interface AuthUser {
   id: string;
   email: string | null;
+  displayName: string | null;
+  avatarUrl: string | null;
 }
 
 export interface SignInResult {
@@ -80,7 +82,31 @@ export function takeReturnPath(): string {
 
 function toUser(session: Session | null): AuthUser | null {
   if (!session?.user) return null;
-  return { id: session.user.id, email: session.user.email ?? null };
+  const meta = (session.user.user_metadata ?? {}) as Record<string, unknown>;
+  const str = (k: string) => (typeof meta[k] === "string" && meta[k] ? (meta[k] as string) : null);
+  return {
+    id: session.user.id,
+    email: session.user.email ?? null,
+    displayName: str("full_name") ?? str("name") ?? str("user_name"),
+    avatarUrl: str("avatar_url") ?? str("picture"),
+  };
+}
+
+/**
+ * First sign-in with any provider (Google, GitHub, email link) creates the
+ * profile row; later sign-ins refresh the name/avatar. Done from the client
+ * rather than an auth trigger, and failures are ignored — a profile is
+ * cosmetic, never a gate on signing in.
+ */
+async function ensureProfile(sb: SupabaseClient, session: Session, u: AuthUser): Promise<void> {
+  try {
+    await sb.from("profiles").upsert(
+      { id: u.id, email: u.email, display_name: u.displayName, avatar_url: u.avatarUrl, updated_at: new Date().toISOString() },
+      { onConflict: "id" },
+    );
+  } catch {
+    /* ignore */
+  }
 }
 
 function humanAuthError(message: string, provider?: OAuthProviderName): string {
@@ -119,7 +145,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(u);
       // A different subject means a different budget — drop the stale counter.
       if (lastUserId.current !== undefined && lastUserId.current !== (u?.id ?? null)) aiQuotaStore.clear();
+      const changed = lastUserId.current !== (u?.id ?? null);
       lastUserId.current = u?.id ?? null;
+      if (u && session && changed) void client().then((sb) => ensureProfile(sb, session, u));
     };
 
     client()

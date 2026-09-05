@@ -66,8 +66,8 @@ export function AccountMenu({ className, variant = "nav" }: { className?: string
     );
   }
 
-  const email = user.email ?? "Signed in";
-  const initial = (user.email?.[0] ?? "?").toUpperCase();
+  const email = user.email ?? user.displayName ?? "Signed in";
+  const initial = (user.displayName?.[0] ?? user.email?.[0] ?? "?").toUpperCase();
   const searchLimit = searchQuota?.kind === "user" ? searchQuota.limit : 200;
   const explainLimit = explainQuota?.kind === "user" ? explainQuota.limit : 100;
   const searchUsed = usage?.search ?? (searchQuota?.kind === "user" ? searchQuota.used : null);
@@ -84,9 +84,13 @@ export function AccountMenu({ className, variant = "nav" }: { className?: string
           )}
           aria-label={`Account: ${email}`}
         >
-          <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground">
-            {initial}
-          </span>
+          {user.avatarUrl ? (
+            <img src={user.avatarUrl} alt="" width={24} height={24} className="h-6 w-6 rounded-full object-cover" referrerPolicy="no-referrer" />
+          ) : (
+            <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground">
+              {initial}
+            </span>
+          )}
           {variant === "menu" && <span className="truncate max-w-[220px]">{email}</span>}
         </button>
       </PopoverTrigger>
