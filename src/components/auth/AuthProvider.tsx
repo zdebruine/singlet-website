@@ -55,10 +55,6 @@ function unavailable(provider: OAuthProviderName): string {
   return `${PROVIDER_LABEL[provider]} sign-in isn't available on this site yet — use your email instead.`;
 }
 
-function isLovableHost(host = typeof window !== "undefined" ? window.location.hostname : ""): boolean {
-  return /(^|\.)(lovable\.app|lovableproject\.com|lovable\.dev)$/.test(host);
-}
-
 /** Where to land after the email link / OAuth round-trip. */
 export function rememberReturnPath() {
   try {
