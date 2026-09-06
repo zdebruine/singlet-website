@@ -605,9 +605,9 @@ export function buildStudyWhere(f: SearchFilters, opts: StudyWhereOpts = {}): Bu
   const arr = (field: ArrayFilterField, col: string) => {
     const vals = f[field];
     if (!vals.length || ex === field) return;
-    clauses.push(
-      `EXISTS (SELECT 1 FROM json_each(m.${col}) je WHERE je.value IN (${vals.map(() => "?").join(",")}))`
-    );
+    clauses.push(f.match_mode[field] === "all"
+      ? `(SELECT COUNT(DISTINCT je.value) FROM json_each(m.${col}) je WHERE je.value IN (${vals.map(() => "?").join(",")})) = ${vals.length}`
+      : `EXISTS (SELECT 1 FROM json_each(m.${col}) je WHERE je.value IN (${vals.map(() => "?").join(",")}))`);
     params.push(...vals);
   };
   arr("organism", "organisms");
@@ -637,6 +637,37 @@ export function buildStudyWhere(f: SearchFilters, opts: StudyWhereOpts = {}): Bu
     clauses.push("m.year <= ?");
     params.push(f.year_max);
   }
+  if (f.min_file_samples != null) {
+    clauses.push("COALESCE((SELECT b.n_gsms_in_bundle FROM bundle_manifest b WHERE b.gse_id = m.gse_id), 0) >= ?");
+    params.push(f.min_file_samples);
+  }
+  if (f.min_file_cells != null) {
+    clauses.push("COALESCE((SELECT SUM(q.n_cells_called) FROM sample_qc q WHERE q.gse_id = m.gse_id), 0) >= ?");
+    params.push(f.min_file_cells);
+  }
+  const multiExists = (values: string[], mode: "any" | "all" | undefined, sql: string) => {
+    if (!values.length) return;
+    clauses.push(mode === "all"
+      ? `(SELECT COUNT(DISTINCT value) FROM (${sql})) = ${values.length}`
+      : `EXISTS (SELECT 1 FROM (${sql}))`);
+    params.push(jsonArray(values));
+  };
+  multiExists(f.reference_build, f.match_mode.reference_build,
+    "SELECT b.reference_build AS value FROM bundle_manifest b WHERE b.gse_id = m.gse_id AND b.reference_build IN (SELECT value FROM json_each(?))");
+  const protocolExpr = `CASE
+    WHEN lower(q.protocol) LIKE '%multiome%' OR lower(q.protocol) LIKE '%atac%' THEN 'multiome'
+    WHEN lower(q.protocol) LIKE '%5%prime%' OR lower(q.protocol) LIKE '%5''%' THEN '10x 5'''
+    WHEN lower(q.protocol) LIKE '%v2%' THEN '10xv2'
+    WHEN lower(q.protocol) LIKE '%v3%' THEN '10xv3'
+    ELSE 'other' END`;
+  multiExists(f.protocol, f.match_mode.protocol,
+    `SELECT ${protocolExpr} AS value FROM sample_qc q WHERE q.gse_id = m.gse_id AND ${protocolExpr} IN (SELECT value FROM json_each(?))`);
+  if (f.has_pubmed === true) clauses.push("EXISTS (SELECT 1 FROM gse gx WHERE gx.id = m.gse_id AND gx.pubmed_ids IS NOT NULL AND gx.pubmed_ids NOT IN ('', '[]'))");
+  if (f.max_file_bytes != null) {
+    clauses.push("EXISTS (SELECT 1 FROM gse gx WHERE gx.id = m.gse_id AND gx.r2_bundle_bytes <= ?)");
+    params.push(f.max_file_bytes);
+  }
+  if (f.has_conditions === true) clauses.push("m.n_conditions >= 1");
   if (opts.gseIds) {
     clauses.push("m.gse_id IN (SELECT value FROM json_each(?))");
     params.push(jsonArray(opts.gseIds));
@@ -742,6 +773,9 @@ interface StudyDbRow {
   abstract: string | null;
   r2_bundle_bytes: number | null;
   r2_bundle_key: string | null;
+  bundle_n_samples: number | null;
+  file_cells: number | null;
+  reference_build: string | null;
   n_gsm_failed: number | null;
   s_gse: number | null;
   s_gsm: number | null;
@@ -755,7 +789,10 @@ interface StudyDbRow {
 const STUDY_SELECT = `
   m.gse_id, m.organism_primary, m.organisms, m.tissue_groups, m.disease_groups, m.assay_families,
   m.tissues_raw, m.cell_types_raw, m.n_conditions, m.n_done, m.n_total, m.n_cells, m.has_bundle, m.year,
-  g.title, g.abstract, g.r2_bundle_bytes, g.r2_bundle_key, g.n_gsm_failed`;
+  g.title, g.abstract, g.r2_bundle_bytes, g.r2_bundle_key, g.n_gsm_failed,
+  (SELECT b.n_gsms_in_bundle FROM bundle_manifest b WHERE b.gse_id = m.gse_id) AS bundle_n_samples,
+  (SELECT b.reference_build FROM bundle_manifest b WHERE b.gse_id = m.gse_id) AS reference_build,
+  (SELECT SUM(q.n_cells_called) FROM sample_qc q WHERE q.gse_id = m.gse_id) AS file_cells`;
 
 function studyOrder(sort: Sort, hasQ: boolean): string {
   switch (sort) {
@@ -883,11 +920,14 @@ function shapeStudy(r: StudyDbRow): StudyRow {
     has_bundle: Number(r.has_bundle ?? 0) === 1,
     bundle_bytes: r.r2_bundle_bytes != null ? Number(r.r2_bundle_bytes) : null,
     bundle_key: r.r2_bundle_key,
+    bundle_n_samples: r.bundle_n_samples != null ? Number(r.bundle_n_samples) : null,
+    file_cells: r.file_cells != null ? Number(r.file_cells) : null,
+    reference_build: r.reference_build,
     year: r.year != null ? Number(r.year) : null,
     n_conditions: Number(r.n_conditions ?? 0),
     conditions: [],
     conditions_label: "",
-    match: { filters: [], text: [] },
+    match: { filters: [], text: [], facets: [], keywords: [], score: 0 },
     why: "",
     score: r.score != null ? Number(r.score) : null,
   };
