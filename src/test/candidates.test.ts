@@ -10,7 +10,7 @@
 import { describe, expect, it } from "vitest";
 import { DatabaseSync } from "node:sqlite";
 import { readFileSync } from "node:fs";
-import { rankedCandidateIds } from "../../functions/_shared/search-core";
+import { parseSearchParams, rankedCandidateIds } from "../../functions/_shared/search-core";
 import type { SearchParams, SoftSignals } from "../../functions/_shared/search-core";
 
 // ── Minimal D1 adapter over node:sqlite ────────────────────────────────────
@@ -101,13 +101,7 @@ function buildDb(): D1Database {
 }
 
 function params(): SearchParams {
-  return {
-    q: "", level: "gse", page: 1, limit: 25, sort: "relevance",
-    organism: [], tissue_group: [], disease_group: [], assay_family: [], cell_type: [],
-    match_mode: {}, min_cells: null, year_min: null, year_max: null, has_bundle: false,
-    min_file_samples: null, min_file_cells: null, max_file_bytes: null,
-    has_pubmed: null, has_conditions: null,
-  } as unknown as SearchParams;
+  return parseSearchParams(new URL("https://singlet.bio/api/search?level=gse&sort=relevance"));
 }
 
 function signals(over: Partial<SoftSignals>): SoftSignals {
