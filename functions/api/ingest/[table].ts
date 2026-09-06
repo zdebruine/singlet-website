@@ -14,6 +14,9 @@
  * bust `/api/gse/<id>` for every id in the batch here.
  */
 
+import { getBundleIndex, ensureSampleQcTable } from "../../_shared/bundle-reader";
+import { readSampleSummaries, upsertSampleQcStatement } from "../../_shared/bundle-core";
+
 const DEFAULT_TOKEN_SHA256 = "b37e6cb5277791ff7d0de2550f0944ea39e580ec4f94e9f4c3b8dcd842a8aaab";
 
 const MAX_ROWS = 2000;
@@ -22,6 +25,10 @@ const MAX_STRING_BYTES = 64 * 1024;
 const BATCH_SIZE = 100;
 
 const GSE_RE = /^GSE\d+$/;
+const GSM_RE = /^GSM\d+$/;
+
+/** Studies indexed per POST /api/ingest/index-bundle call. */
+const MAX_INDEX_PER_CALL = 25;
 
 const ALLOWED_ORIGIN_RE = /^https:\/\/(singlet\.bio|[a-z0-9-]+\.singlet-4gc\.pages\.dev)$/i;
 
@@ -30,12 +37,16 @@ interface Env {
   INGEST_TOKEN_SHA256?: string;
 }
 
-type ColKind = "text" | "int";
+type ColKind = "text" | "int" | "real";
 
 interface TableSpec {
   columns: Record<string, ColKind>;
   /** Columns that are set to the current timestamp on every write. */
   stamp: string;
+  /** Primary key column (also the ON CONFLICT target). */
+  pk?: string;
+  /** Created on demand — the table is not part of the original catalog schema. */
+  ensure?: (db: D1Database) => Promise<void>;
 }
 
 const TABLES: Record<string, TableSpec> = {
@@ -62,6 +73,30 @@ const TABLES: Record<string, TableSpec> = {
       gdstype: "text",
     },
     stamp: "fetched_at",
+  },
+  sample_qc: {
+    pk: "gsm_id",
+    columns: {
+      gsm_id: "text",
+      gse_id: "text",
+      protocol: "text",
+      reference_build: "text",
+      n_input_reads: "int",
+      uniquely_mapped_pct: "real",
+      n_cells_called: "int",
+      median_umi: "real",
+      median_genes: "real",
+      mapping_rate: "real",
+      exonic_fraction: "real",
+      intronic_fraction: "real",
+      sequencing_saturation: "real",
+      median_mito_fraction: "real",
+      fraction_reads_in_cells: "real",
+      total_genes_detected: "int",
+      singlet_version: "text",
+    },
+    stamp: "updated_at",
+    ensure: ensureSampleQcTable,
   },
 };
 
@@ -113,6 +148,51 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, params }
     return json({ error: "Invalid ingest token" }, 401, origin);
   }
 
+  // ── POST /api/ingest/index-bundle?gse=GSE…&gse=… ─────────────────────────
+  // Reads each study's .singlet central directory and its per-sample
+  // summary.json files, and persists both (bundle_index + sample_qc). Tolerant:
+  // a study that cannot be read is reported, never fatal.
+  if (String(params.table ?? "") === "index-bundle") {
+    const url = new URL(request.url);
+    const wanted = [...new Set(url.searchParams.getAll("gse").flatMap((v) => v.split(",")))]
+      .map((v) => v.trim().toUpperCase())
+      .filter(Boolean);
+    if (!wanted.length) return json({ error: "At least one ?gse=GSE… is required" }, 400, origin);
+    if (wanted.length > MAX_INDEX_PER_CALL) {
+      return json({ error: `Too many studies (max ${MAX_INDEX_PER_CALL} per call)` }, 400, origin);
+    }
+    await ensureSampleQcTable(env.DB).catch(() => undefined);
+    const results: Record<string, unknown>[] = [];
+    for (const gse of wanted) {
+      if (!GSE_RE.test(gse)) {
+        results.push({ gse_id: gse, ok: false, error: "not a GSE accession" });
+        continue;
+      }
+      try {
+        const index = await getBundleIndex(env.DB, gse, { refresh: true });
+        const samples = await readSampleSummaries(gse, index);
+        const st = nowIso();
+        const statements = samples.map((s) => upsertSampleQcStatement(env.DB, s as unknown as Record<string, unknown>, st));
+        for (let i = 0; i < statements.length; i += BATCH_SIZE) await env.DB.batch(statements.slice(i, i + BATCH_SIZE));
+        results.push({ gse_id: gse, ok: true, bytes: index.bytes, entries: index.entries.length, samples_qc: samples.length });
+      } catch (e) {
+        results.push({ gse_id: gse, ok: false, error: String(e) });
+      }
+    }
+    return json(
+      {
+        ok: true,
+        table: "index-bundle",
+        received: wanted.length,
+        written: results.filter((r) => r.ok).length,
+        ms: Date.now() - started,
+        results,
+      },
+      200,
+      origin
+    );
+  }
+
   // ── Table allow-list ──────────────────────────────────────────────────────
   const table = String(params.table ?? "");
   const spec = TABLES[table];
@@ -150,9 +230,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, params }
         out[key] = null;
         continue;
       }
-      if (kind === "int") {
-        if (typeof value !== "number" || !Number.isInteger(value)) {
-          return json({ error: `Row ${i}: '${key}' must be an integer` }, 400, origin);
+      if (kind === "int" || kind === "real") {
+        if (typeof value !== "number" || !Number.isFinite(value) || (kind === "int" && !Number.isInteger(value))) {
+          return json({ error: `Row ${i}: '${key}' must be ${kind === "int" ? "an integer" : "a number"}` }, 400, origin);
         }
         out[key] = value;
       } else {
@@ -162,24 +242,36 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, params }
         out[key] = s;
       }
     }
-    const gseId = out.gse_id;
-    if (typeof gseId !== "string" || !GSE_RE.test(gseId)) {
-      return json({ error: `Row ${i}: gse_id must match /^GSE\\d+$/` }, 400, origin);
+    if (spec.pk === "gsm_id") {
+      const gsmId = out.gsm_id;
+      if (typeof gsmId !== "string" || !GSM_RE.test(gsmId)) {
+        return json({ error: `Row ${i}: gsm_id must match /^GSM\\d+$/` }, 400, origin);
+      }
+      if (out.gse_id != null && (typeof out.gse_id !== "string" || !GSE_RE.test(out.gse_id))) {
+        return json({ error: `Row ${i}: gse_id must match /^GSE\\d+$/` }, 400, origin);
+      }
+    } else {
+      const gseId = out.gse_id;
+      if (typeof gseId !== "string" || !GSE_RE.test(gseId)) {
+        return json({ error: `Row ${i}: gse_id must match /^GSE\\d+$/` }, 400, origin);
+      }
     }
     clean.push(out);
   }
 
   // ── Upsert ────────────────────────────────────────────────────────────────
   const stamp = nowIso();
+  const pk = spec.pk ?? "gse_id";
+  if (spec.ensure) await spec.ensure(env.DB).catch(() => undefined);
   const statements: D1PreparedStatement[] = [];
   for (const row of clean) {
     const cols = Object.keys(row);
     const allCols = [...cols, spec.stamp];
     const placeholders = allCols.map(() => "?").join(", ");
-    const updates = [...cols.filter((c) => c !== "gse_id"), spec.stamp].map((c) => `${c} = excluded.${c}`).join(", ");
+    const updates = [...cols.filter((c) => c !== pk), spec.stamp].map((c) => `${c} = excluded.${c}`).join(", ");
     const sql =
       `INSERT INTO ${table} (${allCols.join(", ")}) VALUES (${placeholders}) ` +
-      `ON CONFLICT(gse_id) DO UPDATE SET ${updates}`;
+      `ON CONFLICT(${pk}) DO UPDATE SET ${updates}`;
     statements.push(env.DB.prepare(sql).bind(...cols.map((c) => row[c]), stamp));
   }
 
@@ -192,7 +284,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, params }
     }
 
     // ── Derived catalog columns for the ids in this batch ───────────────────
-    const ids = clean.map((r) => String(r.gse_id));
+    const ids = table === "sample_qc" ? [] : clean.map((r) => String(r.gse_id));
     for (let i = 0; i < ids.length; i += BATCH_SIZE) {
       const chunk = ids.slice(i, i + BATCH_SIZE);
       const inList = chunk.map(() => "?").join(", ");
