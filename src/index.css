@@ -1,77 +1,12 @@
+@import "./styles/tokens.css";
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* ──────────────────────────────────────────────────────────────────────────
-   singlet.bio design system
-   Palette (hex → hsl components for shadcn tokens):
-     page #F7F9F8 · surface #FFFFFF · dark surface #0F1F1D
-     ink #0F1F1D · muted #5C6A68 · border #DCE5E2
-     primary #0E8C7E (hover #0B7568) · cyan #22D3EE
-     AI violet #7C5CFF (tint #F5F4FF, border #C9CDFF)
-     amber #B45309 on #FFF6E5 · destructive #B42318
-   Type: Inter (UI) · Space Grotesk (logo, h1/h2) · JetBrains Mono (code, ids, numbers)
-   Radius: 3px everywhere, 0 on tables. No pills, no drop shadows.
-   ────────────────────────────────────────────────────────────────────────── */
+/* singlet.bio brand system. All visual values originate in styles/tokens.css. */
 
 @layer base {
-  :root {
-    --background: 150 14% 97%;
-    --foreground: 172 35% 9%;
 
-    --card: 0 0% 100%;
-    --card-foreground: 172 35% 9%;
-
-    --popover: 0 0% 100%;
-    --popover-foreground: 172 35% 9%;
-
-    --primary: 173 82% 30%;
-    --primary-hover: 173 83% 25%;
-    --primary-foreground: 0 0% 100%;
-
-    --secondary: 150 16% 94%;
-    --secondary-foreground: 172 35% 9%;
-
-    --muted: 150 16% 94%;
-    --muted-foreground: 171 7% 39%;
-
-    --accent: 168 40% 93%;
-    --accent-foreground: 172 35% 9%;
-
-    --cyan: 188 86% 53%;
-
-    --ai: 252 100% 68%;
-    --ai-tint: 245 100% 98%;
-    --ai-border: 236 100% 89%;
-
-    --warning: 26 91% 37%;
-    --warning-tint: 39 100% 95%;
-    --warning-border: 36 80% 82%;
-
-    --destructive: 4 76% 40%;
-    --destructive-foreground: 0 0% 100%;
-
-    --border: 160 15% 88%;
-    --border-strong: 165 13% 76%;
-    --input: 160 15% 88%;
-    --ring: 173 82% 30%;
-
-    --dark-surface: 172 35% 9%;
-    --dark-foreground: 156 31% 94%;
-    --dark-muted: 165 12% 62%;
-    --dark-border: 170 20% 20%;
-
-    --radius: 3px;
-
-    --sidebar-background: 0 0% 100%;
-    --sidebar-foreground: 172 35% 9%;
-    --sidebar-primary: 173 82% 30%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 150 16% 94%;
-    --sidebar-accent-foreground: 172 35% 9%;
-    --sidebar-border: 160 15% 88%;
-    --sidebar-ring: 173 82% 30%;
-  }
 
   * {
     @apply border-border;
@@ -89,19 +24,21 @@
     line-height: 1.55;
     margin: 0;
     font-feature-settings: "cv11", "ss01", "calt";
+    font-variant-numeric: tabular-nums;
   }
 
   h1, h2 {
-    @apply font-display;
-    letter-spacing: -0.025em;
-    font-weight: 700;
-    line-height: 1.1;
+    @apply font-sans;
+    font-size: 30px;
+    line-height: 36px;
+    letter-spacing: -0.02em;
+    font-weight: 600;
   }
 
   h3, h4, h5, h6 {
     font-weight: 600;
-    letter-spacing: -0.01em;
-    line-height: 1.25;
+    letter-spacing: 0;
+    line-height: 22px;
   }
 
   code, kbd, pre, samp {
@@ -139,15 +76,14 @@
 
   /* Buttons */
   .btn-primary {
-    @apply inline-flex items-center justify-center gap-2 rounded px-4 h-10 text-sm font-medium text-white transition-[filter,background-color] select-none;
-    background-image: linear-gradient(90deg, #0E8C7E, #12A3A0);
+    @apply inline-flex items-center justify-center gap-2 rounded px-4 h-10 text-sm font-medium text-primary-foreground bg-primary transition-colors select-none;
     border: 1px solid transparent;
   }
   .btn-primary:hover:not(:disabled) {
-    background-image: linear-gradient(90deg, #0B7568, #0E8C7E);
+    background: var(--primary-hover);
   }
   .btn-primary:disabled {
-    opacity: 0.45;
+    opacity: 0.5;
     cursor: not-allowed;
   }
 
@@ -159,7 +95,7 @@
     @apply bg-background;
   }
   .btn-secondary:disabled {
-    opacity: 0.45;
+    opacity: 0.5;
     cursor: not-allowed;
   }
 
@@ -174,6 +110,9 @@
   /* Surfaces */
   .surface {
     @apply bg-card border border-border rounded;
+  }
+  .surface-interactive {
+    @apply surface transition-colors hover:border-[var(--teal-200)];
   }
 
   .surface-dark {
@@ -207,7 +146,7 @@
   .ai-badge {
     @apply inline-flex items-center rounded px-1.5 h-[18px] text-[10px] font-semibold tracking-wide uppercase;
     background: hsl(var(--ai));
-    color: white;
+    color: var(--surface);
   }
   .ai-surface {
     @apply rounded border;
@@ -254,7 +193,7 @@
     color: hsl(var(--dark-muted));
   }
   .code-block .tok-prompt {
-    color: hsl(var(--cyan));
+    color: var(--primary);
   }
   .code-inline {
     @apply font-mono text-[0.9em] rounded px-1 py-0.5;
@@ -269,7 +208,7 @@
   .input:focus {
     outline: none;
     border-color: hsl(var(--primary));
-    box-shadow: 0 0 0 1px hsl(var(--primary));
+    box-shadow: 0 0 0 2px var(--teal-200);
   }
 
   /* Tables — square corners */
@@ -278,7 +217,7 @@
     border-radius: 0;
   }
   .data-table th {
-    @apply text-left text-xs font-medium text-muted-foreground px-3 py-2.5 border-b border-border bg-background whitespace-nowrap;
+    @apply sticky top-0 z-10 text-left text-[11.5px] font-semibold uppercase tracking-[0.08em] text-muted-foreground px-3 py-2.5 border-b border-border bg-background whitespace-nowrap;
   }
   .data-table td {
     @apply px-3 py-2.5 border-b border-border align-top;
@@ -287,7 +226,7 @@
     border-bottom: 0;
   }
   .data-table tbody tr:hover td {
-    background: hsl(var(--background));
+    background: color-mix(in srgb, var(--teal-50) 40%, transparent);
   }
   .data-table .num {
     @apply text-right font-mono tabular-nums;
@@ -295,16 +234,17 @@
 
   /* Prose for docs / about */
   .prose-doc {
-    @apply text-[15px] leading-[1.65] text-foreground;
+    @apply text-[15px] leading-6 text-foreground;
+    max-width: 66ch;
   }
   .prose-doc p {
     @apply mb-4 text-foreground/90;
   }
   .prose-doc h2 {
-    @apply text-[26px] mt-2 mb-3 scroll-mt-24;
+    @apply text-[20px] leading-7 font-semibold mt-2 mb-3 scroll-mt-24;
   }
   .prose-doc h3 {
-    @apply text-[17px] mt-8 mb-2 scroll-mt-24;
+    @apply text-[15px] leading-[22px] font-semibold mt-8 mb-2 scroll-mt-24;
   }
   .prose-doc ul {
     @apply list-disc pl-5 mb-4 space-y-1.5 text-foreground/90;
@@ -325,12 +265,7 @@
     @apply px-3 py-2 border-b border-border align-top;
   }
 
-  .gradient-text {
-    background-image: linear-gradient(90deg, #0E8C7E, #22D3EE);
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
-  }
+  .gradient-text { color: var(--primary); }
 }
 
 @layer utilities {
@@ -344,7 +279,7 @@
     color: hsl(var(--warning));
   }
   .text-cyan {
-    color: hsl(var(--cyan));
+    color: var(--primary);
   }
   .bg-dark {
     background: hsl(var(--dark-surface));
@@ -368,4 +303,19 @@
   body {
     background: white;
   }
+}
+
+@layer utilities {
+  .type-display { font-size: 40px; line-height: 44px; font-weight: 600; letter-spacing: -0.02em; }
+  .type-h1 { font-size: 30px; line-height: 36px; font-weight: 600; letter-spacing: -0.02em; }
+  .type-h2 { font-size: 20px; line-height: 28px; font-weight: 600; letter-spacing: -0.01em; }
+  .type-h3 { font-size: 15px; line-height: 22px; font-weight: 600; }
+  .type-small { font-size: 13px; line-height: 20px; }
+  .type-label { font-size: 11.5px; line-height: 16px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; }
+  .type-mono { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12.5px; line-height: 18px; font-weight: 500; }
+  .dialog-surface { border-radius: var(--radius-dialog); box-shadow: var(--overlay-shadow); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
 }
