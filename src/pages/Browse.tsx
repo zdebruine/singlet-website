@@ -300,7 +300,7 @@ const Browse = () => {
             aria-controls="browse-filters"
           >
             <SlidersHorizontal size={15} />
-            <span className="sr-only sm:not-sr-only">Filters</span>
+            <span className="sr-only sm:not-sr-only">Filters ({activeFilters(chipsApplied, organismLabel).length})</span>
           </button>
         </form>
       </div>
@@ -482,10 +482,18 @@ const Browse = () => {
                         </label>
                       </div>
                     )}
+                    {state.sort === "relevance" && shown?.groups && shown.groups.full > 0 && (
+                      <h2 className="mb-2 text-[13px] font-semibold text-foreground">Matches everything ({fmtInt(shown.groups.full)})</h2>
+                    )}
                     <div className="space-y-3">
-                      {studies.map((r) => (
+                      {studies.map((r, index) => (
+                        <Fragment key={r.gse_id}>
+                        {state.sort === "relevance" && shown?.groups && index === shown.groups.full && shown.groups.partial > 0 && (
+                          <div className="border-t border-border pt-4 mt-5">
+                            <h2 className="text-[13px] font-semibold text-foreground">Partial matches, best first ({fmtInt(shown.groups.partial)})</h2>
+                          </div>
+                        )}
                         <StudyCard
-                          key={r.gse_id}
                           row={r}
                           selected={selection.ids.has(r.gse_id)}
                           onToggle={selection.toggle}
@@ -493,6 +501,7 @@ const Browse = () => {
                           why={explanations[r.gse_id] ?? nl?.why?.[r.gse_id]}
                           aiWhy={!!explanations[r.gse_id]}
                         />
+                        </Fragment>
                       ))}
                     </div>
                   </>
@@ -504,9 +513,7 @@ const Browse = () => {
                     <button type="button" className="btn-secondary btn-sm" disabled={state.page <= 1} onClick={() => setPage(state.page - 1)}>
                       <ChevronLeft size={13} /> Previous
                     </button>
-                    <span className="text-muted-foreground tabular">
-                      Page <span className="font-mono text-foreground">{fmtInt(state.page)}</span> of <span className="font-mono text-foreground">{fmtInt(pages)}</span>
-                    </span>
+                    <span className="text-muted-foreground tabular">Showing {fmtInt((state.page - 1) * shown.limit + 1)}–{fmtInt(Math.min(state.page * shown.limit, total))} of {fmtInt(total)}</span>
                     <button type="button" className="btn-secondary btn-sm" disabled={state.page >= pages} onClick={() => setPage(state.page + 1)}>
                       Next <ChevronRight size={13} />
                     </button>
