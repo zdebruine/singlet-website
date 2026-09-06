@@ -1109,18 +1109,29 @@ async function rankedCandidateIds(db: D1Database, p: SearchParams, signals: Soft
   }
   const text = [...signals.q, ...signals.cell_type];
   const match = tokenizeQuery(text.join(" ")).or;
+  const cellMatch = signals.cell_type.length ? tokenizeQuery(signals.cell_type.join(" ")).or : null;
+  const evParts: string[] = [];
+  const evParams: (string | number)[] = [];
+  if (cellMatch) {
+    evParts.push(`CASE WHEN m.gse_id IN (SELECT gse_id FROM fts_gsm WHERE fts_gsm MATCH ?) THEN 4 ELSE 0 END`);
+    evParams.push(cellMatch);
+  }
   if (match) {
     soft.push(`m.gse_id IN (SELECT id FROM fts_gse WHERE fts_gse MATCH ? UNION SELECT gse_id FROM fts_gsm WHERE fts_gsm MATCH ?)`);
     params.push(match, match);
+    evParts.push(`CASE WHEN m.gse_id IN (SELECT id FROM fts_gse WHERE fts_gse MATCH ? UNION SELECT gse_id FROM fts_gsm WHERE fts_gsm MATCH ?) THEN 2 ELSE 0 END`);
+    evParams.push(match, match);
   }
   if (!soft.length) return [];
   const clauses = [...where.clauses, `(${soft.join(" OR ")})`];
+  const ev = evParts.length ? evParts.join(" + ") : "0";
   const result = await db.prepare(
-    `SELECT m.gse_id FROM gse_meta m WHERE ${clauses.join(" AND ")}
-      ORDER BY m.has_bundle DESC, ${CAPPED_STUDY_CELLS} DESC LIMIT ${RANKED_CANDIDATE_LIMIT}`
-  ).bind(...params).all<{ gse_id: string }>();
+    `SELECT m.gse_id, (${ev}) AS _ev FROM gse_meta m WHERE ${clauses.join(" AND ")}
+      ORDER BY _ev DESC, m.has_bundle DESC, ${CAPPED_STUDY_CELLS} DESC LIMIT ${RANKED_CANDIDATE_LIMIT}`
+  ).bind(...evParams, ...params).all<{ gse_id: string }>();
   return result.results.map((r) => r.gse_id);
 }
+
 
 /** Run the study query; fills match/conditions/why for the page. */
 export async function runStudySearch(
