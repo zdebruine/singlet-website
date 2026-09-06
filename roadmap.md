@@ -111,3 +111,11 @@
 - [ ] Verify specified production queries, timings, mobile drawer, and URL round-trip after deployment
 
 - [x] Fix all current preview typecheck/build errors from observability log
+
+## Stage 12 — private projects, cohorts, workspaces and usage
+- [ ] Private project storage, upload/register/delete, indexing, search/study/API/MCP integration
+- [ ] Saved cohorts, sharing, comments, exports, diffs and MCP tools
+- [ ] Workspaces, membership/invites, caps and activity feed
+- [ ] Usage events, account usage summaries and weekly email opt-in
+- [ ] Documentation and quickstart updates with preview-limit language
+- [ ] Build/typecheck/package-lock verification and production throwaway-account acceptance
