@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { Logo } from "@/components/Logo";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { CodeBlock } from "@/components/CodeBlock";
@@ -21,7 +22,8 @@ const Quickstart = () => {
       <main className="container-site flex-1 py-10 md:py-14">
         <article className="prose-doc max-w-[760px]">
           <header className="mb-10">
-            <h1 className="text-[36px] md:text-[42px] mb-3">Getting started — for labs</h1>
+            <Logo variant="mark" height={28} link={false} className="docs-brand-mark mb-4" />
+              <h1 className="text-[36px] md:text-[42px] mb-3">Getting started — for labs</h1>
             <p className="text-[17px] text-muted-foreground">
               Install once, find a study in plain English, and load it in one line. No account needed to browse or download.
             </p>

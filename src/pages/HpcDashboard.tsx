@@ -705,7 +705,7 @@ const HpcDashboard = () => {
               },
               OUT_OF_MEMORY: {
                 title: "Out of memory (OOM kill)",
-                detail: "Job was killed by SLURM's OOM handler. These samples need routing to a higher-memory tier (bigmem or xlarge). Cross-reference GSM against the panel to upgrade their tier assignment.",
+                detail: "Job was killed by SLURM's OOM handler. These samples need routing to a higher-memory tier (bigmem or xlarge). Cross-reference GSM against the panel to raise their memory assignment.",
                 severity: "danger",
               },
               barcode_stripped: {

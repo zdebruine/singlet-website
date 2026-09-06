@@ -29,7 +29,6 @@
 | `/invest/benchmarks` | InvestBenchmarks | Evaluation framework |
 | `/invest/need` | InvestNeed | Market problem |
 | `/invest/team` | InvestTeam | Founder/advisor info |
-| `/pricing` | Pricing | Free/Pro/Enterprise tiers |
 | `/docs` | Docs | API documentation with code examples |
 | `/gene-programs` | GenePrograms | 10K+ programs dictionary |
 | `/target-explorer` | TargetExplorer | Gene expression lookup |
@@ -51,4 +50,3 @@ Used in `/invest`, `/docs`, `/gene-programs`. Desktop sidebar shows active secti
 ### Code blocks
 - Copy-to-clipboard functionality
 - Python/R language highlighting
-- Pro features marked with Crown icon

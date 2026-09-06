@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { Logo } from "@/components/Logo";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { CodeBlock } from "@/components/CodeBlock";
@@ -101,7 +102,8 @@ export default function DocsMcp() {
             </Link>{" "}
             / MCP
           </p>
-          <h1 className="text-[36px] md:text-[42px] mb-3">Use singlet from Claude, Cursor or ChatGPT</h1>
+          <Logo variant="mark" height={28} link={false} className="docs-brand-mark mb-4" />
+              <h1 className="text-[36px] md:text-[42px] mb-3">Use singlet from Claude, Cursor or ChatGPT</h1>
           <p className="text-lg text-muted-foreground">
             Finding the right public single-cell study, checking whether its samples are any good, and getting the counts
             onto your machine used to be an afternoon of GEO clicking, GEOquery calls and FASTQ processing. Connected to
