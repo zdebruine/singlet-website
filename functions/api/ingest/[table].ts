@@ -8,11 +8,22 @@
  * `INGEST_TOKEN_SHA256` as a Cloudflare Pages environment variable overrides
  * the baked-in digest below and therefore rotates the token.
  *
+ * GET /api/ingest/index-next?n=25 — UNAUTHENTICATED backfill crank. It only
+ * reads public `.singlet` files and fills the cache tables `bundle_index` and
+ * `sample_qc`, so no token is needed, but it is hard rate-limited with a single
+ * D1 row (`meta_cache` key `index-next:lock`): one run in flight at a time and
+ * at least one second between runs globally — otherwise 429. Each call picks
+ * the next `n` studies from `bundle_manifest` that have no `bundle_index` row
+ * or no `sample_qc` rows and returns
+ * `{ indexed: [...], failed: [{gse_id, error}], remaining }`. Loop until
+ * `remaining` is 0.
+ *
  * Cache note: functions/_shared/cache.ts is TTL-only (Cache API + meta_cache),
  * with no per-key invalidation, so an ingested change becomes visible to
  * /api/gse/:id after its 300 s TTL expires. If per-key purge is added later,
  * bust `/api/gse/<id>` for every id in the batch here.
  */
+
 
 import { getBundleIndex, ensureSampleQcTable } from "../../_shared/bundle-reader";
 import { readSampleSummaries, upsertSampleQcStatement } from "../../_shared/bundle-core";
