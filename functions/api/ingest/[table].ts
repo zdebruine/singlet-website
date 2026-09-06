@@ -346,8 +346,7 @@ const COOLDOWN_MS = 1_000;
 // Studies that cannot be read (missing/corrupt file) are parked here so the
 // backfill loop can reach remaining = 0 instead of retrying them forever.
 const PENDING_SQL = `FROM bundle_manifest m
-  WHERE (NOT EXISTS (SELECT 1 FROM bundle_index i WHERE i.gse_id = m.gse_id)
-      OR NOT EXISTS (SELECT 1 FROM sample_qc q WHERE q.gse_id = m.gse_id))
+  WHERE NOT EXISTS (SELECT 1 FROM bundle_index i WHERE i.gse_id = m.gse_id)
     AND NOT EXISTS (SELECT 1 FROM bundle_index_failure f WHERE f.gse_id = m.gse_id)`;
 
 async function ensureFailureTable(db: D1Database): Promise<void> {
