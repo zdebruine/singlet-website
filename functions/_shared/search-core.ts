@@ -1103,17 +1103,24 @@ export async function rankedCandidateIds(db: D1Database, p: SearchParams, signal
   const where = buildStudyWhere(hard);
   const soft: string[] = [];
   const params: (string | number)[] = [...where.params];
+  // Facet clauses also count as evidence, so a study that matches an
+  // interpreted facet outranks a huge unrelated study before the 200-row cap.
+  const facetClauses: { clause: string; params: (string | number)[] }[] = [];
   const jsonFacet = (col: string, values: string[]) => {
     if (!values.length) return;
-    soft.push(`EXISTS (SELECT 1 FROM json_each(m.${col}) je WHERE je.value IN (SELECT value FROM json_each(?)))`);
+    const clause = `EXISTS (SELECT 1 FROM json_each(m.${col}) je WHERE je.value IN (SELECT value FROM json_each(?)))`;
+    soft.push(clause);
     params.push(jsonArray(values));
+    facetClauses.push({ clause, params: [jsonArray(values)] });
   };
   jsonFacet("tissue_groups", signals.tissue_group);
   jsonFacet("disease_groups", signals.disease_group);
   jsonFacet("assay_families", signals.assay_family);
   if (signals.organism.length) {
-    soft.push(`(m.organism_primary IN (SELECT value FROM json_each(?)) OR EXISTS (SELECT 1 FROM json_each(m.organisms) je WHERE je.value IN (SELECT value FROM json_each(?))))`);
+    const clause = `(m.organism_primary IN (SELECT value FROM json_each(?)) OR EXISTS (SELECT 1 FROM json_each(m.organisms) je WHERE je.value IN (SELECT value FROM json_each(?))))`;
+    soft.push(clause);
     params.push(jsonArray(signals.organism), jsonArray(signals.organism));
+    facetClauses.push({ clause, params: [jsonArray(signals.organism), jsonArray(signals.organism)] });
   }
   const text = [...signals.q, ...signals.cell_type];
   const match = tokenizeQuery(text.join(" ")).or;
@@ -1129,6 +1136,10 @@ export async function rankedCandidateIds(db: D1Database, p: SearchParams, signal
     params.push(match, match);
     evParts.push(`CASE WHEN m.gse_id IN (SELECT id FROM fts_gse WHERE fts_gse MATCH ? UNION SELECT gse_id FROM fts_gsm WHERE fts_gsm MATCH ?) THEN 2 ELSE 0 END`);
     evParams.push(match, match);
+  }
+  for (const f of facetClauses) {
+    evParts.push(`CASE WHEN ${f.clause} THEN 1 ELSE 0 END`);
+    evParams.push(...f.params);
   }
   if (!soft.length) return [];
   const clauses = [...where.clauses, `(${soft.join(" OR ")})`];
