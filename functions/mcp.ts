@@ -148,36 +148,306 @@ const TOOLS = [
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
     annotations: { title: "Atlas size", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   },
+  {
+    name: "get_sample_qc",
+    title: "Per-sample QC",
+    description:
+      "Per-sample quality control read from the study's own .singlet file: cells called, median UMI and genes per cell, uniquely mapped %, mitochondrial %, reads-in-cells %, input reads, protocol, reference build and pipeline version — plus study-level totals. Samples with fewer than 500 cells or under 60% uniquely mapped are listed in `warnings`. Not metered.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        gse_id: { type: "string", pattern: "^GSE\\d+$", description: "GEO series accession." },
+        gsm_ids: { type: "array", items: { type: "string", pattern: "^GSM\\d+$" }, description: "Restrict to these samples." },
+      },
+      required: ["gse_id"],
+      additionalProperties: false,
+    },
+    annotations: { title: "Per-sample QC", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  },
+  {
+    name: "list_bundle_files",
+    title: "What is inside the file",
+    description:
+      "List everything inside a study's .singlet file: per-sample matrices and QC files with their sizes, plus the study-level files (manifest, metadata). Use it before get_partial_download. Not metered.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        gse_id: { type: "string", pattern: "^GSE\\d+$", description: "GEO series accession." },
+        gsm_id: { type: "string", pattern: "^GSM\\d+$", description: "Only this sample's files." },
+      },
+      required: ["gse_id"],
+      additionalProperties: false,
+    },
+    annotations: { title: "What is inside the file", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  },
+  {
+    name: "get_partial_download",
+    title: "Fetch one sample's file",
+    description:
+      "Get the HTTP byte range for one file of one sample inside a study's .singlet archive, so a multi-GB study can be used by downloading only the sample you need. Returns the URL, the Range header, the compression method, compressed and uncompressed sizes, and ready-to-run curl and Python snippets (raw-deflate inflate included). Not metered.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        gse_id: { type: "string", pattern: "^GSE\\d+$", description: "GEO series accession." },
+        gsm_id: { type: "string", pattern: "^GSM\\d+$", description: "GEO sample accession." },
+        file: { type: "string", description: "File name inside the sample folder, e.g. exon_counts.1pz (see list_bundle_files)." },
+      },
+      required: ["gse_id", "gsm_id", "file"],
+      additionalProperties: false,
+    },
+    annotations: { title: "Fetch one sample's file", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  },
+  {
+    name: "export_manifest",
+    title: "Export a download manifest",
+    description:
+      "Turn a search, a filter set or an explicit list of accessions (max 2,000 studies) into a download manifest: TSV, JSON, a curl or wget script, or a Python/R snippet that loads every study. Returns the manifest text, the study count and the total bytes. Not metered.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: { type: "string", maxLength: 500, description: "Keyword query (no AI interpretation)." },
+        filters: {
+          type: "object",
+          description: "Canonical filters.",
+          properties: {
+            organism: { type: "array", items: { type: "string" } },
+            tissue: { type: "array", items: { type: "string", enum: TISSUE_GROUPS as unknown as string[] } },
+            disease: { type: "array", items: { type: "string", enum: DISEASE_GROUPS as unknown as string[] } },
+            assay: { type: "array", items: { type: "string", enum: ASSAY_FAMILIES as unknown as string[] } },
+            cell_type: { type: "array", items: { type: "string" } },
+            min_cells: { type: "integer", minimum: 0 },
+            year_min: { type: "integer" },
+            year_max: { type: "integer" },
+          },
+          additionalProperties: false,
+        },
+        gse_ids: { type: "array", items: { type: "string", pattern: "^GSE\\d+$" }, description: "Explicit accessions; overrides query and filters." },
+        format: { type: "string", enum: MANIFEST_FORMATS as unknown as string[], default: "tsv" },
+      },
+      required: ["format"],
+      additionalProperties: false,
+    },
+    annotations: { title: "Export a download manifest", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  },
+  {
+    name: "find_matched_controls",
+    title: "Find matched control studies",
+    description:
+      "Candidate control studies for a given study: same organism and tissue group, no disease label (or a healthy/control one), preferring the same assay family and reference build, ordered by samples in the file then year. Each candidate carries a deterministic `why` and its loader line, plus honest `caveats` about study-level labels and batch effects. Needs an API key.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        gse_id: { type: "string", pattern: "^GSE\\d+$", description: "The study you want controls for." },
+        min_samples: { type: "integer", minimum: 1, default: 1, description: "Minimum samples present in the candidate's file." },
+        same_assay: { type: "boolean", default: false, description: "Require an overlapping assay family." },
+      },
+      required: ["gse_id"],
+      additionalProperties: false,
+    },
+    annotations: { title: "Find matched control studies", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  },
+  {
+    name: "compare_studies",
+    title: "Compare studies side by side",
+    description:
+      "Side-by-side comparison of 2–8 studies: organism, tissue/disease/assay groups, conditions, samples (in the file vs in the catalog), cells (file QC vs catalog), reference build, pipeline version, year, PubMed, file size and per-sample QC medians — plus a `differences` list naming every field the studies disagree on, so confounds are explicit. Not metered.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        gse_ids: { type: "array", items: { type: "string", pattern: "^GSE\\d+$" }, minItems: 2, maxItems: 8 },
+      },
+      required: ["gse_ids"],
+      additionalProperties: false,
+    },
+    annotations: { title: "Compare studies side by side", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  },
+  {
+    name: "assess_study",
+    title: "Is this study usable?",
+    description:
+      "A deterministic usability report for one study (no model call): what the file contains, samples in the file vs on GEO, the per-condition breakdown, QC summary with low-cell and low-mapping samples, reference build, a read-cap note, and what metadata is missing (age, sex, donor, annotations, PubMed). Given `purpose`, it adds concrete fit checks — e.g. \"velocity\" checks for intron-aware layers, \"aging\" checks that an age characteristic exists. Needs an API key.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        gse_id: { type: "string", pattern: "^GSE\\d+$", description: "GEO series accession." },
+        purpose: { type: "string", maxLength: 300, description: "What you want to do with it, in plain English." },
+      },
+      required: ["gse_id"],
+      additionalProperties: false,
+    },
+    annotations: { title: "Is this study usable?", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  },
 ];
+
+/** Tools that need a personal API key; everything else answers anonymously. */
+const KEY_ONLY_TOOLS = new Set(["find_matched_controls", "assess_study"]);
+/** Only AI-interpreted search spends the daily budget. */
+const METERED_TOOLS = new Set(["search_datasets"]);
+
+// ── Prompts ─────────────────────────────────────────────────────────────────
+
+const PROMPTS = [
+  {
+    name: "assemble_cohort",
+    title: "Assemble a cohort",
+    description: "Walk from a biological question to a downloadable cohort: search, assess each study, find controls, export a manifest.",
+    arguments: [{ name: "question", description: "The biological question, e.g. \"microglia in aged mouse brain vs young\".", required: true }],
+  },
+  {
+    name: "qc_review",
+    title: "QC review of one study",
+    description: "Read a study and its per-sample QC and write a short, honest QC narrative with warnings.",
+    arguments: [{ name: "gse_id", description: "GEO series accession, e.g. GSE200901.", required: true }],
+  },
+  {
+    name: "load_and_summarise",
+    title: "Load a study",
+    description: "Summarise one study and give the exact commands to load all of it, or just one sample by byte range.",
+    arguments: [{ name: "gse_id", description: "GEO series accession, e.g. GSE200901.", required: true }],
+  },
+];
+
+function promptMessages(name: string, args: Record<string, unknown>): { description: string; messages: unknown[] } | null {
+  const question = typeof args.question === "string" ? args.question.trim() : "";
+  const gse = typeof args.gse_id === "string" ? args.gse_id.trim().toUpperCase() : "";
+  const user = (text: string) => [{ role: "user", content: { type: "text", text } }];
+  switch (name) {
+    case "assemble_cohort":
+      if (!question) return null;
+      return {
+        description: `Assemble a singlet.bio cohort for: ${question}`,
+        messages: user(
+          `Use the singlet.bio tools to assemble a cohort for this question: "${question}".
+
+1. search_datasets with the question as written. Report how it was interpreted and how many studies matched.
+2. For the 3–5 most promising studies, call assess_study with purpose="${question}" and say plainly which are usable and why not.
+3. For each study you keep, call find_matched_controls if the question needs a comparison group, and repeat the assessment on the candidates.
+4. Call compare_studies on the final set and list the differences that could confound the comparison.
+5. Call export_manifest with the final accessions (format "curl" plus "tsv") and give me both.
+
+Quote the tool numbers and \`why\` strings verbatim — they are computed, not generated. Where the catalog and the file's QC disagree, trust the file and say so.`
+        ),
+      };
+    case "qc_review":
+      if (!GSE_RE.test(gse)) return null;
+      return {
+        description: `QC review of ${gse}`,
+        messages: user(
+          `Review the quality of ${gse} for me.
+
+1. get_study ${gse} — what the experiment is, its conditions and how many samples were processed.
+2. get_sample_qc ${gse} — per-sample cells, UMI, genes, mapping and mitochondrial fraction.
+
+Then write a short QC narrative: overall verdict in one sentence, the numbers that support it, every sample in \`warnings\` named with its problem, and what I should check myself before using it. Use only the returned numbers.`
+        ),
+      };
+    case "load_and_summarise":
+      if (!GSE_RE.test(gse)) return null;
+      return {
+        description: `Load ${gse}`,
+        messages: user(
+          `Get me set up with ${gse}.
+
+1. get_study ${gse} for the summary and get_download_url for the whole file.
+2. list_bundle_files ${gse} so I know what is inside.
+3. get_partial_download for the first sample's counts matrix, so I can try one sample without downloading the whole study.
+
+Give me: two sentences on what the study is, the Python and R one-liners, the curl for the whole file with its size, and the range-request commands for the single sample.`
+        ),
+      };
+    default:
+      return null;
+  }
+}
+
+// ── Resources ───────────────────────────────────────────────────────────────
+
+const RESOURCES = [
+  {
+    uri: "singlet://stats",
+    name: "atlas_stats",
+    title: "Atlas statistics",
+    description: "Live corpus numbers: studies, samples, cells, species, mapping rate.",
+    mimeType: "application/json",
+  },
+  {
+    uri: "singlet://vocab",
+    name: "vocabulary",
+    title: "Canonical filter vocabulary",
+    description: "The organism, tissue, disease and assay groups searches can filter on, with study counts — use these exact strings in filters.",
+    mimeType: "application/json",
+  },
+];
+
+async function readResource(env: Env, uri: string) {
+  if (uri === "singlet://stats") {
+    const s = await computeStats(env.DB);
+    return { uri, mimeType: "application/json", text: JSON.stringify({ ...(s ?? {}), as_of: new Date().toISOString() }, null, 2) };
+  }
+  if (uri === "singlet://vocab") {
+    const counts = async (column: string) => {
+      const rows = await env.DB.prepare(`SELECT ${column} AS v, COUNT(*) AS n FROM gse_meta WHERE ${column} IS NOT NULL GROUP BY ${column}`)
+        .all<{ v: string; n: number }>()
+        .catch(() => null);
+      const out: Record<string, number> = {};
+      for (const r of rows?.results ?? []) {
+        for (const value of (() => {
+          try {
+            const parsed = JSON.parse(r.v);
+            return Array.isArray(parsed) ? parsed.map(String) : [String(r.v)];
+          } catch {
+            return [String(r.v)];
+          }
+        })())
+          out[value] = (out[value] ?? 0) + Number(r.n);
+      }
+      return Object.fromEntries(Object.entries(out).sort((a, b) => b[1] - a[1]));
+    };
+    const body = {
+      note: "Use these exact strings in the tissue/disease/assay filters. Counts are studies in the atlas.",
+      organism: await counts("organism_primary"),
+      tissue_group: await counts("tissue_groups"),
+      disease_group: await counts("disease_groups"),
+      assay_family: await counts("assay_families"),
+      canonical: { tissue_group: TISSUE_GROUPS, disease_group: DISEASE_GROUPS, assay_family: ASSAY_FAMILIES },
+    };
+    return { uri, mimeType: "application/json", text: JSON.stringify(body, null, 2) };
+  }
+  return null;
+}
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
-const fmt = (n: number | null | undefined) => (n == null ? "—" : n.toLocaleString("en-US"));
-
-function toolResult(text: string, structured: unknown, meta?: Record<string, unknown>) {
+/** `_meta.quota` goes on every tool result, metered or not. */
+function quotaMeta(hasKey: boolean, quota?: Quota) {
+  if (quota) {
+    return {
+      quota: {
+        metered: true,
+        kind: quota.kind,
+        used: quota.used,
+        limit: quota.limit,
+        remaining: Math.max(0, quota.limit - quota.used),
+        resets_at: quota.resets_at,
+        exceeded: !!quota.exceeded,
+      },
+      rate_limit: { used: quota.used, limit: quota.limit, remaining: Math.max(0, quota.limit - quota.used), resets_at: quota.resets_at },
+    };
+  }
   return {
-    content: [{ type: "text", text }],
-    structuredContent: structured,
-    ...(meta ? { _meta: meta } : {}),
+    quota: {
+      metered: false,
+      kind: hasKey ? "user" : "anon",
+      ai_search_limit_per_day: hasKey ? KEY_SEARCH_LIMIT : ANON_SEARCH_LIMIT,
+      note: `This tool is not metered. Only AI-interpreted search counts: ${ANON_SEARCH_LIMIT}/day without a key, ${KEY_SEARCH_LIMIT}/day with a free key from ${ACCOUNT_URL}.`,
+    },
   };
 }
 
-function toolError(text: string, extra?: Record<string, unknown>) {
-  return { content: [{ type: "text", text }], isError: true, ...(extra ? { _meta: extra } : {}) };
+function withQuota(result: ToolResult, meta: Record<string, unknown>): ToolResult {
+  return { ...result, _meta: { ...meta, ...(result._meta ?? {}) } };
 }
 
-/** 9700031412 → "9.7 GB"; 512000 → "0.5 MB". */
-function fmtBytes(n: number): string {
-  if (n >= 1e9) return `${(n / 1e9).toFixed(n >= 1e10 ? 0 : 1)} GB`;
-  if (n >= 1e6) return `${(n / 1e6).toFixed(n >= 1e8 ? 0 : 1)} MB`;
-  return `${Math.max(1, Math.round(n / 1e3))} KB`;
-}
-
-function rateLimitMeta(quota?: Quota) {
-  return quota
-    ? { rate_limit: { used: quota.used, limit: quota.limit, remaining: Math.max(0, quota.limit - quota.used), resets_at: quota.resets_at } }
-    : undefined;
-}
 
 function strArray(v: unknown): string[] {
   if (Array.isArray(v)) return v.map((x) => String(x).trim()).filter(Boolean);
