@@ -98,7 +98,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, params, request, w
       }
 
       const body = await readEntry(gse, entry);
-      return new Response(body, {
+      return new Response(body as unknown as ArrayBuffer, {
         status: 200,
         headers: {
           ...CORS_HEADERS,
