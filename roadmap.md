@@ -120,3 +120,13 @@
 - [ ] Documentation and quickstart updates with preview-limit language
 - [ ] Build/typecheck/package-lock verification and production throwaway-account acceptance
 - [x] Fix all current preview typecheck/build errors from observability log
+
+## Stage 11b — ranked-search production corrections
+- [ ] Relax full-match status semantics while preserving score fractions and evidence
+- [ ] Compute conditional rail counts/totals from the ranked candidate set
+- [ ] Standardize ordered hit/partial/miss evidence chips, MCP match data and why text
+- [ ] Use bundle sample counts consistently, with explicit catalog fallback labels
+- [ ] Show interpretation loading state and keyword fallback after 800 ms
+- [ ] Park zero-QC index-next studies so they are not selected repeatedly
+- [ ] Preserve non-best sort URL state and remove grouped divider
+- [ ] Build/typecheck without package-lock changes and verify all seven items on production
