@@ -9,6 +9,7 @@ import { AuthProvider } from "@/components/auth/AuthProvider";
 import Index from "./pages/Index.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import Docs from "./pages/Docs.tsx";
+import DocsMcp from "./pages/DocsMcp.tsx";
 import About from "./pages/About.tsx";
 import Browse from "./pages/Browse.tsx";
 import Quickstart from "./pages/Quickstart.tsx";
@@ -82,6 +83,7 @@ const App = () => (
               <Route path="/quickstart" element={<Quickstart />} />
               <Route path="/study/:gse" element={<StudyDetail />} />
               <Route path="/docs" element={<Docs />} />
+              <Route path="/docs/mcp" element={<DocsMcp />} />
               <Route path="/about" element={<About />} />
 
               {/* Accessions */}

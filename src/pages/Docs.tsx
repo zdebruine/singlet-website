@@ -653,10 +653,15 @@ accs <- find("microglia in the aging mouse brain")`}
 
               <h3>MCP server</h3>
               <p>
+                Full guide with example prompts, per-editor setup and the tool reference:{" "}
+                <Link to="/docs/mcp">Use singlet from Claude, Cursor or ChatGPT</Link>.
+              </p>
+              <p>
                 <Mono>{MCP_URL}</Mono> is a hosted Model Context Protocol server (Streamable HTTP, stateless) that lets an
                 assistant — Claude Desktop, Claude Code, Cursor, VS Code — search the atlas, read a study's metadata and
-                hand back a download URL or a loader snippet. Listing the tools works without a key; calling one requires
-                your API key in the <Mono>Authorization</Mono> header.
+                hand back a download URL or a loader snippet. It works without a key — AI-interpreted search runs at the
+                10/day anonymous allowance, and only <Mono>assess_study</Mono> and <Mono>find_matched_controls</Mono>
+                need one. A key raises search to 200/day.
               </p>
               <div className="grid md:grid-cols-2 gap-3">
                 <CodeBlock

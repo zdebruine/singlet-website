@@ -114,7 +114,9 @@ head(colData(sce)$gsm_id)`}
           <section className="pb-12 mb-12 border-b border-border scroll-mt-20">
             <h2 className="mb-4">Use it from an AI assistant</h2>
             <p>
-              Sign in → <Link to="/account" className="text-primary hover:underline">Account</Link> → create an API key → paste the config into Claude Desktop, Cursor, or Claude Code.
+              Paste the config below into Claude Desktop, Cursor or Claude Code and ask away — no account needed to
+              start. Signing in and adding a key raises the daily search allowance from 10 to 200. Full guide:{" "}
+              <Link to="/docs/mcp" className="text-primary hover:underline">Use singlet from Claude, Cursor or ChatGPT</Link>.
             </p>
             <div className="grid md:grid-cols-2 gap-3">
               <CodeBlock
