@@ -22,6 +22,7 @@ import SplicePatternSpec from "./pages/SplicePatternSpec.tsx";
 import HpcDashboard from "./pages/HpcDashboard.tsx";
 import AuthCallback from "./pages/AuthCallback.tsx";
 import Account from "./pages/Account.tsx";
+import Brand from "./pages/Brand.tsx";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -85,6 +86,7 @@ const App = () => (
               <Route path="/docs" element={<Docs />} />
               <Route path="/docs/mcp" element={<DocsMcp />} />
               <Route path="/about" element={<About />} />
+              <Route path="/brand" element={<Brand />} />
 
               {/* Accessions */}
               <Route path="/series/:gseId" element={<SeriesRedirect />} />
