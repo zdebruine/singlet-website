@@ -1,109 +1,51 @@
-import { useId } from "react";
 import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
 
-/**
- * singlet.bio logo — mark + wordmark.
- *
- * Mark: a 4×4 lattice of cells; one cell is "lit" (teal→cyan gradient, slightly
- * larger) and connected by thin gradient edges to its four neighbours — a single
- * cell in a population / a kNN graph.
- *
- * Wordmark: "singlet" in Space Grotesk 700 (ink), ".bio" in the same face with the
- * teal→cyan gradient as text fill.
- *
- * `size` is the wordmark height in px; the mark is 1.15× that.
- */
 export interface LogoProps {
-  size?: number;
-  variant?: "light" | "dark";
-  /** Render only the lattice mark. */
-  markOnly?: boolean;
-  /** Wrap in a link to "/" (default true). */
+  variant?: "mark" | "wordmark" | "lockup" | "stacked";
+  theme?: "auto" | "light" | "dark" | "mono";
+  height?: number;
   link?: boolean;
   className?: string;
 }
 
-const PALETTE = {
-  light: { cell: "#B7C6C2", neighbour: "#7FBDB4", word: "#0F1F1D" },
-  dark: { cell: "#3A5C57", neighbour: "#4E8F86", word: "#EAF4F1" },
-} as const;
-
-export function LogoMark({
-  size = 24,
-  variant = "light",
-  className,
-}: {
-  size?: number;
-  variant?: "light" | "dark";
-  className?: string;
-}) {
-  const id = useId().replace(/:/g, "");
-  const gid = `singlet-g-${id}`;
-  const p = PALETTE[variant];
+function Mark({ theme }: { theme: NonNullable<LogoProps["theme"]> }) {
   return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 40 40"
-      width={size}
-      height={size}
-      className={cn("shrink-0", className)}
-      aria-hidden="true"
-      focusable="false"
-    >
-      <defs>
-        <linearGradient id={gid} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#0E8C7E" />
-          <stop offset="1" stopColor="#22D3EE" />
-        </linearGradient>
-      </defs>
-      <rect x="2" y="2" width="6" height="6" fill={p.cell} />
-      <rect x="12" y="2" width="6" height="6" fill={p.cell} />
-      <rect x="22" y="2" width="6" height="6" fill={p.cell} />
-      <rect x="32" y="2" width="6" height="6" fill={p.cell} />
-      <rect x="2" y="12" width="6" height="6" fill={p.neighbour} />
-      <rect x="12" y="12" width="6" height="6" fill={p.neighbour} />
-      <rect x="22" y="12" width="6" height="6" fill={p.cell} />
-      <rect x="32" y="12" width="6" height="6" fill={p.cell} />
-      <rect x="2" y="22" width="6" height="6" fill={p.cell} />
-      <rect x="22" y="22" width="6" height="6" fill={p.neighbour} />
-      <rect x="32" y="22" width="6" height="6" fill={p.cell} />
-      <rect x="2" y="32" width="6" height="6" fill={p.cell} />
-      <rect x="12" y="32" width="6" height="6" fill={p.neighbour} />
-      <rect x="22" y="32" width="6" height="6" fill={p.cell} />
-      <rect x="32" y="32" width="6" height="6" fill={p.cell} />
-      <line x1="15" y1="25" x2="5" y2="15" stroke={`url(#${gid})`} strokeWidth="1.2" strokeOpacity="0.9" />
-      <line x1="15" y1="25" x2="15" y2="15" stroke={`url(#${gid})`} strokeWidth="1.2" strokeOpacity="0.9" />
-      <line x1="15" y1="25" x2="15" y2="35" stroke={`url(#${gid})`} strokeWidth="1.2" strokeOpacity="0.9" />
-      <line x1="15" y1="25" x2="25" y2="25" stroke={`url(#${gid})`} strokeWidth="1.2" strokeOpacity="0.9" />
-      <rect x="11" y="21" width="8" height="8" fill={`url(#${gid})`} />
-    </svg>
+    <g className={cn("logo-mark", `logo-${theme}`)}>
+      {Array.from({ length: 16 }, (_, i) => {
+        const row = Math.floor(i / 4);
+        const col = i % 4;
+        const lit = row === 1 && col === 2;
+        return <rect key={i} x={col * 27} y={row * 27} width="19" height="19" rx="2" className={lit ? "logo-lit" : "logo-cell"} />;
+      })}
+    </g>
   );
 }
 
-export function Logo({ size = 22, variant = "light", markOnly = false, link = true, className }: LogoProps) {
-  const p = PALETTE[variant];
-  const markSize = Math.round(size * 1.15);
+function Wordmark({ theme }: { theme: NonNullable<LogoProps["theme"]> }) {
+  return (
+    <text x="0" y="75" className={cn("logo-word", `logo-${theme}`)}>
+      <tspan>singlet</tspan><tspan className="logo-bio">.bio</tspan>
+    </text>
+  );
+}
+
+export function Logo({ variant = "lockup", theme = "auto", height = 24, link = true, className }: LogoProps) {
+  const viewBox = variant === "mark" ? "0 0 100 100" : variant === "wordmark" ? "0 0 465 100" : variant === "stacked" ? "0 0 505 270" : "0 0 449 100";
   const content = (
-    <span className={cn("inline-flex items-center gap-2 select-none", className)} aria-label="singlet.bio">
-      <LogoMark size={markSize} variant={variant} />
-      {!markOnly && (
-        <span
-          className="font-display font-bold leading-none whitespace-nowrap"
-          style={{ fontSize: size, letterSpacing: "-0.04em", lineHeight: 1 }}
-        >
-          <span style={{ color: p.word }}>singlet</span>
-          <span className="gradient-text">.bio</span>
-        </span>
-      )}
-    </span>
+    <svg viewBox={viewBox} height={height} className={cn("singlet-logo shrink-0", className)} role="img" aria-label="singlet.bio">
+      {variant === "mark" && <Mark theme={theme} />}
+      {variant === "wordmark" && <Wordmark theme={theme} />}
+      {variant === "lockup" && <><g transform="translate(0 14) scale(.72)"><Mark theme={theme} /></g><g transform="translate(86 8) scale(.78)"><Wordmark theme={theme} /></g></>}
+      {variant === "stacked" && <><g transform="translate(202.5 20)"><Mark theme={theme} /></g><g transform="translate(43 140) scale(.9)"><Wordmark theme={theme} /></g></>}
+    </svg>
   );
   if (!link) return content;
-  return (
-    <Link to="/" className="inline-flex items-center rounded focus-visible:outline-offset-4" aria-label="singlet.bio home">
-      {content}
-    </Link>
-  );
+  return <Link to="/" className="inline-flex items-center" aria-label="singlet.bio home">{content}</Link>;
+}
+
+export function LogoMark({ size = 24, theme = "auto", className }: { size?: number; theme?: LogoProps["theme"]; className?: string }) {
+  return <Logo variant="mark" theme={theme} height={size} link={false} className={className} />;
 }
 
 export default Logo;
