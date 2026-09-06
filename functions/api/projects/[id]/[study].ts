@@ -1,9 +1,11 @@
-import { productCall, type PrivateEnv } from "../../../_shared/private-project";
+import { hasPrivateIdentity, productCall, unauthorized, type PrivateEnv } from "../../../_shared/private-project";
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
 
 export const onRequestGet: PagesFunction<PrivateEnv> = async ({ request, env, params, waitUntil }) => {
   const url = new URL(request.url);
+  // A project read token is the only anonymous route into a private file.
+  if (!hasPrivateIdentity(request, env) && !url.searchParams.get("token")) return unauthorized();
   const projectId = String(params.id ?? "");
   const studyId = String(params.study ?? "");
   try {
