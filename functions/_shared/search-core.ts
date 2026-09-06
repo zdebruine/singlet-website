@@ -1089,38 +1089,64 @@ function softFromQuery(p: SearchParams): SoftSignals {
   return { organism: [], tissue_group: [], disease_group: [], assay_family: [], cell_type: [], q: tokenizeQuery(p.q).terms };
 }
 
-/** Candidate union for soft evidence; hard constraints are applied before the 200-row cap. */
+/**
+ * Candidate union for soft evidence; hard constraints are applied before the cap.
+ * Evidence-bearing candidates (cell-type sample annotations, then keyword text
+ * hits) are ordered first so the cap can never drop the studies the query is
+ * actually about in favour of large facet-only studies.
+ */
 async function rankedCandidateIds(db: D1Database, p: SearchParams, signals: SoftSignals): Promise<string[]> {
   const hard: SearchParams = { ...p, q: "", page: 1, limit: RANKED_CANDIDATE_LIMIT };
   const where = buildStudyWhere(hard);
   const soft: string[] = [];
-  const params: (string | number)[] = [...where.params];
+  const softParams: (string | number)[] = [];
   const jsonFacet = (col: string, values: string[]) => {
     if (!values.length) return;
     soft.push(`EXISTS (SELECT 1 FROM json_each(m.${col}) je WHERE je.value IN (SELECT value FROM json_each(?)))`);
-    params.push(jsonArray(values));
+    softParams.push(jsonArray(values));
   };
   jsonFacet("tissue_groups", signals.tissue_group);
   jsonFacet("disease_groups", signals.disease_group);
   jsonFacet("assay_families", signals.assay_family);
   if (signals.organism.length) {
     soft.push(`(m.organism_primary IN (SELECT value FROM json_each(?)) OR EXISTS (SELECT 1 FROM json_each(m.organisms) je WHERE je.value IN (SELECT value FROM json_each(?))))`);
-    params.push(jsonArray(signals.organism), jsonArray(signals.organism));
+    softParams.push(jsonArray(signals.organism), jsonArray(signals.organism));
   }
-  const text = [...signals.q, ...signals.cell_type];
-  const match = tokenizeQuery(text.join(" ")).or;
-  if (match) {
-    soft.push(`m.gse_id IN (SELECT id FROM fts_gse WHERE fts_gse MATCH ? UNION SELECT gse_id FROM fts_gsm WHERE fts_gsm MATCH ?)`);
-    params.push(match, match);
-  }
+
+  // Evidence clauses, kept separate so they can also drive the ordering.
+  const cellMatch = signals.cell_type.length ? cellTypeMatch(signals.cell_type) : null;
+  const cellClause = cellMatch ? `m.gse_id IN (SELECT gse_id FROM fts_gsm WHERE fts_gsm MATCH ?)` : null;
+  const textTerms = [...signals.q, ...signals.cell_type].join(" ");
+  const textMatch = textTerms ? tokenizeQuery(textTerms).or : null;
+  const textClause = textMatch
+    ? `m.gse_id IN (SELECT id FROM fts_gse WHERE fts_gse MATCH ? UNION SELECT gse_id FROM fts_gsm WHERE fts_gsm MATCH ?)`
+    : null;
+  if (cellClause) soft.push(cellClause);
+  if (textClause) soft.push(textClause);
   if (!soft.length) return [];
+
+  const selectParams: (string | number)[] = [];
+  const evParts: string[] = [];
+  if (cellClause) {
+    evParts.push(`CASE WHEN ${cellClause} THEN 4 ELSE 0 END`);
+    selectParams.push(cellMatch as string);
+  }
+  if (textClause) {
+    evParts.push(`CASE WHEN ${textClause} THEN 2 ELSE 0 END`);
+    selectParams.push(textMatch as string, textMatch as string);
+  }
+  if (cellMatch) softParams.push(cellMatch);
+  if (textMatch) softParams.push(textMatch, textMatch);
+
+  const ev = evParts.length ? evParts.join(" + ") : "0";
   const clauses = [...where.clauses, `(${soft.join(" OR ")})`];
   const result = await db.prepare(
-    `SELECT m.gse_id FROM gse_meta m WHERE ${clauses.join(" AND ")}
-      ORDER BY m.has_bundle DESC, ${CAPPED_STUDY_CELLS} DESC LIMIT ${RANKED_CANDIDATE_LIMIT}`
-  ).bind(...params).all<{ gse_id: string }>();
+    `SELECT m.gse_id, (${ev}) AS _ev FROM gse_meta m WHERE ${clauses.join(" AND ")}
+      ORDER BY _ev DESC, m.has_bundle DESC, ${CAPPED_STUDY_CELLS} DESC LIMIT ${RANKED_CANDIDATE_LIMIT}`
+  ).bind(...selectParams, ...where.params, ...softParams).all<{ gse_id: string }>();
   return result.results.map((r) => r.gse_id);
 }
+
 
 /** Run the study query; fills match/conditions/why for the page. */
 export async function runStudySearch(
