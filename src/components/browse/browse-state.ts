@@ -22,14 +22,15 @@ export const ARRAY_FIELDS = ["organism", "tissue_group", "disease_group", "assay
 export type ArrayField = (typeof ARRAY_FIELDS)[number];
 
 export const SORTS: { value: Sort; label: string }[] = [
-  { value: "relevance", label: "Relevance" },
-  { value: "cells", label: "Most cells" },
+  { value: "relevance", label: "Best match" },
+  { value: "file_cells", label: "Most cells (file)" },
   { value: "samples", label: "Most samples" },
   { value: "year", label: "Newest" },
-  { value: "accession", label: "Accession" },
+  { value: "file_size", label: "Smallest file" },
+  { value: "alphabetical", label: "Alphabetical" },
 ];
 
-export const PAGE_SIZE = 20;
+export const PAGE_SIZE = 25;
 
 export interface BrowseState {
   q: string;
@@ -45,6 +46,14 @@ export interface BrowseState {
   has_bundle: boolean;
   year_min: number | null;
   year_max: number | null;
+  min_file_samples: number | null;
+  min_file_cells: number | null;
+  reference_build: string[];
+  protocol: string[];
+  has_pubmed: boolean | null;
+  max_file_bytes: number | null;
+  has_conditions: boolean | null;
+  match_mode: Record<string, "any" | "all">;
   sort: Sort;
   page: number;
   view: View;
@@ -64,6 +73,14 @@ export const DEFAULT_STATE: BrowseState = {
   has_bundle: true,
   year_min: null,
   year_max: null,
+  min_file_samples: null,
+  min_file_cells: null,
+  reference_build: [],
+  protocol: [],
+  has_pubmed: null,
+  max_file_bytes: null,
+  has_conditions: null,
+  match_mode: {},
   sort: "relevance",
   page: 1,
   view: "cards",
@@ -104,6 +121,14 @@ export function parseBrowseState(sp: URLSearchParams): BrowseState {
     has_bundle: hb == null || hb === "" ? true : hb === "1" || hb === "true",
     year_min: intOrNull(sp.get("year_min")),
     year_max: intOrNull(sp.get("year_max")),
+    min_file_samples: intOrNull(sp.get("min_file_samples")),
+    min_file_cells: intOrNull(sp.get("min_file_cells")),
+    reference_build: multi(sp, "reference_build"),
+    protocol: multi(sp, "protocol"),
+    has_pubmed: sp.has("has_pubmed") ? sp.get("has_pubmed") === "1" : null,
+    max_file_bytes: intOrNull(sp.get("max_file_bytes")),
+    has_conditions: sp.has("has_conditions") ? sp.get("has_conditions") === "1" : null,
+    match_mode: Object.fromEntries([...ARRAY_FIELDS, "reference_build", "protocol"].filter((f) => sp.get(`${f}_mode`) === "all").map((f) => [f, "all"])),
     sort,
     page: Math.max(1, intOrNull(sp.get("page")) ?? 1),
     view: sp.get("view") === "table" ? "table" : "cards",
@@ -122,6 +147,13 @@ export function serializeBrowseState(s: BrowseState): URLSearchParams {
   if (!s.has_bundle) sp.set("has_bundle", "0");
   if (s.year_min != null) sp.set("year_min", String(s.year_min));
   if (s.year_max != null) sp.set("year_max", String(s.year_max));
+  for (const field of ["reference_build", "protocol"] as const) for (const v of s[field]) sp.append(field, v);
+  if (s.min_file_samples != null) sp.set("min_file_samples", String(s.min_file_samples));
+  if (s.min_file_cells != null) sp.set("min_file_cells", String(s.min_file_cells));
+  if (s.has_pubmed != null) sp.set("has_pubmed", s.has_pubmed ? "1" : "0");
+  if (s.max_file_bytes != null) sp.set("max_file_bytes", String(s.max_file_bytes));
+  if (s.has_conditions != null) sp.set("has_conditions", s.has_conditions ? "1" : "0");
+  for (const [field, mode] of Object.entries(s.match_mode)) if (mode === "all") sp.set(`${field}_mode`, "all");
   if (s.sort !== "relevance") sp.set("sort", s.sort);
   if (s.page > 1) sp.set("page", String(s.page));
   if (s.view !== "cards") sp.set("view", s.view);
@@ -145,6 +177,8 @@ export function hasExplicitFilters(s: BrowseState): boolean {
     s.year_min != null ||
     s.year_max != null ||
     !s.has_bundle
+    || s.min_file_samples != null || s.min_file_cells != null || s.reference_build.length > 0 || s.protocol.length > 0
+    || s.has_pubmed != null || s.max_file_bytes != null || s.has_conditions != null
   );
 }
 
@@ -162,6 +196,14 @@ export function toSearchQuery(s: BrowseState, limit = PAGE_SIZE): SearchQuery {
     has_bundle: s.has_bundle,
     year_min: s.year_min ?? undefined,
     year_max: s.year_max ?? undefined,
+    min_file_samples: s.min_file_samples ?? undefined,
+    min_file_cells: s.min_file_cells ?? undefined,
+    reference_build: s.reference_build,
+    protocol: s.protocol,
+    has_pubmed: s.has_pubmed ?? undefined,
+    max_file_bytes: s.max_file_bytes ?? undefined,
+    has_conditions: s.has_conditions ?? undefined,
+    match_mode: s.match_mode,
     sort: s.sort,
     page: s.page,
     limit,
@@ -182,6 +224,14 @@ export function appliedToQuery(a: AppliedFilters, level: Level): SearchQuery {
     has_bundle: a.has_bundle ?? true,
     year_min: a.year_min ?? undefined,
     year_max: a.year_max ?? undefined,
+    min_file_samples: a.min_file_samples ?? undefined,
+    min_file_cells: a.min_file_cells ?? undefined,
+    reference_build: a.reference_build,
+    protocol: a.protocol,
+    has_pubmed: a.has_pubmed ?? undefined,
+    max_file_bytes: a.max_file_bytes ?? undefined,
+    has_conditions: a.has_conditions ?? undefined,
+    match_mode: a.match_mode,
   };
 }
 
@@ -204,6 +254,14 @@ export function appliedToState(a: AppliedFilters, base: BrowseState): BrowseStat
     has_bundle: a.has_bundle ?? base.has_bundle,
     year_min: a.year_min,
     year_max: a.year_max,
+    min_file_samples: a.min_file_samples,
+    min_file_cells: a.min_file_cells,
+    reference_build: [...a.reference_build],
+    protocol: [...a.protocol],
+    has_pubmed: a.has_pubmed,
+    max_file_bytes: a.max_file_bytes,
+    has_conditions: a.has_conditions,
+    match_mode: { ...a.match_mode },
     page: 1,
   };
 }
@@ -305,5 +363,13 @@ export function stateToApplied(s: BrowseState): AppliedFilters {
     has_bundle: s.has_bundle,
     year_min: s.year_min,
     year_max: s.year_max,
+    min_file_samples: s.min_file_samples,
+    min_file_cells: s.min_file_cells,
+    reference_build: s.reference_build,
+    protocol: s.protocol,
+    has_pubmed: s.has_pubmed,
+    max_file_bytes: s.max_file_bytes,
+    has_conditions: s.has_conditions,
+    match_mode: s.match_mode,
   };
 }
