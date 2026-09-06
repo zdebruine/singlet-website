@@ -402,25 +402,38 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env, params })
       .all<{ gse_id: string }>();
 
     for (const { gse_id } of pending.results ?? []) {
+      let parked: string | null = null;
       try {
         const index = await getBundleIndex(env.DB, gse_id, { refresh: true });
         const samples = await readSampleSummaries(gse_id, index);
-        if (samples.length === 0) throw new Error("No sample QC summaries in bundle; parked after successful ZIP indexing");
-        const st = nowIso();
-        const statements = samples.map((s) => upsertSampleQcStatement(env.DB, s as unknown as Record<string, unknown>, st));
-        for (let i = 0; i < statements.length; i += BATCH_SIZE) await env.DB.batch(statements.slice(i, i + BATCH_SIZE));
+        // Keep every row we did parse — never delete existing sample_qc rows.
+        if (samples.length > 0) {
+          const st = nowIso();
+          const statements = samples.map((s) => upsertSampleQcStatement(env.DB, s as unknown as Record<string, unknown>, st));
+          for (let i = 0; i < statements.length; i += BATCH_SIZE) await env.DB.batch(statements.slice(i, i + BATCH_SIZE));
+        }
+        const expected = await env.DB.prepare(`SELECT n_gsms_in_bundle AS n FROM bundle_manifest WHERE gse_id = ?`)
+          .bind(gse_id)
+          .first<{ n: number }>()
+          .catch(() => null);
+        const want = Number(expected?.n ?? 0);
+        if (samples.length === 0) parked = "no summary.json";
+        else if (want > 0 && samples.length < want) parked = `partial summaries: ${samples.length}/${want} samples`;
         indexed.push(gse_id);
       } catch (e) {
-        const error = String(e).slice(0, 500);
-        failed.push({ gse_id, error });
+        parked = String(e).slice(0, 500);
+      }
+      if (parked) {
+        failed.push({ gse_id, error: parked });
         await env.DB.prepare(
           `INSERT OR REPLACE INTO bundle_index_failure (gse_id, error, updated_at) VALUES (?, ?, ?)`
         )
-          .bind(gse_id, error, nowIso())
+          .bind(gse_id, parked, nowIso())
           .run()
           .catch(() => undefined);
       }
     }
+
 
     const rest = await env.DB.prepare(`SELECT COUNT(*) AS c ${PENDING_SQL}`).first<{ c: number }>();
     return json(
