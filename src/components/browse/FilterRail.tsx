@@ -3,7 +3,7 @@ import { ChevronRight, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { fmtInt, organismLabel } from "@/lib/catalog-display";
 import type { AppliedFilters, FacetOption, FacetsResponse, Level } from "@/integrations/api/types";
-import type { ArrayField } from "./browse-state";
+import type { MultiField } from "./browse-state";
 
 const TOP_N = 8;
 
@@ -22,11 +22,16 @@ interface Props {
   level: Level;
   /** Filters currently in force (explicit, or as the interpreter applied them). */
   current: AppliedFilters;
-  onToggle: (field: ArrayField, value: string) => void;
+  onToggle: (field: MultiField, value: string) => void;
+  onMode: (field: MultiField, mode: "any" | "all") => void;
   onAddCellType: (value: string) => void;
   onMinCells: (n: number | null) => void;
   onYear: (min: number | null, max: number | null) => void;
   onBundle: (only: boolean) => void;
+  onFileSamples: (n: number | null) => void;
+  onFileCells: (n: number | null) => void;
+  onFileSize: (n: number | null) => void;
+  onBoolean: (field: "has_pubmed" | "has_conditions", value: boolean | null) => void;
   className?: string;
 }
 
@@ -60,10 +65,10 @@ function CheckList({
   searchPlaceholder,
   loading,
 }: {
-  field: ArrayField;
+  field: MultiField;
   options: FacetOption[];
   selected: string[];
-  onToggle: (field: ArrayField, value: string) => void;
+  onToggle: (field: MultiField, value: string) => void;
   labelFn?: (o: FacetOption) => string;
   searchPlaceholder: string;
   loading: boolean;
@@ -157,7 +162,7 @@ function CellTypeSection({
   options: FacetOption[];
   selected: string[];
   onAdd: (v: string) => void;
-  onToggle: (field: ArrayField, value: string) => void;
+  onToggle: (field: MultiField, value: string) => void;
 }) {
   const [text, setText] = useState("");
   const needle = text.trim().toLowerCase();
@@ -229,10 +234,15 @@ export function FilterRail({
   level,
   current,
   onToggle,
+  onMode,
   onAddCellType,
   onMinCells,
   onYear,
   onBundle,
+  onFileSamples,
+  onFileCells,
+  onFileSize,
+  onBoolean,
   className,
 }: Props) {
   const years = useMemo(() => {
@@ -250,10 +260,19 @@ export function FilterRail({
     for (let y = lo; y <= hi; y++) out.push(y);
     return out;
   }, [yearMin, yearMax, current.year_min, current.year_max]);
+  const modeControl = (field: MultiField, selected: string[]) => selected.length > 1 ? (
+    <div className="mb-2 inline-flex rounded border border-border p-0.5" role="group" aria-label={`${field} match mode`}>
+      {(["any", "all"] as const).map((mode) => (
+        <button key={mode} type="button" onClick={() => onMode(field, mode)} aria-pressed={(current.match_mode[field] ?? "any") === mode}
+          className={cn("rounded-[2px] px-2 py-0.5 text-[11px] font-medium", (current.match_mode[field] ?? "any") === mode ? "bg-primary text-primary-foreground" : "text-muted-foreground")}>{mode === "any" ? "Any" : "All"}</button>
+      ))}
+    </div>
+  ) : null;
 
   return (
     <aside className={cn("text-foreground", className)} aria-label="Filters" aria-busy={loading || undefined}>
       <Section title="Organism">
+        {modeControl("organism", current.organism)}
         <CheckList
           field="organism"
           options={facets?.organism ?? []}
@@ -265,6 +284,7 @@ export function FilterRail({
         />
       </Section>
       <Section title="Tissue">
+        {modeControl("tissue_group", current.tissue_group)}
         <CheckList
           field="tissue_group"
           options={facets?.tissue_group ?? []}
@@ -275,6 +295,7 @@ export function FilterRail({
         />
       </Section>
       <Section title="Disease">
+        {modeControl("disease_group", current.disease_group)}
         <CheckList
           field="disease_group"
           options={facets?.disease_group ?? []}
@@ -285,6 +306,7 @@ export function FilterRail({
         />
       </Section>
       <Section title="Assay">
+        {modeControl("assay_family", current.assay_family)}
         <CheckList
           field="assay_family"
           options={facets?.assay_family ?? []}
@@ -295,9 +317,18 @@ export function FilterRail({
         />
       </Section>
       <Section title="Cell type">
+        {modeControl("cell_type", current.cell_type)}
         <CellTypeSection options={facets?.cell_type ?? []} selected={current.cell_type} onAdd={onAddCellType} onToggle={onToggle} />
       </Section>
       <Section title="Year" hint={years.length ? undefined : "few studies dated"}>
+        {years.length > 0 && (
+          <div className="mb-2 flex h-8 items-end gap-px" aria-label="Studies by year">
+            {(facets?.year ?? []).slice().reverse().map((y) => {
+              const max = Math.max(1, ...(facets?.year ?? []).map((x) => x.count));
+              return <span key={y.value} title={`${y.value}: ${fmtInt(y.count)}`} className="min-w-px flex-1 bg-primary/35" style={{ height: `${Math.max(8, y.count / max * 100)}%` }} />;
+            })}
+          </div>
+        )}
         {yearRange.length ? (
           <div className="grid grid-cols-2 gap-2">
             <label className="text-xs text-muted-foreground">
@@ -372,6 +403,37 @@ export function FilterRail({
           Off also shows {level === "gse" ? "studies" : "samples"} that were catalogued but whose <span className="font-mono">.singlet</span> file has not been built yet.
         </p>
       </Section>
+      {level === "gse" && (
+        <>
+          <Section title="Samples in file">
+            <select value={current.min_file_samples ?? ""} onChange={(e) => onFileSamples(e.target.value ? Number(e.target.value) : null)} className="input h-8 px-2 text-[13px] font-mono">
+              <option value="">Any</option><option value="10">≥ 10</option><option value="25">≥ 25</option><option value="50">≥ 50</option><option value="100">≥ 100</option>
+            </select>
+          </Section>
+          <Section title="Cells called in file">
+            <select value={current.min_file_cells ?? ""} onChange={(e) => onFileCells(e.target.value ? Number(e.target.value) : null)} className="input h-8 px-2 text-[13px] font-mono">
+              <option value="">Any</option><option value="10000">≥ 10K</option><option value="100000">≥ 100K</option><option value="1000000">≥ 1M</option>
+            </select>
+          </Section>
+          <Section title="Reference build">
+            {modeControl("reference_build", current.reference_build)}
+            <CheckList field="reference_build" options={facets?.reference_build ?? []} selected={current.reference_build} onToggle={onToggle} searchPlaceholder="Search references…" loading={loading} />
+          </Section>
+          <Section title="Protocol">
+            {modeControl("protocol", current.protocol)}
+            <CheckList field="protocol" options={facets?.protocol ?? []} selected={current.protocol} onToggle={onToggle} searchPlaceholder="Search protocols…" loading={loading} />
+          </Section>
+          <Section title="File size">
+            <select value={current.max_file_bytes ?? ""} onChange={(e) => onFileSize(e.target.value ? Number(e.target.value) : null)} className="input h-8 px-2 text-[13px] font-mono">
+              <option value="">Any</option><option value="1073741824">≤ 1 GB</option><option value="5368709120">≤ 5 GB</option><option value="10737418240">≤ 10 GB</option>
+            </select>
+          </Section>
+          <Section title="Metadata">
+            <label className="mb-2 flex items-center gap-2 text-[13px]"><input type="checkbox" checked={current.has_pubmed === true} onChange={(e) => onBoolean("has_pubmed", e.target.checked ? true : null)} />Has PubMed</label>
+            <label className="flex items-center gap-2 text-[13px]"><input type="checkbox" checked={current.has_conditions === true} onChange={(e) => onBoolean("has_conditions", e.target.checked ? true : null)} />Has conditions</label>
+          </Section>
+        </>
+      )}
     </aside>
   );
 }
