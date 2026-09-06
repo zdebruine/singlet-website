@@ -130,3 +130,8 @@
 - [x] Park zero-QC index-next studies so they are not selected repeatedly
 - [x] Preserve non-best sort URL state and remove grouped divider
 - [ ] Build/typecheck without package-lock changes and verify all seven items on production
+
+## Stage 11c — candidate-set regression fix
+- [x] Evidence-first ranked candidate selection (keywords never restrict candidates)
+- [x] Pinned scorer unit test (src/test/scorer.test.ts), run via npm prebuild
+- [ ] Verify the four queries and the /browse chip row on production after deploy
