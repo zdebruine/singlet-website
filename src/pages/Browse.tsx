@@ -40,7 +40,7 @@ import {
   toSearchQuery,
   toggleValue,
   withoutFilter,
-  type ArrayField,
+  type MultiField,
   type BrowseState,
   type View,
 } from "@/components/browse/browse-state";
@@ -173,7 +173,11 @@ const Browse = () => {
     return { ...state, page: 1 };
   }, [aiMode, fresh, state]);
 
-  const onToggle = (field: ArrayField, value: string) => go(toggleValue(explicitBase(), field, value));
+  const onToggle = (field: MultiField, value: string) => go(toggleValue(explicitBase(), field, value));
+  const onMode = (field: MultiField, mode: "any" | "all") => {
+    const b = explicitBase();
+    go({ ...b, match_mode: { ...b.match_mode, [field]: mode } });
+  };
   const onAddCellType = (v: string) => {
     const b = explicitBase();
     if (b.cell_type.includes(v)) return;
@@ -182,6 +186,7 @@ const Browse = () => {
   const onMinCells = (n: number | null) => go({ ...explicitBase(), min_cells: n });
   const onYear = (min: number | null, max: number | null) => go({ ...explicitBase(), year_min: min, year_max: max });
   const onBundle = (only: boolean) => go({ ...explicitBase(), has_bundle: only });
+  const onBoolean = (field: "has_pubmed" | "has_conditions", value: boolean | null) => go({ ...explicitBase(), [field]: value });
   const onRemove = (field: string, value: string) => go(withoutFilter(explicitBase(), field, value));
   const onClear = () => go({ ...DEFAULT_STATE, level: state.level, view: state.view });
   const setLevel = (level: "gse" | "gsm") => go({ ...state, level, page: 1, view: level === "gsm" ? state.view : state.view });
@@ -296,7 +301,7 @@ const Browse = () => {
           <button
             type="button"
             className="btn-secondary h-10 px-3 lg:hidden"
-            onClick={() => setRailOpen((v) => !v)}
+            onClick={() => setRailOpen(true)}
             aria-expanded={railOpen}
             aria-controls="browse-filters"
           >
@@ -309,7 +314,9 @@ const Browse = () => {
       <main className="container-site flex-1 py-5 pb-40">
         <div className="lg:grid lg:grid-cols-[240px_minmax(0,1fr)] lg:gap-8">
           {/* Left rail */}
-          <div id="browse-filters" ref={railRef} className={cn("lg:block scroll-mt-32", railOpen ? "block mb-6" : "hidden")}>
+          {railOpen && <button type="button" aria-label="Close filters" className="fixed inset-0 z-30 bg-foreground/25 lg:hidden" onClick={() => setRailOpen(false)} />}
+          <div id="browse-filters" ref={railRef} role="dialog" aria-modal={railOpen || undefined} aria-label="Search filters" className={cn("fixed inset-y-0 left-0 z-40 w-[min(88vw,340px)] overflow-y-auto bg-background px-5 pt-16 shadow-overlay transition-transform lg:static lg:z-auto lg:block lg:w-auto lg:translate-x-0 lg:overflow-visible lg:bg-transparent lg:px-0 lg:pt-0 lg:shadow-none", railOpen ? "translate-x-0" : "-translate-x-full")}>
+            <div className="mb-2 flex items-center justify-between lg:hidden"><strong className="text-[15px]">Filters</strong><button type="button" className="btn-secondary btn-sm" onClick={() => setRailOpen(false)}>Close</button></div>
             <div className="lg:sticky lg:top-[120px] lg:max-h-[calc(100vh-136px)] lg:overflow-y-auto lg:pr-2 no-scrollbar">
               <FilterRail
                 facets={facets.data}
@@ -317,10 +324,15 @@ const Browse = () => {
                 level={state.level}
                 current={chipsApplied}
                 onToggle={onToggle}
+                 onMode={onMode}
                 onAddCellType={onAddCellType}
                 onMinCells={onMinCells}
                 onYear={onYear}
                 onBundle={onBundle}
+                 onFileSamples={(n) => go({ ...explicitBase(), min_file_samples: n })}
+                 onFileCells={(n) => go({ ...explicitBase(), min_file_cells: n })}
+                 onFileSize={(n) => go({ ...explicitBase(), max_file_bytes: n })}
+                 onBoolean={onBoolean}
               />
             </div>
           </div>
