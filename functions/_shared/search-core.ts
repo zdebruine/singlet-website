@@ -591,7 +591,7 @@ export interface Built {
 
 export interface StudyWhereOpts {
   /** Facet field whose own constraint should be skipped (contextual facet counts). */
-  exclude?: ArrayFilterField | "year" | "min_cells" | "q";
+  exclude?: ArrayFilterField | "year" | "min_cells" | "q" | "reference_build" | "protocol" | "file_samples" | "file_cells" | "file_size";
   /** Restrict to these gse_ids (JSON array string is built here). */
   gseIds?: string[] | null;
 }
@@ -637,11 +637,11 @@ export function buildStudyWhere(f: SearchFilters, opts: StudyWhereOpts = {}): Bu
     clauses.push("m.year <= ?");
     params.push(f.year_max);
   }
-  if (f.min_file_samples != null) {
+  if (f.min_file_samples != null && ex !== "file_samples") {
     clauses.push("COALESCE((SELECT b.n_gsms_in_bundle FROM bundle_manifest b WHERE b.gse_id = m.gse_id), 0) >= ?");
     params.push(f.min_file_samples);
   }
-  if (f.min_file_cells != null) {
+  if (f.min_file_cells != null && ex !== "file_cells") {
     clauses.push("COALESCE((SELECT SUM(q.n_cells_called) FROM sample_qc q WHERE q.gse_id = m.gse_id), 0) >= ?");
     params.push(f.min_file_cells);
   }
@@ -652,7 +652,7 @@ export function buildStudyWhere(f: SearchFilters, opts: StudyWhereOpts = {}): Bu
       : `EXISTS (SELECT 1 FROM (${sql}))`);
     params.push(jsonArray(values));
   };
-  multiExists(f.reference_build, f.match_mode.reference_build,
+  if (ex !== "reference_build") multiExists(f.reference_build, f.match_mode.reference_build,
     "SELECT b.reference_build AS value FROM bundle_manifest b WHERE b.gse_id = m.gse_id AND b.reference_build IN (SELECT value FROM json_each(?))");
   const protocolExpr = `CASE
     WHEN lower(q.protocol) LIKE '%multiome%' OR lower(q.protocol) LIKE '%atac%' THEN 'multiome'
@@ -660,10 +660,10 @@ export function buildStudyWhere(f: SearchFilters, opts: StudyWhereOpts = {}): Bu
     WHEN lower(q.protocol) LIKE '%v2%' THEN '10xv2'
     WHEN lower(q.protocol) LIKE '%v3%' THEN '10xv3'
     ELSE 'other' END`;
-  multiExists(f.protocol, f.match_mode.protocol,
+  if (ex !== "protocol") multiExists(f.protocol, f.match_mode.protocol,
     `SELECT ${protocolExpr} AS value FROM sample_qc q WHERE q.gse_id = m.gse_id AND ${protocolExpr} IN (SELECT value FROM json_each(?))`);
   if (f.has_pubmed === true) clauses.push("EXISTS (SELECT 1 FROM gse gx WHERE gx.id = m.gse_id AND gx.pubmed_ids IS NOT NULL AND gx.pubmed_ids NOT IN ('', '[]'))");
-  if (f.max_file_bytes != null) {
+  if (f.max_file_bytes != null && ex !== "file_size") {
     clauses.push("EXISTS (SELECT 1 FROM gse gx WHERE gx.id = m.gse_id AND gx.r2_bundle_bytes <= ?)");
     params.push(f.max_file_bytes);
   }
