@@ -8,7 +8,7 @@
  * list studies through /api/search. AND across filter groups, any-of within a
  * group, never loosened silently.
  */
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, LayoutGrid, List, Loader2, Search, SlidersHorizontal, Sparkles } from "lucide-react";
@@ -16,7 +16,7 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { cn } from "@/lib/utils";
 import { usePageMeta } from "@/hooks/usePageMeta";
-import { fmtCompact, fmtInt } from "@/lib/catalog-display";
+import { fmtCompact, fmtInt, organismLabel } from "@/lib/catalog-display";
 import { searchDestination } from "@/lib/search-routing";
 import { SEARCH_PLACEHOLDER } from "@/components/SearchBox";
 import { apiClient, isApiError } from "@/integrations/api/client";
@@ -28,6 +28,7 @@ import {
   PAGE_SIZE,
   SORTS,
   appliedToQuery,
+  activeFilters,
   appliedToState,
   browseHref,
   hasExplicitFilters,
