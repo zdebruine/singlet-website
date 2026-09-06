@@ -27,8 +27,8 @@ import {
 // ── Types ───────────────────────────────────────────────────────────────────
 
 export type Level = "gse" | "gsm";
-export type Sort = "relevance" | "cells" | "samples" | "year" | "accession";
-export const SORTS: readonly Sort[] = ["relevance", "cells", "samples", "year", "accession"];
+export type Sort = "relevance" | "cells" | "samples" | "year" | "accession" | "file_cells" | "file_size" | "alphabetical";
+export const SORTS: readonly Sort[] = ["relevance", "cells", "samples", "year", "accession", "file_cells", "file_size", "alphabetical"];
 
 export const ARRAY_FILTER_FIELDS = ["organism", "tissue_group", "disease_group", "assay_family", "cell_type"] as const;
 export type ArrayFilterField = (typeof ARRAY_FILTER_FIELDS)[number];
@@ -44,6 +44,22 @@ export interface SearchFilters {
   has_bundle: boolean | null;
   year_min: number | null;
   year_max: number | null;
+  min_file_samples: number | null;
+  min_file_cells: number | null;
+  reference_build: string[];
+  protocol: string[];
+  has_pubmed: boolean | null;
+  max_file_bytes: number | null;
+  has_conditions: boolean | null;
+  match_mode: Partial<Record<ArrayFilterField | "reference_build" | "protocol", "any" | "all">>;
+}
+
+export interface SoftSignals {
+  tissue_group: string[];
+  disease_group: string[];
+  assay_family: string[];
+  cell_type: string[];
+  q: string[];
 }
 
 export interface SearchParams extends SearchFilters {
@@ -69,6 +85,9 @@ export interface TextMatch {
 export interface MatchInfo {
   filters: FilterMatch[];
   text: TextMatch[];
+  facets: { key: string; label: string; status: "hit" | "partial" | "miss"; detail: string }[];
+  keywords: { term: string; hits: string[] }[];
+  score: number;
 }
 
 export interface StudyRow {
@@ -91,6 +110,9 @@ export interface StudyRow {
   has_bundle: boolean;
   bundle_bytes: number | null;
   bundle_key: string | null;
+  bundle_n_samples: number | null;
+  file_cells: number | null;
+  reference_build: string | null;
   year: number | null;
   n_conditions: number;
   conditions: ConditionSummary["conditions"];
@@ -145,6 +167,7 @@ export interface SearchResult<T> {
   accession_lookup?: string[];
   /** True when no study matched every word, so results match ANY of the words instead. */
   any_word?: boolean;
+  groups?: { full: number; partial: number };
 }
 
 export interface Ctx {
@@ -162,6 +185,7 @@ export const MAX_EXPORT = 5000;
 const CAP_CELLS_PER_SAMPLE = 250_000;
 const CAPPED_STUDY_CELLS = `MIN(m.n_cells, ${CAP_CELLS_PER_SAMPLE} * MAX(m.n_done, 1))`;
 const MAX_TERMS = 6;
+const RANKED_CANDIDATE_LIMIT = 200;
 const ABSTRACT_CHARS = 300;
 const CONDITIONS_TTL_MS = 7 * 24 * 3600 * 1000;
 const CONDITIONS_SAMPLE_CAP = 300;
@@ -232,6 +256,10 @@ const KEYWORD_SYNONYMS: Record<string, string[]> = {
   nuclei: ["nuclei", "nucleus", "snrna seq", "snrnaseq"],
   organoid: ["organoid", "organoids", "spheroid", "spheroids"],
   organoids: ["organoid", "organoids", "spheroid", "spheroids"],
+  ad: ["ad", "alzheimer", "alzheimers", "alzheimer disease"],
+  alzheimer: ["alzheimer", "alzheimers", "alzheimer disease", "ad"],
+  pbmc: ["pbmc", "pbmcs", "peripheral blood mononuclear cell", "peripheral blood mononuclear cells"],
+  "t cell": ["t cell", "t cells", "t-cell", "t-cells", "lymphocyte"],
   xenograft: ["xenograft", "pdx", "xenografts"],
   pdx: ["pdx", "xenograft"],
   metastasis: ["metastasis", "metastases", "metastatic"],
@@ -310,6 +338,14 @@ export function emptyFilters(): SearchFilters {
     has_bundle: null,
     year_min: null,
     year_max: null,
+    min_file_samples: null,
+    min_file_cells: null,
+    reference_build: [],
+    protocol: [],
+    has_pubmed: null,
+    max_file_bytes: null,
+    has_conditions: null,
+    match_mode: {},
   };
 }
 
@@ -321,6 +357,14 @@ export function parseSearchParams(url: URL): SearchParams {
   const limit = Math.min(MAX_LIMIT, Math.max(1, intOrNull(url.searchParams.get("limit")) ?? DEFAULT_LIMIT));
   const hb = url.searchParams.get("has_bundle");
   const has_bundle = hb == null || hb === "" ? true : hb === "1" || hb === "true";
+  const bool = (key: string): boolean | null => {
+    const value = url.searchParams.get(key);
+    return value == null || value === "" ? null : value === "1" || value === "true";
+  };
+  const mode: SearchFilters["match_mode"] = {};
+  for (const field of [...ARRAY_FILTER_FIELDS, "reference_build", "protocol"] as const) {
+    if (url.searchParams.get(`${field}_mode`) === "all") mode[field] = "all";
+  }
   return {
     q: (url.searchParams.get("q") ?? "").trim(),
     organism: multi(url, "organism"),
@@ -332,6 +376,14 @@ export function parseSearchParams(url: URL): SearchParams {
     has_bundle,
     year_min: intOrNull(url.searchParams.get("year_min")),
     year_max: intOrNull(url.searchParams.get("year_max")),
+    min_file_samples: intOrNull(url.searchParams.get("min_file_samples")),
+    min_file_cells: intOrNull(url.searchParams.get("min_file_cells")),
+    reference_build: multi(url, "reference_build"),
+    protocol: multi(url, "protocol"),
+    has_pubmed: bool("has_pubmed"),
+    max_file_bytes: intOrNull(url.searchParams.get("max_file_bytes")),
+    has_conditions: bool("has_conditions"),
+    match_mode: mode,
     level,
     sort,
     page,
@@ -389,10 +441,18 @@ export function canonicalQuery(p: SearchParams | (SearchFilters & Partial<Search
   add("disease_group", p.disease_group);
   add("assay_family", p.assay_family);
   add("cell_type", p.cell_type);
+  add("reference_build", p.reference_build);
+  add("protocol", p.protocol);
   if (p.min_cells != null) sp.set("min_cells", String(p.min_cells));
   if (p.has_bundle != null) sp.set("has_bundle", p.has_bundle ? "1" : "0");
   if (p.year_min != null) sp.set("year_min", String(p.year_min));
   if (p.year_max != null) sp.set("year_max", String(p.year_max));
+  if (p.min_file_samples != null) sp.set("min_file_samples", String(p.min_file_samples));
+  if (p.min_file_cells != null) sp.set("min_file_cells", String(p.min_file_cells));
+  if (p.has_pubmed != null) sp.set("has_pubmed", p.has_pubmed ? "1" : "0");
+  if (p.max_file_bytes != null) sp.set("max_file_bytes", String(p.max_file_bytes));
+  if (p.has_conditions != null) sp.set("has_conditions", p.has_conditions ? "1" : "0");
+  for (const [field, mode] of Object.entries(p.match_mode)) if (mode === "all") sp.set(`${field}_mode`, "all");
   if (p.level) sp.set("level", p.level);
   if (p.sort) sp.set("sort", p.sort);
   if (p.page) sp.set("page", String(p.page));
@@ -412,6 +472,8 @@ export function hasAnyFilter(f: SearchFilters): boolean {
     f.min_cells != null ||
     f.year_min != null ||
     f.year_max != null
+    || f.min_file_samples != null || f.min_file_cells != null || f.reference_build.length > 0 || f.protocol.length > 0
+    || f.has_pubmed != null || f.max_file_bytes != null || f.has_conditions != null
   );
 }
 
