@@ -389,6 +389,7 @@ const Browse = () => {
                     )}
                     {totals.cells != null && <span className="text-muted-foreground font-normal"> · {fmtCompact(totals.cells)} cells</span>}
                     <span className="text-muted-foreground font-normal"> match</span>
+                    {shown.ms != null && <span className="text-muted-foreground font-normal"> · {fmtInt(shown.ms)} ms</span>}
                   </>
                 ) : (
                   "Studies"

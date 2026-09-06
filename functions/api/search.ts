@@ -49,6 +49,7 @@ interface Env extends CloudEnv {
 }
 
 export const onRequestGet: PagesFunction<Env> = async ({ env, request, waitUntil }) => {
+  const started = Date.now();
   // Keys are optional here (no AI budget is spent), but a key that is sent
   // must be a real one — a revoked key never quietly works.
   const id = await resolveIdentity(request, env, waitUntil);
@@ -105,6 +106,8 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request, waitUntil
           dropped,
           ...(result.accession_lookup ? { accession_lookup: result.accession_lookup } : {}),
           ...(result.any_word ? { any_word: true } : {}),
+          ...(result.groups ? { groups: result.groups } : {}),
+          ms: Date.now() - started,
           ...(note ? { note } : {}),
         });
       } catch (e) {

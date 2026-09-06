@@ -41,12 +41,12 @@ function LoadSnippet({ gseId }: { gseId: string }) {
     <button
       type="button"
       onClick={copy}
-      className="inline-flex items-center gap-2 rounded font-mono text-[12px] h-7 px-2 bg-dark text-dark-foreground hover:brightness-110 transition"
+      className="relative z-10 inline-flex items-center gap-2 rounded font-mono text-[12px] h-7 px-2 bg-dark text-dark-foreground hover:brightness-110 transition"
       aria-label={`Copy ${code}`}
       title="Copy to clipboard"
     >
       <span>{code}</span>
-      {copied ? <Check size={12} className="text-cyan" /> : <Copy size={12} className="text-dark-muted" />}
+      {copied ? <Check size={12} className="text-primary" /> : <Copy size={12} className="text-dark-muted" />}
     </button>
   );
 }
@@ -58,7 +58,7 @@ export function StudyCard({ row, selected, onToggle, ai, why, aiWhy }: Props) {
 
   return (
     <article
-      className={cn("surface group p-4 transition-colors", selected && "border-primary/60 bg-primary/[0.02]")}
+      className={cn("surface group relative p-4 transition-colors", selected && "border-primary/60 bg-primary/[0.02]")}
       aria-labelledby={`${row.gse_id}-title`}
     >
       <div className="flex items-start gap-3">
@@ -71,13 +71,13 @@ export function StudyCard({ row, selected, onToggle, ai, why, aiWhy }: Props) {
         />
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline justify-between gap-3">
-            <Link to={`/study/${row.gse_id}`} className="font-mono text-[13px] text-primary hover:underline">
+            <Link to={`/study/${row.gse_id}`} className="relative z-10 font-mono text-[13px] text-primary hover:underline">
               {row.gse_id}
             </Link>
             {row.year && <span className="font-mono text-[12px] text-muted-foreground tabular">{row.year}</span>}
           </div>
           <h3 id={`${row.gse_id}-title`} className="mt-0.5 text-[15px] font-semibold leading-snug text-foreground line-clamp-2">
-            <Link to={`/study/${row.gse_id}`} className="hover:text-primary transition-colors">
+            <Link to={`/study/${row.gse_id}`} className="before:absolute before:inset-0 hover:text-primary transition-colors">
               {row.title ?? "Untitled study"}
             </Link>
           </h3>
@@ -153,7 +153,7 @@ export function StudyCard({ row, selected, onToggle, ai, why, aiWhy }: Props) {
             {row.has_bundle ? (
               <a
                 href={bundleUrl(row.gse_id)}
-                className="inline-flex items-center gap-1.5 text-[13px] text-primary hover:underline"
+                className="relative z-10 inline-flex items-center gap-1.5 text-[13px] text-primary hover:underline"
                 download
               >
                 <Download size={13} />

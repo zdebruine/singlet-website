@@ -356,6 +356,7 @@ function normalizeSearch<T>(raw: unknown, level: "gse" | "gsm"): SearchResponse<
     note: typeof r.note === "string" ? r.note : undefined,
     groups: r.groups ? { full: num(rec(r.groups).full), partial: num(rec(r.groups).partial) } : undefined,
     hard_applied: r.hard_applied ? normalizeApplied(r.hard_applied) : undefined,
+    ms: typeof r.ms === "number" ? r.ms : undefined,
   };
 }
 

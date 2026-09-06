@@ -387,6 +387,7 @@ export interface NlSearchBody {
   accession_lookup?: string[];
   hard_applied?: SearchFilters;
   groups?: { full: number; partial: number };
+  ms?: number;
 }
 
 export type NlSearchOutcome =
@@ -404,6 +405,7 @@ export async function nlSearch(
   waitUntil: (p: Promise<unknown>) => void,
   url: URL
 ): Promise<NlSearchOutcome> {
+  const started = Date.now();
   const explicit = parseSearchParams(url);
   const q = explicit.q;
   if (!q) return { ok: false, status: 400, error: "missing_query", message: "Missing query parameter 'q'" };
@@ -503,6 +505,7 @@ export async function nlSearch(
     ...(quotaExceeded && quota ? { quota_exceeded: true, quota } : {}),
     ...(result.accession_lookup ? { accession_lookup: result.accession_lookup } : {}),
     ...(result.groups ? { groups: result.groups } : {}),
+    ms: Date.now() - started,
   };
   return { ok: true, body, headers, quota };
 }
