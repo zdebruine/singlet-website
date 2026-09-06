@@ -180,11 +180,12 @@ const Browse = () => {
 
   const applied: AppliedFilters = useMemo(() => fresh?.applied ?? stateToApplied(state), [fresh, state]);
   const appliedQuery = useMemo(() => ({ ...appliedToQuery(applied, state.level), candidate_ids: fresh?.candidate_accessions }), [applied, state.level, fresh?.candidate_accessions]);
+  const facetsQuery = useMemo(() => ({ ...appliedToQuery(fresh?.hard_applied ?? applied, state.level), candidate_ids: fresh?.candidate_accessions }), [applied, state.level, fresh?.candidate_accessions, fresh?.hard_applied]);
   const appliedKey = JSON.stringify(appliedQuery);
 
   const facets = useQuery({
     queryKey: ["facets", appliedKey],
-    queryFn: ({ signal }) => apiClient.facets(appliedQuery, signal),
+    queryFn: ({ signal }) => apiClient.facets(facetsQuery, signal),
     enabled: !aiMode || !!fresh,
     placeholderData: keepPreviousData,
     staleTime: 300_000,
