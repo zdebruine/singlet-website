@@ -141,3 +141,5 @@
 - [ ] D. Throwaway-account production acceptance (needs a signed-in session; not available in this environment)
 
 <!-- Stage 12b restored and re-synced to GitHub main on 2026-09-06 after the ANVIL bot push race. -->
+
+<!-- Stage 11d re-applied 2026-09-06 17:50 UTC: ranked candidate evidence ordering restored after the ANVIL bot push race. -->
