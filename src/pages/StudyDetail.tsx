@@ -384,7 +384,6 @@ const StudyDetail = () => {
             View on GEO <ExternalLink size={11} />
           </a>
           <CiteDialog gseId={gseId} title={series.title} year={year} pubmedIds={series.pubmed_ids} doi={series.doi} />
-          {year && <span className="font-mono text-muted-foreground tabular">{year}</span>}
           {series.reference_build && (
             <span className="text-muted-foreground">
               Reference: <span className="font-mono">{series.reference_build}</span>
@@ -449,7 +448,7 @@ const StudyDetail = () => {
               </div>
             ))}
           </dl>
-          {!hasQc && processed.length > 0 && (
+          {!hasQc && !qcByGsm && processed.length > 0 && (
             <p className="mb-6 text-[12.5px] text-muted-foreground">Per-sample QC metrics were not recorded for this study.</p>
           )}
 
@@ -534,18 +533,27 @@ const StudyDetail = () => {
             </div>
           )}
           <dl className="surface px-4 py-3 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-1.5 text-[12.5px]">
-            <dt className="text-muted-foreground">Pipeline</dt>
-            <dd className="text-foreground font-mono">{versions.length ? versions.join(", ") : "—"}</dd>
-            <dt className="text-muted-foreground">Processed</dt>
-            <dd className="text-foreground tabular">{dateMin ? (dateMin === dateMax || !dateMax ? dateMin : `${dateMin} – ${dateMax}`) : "—"}</dd>
-            <dt className="text-muted-foreground">Raw reads</dt>
-            <dd className="text-foreground tabular">{nRuns > 0 ? `${fmtInt(nRuns)} SRA run${nRuns === 1 ? "" : "s"}` : "—"}</dd>
-            <dt className="text-muted-foreground">Catalog updated</dt>
-            <dd className="text-foreground tabular">{series.last_updated ? series.last_updated.slice(0, 10) : "—"}</dd>
-            <dt className="text-muted-foreground">License</dt>
-            <dd>
-              <Link to="/data-license" className="text-primary hover:underline">CC0 data · MIT code</Link>
-            </dd>
+            {[
+              versions.length ? { label: "Pipeline", value: <span className="font-mono">{versions.join(", ")}</span> } : null,
+              dateMin ? { label: "Processed", value: <span className="tabular">{dateMin === dateMax || !dateMax ? dateMin : `${dateMin} \u2013 ${dateMax}`}</span> } : null,
+              nRuns > 0 ? { label: "Raw reads", value: <span className="tabular">{`${fmtInt(nRuns)} SRA run${nRuns === 1 ? "" : "s"}`}</span> } : null,
+              series.last_updated ? { label: "Catalog updated", value: <span className="tabular">{series.last_updated.slice(0, 10)}</span> } : null,
+              {
+                label: "License",
+                value: (
+                  <Link to="/data-license" className="text-primary hover:underline">
+                    CC0 data \u00b7 MIT code
+                  </Link>
+                ),
+              },
+            ]
+              .filter((row): row is { label: string; value: React.ReactNode } => row !== null)
+              .map((row) => (
+                <React.Fragment key={row.label}>
+                  <dt className="text-muted-foreground">{row.label}</dt>
+                  <dd className="text-foreground">{row.value}</dd>
+                </React.Fragment>
+              ))}
           </dl>
           <p className="text-[12px] text-muted-foreground leading-relaxed px-0.5">
             Every study is run through the same pipeline from raw reads, so this file compares directly with any other on the site.{" "}
