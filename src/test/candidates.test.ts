@@ -221,7 +221,7 @@ const FILLER: Fixture[] = Array.from({ length: 260 }, (_, i) => ({
 function seed(): D1Database {
   const sqlite = new DatabaseSync(":memory:");
   sqlite.exec(readFileSync(resolve(__dirname, "../../scripts/dev-api/schema.sql"), "utf8"));
-  for (const f of FIXTURES) {
+  for (const f of [...FIXTURES, ...FILLER]) {
     sqlite.prepare(
       `INSERT INTO gse (id, title, abstract, organism, n_gsm_total, n_gsm_done, n_cells, r2_bundle_key, r2_bundle_bytes)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
