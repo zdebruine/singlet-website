@@ -349,8 +349,9 @@ const StudyDetail = () => {
       title: geoTotal > samples.length ? `${samples.length} of ${geoTotal} GEO samples are catalogued` : `${samples.length} samples`,
     },
     {
-      label: "Cells in file",
+      label: "Cells (catalog)",
       value:
+
         totalCells === 0 && flagged > 0 ? (
           <span className="inline-flex items-center gap-1 text-warning font-normal text-[13px]" title="The reported cell counts for these plate-based samples are implausible and are under review.">
             <AlertTriangle size={12} /> under review
