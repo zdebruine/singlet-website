@@ -128,7 +128,7 @@ const Browse = () => {
   };
 
   // ── Results ───────────────────────────────────────────────────────────────
-  const query = useMemo(() => toSearchQuery(state, PAGE_SIZE), [state]);
+  const query = useMemo(() => ({ ...toSearchQuery(state, Math.min(200, state.page * PAGE_SIZE)), page: 1 }), [state]);
   const result = useQuery<Result>({
     queryKey: ["browse", state.q ? (aiMode ? "nl" : "nl-edited") : "list", stateKey],
     queryFn: async ({ signal }) => {
@@ -212,7 +212,7 @@ const Browse = () => {
   const samples = (shown?.level === "gsm" ? (shown.data as SampleRow[]) : []) ?? [];
   const totals = shown?.totals;
   const total = shown?.total ?? 0;
-  const pages = shown ? Math.max(1, Math.ceil(shown.total / shown.limit)) : 1;
+  const canLoadMore = !!shown && shown.data.length < shown.total && shown.data.length < 200;
   const nl = isNl(fresh) ? fresh : undefined;
   const showAiRow = aiMode && !!nl?.interpreted;
   const quotaExceeded = !!nl?.quota_exceeded && !!nl.quota;
@@ -522,15 +522,10 @@ const Browse = () => {
                 )}
 
                 {/* Pagination */}
-                {pages > 1 && (
-                  <nav className="mt-5 flex items-center justify-between text-[13px]" aria-label="Pagination">
-                    <button type="button" className="btn-secondary btn-sm" disabled={state.page <= 1} onClick={() => setPage(state.page - 1)}>
-                      <ChevronLeft size={13} /> Previous
-                    </button>
-                    <span className="text-muted-foreground tabular">Showing {fmtInt((state.page - 1) * shown.limit + 1)}–{fmtInt(Math.min(state.page * shown.limit, total))} of {fmtInt(total)}</span>
-                    <button type="button" className="btn-secondary btn-sm" disabled={state.page >= pages} onClick={() => setPage(state.page + 1)}>
-                      Next <ChevronRight size={13} />
-                    </button>
+                {shown && (
+                  <nav className="mt-5 flex items-center justify-center gap-4 text-[13px]" aria-label="More results">
+                    <span className="text-muted-foreground tabular">Showing 1–{fmtInt(shown.data.length)} of {fmtInt(total)}</span>
+                    {canLoadMore && <button type="button" className="btn-secondary btn-sm" onClick={() => setPage(state.page + 1)}>Load 25 more <ChevronRight size={13} /></button>}
                   </nav>
                 )}
               </div>

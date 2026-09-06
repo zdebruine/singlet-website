@@ -22,7 +22,7 @@ export function metaLine(r: StudyRow): string[] {
   parts.push(r.organism_label || "Unknown organism");
   if (r.tissue_groups.length) parts.push(r.tissue_groups.slice(0, 2).join(", ") + (r.tissue_groups.length > 2 ? " +" + (r.tissue_groups.length - 2) : ""));
   if (r.assay_families.length) parts.push(r.assay_families.slice(0, 2).join(", "));
-  parts.push(`${fmtInt(r.bundle_n_samples ?? r.n_done)} samples in file`);
+  parts.push(r.bundle_n_samples != null ? `${fmtInt(r.bundle_n_samples)} samples in file` : `${fmtInt(r.n_done)} samples (catalog)`);
   parts.push(r.file_cells != null ? `${fmtCompact(r.file_cells)} cells (file)` : `${fmtCompact(r.n_cells)} cells (catalog)`);
   if (r.year) parts.push(String(r.year));
   return parts;

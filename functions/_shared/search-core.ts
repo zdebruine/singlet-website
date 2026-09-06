@@ -628,12 +628,22 @@ export function buildStudyWhere(f: SearchFilters, opts: StudyWhereOpts = {}): Bu
   arr("assay_family", "assay_families");
 
   if (f.cell_type.length && ex !== "cell_type") {
-    const match = cellTypeMatch(f.cell_type);
-    if (match) {
-      clauses.push(`m.gse_id IN (SELECT gse_id FROM fts_gsm WHERE fts_gsm MATCH ?)`);
-      params.push(match);
+    if (f.match_mode.cell_type === "all") {
+      for (const value of f.cell_type) {
+        const match = cellTypeMatch([value]);
+        if (match) {
+          clauses.push(`m.gse_id IN (SELECT gse_id FROM fts_gsm WHERE fts_gsm MATCH ?)`);
+          params.push(match);
+        }
+      }
     } else {
-      clauses.push("0");
+      const match = cellTypeMatch(f.cell_type);
+      if (match) {
+        clauses.push(`m.gse_id IN (SELECT gse_id FROM fts_gsm WHERE fts_gsm MATCH ?)`);
+        params.push(match);
+      } else {
+        clauses.push("0");
+      }
     }
   }
   if (f.min_cells != null && ex !== "min_cells") {
@@ -705,7 +715,9 @@ export function buildSampleWhere(f: SearchFilters, opts: StudyWhereOpts = {}): B
   col("assay_family", "assay_family");
 
   if (f.cell_type.length && ex !== "cell_type") {
-    const match = cellTypeMatch(f.cell_type);
+    const match = f.match_mode.cell_type === "all"
+      ? f.cell_type.map((value) => cellTypeMatch([value])).filter(Boolean).join(" AND ")
+      : cellTypeMatch(f.cell_type);
     if (match) {
       clauses.push(`s.gsm_id IN (SELECT gsm_id FROM fts_gsm WHERE fts_gsm MATCH ?)`);
       params.push(match);
