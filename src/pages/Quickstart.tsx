@@ -145,7 +145,7 @@ head(colData(sce)$gsm_id)`}
               metadata and QC then appear under <strong>Mine</strong> in Browse.
             </p>
             <p className="text-sm text-muted-foreground">
-              Free while in preview. Limits: 5 projects, 20 files per project, 2 GB per file and 10 GB stored per account.
+              Included with a free account. Limits: 5 projects, 20 files per project, 2 GB per file and 10 GB stored per account.
               Save selected public studies as a versioned cohort or share work in a lab workspace.
             </p>
           </section>

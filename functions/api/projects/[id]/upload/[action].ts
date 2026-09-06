@@ -1,6 +1,6 @@
 import { httpBundleSource, r2BundleSource } from "../../../../_shared/bundle-reader";
 import { indexPrivateBundle, assertPublicBundleUrl } from "../../../../_shared/private-indexer";
-import { FILE_BYTES_CAP, PART_BYTES, productCall, type PrivateEnv } from "../../../../_shared/private-project";
+import { FILE_BYTES_CAP, hasPrivateIdentity, PART_BYTES, productCall, unauthorized, type PrivateEnv } from "../../../../_shared/private-project";
 
 const headers = { "Content-Type": "application/json", "Cache-Control": "no-store" };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers });
@@ -12,6 +12,7 @@ async function indexAndFinish(request: Request, env: PrivateEnv, source: ReturnT
 }
 
 export const onRequestPost: PagesFunction<PrivateEnv> = async ({ request, env, params, waitUntil }) => {
+  if (!hasPrivateIdentity(request, env)) return unauthorized();
   const action = String(params.action ?? "");
   const projectId = String(params.id ?? "");
   try {
@@ -74,6 +75,7 @@ export const onRequestPost: PagesFunction<PrivateEnv> = async ({ request, env, p
 };
 
 export const onRequestPut: PagesFunction<PrivateEnv> = async ({ request, env, params }) => {
+  if (!hasPrivateIdentity(request, env)) return unauthorized();
   if (String(params.action ?? "") !== "part") return json({ error: "unknown_action" }, 404);
   try {
     const url = new URL(request.url);
