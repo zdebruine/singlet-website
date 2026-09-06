@@ -19,7 +19,7 @@ const PROJECT_ID = "lovp_735241pm6n8r3a7are3rf3wng0";
 export const onRequestGet: PagesFunction = async ({ request }) => {
   const incoming = new URL(request.url);
   const target = new URL(BROKER);
-  for (const [k, v] of incoming.searchParams) target.searchParams.set(k, v);
+  incoming.searchParams.forEach((v, k) => target.searchParams.set(k, v));
   target.searchParams.set("project_id", PROJECT_ID);
   return Response.redirect(target.toString(), 302);
 };

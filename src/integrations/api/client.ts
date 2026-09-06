@@ -354,6 +354,8 @@ function normalizeSearch<T>(raw: unknown, level: "gse" | "gsm"): SearchResponse<
     accession_lookup: r.accession_lookup ? strArr(r.accession_lookup) : undefined,
     any_word: r.any_word === true ? true : undefined,
     note: typeof r.note === "string" ? r.note : undefined,
+    groups: r.groups ? { full: num(rec(r.groups).full), partial: num(rec(r.groups).partial) } : undefined,
+    hard_applied: r.hard_applied ? normalizeApplied(r.hard_applied) : undefined,
   };
 }
 
@@ -382,6 +384,8 @@ function normalizeNlSearch<T>(raw: unknown, level: "gse" | "gsm"): NlSearchRespo
     model: typeof r.model === "string" ? r.model : undefined,
     quota_exceeded: r.quota_exceeded === true ? true : undefined,
     quota: parseQuota(r.quota) ?? undefined,
+    groups: r.groups ? { full: num(rec(r.groups).full), partial: num(rec(r.groups).partial) } : undefined,
+    hard_applied: r.hard_applied ? normalizeApplied(r.hard_applied) : undefined,
   };
 }
 
