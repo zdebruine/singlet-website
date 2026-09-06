@@ -36,6 +36,12 @@ export interface StudySeries {
   bundle_n_samples: number | null;
   /** Reference genome build of the bundle, e.g. "GRCm39-2024-A". Null until the packing job ingests it via bundle_manifest. */
   reference_build: string | null;
+  /** singlet pipeline version the bundle was packed with. */
+  singlet_version: string | null;
+  /** When the bundle was packed (manifest_created_at). */
+  packed_at: string | null;
+  /** Reserved: study DOI, once one is derivable. Always null today. */
+  doi: string | null;
   submitted_date: string | null;
   last_updated: string | null;
   /** Legacy names kept for the Python/R packages. */
@@ -131,7 +137,7 @@ export async function loadStudy(db: D1Database, rawId: string): Promise<StudyDet
 
     // Bundle manifest (ingested by the packing job): reference build + actual sample count.
     db
-      .prepare(`SELECT reference_build, n_gsms_in_bundle FROM bundle_manifest WHERE gse_id = ?`)
+      .prepare(`SELECT reference_build, singlet_version, manifest_created_at, bytes, n_gsms_in_bundle FROM bundle_manifest WHERE gse_id = ?`)
       .bind(id)
       .first<Record<string, unknown>>()
       .catch(() => null),
@@ -188,6 +194,13 @@ export async function loadStudy(db: D1Database, rawId: string): Promise<StudyDet
     bundle_url: hasBundle ? bundleUrl(id) : null,
     bundle_n_samples: bundleNSamples != null && !Number.isNaN(bundleNSamples) ? bundleNSamples : null,
     reference_build: referenceBuild,
+    singlet_version:
+      typeof manifestRow?.singlet_version === "string" && manifestRow.singlet_version ? manifestRow.singlet_version : null,
+    packed_at:
+      typeof manifestRow?.manifest_created_at === "string" && manifestRow.manifest_created_at
+        ? manifestRow.manifest_created_at
+        : null,
+    doi: null,
     submitted_date: (seriesRow.submitted_date as string | null) ?? null,
     last_updated: (seriesRow.last_updated as string | null) ?? null,
     r2_bundle_key: bundleKey,
