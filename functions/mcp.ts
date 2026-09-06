@@ -750,24 +750,47 @@ async function callTool(ctx: CallContext, params: Record<string, unknown>) {
   const args = (params.arguments && typeof params.arguments === "object" ? params.arguments : {}) as Record<string, unknown>;
   if (!TOOLS.some((t) => t.name === name)) return { error: rpcError(null, -32602, `Unknown tool: ${name}`) };
 
-  if (!ctx.auth.ok) {
-    const how =
-      ctx.auth.reason === "missing"
-        ? `This tool needs a personal singlet.bio API key. Sign in at ${ACCOUNT_URL} (free), create a key under "API keys", then send it as \`Authorization: Bearer sk_live_…\` (or \`X-API-Key\`) with requests to ${SITE}/mcp. Downloading .singlet files never needs a key.`
-        : ctx.auth.message;
-    return { result: toolError(how, { auth: ctx.auth.reason, account_url: ACCOUNT_URL }) };
+  const hasKey = ctx.auth.ok;
+  // A key that was sent but is wrong or revoked is always an error, whatever
+  // the tool: silently downgrading it to anonymous would hide the mistake.
+  if (!ctx.auth.ok && ctx.auth.reason !== "missing") {
+    return { result: toolError(ctx.auth.message, { auth: ctx.auth.reason, account_url: ACCOUNT_URL }) };
+  }
+  if (!hasKey && KEY_ONLY_TOOLS.has(name)) {
+    return {
+      result: toolError(
+        `${name} needs a personal singlet.bio API key. Sign in at ${ACCOUNT_URL} (free), create a key under "API keys", then send it as \`Authorization: Bearer sk_live_…\` (or \`X-API-Key\`) with requests to ${SITE}/mcp. Everything else here — search, study details, QC, downloads — works without one.`,
+        { auth: "key_required", tool: name, account_url: ACCOUNT_URL, ...quotaMeta(false) }
+      ),
+    };
   }
 
+  const meta = quotaMeta(hasKey);
+  const db = { db: ctx.env.DB, waitUntil: ctx.waitUntil };
   try {
     switch (name) {
       case "search_datasets":
-        return { result: await searchDatasets(ctx.env, ctx.request, ctx.waitUntil, args) };
+        return { result: await searchDatasets(ctx.env, ctx.request, ctx.waitUntil, args, hasKey) };
       case "get_study":
-        return { result: await getStudy(ctx.env, args) };
+        return { result: withQuota(await getStudy(ctx.env, args), meta) };
       case "get_download_url":
-        return { result: await getDownloadUrl(ctx.env, args) };
+        return { result: withQuota(await getDownloadUrl(ctx.env, args), meta) };
       case "get_atlas_stats":
-        return { result: await getAtlasStats(ctx.env) };
+        return { result: withQuota(await getAtlasStats(ctx.env), meta) };
+      case "get_sample_qc":
+        return { result: withQuota(await getSampleQc(db, args), meta) };
+      case "list_bundle_files":
+        return { result: withQuota(await listBundleFiles(db, args), meta) };
+      case "get_partial_download":
+        return { result: withQuota(await getPartialDownload(db, args), meta) };
+      case "export_manifest":
+        return { result: withQuota(await exportManifest(ctx.env, ctx.waitUntil, args), meta) };
+      case "find_matched_controls":
+        return { result: withQuota(await findMatchedControls(db, args), meta) };
+      case "compare_studies":
+        return { result: withQuota(await compareStudies(db, args), meta) };
+      case "assess_study":
+        return { result: withQuota(await assessStudy(db, args), meta) };
       default:
         return { error: rpcError(null, -32602, `Unknown tool: ${name}`) };
     }
@@ -791,7 +814,7 @@ async function handleMessage(ctx: CallContext, msg: JsonRpcRequest): Promise<unk
       const protocolVersion = (PROTOCOL_VERSIONS as readonly string[]).includes(asked) ? asked : LATEST_PROTOCOL;
       return rpcResult(id, {
         protocolVersion,
-        capabilities: { tools: { listChanged: false } },
+        capabilities: { tools: { listChanged: false }, prompts: { listChanged: false }, resources: { listChanged: false, subscribe: false } },
         serverInfo: SERVER_INFO,
         instructions: INSTRUCTIONS,
       });
@@ -810,9 +833,25 @@ async function handleMessage(ctx: CallContext, msg: JsonRpcRequest): Promise<unk
       return rpcResult(id, r.result);
     }
     case "resources/list":
-      return rpcResult(id, { resources: [] });
+      return rpcResult(id, { resources: RESOURCES });
+    case "resources/templates/list":
+      return rpcResult(id, { resourceTemplates: [] });
+    case "resources/read": {
+      const uri = typeof params.uri === "string" ? params.uri : "";
+      const contents = await readResource(ctx.env, uri).catch(() => null);
+      if (!contents) return rpcError(id, -32602, `Unknown resource: ${uri}`);
+      return rpcResult(id, { contents: [contents] });
+    }
     case "prompts/list":
-      return rpcResult(id, { prompts: [] });
+      return rpcResult(id, { prompts: PROMPTS });
+    case "prompts/get": {
+      const name = typeof params.name === "string" ? params.name : "";
+      const args = (params.arguments && typeof params.arguments === "object" ? params.arguments : {}) as Record<string, unknown>;
+      if (!PROMPTS.some((p) => p.name === name)) return rpcError(id, -32602, `Unknown prompt: ${name}`);
+      const built = promptMessages(name, args);
+      if (!built) return rpcError(id, -32602, `Missing or invalid arguments for prompt: ${name}`);
+      return rpcResult(id, built);
+    }
     default:
       if (isNotification) return undefined;
       return rpcError(id, -32601, `Method not found: ${method}`);
