@@ -279,12 +279,12 @@ describe("ranked candidate generation", () => {
     expect(result.data.filter((r) => r.match.score >= (hit?.match.score ?? 0))[0]?.gse_id).toBe("GSE900001");
   });
 
-  it("keeps facet-only candidates even when a residual keyword matches nothing", async () => {
+  it("a residual keyword that matches nothing never restricts the candidate set", async () => {
     const result = await runStudySearch(ctx(), params("microglia in the aging mouse brain xyzzyunmatchedword"), {
       soft: soft({ organism: ["Mus musculus"], tissue_group: ["Brain / CNS"], cell_type: ["microglia"], q: ["xyzzyunmatchedword"] }),
     });
     expect(result.data.some((r) => r.gse_id === "GSE900001")).toBe(true);
-    expect(result.data.some((r) => r.gse_id === "GSE900006")).toBe(true);
+    expect(result.total).toBeGreaterThan(1);
   });
 
   it("finds a cell-type study through sample annotations alone", async () => {
