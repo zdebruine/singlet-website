@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { Search } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -36,6 +36,27 @@ export function SearchBox({
   const inputId = id ?? (variant === "hero" ? "hero-search" : "site-search");
   const navigate = useNavigate();
   const [value, setValue] = useState(initialValue);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const onKey = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "/" && !event.metaKey && !event.ctrlKey && !event.altKey) {
+        const target = event.target as HTMLElement | null;
+        if (target?.matches("input, textarea, select, [contenteditable=true]")) return;
+        event.preventDefault();
+        inputRef.current?.focus();
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
+
+  const onInputKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Escape" && value) {
+      event.preventDefault();
+      setValue("");
+    }
+  };
 
   const submit = (e?: FormEvent) => {
     e?.preventDefault();
@@ -48,21 +69,20 @@ export function SearchBox({
   if (variant === "hero") {
     return (
       <form onSubmit={submit} role="search" className={cn("w-full", className)}>
-        <div
-          className="flex items-stretch bg-card rounded overflow-hidden"
-          style={{ border: "1.5px solid #0E8C7E" }}
-        >
+        <div className="flex items-stretch bg-card rounded overflow-hidden border border-primary focus-within:ring-2 focus-within:ring-[var(--teal-200)]">
           <label htmlFor={inputId} className="sr-only">
             Search the atlas
           </label>
           <input
             id={inputId}
+            ref={inputRef}
             type="search"
             autoFocus={autoFocus}
             autoComplete="off"
             spellCheck={false}
             value={value}
             onChange={(e) => setValue(e.target.value)}
+            onKeyDown={onInputKeyDown}
             placeholder={placeholder ?? SEARCH_PLACEHOLDER}
             className="flex-1 min-w-0 bg-transparent px-4 h-[52px] text-[15px] text-foreground placeholder:text-muted-foreground focus:outline-none [&::-webkit-search-cancel-button]:appearance-none"
           />
@@ -87,11 +107,13 @@ export function SearchBox({
       <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
       <input
         id={inputId}
+        ref={inputRef}
         type="search"
         autoComplete="off"
         spellCheck={false}
         value={value}
         onChange={(e) => setValue(e.target.value)}
+        onKeyDown={onInputKeyDown}
         placeholder={placeholder ?? SEARCH_PLACEHOLDER}
         title={SEARCH_PLACEHOLDER}
         className="input h-9 pl-8 pr-3 text-[13px] [&::-webkit-search-cancel-button]:appearance-none"
