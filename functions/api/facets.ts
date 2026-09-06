@@ -34,14 +34,15 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request, waitUntil
   const rules = await loadRules(env.DB, waitUntil);
   const { filters, dropped } = normalizeFilters(params, rules);
   const applied = pickFilters(filters);
-  const key = canonicalQuery({ ...applied, level: params.level });
+  const candidateIds = [...new Set((url.searchParams.get("candidate_ids") ?? "").split(",").map((v) => v.trim().toUpperCase()).filter((v) => /^GSE\d+$/.test(v)))].slice(0, 200);
+  const key = canonicalQuery({ ...applied, level: params.level }) + (candidateIds.length ? `&candidate_ids=${candidateIds.join(",")}` : "");
 
   return cachedJson(
     request,
     waitUntil,
     async () => {
       try {
-        const facets = await computeFacets({ db: env.DB, rules, waitUntil }, applied, params.level);
+        const facets = await computeFacets({ db: env.DB, rules, waitUntil }, applied, params.level, candidateIds.length ? candidateIds : null);
         return corsOk({ ...facets, applied, dropped });
       } catch (e) {
         return corsErr(String(e));

@@ -309,7 +309,8 @@ async function textScope(
   return { gseIds: ids, gsmIds: null, empty: ids.length === 0 };
 }
 
-export async function computeFacets(ctx: Ctx, f: SearchFilters, level: Level): Promise<FacetsResponse> {
+export async function computeFacets(ctx: Ctx, f: SearchFilters, level: Level, scopedGseIds: string[] | null = null): Promise<FacetsResponse> {
+  if (scopedGseIds) return computeFacetsLive(ctx, f, level, scopedGseIds);
   const unfiltered = !hasAnyFilter(f) && !f.q;
   if (unfiltered) {
     const key = `facets:v11:${level}:all:${f.has_bundle === true ? "hb1" : "hb0"}`;
@@ -318,11 +319,12 @@ export async function computeFacets(ctx: Ctx, f: SearchFilters, level: Level): P
   return computeFacetsLive(ctx, f, level);
 }
 
-async function computeFacetsLive(ctx: Ctx, f: SearchFilters, level: Level): Promise<FacetsResponse> {
+async function computeFacetsLive(ctx: Ctx, f: SearchFilters, level: Level, scopedGseIds: string[] | null = null): Promise<FacetsResponse> {
   const scope = await textScope(ctx, f, level);
   if (scope.empty) return emptyFacets(level);
+  const gseIds = scopedGseIds ?? scope.gseIds;
   const statements =
-    level === "gse" ? studyFacetStatements(f, scope.gseIds) : sampleFacetStatements(f, scope.gsmIds, scope.gseIds);
+    level === "gse" ? studyFacetStatements(f, gseIds) : sampleFacetStatements(f, scope.gsmIds, gseIds);
   const rows = await runFacetStatements(ctx.db, statements);
   return assemble(level, rows);
 }

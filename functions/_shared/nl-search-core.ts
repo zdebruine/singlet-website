@@ -253,6 +253,7 @@ function mergeFilters(explicit: SearchParams, interp: Interpreted, rules: VocabR
     if (Array.isArray(arr)) (filters as unknown as Record<string, string[]>)[key] = arr.filter((v) => v !== d.value);
   }
   const soft: SoftSignals = {
+    organism: display.organism.filter((v) => interp.organism.includes(v)),
     tissue_group: display.tissue_group.filter((v) => !explicit.tissue_group.includes(v)),
     disease_group: display.disease_group.filter((v) => !explicit.disease_group.includes(v)),
     assay_family: display.assay_family.filter((v) => !explicit.assay_family.includes(v)),
@@ -387,6 +388,7 @@ export interface NlSearchBody {
   accession_lookup?: string[];
   hard_applied?: SearchFilters;
   groups?: { full: number; partial: number };
+  candidate_accessions?: string[];
   ms?: number;
 }
 
@@ -505,6 +507,7 @@ export async function nlSearch(
     ...(quotaExceeded && quota ? { quota_exceeded: true, quota } : {}),
     ...(result.accession_lookup ? { accession_lookup: result.accession_lookup } : {}),
     ...(result.groups ? { groups: result.groups } : {}),
+    ...(result.candidate_accessions ? { candidate_accessions: result.candidate_accessions } : {}),
     ms: Date.now() - started,
   };
   return { ok: true, body, headers, quota };

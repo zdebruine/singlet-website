@@ -23,7 +23,7 @@ export interface MatchInfo {
   filters: FilterMatch[];
   text: TextMatch[];
   facets: { key: string; label: string; status: "hit" | "partial" | "miss"; detail: string }[];
-  keywords: { term: string; hits: string[] }[];
+  keywords: { term: string; status: "hit" | "partial" | "miss"; detail: string; hits: string[] }[];
   score: number;
 }
 
@@ -143,6 +143,7 @@ export interface SearchResponse<T = StudyRow | SampleRow> {
   any_word?: boolean;
   note?: string;
   groups?: { full: number; partial: number };
+  candidate_accessions?: string[];
   hard_applied?: AppliedFilters;
   ms?: number;
 }
@@ -370,6 +371,7 @@ export interface GsmDetailResponse {
 
 export interface SearchQuery {
   q?: string;
+  candidate_ids?: string[];
   level?: Level;
   organism?: string[];
   tissue_group?: string[];

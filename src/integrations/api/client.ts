@@ -578,6 +578,7 @@ function normalizeStats(raw: unknown): CorpusStats {
 function searchParams(q: SearchQuery): Record<string, ParamValue> {
   return {
     q: q.q,
+    candidate_ids: q.candidate_ids?.join(","),
     level: q.level,
     organism: q.organism,
     tissue_group: q.tissue_group,
