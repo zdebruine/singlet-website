@@ -141,3 +141,7 @@
 - [ ] D. Throwaway-account production acceptance (needs a signed-in session; not available in this environment)
 
 <!-- Stage 12b restored and re-synced to GitHub main on 2026-09-06 after the ANVIL bot push race. -->
+
+## Stage 11d — 11c candidate fix restored after the 12b file restore
+- [x] Re-applied evidence-ordered candidate generation on top of the 12b text fallback
+- [x] Integration test over the real candidate SQL (src/test/candidates.test.ts), run in `npm run build`
