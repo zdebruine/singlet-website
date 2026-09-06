@@ -146,7 +146,7 @@ const isQuota = (v: unknown): v is Quota =>
  */
 async function interpret(env: NlEnv, ctx: Ctx, request: Request, query: string): Promise<InterpretOutcome> {
   const normQ = query.toLowerCase().replace(/\s+/g, " ").trim();
-  const cacheKey = `${INTERPRET_CACHE_URL}?v=2&q=${encodeURIComponent(normQ)}`;
+  const cacheKey = `${INTERPRET_CACHE_URL}?v=${INTERPRET_RULES_VERSION}&q=${encodeURIComponent(normQ)}`;
   let cache: Cache | null = null;
   try {
     cache = (caches as unknown as { default?: Cache }).default ?? null;
