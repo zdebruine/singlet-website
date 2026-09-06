@@ -940,7 +940,7 @@ function scoreStudy(r: StudyRow, signals: SoftSignals): { score: number; full: b
     if (!wanted.length) return;
     const hits = wanted.filter((value) => have.some((v) => v.toLowerCase() === value.toLowerCase()));
     const status = hits.length === wanted.length ? "hit" : hits.length ? "partial" : "miss";
-    if (status !== "hit") full = false;
+    if (status === "miss") full = false;
     if (hits.length) score += weight * (hits.length / wanted.length);
     r.match.facets.push({ key, label, status, detail: hits.length ? hits.join(" / ") : "not annotated" });
   };
@@ -1181,10 +1181,8 @@ async function attachStudyMatches(ctx: Ctx, rows: StudyRow[], p: SearchParams, p
         const variants = termVariants(t);
         const inTitle = variants.find((v) => wordHit(title, v));
         if (inTitle) r.match.text.push({ field: "title", term: inTitle, n_samples: 0 });
-        else {
-          const inAbstract = variants.find((v) => wordHit(abstract, v));
-          if (inAbstract) r.match.text.push({ field: "abstract", term: inAbstract, n_samples: 0 });
-        }
+        const inAbstract = variants.find((v) => wordHit(abstract, v));
+        if (inAbstract) r.match.text.push({ field: "abstract", term: inAbstract, n_samples: 0 });
       }
     }
     const fields: ["characteristics" | "source" | "cell_type" | "tissue" | "sample_title", string][] = [
