@@ -115,7 +115,7 @@ function cors(origin: string | null): Record<string, string> {
   const allow = origin && ALLOWED_ORIGIN_RE.test(origin) ? origin : "https://singlet.bio";
   return {
     "Access-Control-Allow-Origin": allow,
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, X-Ingest-Token",
     "Access-Control-Max-Age": "86400",
     Vary: "Origin",
@@ -173,6 +173,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, params }
       return json({ error: `Too many studies (max ${MAX_INDEX_PER_CALL} per call)` }, 400, origin);
     }
     await ensureSampleQcTable(env.DB).catch(() => undefined);
+    await ensureFailureTable(env.DB).catch(() => undefined);
     const results: Record<string, unknown>[] = [];
     for (const gse of wanted) {
       if (!GSE_RE.test(gse)) {
@@ -342,9 +343,22 @@ const LOCK_MS = 120_000;
 /** Minimum spacing between runs once one finishes. */
 const COOLDOWN_MS = 1_000;
 
+// Studies that cannot be read (missing/corrupt file) are parked here so the
+// backfill loop can reach remaining = 0 instead of retrying them forever.
 const PENDING_SQL = `FROM bundle_manifest m
-  WHERE NOT EXISTS (SELECT 1 FROM bundle_index i WHERE i.gse_id = m.gse_id)
-     OR NOT EXISTS (SELECT 1 FROM sample_qc q WHERE q.gse_id = m.gse_id)`;
+  WHERE (NOT EXISTS (SELECT 1 FROM bundle_index i WHERE i.gse_id = m.gse_id)
+      OR NOT EXISTS (SELECT 1 FROM sample_qc q WHERE q.gse_id = m.gse_id))
+    AND NOT EXISTS (SELECT 1 FROM bundle_index_failure f WHERE f.gse_id = m.gse_id)`;
+
+async function ensureFailureTable(db: D1Database): Promise<void> {
+  await db
+    .prepare(
+      `CREATE TABLE IF NOT EXISTS bundle_index_failure (
+         gse_id TEXT PRIMARY KEY, error TEXT, updated_at TEXT
+       )`
+    )
+    .run();
+}
 
 async function readLockUntil(db: D1Database): Promise<number> {
   const row = await db
@@ -383,6 +397,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env, params })
   const failed: { gse_id: string; error: string }[] = [];
   try {
     await ensureSampleQcTable(env.DB).catch(() => undefined);
+    await ensureFailureTable(env.DB).catch(() => undefined);
     const pending = await env.DB.prepare(`SELECT m.gse_id ${PENDING_SQL} ORDER BY m.gse_id LIMIT ?`)
       .bind(n)
       .all<{ gse_id: string }>();
@@ -396,7 +411,14 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env, params })
         for (let i = 0; i < statements.length; i += BATCH_SIZE) await env.DB.batch(statements.slice(i, i + BATCH_SIZE));
         indexed.push(gse_id);
       } catch (e) {
-        failed.push({ gse_id, error: String(e) });
+        const error = String(e).slice(0, 500);
+        failed.push({ gse_id, error });
+        await env.DB.prepare(
+          `INSERT OR REPLACE INTO bundle_index_failure (gse_id, error, updated_at) VALUES (?, ?, ?)`
+        )
+          .bind(gse_id, error, nowIso())
+          .run()
+          .catch(() => undefined);
       }
     }
 
