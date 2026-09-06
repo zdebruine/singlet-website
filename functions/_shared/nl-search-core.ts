@@ -55,6 +55,8 @@ const INTERPRET_FN = "interpret-search-query";
 const INTERPRET_TIMEOUT_MS = 9000;
 const INTERPRET_CACHE_TTL = 3600;
 const INTERPRET_CACHE_URL = "https://singlet.bio/__internal/interpret";
+/** Bump whenever the interpreter prompt or its pinned examples change, so cached readings expire at once. */
+const INTERPRET_RULES_VERSION = "11f-1";
 const MAX_SUGGESTIONS = 5;
 
 export interface Interpreted {
