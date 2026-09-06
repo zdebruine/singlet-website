@@ -4,19 +4,18 @@
  * Stateless JSON-RPC 2.0 over POST. No sessions, no server-initiated streams
  * (GET answers 405), every response is plain `application/json`.
  *
- *   initialize                → capabilities + serverInfo
+ *   initialize                → capabilities + serverInfo + instructions
  *   notifications/initialized → 202
  *   ping                      → {}
- *   tools/list                → the four tools below
- *   tools/call                → needs `Authorization: Bearer sk_live_…` (or
- *                               `X-API-Key`); without one the tool answers with
- *                               an isError result pointing at /account.
- *
- * Tools
- *   search_datasets  natural-language search (same engine as the site bar)
- *   get_study        everything about one GSE
- *   get_download_url the .singlet bundle URL for one GSE
- *   get_atlas_stats  live corpus numbers
+ *   tools/list                → the eleven tools below
+ *   tools/call                → works WITHOUT a key: AI-interpreted search is
+ *                               metered at the anonymous allowance (10/day per
+ *                               visitor), everything deterministic is free. A
+ *                               personal key (Authorization: Bearer sk_live_…
+ *                               or X-API-Key) raises search to 200/day and
+ *                               unlocks the two heavy tools.
+ *   prompts/list, prompts/get → three guided workflows
+ *   resources/list, /read     → singlet://stats, singlet://vocab
  *
  * Protocol versions 2025-06-18 and 2025-03-26 (JSON-RPC batches accepted for
  * the latter). A missing MCP-Protocol-Version header means 2025-03-26.
@@ -27,20 +26,41 @@ import { nlSearch, type NlEnv, type NlSearchBody, type Quota } from "./_shared/n
 import { loadStudy, bundleUrl, GSE_RE, type StudyDetail } from "./_shared/study-core";
 import { computeStats } from "./_shared/stats-core";
 import { TISSUE_GROUPS, DISEASE_GROUPS, ASSAY_FAMILIES } from "./_shared/vocab";
+import { MANIFEST_FORMATS } from "./_shared/manifest-core";
 import type { StudyRow, SampleRow } from "./_shared/search-core";
+import {
+  ACCOUNT_URL,
+  LOADERS,
+  SITE,
+  assessStudy,
+  compareStudies,
+  exportManifest,
+  findMatchedControls,
+  fmt,
+  fmtBytes,
+  getPartialDownload,
+  getSampleQc,
+  listBundleFiles,
+  toolError,
+  toolResult,
+  type ToolResult,
+} from "./_shared/mcp-tools";
 
 type Env = NlEnv;
 
-const SERVER_INFO = { name: "singlet-bio", title: "singlet.bio atlas", version: "1.0.0" };
+const SERVER_INFO = { name: "singlet-bio", title: "singlet.bio atlas", version: "2.0.0" };
 const PROTOCOL_VERSIONS = ["2025-06-18", "2025-03-26"] as const;
 const LATEST_PROTOCOL = PROTOCOL_VERSIONS[0];
-const SITE = "https://singlet.bio";
-const ACCOUNT_URL = `${SITE}/account`;
 const MAX_SAMPLES_IN_STUDY = 60;
+const ANON_SEARCH_LIMIT = 10;
+const KEY_SEARCH_LIMIT = 200;
 
-const INSTRUCTIONS = `singlet.bio is an open atlas of public single-cell RNA-seq studies from GEO, all reprocessed the same way. One .singlet file per study (GSE accession), loadable with one line in Python (pip install git+https://github.com/Singlet-Bio/singlet; singlet.load("GSE…")) or R (remotes::install_github("Singlet-Bio/singlet", subdir = "r"); load("GSE…")).
+const INSTRUCTIONS = `singlet.bio is an open atlas of public single-cell RNA-seq studies from GEO, all reprocessed the same way. One CC0 .singlet file per study (zip64) holding per-sample count matrices and per-sample QC.
 
-Start with search_datasets using plain English (organism, tissue, disease, cell type, assay). Use get_study for details on one accession, get_download_url for the file, get_atlas_stats for corpus size. Filters are never relaxed silently: when a search returns nothing, follow the suggestions it returns. Downloads never need a key; tool calls need a personal API key from ${ACCOUNT_URL}.`;
+Recommended order: search_datasets → assess_study or get_study → get_sample_qc → get_download_url (whole study) or get_partial_download (one sample's matrix, by HTTP range) → export_manifest for a cohort. compare_studies and find_matched_controls help pick controls.
+
+Every number and every "why" string is computed, not generated — quote them, don't paraphrase. Catalog cell counts can differ from the file's own QC; the file is the truth. Downloads never need a key. AI-interpreted search is 10/day anonymously; a free key from ${ACCOUNT_URL} raises it to ${KEY_SEARCH_LIMIT}/day and unlocks assess_study and find_matched_controls.`;
+
 
 // ── JSON-RPC plumbing ───────────────────────────────────────────────────────
 
