@@ -139,3 +139,5 @@
 - [x] E. Removed "free while in preview" and other commercial wording
 - [x] F. Caps: 5 projects, 20 files/project, 2 GB/file, 10 GB/account, 2 TB global, 50 cohorts, 10 workspace members
 - [ ] D. Throwaway-account production acceptance (needs a signed-in session; not available in this environment)
+
+<!-- Stage 12b restored and re-synced to GitHub main on 2026-09-06 after the ANVIL bot push race. -->
