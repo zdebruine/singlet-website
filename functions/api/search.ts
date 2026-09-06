@@ -1,9 +1,8 @@
 /**
  * GET /api/search
  *
- * Structured + free-text catalog search. AND across filter groups, OR within a
- * group — never silently relaxed (the only automatic fallback is AND → OR over
- * the free-text terms when AND finds nothing, and that is reported in `note`).
+ * Structured + ranked free-text catalog search. Explicit rail filters remain
+ * hard constraints; interpreted facets and keyword evidence are scored.
  *
  * Params
  *   q              free text; GEO accessions (GSE…/GSM…) short-circuit to lookup
@@ -18,7 +17,7 @@
  *   year_min / year_max
  *   sort           relevance (default) | cells | samples | year | accession
  *   page           1-based, default 1
- *   limit          ≤ 100, default 20
+ *   limit          ≤ 200, default 20
  *   format         json (default) | accessions  → text/plain, one id per line, ≤ 5000
  *
  * Response (json)

@@ -11,7 +11,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, LayoutGrid, List, Loader2, Search, SlidersHorizontal, Sparkles } from "lucide-react";
+import { ChevronRight, LayoutGrid, List, Loader2, Search, SlidersHorizontal, Sparkles } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { cn } from "@/lib/utils";
@@ -194,7 +194,6 @@ const Browse = () => {
   const setSort = (sort: Sort) => go({ ...state, sort, page: 1 });
   const setPage = (page: number) => {
     go({ ...state, page });
-    window.scrollTo({ top: 0, behavior: "smooth" });
   };
   const applySuggestion = (params: string) => go(stateFromParams(params, state));
 
