@@ -4,6 +4,7 @@ const SITE = "https://singlet.bio";
 const DEFAULT_TITLE = "singlet.bio — find single-cell data, load it in one line";
 const DEFAULT_DESC =
   "Every public scRNA-seq study on GEO, reprocessed the same way, one .singlet file per study. Free, CC0, no account.";
+const DEFAULT_IMAGE = `${SITE}/og-default.png`;
 
 function setMeta(selector: string, attr: string, value: string) {
   let el = document.head.querySelector<HTMLMetaElement>(selector);
@@ -67,8 +68,12 @@ export function usePageMeta(opts: {
     setMeta('meta[property="og:title"]', "content", fullTitle);
     setMeta('meta[property="og:description"]', "content", desc);
     setMeta('meta[property="og:url"]', "content", url);
+    setMeta('meta[property="og:site_name"]', "content", "singlet.bio");
+    // TODO: switch study pages to /og/:gse.png once a Pages-compatible PNG renderer is available.
+    setMeta('meta[property="og:image"]', "content", DEFAULT_IMAGE);
     setMeta('meta[name="twitter:title"]', "content", fullTitle);
     setMeta('meta[name="twitter:description"]', "content", desc);
+    setMeta('meta[name="twitter:image"]', "content", DEFAULT_IMAGE);
     setCanonical(url);
     const robots = document.head.querySelector<HTMLMetaElement>('meta[name="robots"]');
     if (noindex) {

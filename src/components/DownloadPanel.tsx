@@ -50,7 +50,7 @@ export function DownloadPanel({ accession, bundleUrl, bundleBytes, bundleNSample
           {!stacked && (
             <>
               <span aria-hidden="true">·</span>
-              <span>Free download, no account</span>
+              <span>CC0 · no account required</span>
             </>
           )}
         </div>

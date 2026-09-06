@@ -1,8 +1,11 @@
 import { ArrowRight, ExternalLink } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import { usePageMeta } from "@/hooks/usePageMeta";
 
-const DataLicense = () => (
+const DataLicense = () => {
+    usePageMeta({ title: "Data and software license", description: "singlet.bio atlas data is CC0; singlet software is MIT licensed.", path: "/data-license" });
+    return (
     <div className="min-h-screen bg-background">
         <Navbar />
 
@@ -155,6 +158,7 @@ const DataLicense = () => (
 
         <Footer />
     </div>
-);
+    );
+};
 
 export default DataLicense;
