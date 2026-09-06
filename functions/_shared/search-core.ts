@@ -1058,6 +1058,9 @@ export async function runStudySearch(
   const evidenceText = [...signals.q, ...signals.cell_type].join(" ");
   const orMatch = evidenceText ? tokenizeQuery(evidenceText).or : null;
   const candidateIds = isRanked ? await rankedCandidateIds(db, p, signals) : undefined;
+  if (isRanked && candidateIds?.length === 0) {
+    return { total: 0, totals: { studies: 0, samples: 0, cells: 0 }, page: p.page, limit: p.limit, data: [], accessions: [], groups: { full: 0, partial: 0 }, candidate_accessions: [] };
+  }
   const candidateParams = isRanked ? { ...p, q: "", page: 1, limit: RANKED_CANDIDATE_LIMIT } : p;
   let plan = planStudyQuery(candidateParams, undefined, candidateIds);
   let res = await db.prepare(plan.sql).bind(...plan.params).all<StudyDbRow>();
