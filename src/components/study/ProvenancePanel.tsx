@@ -12,7 +12,7 @@ export function ProvenancePanel({ index, nCatalogProcessed }: ProvenancePanelPro
   if (!index) return null;
 
   const rows: { label: string; value: string }[] = [
-    ...(index.singlet_version ? [{ label: "Pipeline version", value: index.singlet_version }] : []),
+    ...(index.singlet_version && index.singlet_version !== "unknown" ? [{ label: "Pipeline version", value: index.singlet_version }] : []),
     ...(index.reference_build ? [{ label: "Reference build", value: index.reference_build }] : []),
     ...(index.created_at ? [{ label: "Packed", value: index.created_at.slice(0, 10) }] : []),
     {
