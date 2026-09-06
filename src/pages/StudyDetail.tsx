@@ -369,8 +369,18 @@ const StudyDetail = () => {
       title:
         flagged > 0
           ? `${flagged} of ${processed.length} processed samples report implausible cell counts (a known plate-based pipeline issue). They are excluded from this total.`
-          : undefined,
+          : "Cell counts as recorded in the catalog metadata, not the cells called in the published file.",
     },
+    ...(fileCells != null
+      ? [
+          {
+            label: "Cells (file)",
+            value: fmtCompact(fileCells),
+            title: "Sum of cells called in the published .singlet file, from its per-sample QC summaries.",
+          },
+        ]
+      : []),
+
     // QC tiles only for metrics that were actually recorded; a study with none
     // gets one sentence instead (below the grid), never an em-dash tile.
     ...(avgMR != null ? [{ label: "Mean mapping rate", value: fmtPct(avgMR) }] : []),
