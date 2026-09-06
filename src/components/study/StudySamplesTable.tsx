@@ -311,6 +311,10 @@ export function StudySamplesTable({ gseId, studyTitle, samples, highlightGsm, co
         case "n_cells":
           cmp = (a.n_cells ?? -1) - (b.n_cells ?? -1);
           break;
+        case "n_cells_called":
+          cmp = ((qcByGsm?.[a.gsm_id.toUpperCase()]?.n_cells_called) ?? -1) - ((qcByGsm?.[b.gsm_id.toUpperCase()]?.n_cells_called) ?? -1);
+          break;
+
         case "mapping_rate":
           cmp = (a.mapping_rate ?? -1) - (b.mapping_rate ?? -1);
           break;
