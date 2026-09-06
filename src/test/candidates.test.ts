@@ -199,6 +199,25 @@ const FIXTURES: Fixture[] = [
   },
 ];
 
+/**
+ * Bulk filler: large mouse brain studies that match the interpreted facets but
+ * carry none of the query's evidence. They exist so the fixture crosses the
+ * 200-row candidate cap — the regression this test guards against was the cap
+ * dropping the evidence-bearing study in favour of these.
+ */
+const FILLER: Fixture[] = Array.from({ length: 260 }, (_, i) => ({
+  id: `GSE91${String(i).padStart(4, "0")}`,
+  title: `Large mouse cortex survey ${i}`,
+  abstract: "A large survey of cortical neurons.",
+  organism: "Mus musculus",
+  tissues: ["Brain / CNS"],
+  diseases: ["Healthy / control"],
+  assays: ["10x 3'"],
+  cell_types: ["neuron"],
+  characteristics: "tissue: cortex",
+  n_cells: 1_000_000 + i,
+}));
+
 function seed(): D1Database {
   const sqlite = new DatabaseSync(":memory:");
   sqlite.exec(readFileSync(resolve(__dirname, "../../scripts/dev-api/schema.sql"), "utf8"));
