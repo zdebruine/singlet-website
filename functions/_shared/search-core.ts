@@ -242,6 +242,14 @@ const KEYWORD_SYNONYMS: Record<string, string[]> = {
   pediatric: ["pediatric", "paediatric", "children", "child"],
   paediatric: ["pediatric", "paediatric", "children", "child"],
   infant: ["infant", "neonatal", "neonate", "newborn"],
+  "tumor infiltrating": ["tumor infiltrating", "tumour infiltrating", "til", "tils", "tumor-infiltrating", "tumour-infiltrating"],
+  "tumour infiltrating": ["tumor infiltrating", "tumour infiltrating", "til", "tils"],
+  til: ["til", "tils", "tumor infiltrating", "tumour infiltrating"],
+  "t cell": ["t cell", "t cells", "t-cell", "t lymphocyte", "cd3 t", "cd4 t", "cd8 t"],
+  "t cells": ["t cell", "t cells", "t-cell", "t lymphocyte", "cd3 t", "cd4 t", "cd8 t"],
+  "cd8 t cell": ["cd8 t cell", "cd8+ t cell", "cd8 t cells", "cytotoxic t cell"],
+  "cd4 t cell": ["cd4 t cell", "cd4+ t cell", "cd4 t cells", "helper t cell"],
+  melanoma: ["melanoma", "cutaneous melanoma", "malignant melanoma"],
   neonatal: ["neonatal", "neonate", "newborn", "infant"],
   covid: ["covid", "sars cov 2", "coronavirus"],
   obese: ["obese", "obesity", "high fat diet", "hfd"],
@@ -1090,7 +1098,7 @@ function softFromQuery(p: SearchParams): SoftSignals {
 }
 
 /** Candidate union for soft evidence; hard constraints are applied before the 200-row cap. */
-async function rankedCandidateIds(db: D1Database, p: SearchParams, signals: SoftSignals): Promise<string[]> {
+export async function rankedCandidateIds(db: D1Database, p: SearchParams, signals: SoftSignals): Promise<string[]> {
   const hard: SearchParams = { ...p, q: "", page: 1, limit: RANKED_CANDIDATE_LIMIT };
   const where = buildStudyWhere(hard);
   const soft: string[] = [];
