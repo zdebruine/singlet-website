@@ -156,6 +156,24 @@ async function interpret(env: NlEnv, ctx: Ctx, request: Request, query: string):
   } catch {
     /* ignore cache errors */
   }
+  // Durable second layer: the Cache API is per-colo, so a repeated query could
+  // otherwise reach the model (and spend budget) once per data centre.
+  const dbKey = `interpret:v2:${normQ}`;
+  try {
+    const row = await ctx.db
+      .prepare(`SELECT value, updated_at FROM meta_cache WHERE key = ?`)
+      .bind(dbKey)
+      .first<{ value: string; updated_at: string }>();
+    if (row) {
+      const age = Date.now() - Date.parse(row.updated_at ?? "");
+      if (Number.isFinite(age) && age < INTERPRET_CACHE_TTL * 1000) {
+        const c = JSON.parse(row.value) as { interpreted: Interpreted; model?: string };
+        if (c?.interpreted) return { ok: true, interpreted: c.interpreted, model: c.model, cached: true };
+      }
+    }
+  } catch {
+    /* ignore cache errors */
+  }
 
   const base = cloudBase(env);
   const anon = cloudAnonKey(env);
@@ -215,6 +233,13 @@ async function interpret(env: NlEnv, ctx: Ctx, request: Request, query: string):
           .catch(() => undefined)
       );
     }
+    ctx.waitUntil(
+      ctx.db
+        .prepare(`INSERT OR REPLACE INTO meta_cache (key, value, updated_at) VALUES (?, ?, ?)`)
+        .bind(dbKey, JSON.stringify(stored), new Date().toISOString().replace(/\.\d{3}Z$/, "Z"))
+        .run()
+        .catch(() => undefined)
+    );
     return { ok: true, ...stored, quota: isQuota(data.quota) ? data.quota : undefined, cached: false };
   } catch {
     return { ok: false, reason: "unavailable" };
