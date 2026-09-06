@@ -25,6 +25,10 @@ import type {
   GseDetailResponse,
   GsmDetailResponse,
   GsmRow,
+  BundleIndexResponse,
+  BundleSamplesResponse,
+  RelatedResponse,
+  SampleQc,
   NlSearchQuery,
   NlSearchResponse,
   QuotaInfo,
@@ -411,6 +415,9 @@ export function normalizeGseDetail(raw: unknown): GseDetailResponse {
       bundle_url: strOrNull(s.bundle_url) ?? (strOrNull(s.bundle_key) ?? strOrNull(s.r2_bundle_key) ? bundleUrl(s.id) : null),
       bundle_n_samples: numOrNull(s.bundle_n_samples) ?? numOrNull(s.r2_bundle_n_gsms) ?? null,
       reference_build: typeof s.reference_build === "string" && s.reference_build ? s.reference_build : null,
+      singlet_version: strOrNull(s.singlet_version),
+      packed_at: strOrNull(s.packed_at),
+      doi: strOrNull(s.doi),
       submitted_date: strOrNull(s.submitted_date),
       last_updated: str(s.last_updated),
       organism_label: typeof s.organism_label === "string" ? s.organism_label : undefined,
@@ -678,11 +685,109 @@ export const apiClient = {
     return normalizeGseDetail(await get<unknown>(`/api/gse/${encodeURIComponent(id)}`));
   },
 
+  /** GET /api/bundle/:gse/index — what is actually inside the published file. */
+  async bundleIndex(gseId: string, signal?: AbortSignal): Promise<BundleIndexResponse> {
+    return normalizeBundleIndex(await get<unknown>(`/api/bundle/${encodeURIComponent(gseId)}/index`, undefined, signal));
+  },
+
+  /** GET /api/bundle/:gse/samples — per-sample numbers read from the file itself. */
+  async bundleSamples(gseId: string, signal?: AbortSignal): Promise<BundleSamplesResponse> {
+    return normalizeBundleSamples(await get<unknown>(`/api/bundle/${encodeURIComponent(gseId)}/samples`, undefined, signal));
+  },
+
+  /** GET /api/gse/:id/related — a handful of nearby studies. */
+  async related(gseId: string, signal?: AbortSignal): Promise<RelatedResponse> {
+    return normalizeRelated(await get<unknown>(`/api/gse/${encodeURIComponent(gseId)}/related`, undefined, signal));
+  },
+
+  /** URL for the bulk manifest export of the current search. */
+  manifestUrl(q: SearchQuery, format: "tsv" | "json" | "curl" | "wget" | "python" | "r"): string {
+    return buildApiUrl("/api/manifest", { ...searchParams(q), level: "gse", format, page: undefined, limit: undefined });
+  },
+
   /** GET /api/gsm/:id — sample detail with parent study + siblings. */
   async gsm(id: string): Promise<GsmDetailResponse> {
     return normalizeGsmDetail(await get<unknown>(`/api/gsm/${encodeURIComponent(id)}`));
   },
 };
+
+function normalizeBundleFile(raw: unknown) {
+  const f = rec(raw);
+  return typeof f.path === "string" && f.path
+    ? { path: f.path, bytes_compressed: num(f.bytes_compressed), bytes_uncompressed: num(f.bytes_uncompressed) }
+    : null;
+}
+
+export function normalizeBundleIndex(raw: unknown): BundleIndexResponse {
+  const r = rec(raw);
+  return {
+    gse_id: str(r.gse_id),
+    bytes: num(r.bytes),
+    reference_build: strOrNull(r.reference_build),
+    singlet_version: strOrNull(r.singlet_version),
+    created_at: strOrNull(r.created_at),
+    indexed_at: strOrNull(r.indexed_at),
+    n_samples: num(r.n_samples),
+    samples: arr<unknown>(r.samples)
+      .map((s) => rec(s))
+      .filter((s) => typeof s.gsm_id === "string")
+      .map((s) => ({
+        gsm_id: String(s.gsm_id),
+        files: arr<unknown>(s.files).map(normalizeBundleFile).filter((f): f is NonNullable<typeof f> => f !== null),
+        total_bytes: num(s.total_bytes),
+      })),
+    study_files: arr<unknown>(r.study_files).map(normalizeBundleFile).filter((f): f is NonNullable<typeof f> => f !== null),
+  };
+}
+
+function normalizeSampleQc(raw: unknown): SampleQc | null {
+  const s = rec(raw);
+  if (typeof s.gsm_id !== "string") return null;
+  return {
+    gsm_id: s.gsm_id,
+    gse_id: str(s.gse_id),
+    protocol: strOrNull(s.protocol),
+    reference_build: strOrNull(s.reference_build),
+    n_input_reads: numOrNull(s.n_input_reads),
+    uniquely_mapped_pct: numOrNull(s.uniquely_mapped_pct),
+    n_cells_called: numOrNull(s.n_cells_called),
+    median_umi: numOrNull(s.median_umi),
+    median_genes: numOrNull(s.median_genes),
+    mapping_rate: numOrNull(s.mapping_rate),
+    exonic_fraction: numOrNull(s.exonic_fraction),
+    intronic_fraction: numOrNull(s.intronic_fraction),
+    sequencing_saturation: numOrNull(s.sequencing_saturation),
+    median_mito_fraction: numOrNull(s.median_mito_fraction),
+    fraction_reads_in_cells: numOrNull(s.fraction_reads_in_cells),
+    total_genes_detected: numOrNull(s.total_genes_detected),
+    singlet_version: strOrNull(s.singlet_version),
+  };
+}
+
+export function normalizeBundleSamples(raw: unknown): BundleSamplesResponse {
+  const r = rec(raw);
+  const samples = arr<unknown>(r.samples).map(normalizeSampleQc).filter((s): s is SampleQc => s !== null);
+  return { gse_id: str(r.gse_id), source: r.source === "d1" ? "d1" : "bundle", n_samples: num(r.n_samples, samples.length), samples };
+}
+
+export function normalizeRelated(raw: unknown): RelatedResponse {
+  const r = rec(raw);
+  const related = arr<unknown>(r.related)
+    .map((x) => rec(x))
+    .filter((x) => typeof x.gse_id === "string")
+    .map((x) => ({
+      gse_id: String(x.gse_id),
+      title: strOrNull(x.title),
+      organism_label: str(x.organism_label),
+      tissue_groups: strArr(x.tissue_groups),
+      disease_groups: strArr(x.disease_groups),
+      n_cells: num(x.n_cells),
+      n_done: num(x.n_done),
+      year: numOrNull(x.year),
+      reason: str(x.reason),
+    }));
+  return { gse_id: str(r.gse_id), total: num(r.total, related.length), related };
+}
 
 /** Public download URL for a study bundle. */
 export function bundleUrl(gseId: string): string {

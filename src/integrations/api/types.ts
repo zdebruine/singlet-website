@@ -252,6 +252,11 @@ export interface GseRow {
   /** Number of samples actually present in the bundle, when indexed by the packing job. */
   bundle_n_samples: number | null;
   reference_build: string | null;
+  /** Pipeline version that packed the file, from the bundle manifest. */
+  singlet_version: string | null;
+  /** When the file was packed (ISO), from the bundle manifest. */
+  packed_at: string | null;
+  doi: string | null;
   submitted_date: string | null;
   last_updated: string;
   /** Common name for the study's primary organism (e.g. "Human"). */
@@ -372,4 +377,76 @@ export interface ApiKeyCreated {
   key: ApiKeySummary;
   /** The full secret. Shown once; never retrievable again. */
   secret: string;
+}
+
+// ── Bundle contents (/api/bundle/:gse/*) ────────────────────────────────────
+
+export interface BundleFile {
+  path: string;
+  bytes_compressed: number;
+  bytes_uncompressed: number;
+}
+
+export interface BundleSampleFiles {
+  gsm_id: string;
+  files: BundleFile[];
+  total_bytes: number;
+}
+
+export interface BundleIndexResponse {
+  gse_id: string;
+  bytes: number;
+  reference_build: string | null;
+  singlet_version: string | null;
+  created_at: string | null;
+  indexed_at: string | null;
+  n_samples: number;
+  samples: BundleSampleFiles[];
+  study_files: BundleFile[];
+}
+
+/** Per-sample numbers read out of the published file (or the D1 memo of it). */
+export interface SampleQc {
+  gsm_id: string;
+  gse_id: string;
+  protocol: string | null;
+  reference_build: string | null;
+  n_input_reads: number | null;
+  uniquely_mapped_pct: number | null;
+  n_cells_called: number | null;
+  median_umi: number | null;
+  median_genes: number | null;
+  mapping_rate: number | null;
+  exonic_fraction: number | null;
+  intronic_fraction: number | null;
+  sequencing_saturation: number | null;
+  median_mito_fraction: number | null;
+  fraction_reads_in_cells: number | null;
+  total_genes_detected: number | null;
+  singlet_version: string | null;
+}
+
+export interface BundleSamplesResponse {
+  gse_id: string;
+  source: "d1" | "bundle";
+  n_samples: number;
+  samples: SampleQc[];
+}
+
+export interface RelatedStudy {
+  gse_id: string;
+  title: string | null;
+  organism_label: string;
+  tissue_groups: string[];
+  disease_groups: string[];
+  n_cells: number;
+  n_done: number;
+  year: number | null;
+  reason: string;
+}
+
+export interface RelatedResponse {
+  gse_id: string;
+  total: number;
+  related: RelatedStudy[];
 }
