@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS gse (
   pubmed_ids TEXT DEFAULT '[]',
   r2_bundle_key TEXT,
   r2_bundle_bytes INTEGER,
+  r2_bundle_n_gsms INTEGER,
   submitted_date TEXT,
   last_updated TEXT
 );
@@ -92,4 +93,24 @@ CREATE TABLE IF NOT EXISTS gse_publication (gse_id TEXT, pmid TEXT);
 CREATE VIRTUAL TABLE IF NOT EXISTS fts_gse USING fts5(id, title, abstract, organism, tokenize='unicode61');
 CREATE VIRTUAL TABLE IF NOT EXISTS fts_gsm USING fts5(
   gsm_id, gse_id, title, source, tissue, cell_type, organism, disease, characteristics, tokenize='unicode61'
+);
+
+-- Stage 7/8 maintenance + bundle tables.
+CREATE TABLE IF NOT EXISTS bundle_manifest (
+  gse_id TEXT PRIMARY KEY, bytes INTEGER, n_files INTEGER, n_gsms_in_bundle INTEGER,
+  manifest_n_gsms INTEGER, gsm_ids TEXT, manifest_created_at TEXT, audited_at TEXT,
+  reference_build TEXT, singlet_version TEXT
+);
+CREATE TABLE IF NOT EXISTS geo_enrich (
+  gse_id TEXT PRIMARY KEY, pdat TEXT, pubmed_ids TEXT, n_samples_geo INTEGER, gdstype TEXT, fetched_at TEXT
+);
+CREATE TABLE IF NOT EXISTS bundle_index (
+  gse_id TEXT PRIMARY KEY, bytes INTEGER, entries TEXT, indexed_at TEXT
+);
+CREATE TABLE IF NOT EXISTS sample_qc (
+  gsm_id TEXT PRIMARY KEY, gse_id TEXT, protocol TEXT, reference_build TEXT,
+  n_input_reads INTEGER, uniquely_mapped_pct REAL, n_cells_called INTEGER,
+  median_umi REAL, median_genes REAL, mapping_rate REAL, exonic_fraction REAL,
+  intronic_fraction REAL, sequencing_saturation REAL, median_mito_fraction REAL,
+  fraction_reads_in_cells REAL, total_genes_detected INTEGER, singlet_version TEXT, updated_at TEXT
 );
