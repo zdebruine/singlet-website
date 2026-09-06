@@ -85,10 +85,6 @@ const json = (body: unknown, status = 200, extra: Record<string, string> = {}) =
 
 // ── Tool catalogue ──────────────────────────────────────────────────────────
 
-const LOADERS = (gse: string) => ({
-  python: `import singlet\nadata = singlet.load("${gse}")   # AnnData`,
-  r: `library(singlet)\nsce <- load("${gse}")   # SingleCellExperiment`,
-});
 
 const TOOLS = [
   {
