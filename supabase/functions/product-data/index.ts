@@ -5,7 +5,8 @@ import { service, sha256Hex } from "../_shared/service.ts";
 
 const PROJECT_CAP = 5;
 const WORKSPACE_CAP = 3;
-const MEMBER_CAP = 25;
+const MEMBER_CAP = 10;
+const COHORT_CAP = 50;
 const FILE_CAP = 20;
 const ACCOUNT_BYTES_CAP = 10 * 1024 ** 3;
 const GLOBAL_BYTES_CAP = 2 * 1024 ** 4;
@@ -109,7 +110,7 @@ Deno.serve(async (req) => {
       ]);
       const projectIds = (projects ?? []).map((p: { id: string }) => p.id);
       const { data: files } = projectIds.length ? await db.from("user_files").select("id, project_id, filename, kind, bytes, status, error, created_at, updated_at").in("project_id", projectIds).order("created_at") : { data: [] };
-      return json({ projects: projects ?? [], files: files ?? [], cohorts: cohorts ?? [], workspaces: workspaceResult.data ?? [], usage: usage ?? {}, weekly_summary: preferences?.weekly_summary ?? false, limits: { projects: PROJECT_CAP, files_per_project: FILE_CAP, storage_bytes: ACCOUNT_BYTES_CAP, workspaces: WORKSPACE_CAP, members_per_workspace: MEMBER_CAP, file_bytes: FILE_BYTES_CAP } });
+      return json({ projects: projects ?? [], files: files ?? [], cohorts: cohorts ?? [], workspaces: workspaceResult.data ?? [], usage: usage ?? {}, weekly_summary: preferences?.weekly_summary ?? false, limits: { projects: PROJECT_CAP, files_per_project: FILE_CAP, storage_bytes: ACCOUNT_BYTES_CAP, workspaces: WORKSPACE_CAP, members_per_workspace: MEMBER_CAP, cohorts: COHORT_CAP, file_bytes: FILE_BYTES_CAP } });
     }
 
     if (action === "create_project") {
@@ -309,6 +310,8 @@ Deno.serve(async (req) => {
         const { data: m } = await db.from("workspace_members").select("role").eq("workspace_id", parsed.data.workspace_id).eq("user_id", uid).maybeSingle();
         if (!m) return fail("workspace_access", "You are not a member of that workspace.", 403);
       }
+      const { count: cohortCount } = await db.from("cohorts").select("id", { count: "exact", head: true }).eq("owner_id", uid);
+      if ((cohortCount ?? 0) >= COHORT_CAP) return fail("cohort_limit", `You can save up to ${COHORT_CAP} cohorts. Delete one before saving another.`, 409, { limit: COHORT_CAP });
       const shareToken = parsed.data.visibility === "link" ? token("sco") : null;
       const { data: c, error } = await db.from("cohorts").insert({ owner_id: uid, workspace_id: parsed.data.workspace_id ?? null, name: parsed.data.name, notes: parsed.data.notes, query: parsed.data.query, filters: parsed.data.filters, catalog_version: await catalogVersion(), visibility: parsed.data.visibility, share_token_hash: shareToken ? await sha256Hex(shareToken) : null, share_token_prefix: shareToken?.slice(0, 12) ?? null }).select("*").single();
       if (error) throw error;
