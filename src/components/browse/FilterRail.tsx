@@ -22,6 +22,8 @@ interface Props {
   level: Level;
   /** Filters currently in force (explicit, or as the interpreter applied them). */
   current: AppliedFilters;
+  /** Values the interpreter read out of the question but did not hard-filter on. */
+  soft?: Partial<Record<MultiField, string[]>>;
   onToggle: (field: MultiField, value: string) => void;
   onMode: (field: MultiField, mode: "any" | "all") => void;
   onAddCellType: (value: string) => void;
@@ -56,10 +58,20 @@ function orderOptions(options: FacetOption[], selected: string[]): FacetOption[]
   return out;
 }
 
+/** Violet "read as" marker: the interpreter saw this, but it is not a filter yet. */
+function ReadAs() {
+  return (
+    <span className="shrink-0 rounded-[2px] border border-ai/40 bg-ai/10 px-1 text-[10px] font-medium uppercase tracking-[0.06em] text-ai" title="Read from your question — tick the box to make it a filter">
+      read as
+    </span>
+  );
+}
+
 function CheckList({
   field,
   options,
   selected,
+  soft = [],
   onToggle,
   labelFn,
   searchPlaceholder,
@@ -68,6 +80,7 @@ function CheckList({
   field: MultiField;
   options: FacetOption[];
   selected: string[];
+  soft?: string[];
   onToggle: (field: MultiField, value: string) => void;
   labelFn?: (o: FacetOption) => string;
   searchPlaceholder: string;
@@ -75,7 +88,7 @@ function CheckList({
 }) {
   const [showAll, setShowAll] = useState(false);
   const [filter, setFilter] = useState("");
-  const ordered = useMemo(() => orderOptions(options, selected), [options, selected]);
+  const ordered = useMemo(() => orderOptions(options, [...new Set([...selected, ...soft])]), [options, selected, soft]);
   const needle = filter.trim().toLowerCase();
   const filtered = needle
     ? ordered.filter((o) => (labelFn ? labelFn(o) : o.value).toLowerCase().includes(needle) || o.value.toLowerCase().includes(needle))
@@ -109,6 +122,7 @@ function CheckList({
       )}
       <ul className={cn("space-y-1", showAll && "max-h-[280px] overflow-y-auto pr-1")}>
         {visible.map((o) => {
+          const isSoft = soft.includes(o.value) && !selected.includes(o.value);
           const checked = selected.includes(o.value);
           const id = `${field}-${o.value}`;
           return (
@@ -130,6 +144,7 @@ function CheckList({
                 >
                   {labelFn ? labelFn(o) : o.value}
                 </span>
+                {isSoft && <ReadAs />}
                 <span className={cn("font-mono text-[11px] tabular shrink-0", o.count ? "text-muted-foreground" : "text-muted-foreground/50")}>
                   {fmtInt(o.count)}
                 </span>
@@ -233,6 +248,7 @@ export function FilterRail({
   loading,
   level,
   current,
+  soft,
   onToggle,
   onMode,
   onAddCellType,
@@ -277,6 +293,7 @@ export function FilterRail({
           field="organism"
           options={facets?.organism ?? []}
           selected={current.organism}
+          soft={soft?.organism}
           onToggle={onToggle}
           labelFn={(o) => o.label ?? organismLabel(o.value)}
           searchPlaceholder="Search organisms…"
@@ -289,6 +306,7 @@ export function FilterRail({
           field="tissue_group"
           options={facets?.tissue_group ?? []}
           selected={current.tissue_group}
+          soft={soft?.tissue_group}
           onToggle={onToggle}
           searchPlaceholder="Search tissues…"
           loading={loading}
@@ -300,6 +318,7 @@ export function FilterRail({
           field="disease_group"
           options={facets?.disease_group ?? []}
           selected={current.disease_group}
+          soft={soft?.disease_group}
           onToggle={onToggle}
           searchPlaceholder="Search diseases…"
           loading={loading}
@@ -311,6 +330,7 @@ export function FilterRail({
           field="assay_family"
           options={facets?.assay_family ?? []}
           selected={current.assay_family}
+          soft={soft?.assay_family}
           onToggle={onToggle}
           searchPlaceholder="Search assays…"
           loading={loading}
