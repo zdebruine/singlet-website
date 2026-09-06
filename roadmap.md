@@ -130,3 +130,12 @@
 - [x] Park zero-QC index-next studies so they are not selected repeatedly
 - [x] Preserve non-best sort URL state and remove grouped divider
 - [ ] Build/typecheck without package-lock changes and verify all seven items on production
+
+## Stage 12b — production verification and fixes
+- [x] A. Unannotated facets fall back to title/abstract/characteristics text (partial, +1.5) and count toward "matches everything"
+- [x] A. Pinned scorer test covering the four queries (src/test/scorer.test.ts)
+- [x] B. 401 before any input read, fetch or database call on every private endpoint; hardened register-URL host checks
+- [x] C. product-data edge function deployed and reachable (was undeployed)
+- [x] E. Removed "free while in preview" and other commercial wording
+- [x] F. Caps: 5 projects, 20 files/project, 2 GB/file, 10 GB/account, 2 TB global, 50 cohorts, 10 workspace members
+- [ ] D. Throwaway-account production acceptance (needs a signed-in session; not available in this environment)
