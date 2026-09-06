@@ -143,3 +143,5 @@
 <!-- Stage 12b restored and re-synced to GitHub main on 2026-09-06 after the ANVIL bot push race. -->
 
 <!-- Stage 11d re-applied 2026-09-06 17:50 UTC: ranked candidate evidence ordering restored after the ANVIL bot push race. -->
+
+- Stage 11e: candidates integration test, interpreter tissue/keyword rules, durable interpretation cache, rail "read as" markers, index-next sample-count predicate.
