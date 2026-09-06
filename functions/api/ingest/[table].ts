@@ -331,3 +331,84 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, params }
 
   return json({ ok: true, table, received: rows.length, written, ms: Date.now() - started }, 200, origin);
 };
+
+// ── GET /api/ingest/index-next?n=25 ─────────────────────────────────────────
+// Unauthenticated backfill crank (see header comment). Only writes the cache
+// tables bundle_index / sample_qc from public files.
+
+const LOCK_KEY = "index-next:lock";
+/** A run may hold the lock for at most this long before it is considered dead. */
+const LOCK_MS = 120_000;
+/** Minimum spacing between runs once one finishes. */
+const COOLDOWN_MS = 1_000;
+
+const PENDING_SQL = `FROM bundle_manifest m
+  WHERE NOT EXISTS (SELECT 1 FROM bundle_index i WHERE i.gse_id = m.gse_id)
+     OR NOT EXISTS (SELECT 1 FROM sample_qc q WHERE q.gse_id = m.gse_id)`;
+
+async function readLockUntil(db: D1Database): Promise<number> {
+  const row = await db
+    .prepare(`SELECT value FROM meta_cache WHERE key = ?`)
+    .bind(LOCK_KEY)
+    .first<{ value: string }>()
+    .catch(() => null);
+  const until = Number(row?.value ?? 0);
+  return Number.isFinite(until) ? until : 0;
+}
+
+async function writeLockUntil(db: D1Database, until: number): Promise<void> {
+  await db
+    .prepare(`INSERT OR REPLACE INTO meta_cache (key, value, updated_at) VALUES (?, ?, ?)`)
+    .bind(LOCK_KEY, String(until), nowIso())
+    .run()
+    .catch(() => undefined);
+}
+
+export const onRequestGet: PagesFunction<Env> = async ({ request, env, params }) => {
+  const origin = request.headers.get("Origin");
+  if (String(params.table ?? "") !== "index-next") {
+    return json({ error: "Unknown GET endpoint. Use /api/ingest/index-next?n=25" }, 404, origin);
+  }
+  const started = Date.now();
+  const url = new URL(request.url);
+  const n = Math.min(MAX_INDEX_PER_CALL, Math.max(1, Number(url.searchParams.get("n") ?? "25") || 25));
+
+  const until = await readLockUntil(env.DB);
+  if (Date.now() < until) {
+    return json({ error: "Busy — another index-next run is in flight or cooling down", retry_after_ms: until - Date.now() }, 429, origin);
+  }
+  await writeLockUntil(env.DB, Date.now() + LOCK_MS);
+
+  const indexed: string[] = [];
+  const failed: { gse_id: string; error: string }[] = [];
+  try {
+    await ensureSampleQcTable(env.DB).catch(() => undefined);
+    const pending = await env.DB.prepare(`SELECT m.gse_id ${PENDING_SQL} ORDER BY m.gse_id LIMIT ?`)
+      .bind(n)
+      .all<{ gse_id: string }>();
+
+    for (const { gse_id } of pending.results ?? []) {
+      try {
+        const index = await getBundleIndex(env.DB, gse_id, { refresh: true });
+        const samples = await readSampleSummaries(gse_id, index);
+        const st = nowIso();
+        const statements = samples.map((s) => upsertSampleQcStatement(env.DB, s as unknown as Record<string, unknown>, st));
+        for (let i = 0; i < statements.length; i += BATCH_SIZE) await env.DB.batch(statements.slice(i, i + BATCH_SIZE));
+        indexed.push(gse_id);
+      } catch (e) {
+        failed.push({ gse_id, error: String(e) });
+      }
+    }
+
+    const rest = await env.DB.prepare(`SELECT COUNT(*) AS c ${PENDING_SQL}`).first<{ c: number }>();
+    return json(
+      { ok: true, indexed, failed, remaining: Number(rest?.c ?? 0), ms: Date.now() - started },
+      200,
+      origin
+    );
+  } catch (e) {
+    return json({ error: String(e), indexed, failed }, 500, origin);
+  } finally {
+    await writeLockUntil(env.DB, Date.now() + COOLDOWN_MS);
+  }
+};
