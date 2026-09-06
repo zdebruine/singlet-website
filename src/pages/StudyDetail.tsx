@@ -132,6 +132,13 @@ const StudyDetail = () => {
     return map;
   }, [bundleSamples]);
 
+  // Cells actually called in the published file (null when no file QC is known).
+  const fileCells = useMemo(() => {
+    const vals = (bundleSamples?.samples ?? []).map((s) => s.n_cells_called).filter((v): v is number => v != null);
+    return vals.length ? vals.reduce((a, v) => a + v, 0) : null;
+  }, [bundleSamples]);
+
+
   const [abstractOpen, setAbstractOpen] = useState(false);
   const [condition, setCondition] = useState<ConditionFilter | null>(null);
 
