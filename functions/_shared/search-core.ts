@@ -825,13 +825,13 @@ interface StudyQueryPlan {
  * Build the paged study query. `matchOverride` lets the caller force the OR
  * form of the FTS expression (fallback when AND finds nothing).
  */
-export function planStudyQuery(p: SearchParams, matchOverride?: string | null): StudyQueryPlan {
+export function planStudyQuery(p: SearchParams, matchOverride?: string | null, candidateIds?: string[]): StudyQueryPlan {
   const acc = p.q ? extractAccessions(p.q) : { gse: [], gsm: [] };
   const fts = p.q ? tokenizeQuery(p.q) : { terms: [], and: null, or: null };
   const isAccession = acc.gse.length > 0 || acc.gsm.length > 0;
   const match = isAccession ? null : matchOverride !== undefined ? matchOverride : fts.and;
 
-  const where = buildStudyWhere(isAccession ? { ...p, has_bundle: null } : p);
+  const where = buildStudyWhere(p, { gseIds: candidateIds });
   const clauses = [...where.clauses];
   const params: (string | number)[] = [];
   let cte = "";
@@ -839,7 +839,7 @@ export function planStudyQuery(p: SearchParams, matchOverride?: string | null): 
   let join = "";
 
   if (isAccession) {
-    // Direct lookup — other filters are ignored on purpose (an accession is an exact ask).
+    // Direct lookup remains exact, while explicit rail filters stay hard.
     const gseIds = [...acc.gse];
     const lookup = [`m.gse_id IN (SELECT value FROM json_each(?))`];
     params.push(jsonArray(gseIds));
@@ -847,7 +847,6 @@ export function planStudyQuery(p: SearchParams, matchOverride?: string | null): 
       lookup.push(`m.gse_id IN (SELECT gse_id FROM gsm WHERE gsm_id IN (SELECT value FROM json_each(?)))`);
       params.push(jsonArray(acc.gsm));
     }
-    clauses.length = 0;
     clauses.push(`(${lookup.join(" OR ")})`);
   } else if (match) {
     cte = `WITH ${HITS_CTE}`;
@@ -981,6 +980,35 @@ function softFromQuery(p: SearchParams): SoftSignals {
   return { tissue_group: [], disease_group: [], assay_family: [], cell_type: [], q: tokenizeQuery(p.q).terms };
 }
 
+/** Candidate union for soft evidence; hard constraints are applied before the 200-row cap. */
+async function rankedCandidateIds(db: D1Database, p: SearchParams, signals: SoftSignals): Promise<string[]> {
+  const hard: SearchParams = { ...p, q: "", page: 1, limit: RANKED_CANDIDATE_LIMIT };
+  const where = buildStudyWhere(hard);
+  const soft: string[] = [];
+  const params: (string | number)[] = [...where.params];
+  const jsonFacet = (col: string, values: string[]) => {
+    if (!values.length) return;
+    soft.push(`EXISTS (SELECT 1 FROM json_each(m.${col}) je WHERE je.value IN (SELECT value FROM json_each(?)))`);
+    params.push(jsonArray(values));
+  };
+  jsonFacet("tissue_groups", signals.tissue_group);
+  jsonFacet("disease_groups", signals.disease_group);
+  jsonFacet("assay_families", signals.assay_family);
+  const text = [...signals.q, ...signals.cell_type];
+  const match = tokenizeQuery(text.join(" ")).or;
+  if (match) {
+    soft.push(`m.gse_id IN (SELECT id FROM fts_gse WHERE fts_gse MATCH ? UNION SELECT gse_id FROM fts_gsm WHERE fts_gsm MATCH ?)`);
+    params.push(match, match);
+  }
+  if (!soft.length) return [];
+  const clauses = [...where.clauses, `(${soft.join(" OR ")})`];
+  const result = await db.prepare(
+    `SELECT m.gse_id FROM gse_meta m WHERE ${clauses.join(" AND ")}
+      ORDER BY m.has_bundle DESC, ${CAPPED_STUDY_CELLS} DESC LIMIT ${RANKED_CANDIDATE_LIMIT}`
+  ).bind(...params).all<{ gse_id: string }>();
+  return result.results.map((r) => r.gse_id);
+}
+
 /** Run the study query; fills match/conditions/why for the page. */
 export async function runStudySearch(
   ctx: Ctx,
@@ -991,10 +1019,11 @@ export async function runStudySearch(
   const signals = opts.soft ?? softFromQuery(p);
   const isRanked = !extractAccessions(p.q).gse.length && !extractAccessions(p.q).gsm.length &&
     (signals.q.length > 0 || signals.tissue_group.length > 0 || signals.disease_group.length > 0 || signals.assay_family.length > 0 || signals.cell_type.length > 0);
-  const candidateText = [...signals.q, ...signals.tissue_group, ...signals.disease_group, ...signals.assay_family, ...signals.cell_type].join(" ");
-  const candidateParams = isRanked ? { ...p, q: candidateText, page: 1, limit: RANKED_CANDIDATE_LIMIT } : p;
-  const orMatch = candidateText ? tokenizeQuery(candidateText).or : null;
-  let plan = planStudyQuery(candidateParams, isRanked ? orMatch : undefined);
+  const evidenceText = [...signals.q, ...signals.cell_type].join(" ");
+  const orMatch = evidenceText ? tokenizeQuery(evidenceText).or : null;
+  const candidateIds = isRanked ? await rankedCandidateIds(db, p, signals) : undefined;
+  const candidateParams = isRanked ? { ...p, q: "", page: 1, limit: RANKED_CANDIDATE_LIMIT } : p;
+  let plan = planStudyQuery(candidateParams, undefined, candidateIds);
   let res = await db.prepare(plan.sql).bind(...plan.params).all<StudyDbRow>();
   let anyWord = false;
 
