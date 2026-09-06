@@ -76,6 +76,19 @@
 - [x] Fix preview typecheck error: `bundle_n_samples` missing in `normalizeGseDetail`
 - [ ] Push Stage 6 commits to GitHub `main` (blocked by sandbox `git push` restriction)
 
+## Stage 8 — what's really in the file (in progress)
+- [x] `functions/_shared/bundle-reader.ts` — zip64 central-directory reader over HTTP Range against data.singlet.bio; index memoised in D1 `bundle_index`
+- [x] `functions/_shared/bundle-core.ts` — per-sample `summary.json` → `sample_qc` (D1 memo), study/sample file listing
+- [x] `/api/bundle/:gse/index`, `/samples`, `/entry?path=…` (inflate ≤ 4 MB at the edge; larger → byte-range recipe), `?refresh=1`
+- [x] `GET /api/manifest` — bulk manifest for a whole search (tsv/json/curl/wget/python/r, ≤ 2,000 studies)
+- [x] `GET /api/gse/:id/related`
+- [x] `/api/gse/:id` series: `reference_build`, `singlet_version`, `packed_at`, `bundle_n_samples`, `doi`
+- [x] ingest: `sample_qc` table + `index-bundle` action (≤ 25 studies per call)
+- [x] dev harness routes + local schema for the new tables
+- [ ] Study page: reference/PubMed/Cite (BibTeX+RIS), file QC samples table, provenance, file tree, related
+- [ ] Browse: sort control + manifest export menu; year on cards
+- [ ] Docs: partial downloads, bulk manifests, provenance/versioning, comparison table; /about caps disclosure; home quick-start hubs
+
 ## Backlog / discovered
 - `public/notebooks/*.html` are stale June exports (old `.1pz` format); unlinked but still served. Delete them or regenerate from the GitHub notebooks.
 - A revoked key keeps working for up to 60 s on an edge isolate that cached it (documented on /account). Add a "revoked" push (KV) if that window ever matters.
