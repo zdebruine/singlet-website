@@ -227,7 +227,7 @@ export async function getBundleIndex(
 // ── entry reads ─────────────────────────────────────────────────────────────
 
 async function inflateRaw(data: Uint8Array): Promise<Uint8Array> {
-  const stream = new Blob([data as unknown as ArrayBufferView]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+  const stream = new Blob([data.slice().buffer as ArrayBuffer]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
   const buf = await new Response(stream).arrayBuffer();
   return new Uint8Array(buf);
 }
