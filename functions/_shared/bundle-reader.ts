@@ -159,6 +159,7 @@ export async function parseZipIndex(url: string): Promise<{ bytes: number; entri
 // ── D1 index cache ──────────────────────────────────────────────────────────
 
 let ensured = false;
+let indexesEnsured = false;
 async function ensureTables(db: D1Database): Promise<void> {
   if (ensured) return;
   await db
@@ -184,6 +185,14 @@ export async function ensureSampleQcTable(db: D1Database): Promise<void> {
        )`
     )
     .run();
+  if (!indexesEnsured) {
+    indexesEnsured = true;
+    await db.batch([
+      db.prepare("CREATE INDEX IF NOT EXISTS idx_gse_meta_year ON gse_meta(year)"),
+      db.prepare("CREATE INDEX IF NOT EXISTS idx_bundle_manifest_samples_reference ON bundle_manifest(n_gsms_in_bundle, reference_build)"),
+      db.prepare("CREATE INDEX IF NOT EXISTS idx_sample_qc_gse_protocol ON sample_qc(gse_id, protocol)"),
+    ]).catch(() => undefined);
+  }
 }
 
 /** Parsed index for a study, from D1 when we have it, otherwise over the wire. */

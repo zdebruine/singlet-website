@@ -48,6 +48,11 @@ export interface FacetsResponse {
   assay_family: FacetOption[];
   cell_type: FacetOption[];
   year: FacetOption[];
+  reference_build: FacetOption[];
+  protocol: FacetOption[];
+  file_samples: FacetOption[];
+  file_cells: FacetOption[];
+  file_size: FacetOption[];
   /** Canonical group lists so the UI never hard-codes them. */
   vocab: {
     tissue_group: readonly string[];
@@ -62,7 +67,7 @@ const CELL_TYPE_FACET_LIMIT = 40;
 const YEAR_FACET_LIMIT = 40;
 const DAY_MS = 24 * 3600 * 1000;
 
-type FacetName = ArrayFilterField | "year";
+type FacetName = ArrayFilterField | "year" | "reference_build" | "protocol" | "file_samples" | "file_cells" | "file_size";
 
 interface FacetRow {
   facet: string;
@@ -112,7 +117,12 @@ function chunkIntoStatements(items: { base: Base; select: string }[]): FacetStat
 
 /** Is the constraint for `facet` currently active (so its own counts must exclude it)? */
 function facetActive(f: SearchFilters, facet: FacetName): boolean {
-  return facet === "year" ? f.year_min != null || f.year_max != null : f[facet].length > 0;
+  if (facet === "year") return f.year_min != null || f.year_max != null;
+  if (facet === "reference_build" || facet === "protocol") return f[facet].length > 0;
+  if (facet === "file_samples") return f.min_file_samples != null;
+  if (facet === "file_cells") return f.min_file_cells != null;
+  if (facet === "file_size") return f.max_file_bytes != null;
+  return f[facet].length > 0;
 }
 
 // ── Study level ─────────────────────────────────────────────────────────────
@@ -135,7 +145,11 @@ export function studyFacetStatements(f: SearchFilters, gseIds: string[] | null):
     const w = buildStudyWhere(f, { exclude: active ? (exclude as FacetName) : undefined, gseIds });
     const base: Base = {
       name: `b_${key}`,
-      cte: `b_${key} AS (SELECT m.gse_id, m.organisms, m.tissue_groups, m.disease_groups, m.assay_families, m.cell_types_raw, m.year
+       cte: `b_${key} AS (SELECT m.gse_id, m.organisms, m.tissue_groups, m.disease_groups, m.assay_families, m.cell_types_raw, m.year,
+                          (SELECT reference_build FROM bundle_manifest bm WHERE bm.gse_id=m.gse_id) AS reference_build,
+                          (SELECT n_gsms_in_bundle FROM bundle_manifest bm WHERE bm.gse_id=m.gse_id) AS file_samples,
+                          (SELECT SUM(n_cells_called) FROM sample_qc sq WHERE sq.gse_id=m.gse_id) AS file_cells,
+                          (SELECT r2_bundle_bytes FROM gse gx WHERE gx.id=m.gse_id) AS file_size
                    FROM gse_meta m${w.clauses.length ? ` WHERE ${w.clauses.join(" AND ")}` : ""})`,
       params: w.params,
     };
@@ -158,6 +172,12 @@ export function studyFacetStatements(f: SearchFilters, gseIds: string[] | null):
     base: by,
     select: `SELECT * FROM (SELECT 'year' AS facet, CAST(b.year AS TEXT) AS value, COUNT(*) AS n FROM ${by.name} b WHERE b.year IS NOT NULL GROUP BY b.year ORDER BY b.year DESC LIMIT ${YEAR_FACET_LIMIT})`,
   });
+  const bextra = baseFor("none");
+  items.push({ base: bextra, select: `SELECT 'reference_build' AS facet, b.reference_build AS value, COUNT(*) AS n FROM ${bextra.name} b WHERE b.reference_build IS NOT NULL AND b.reference_build != '' GROUP BY b.reference_build` });
+  items.push({ base: bextra, select: `SELECT 'file_samples' AS facet, CASE WHEN b.file_samples >= 100 THEN '100' WHEN b.file_samples >= 50 THEN '50' WHEN b.file_samples >= 25 THEN '25' WHEN b.file_samples >= 10 THEN '10' ELSE '1' END AS value, COUNT(*) AS n FROM ${bextra.name} b WHERE b.file_samples IS NOT NULL GROUP BY value` });
+  items.push({ base: bextra, select: `SELECT 'file_cells' AS facet, CASE WHEN b.file_cells >= 1000000 THEN '1000000' WHEN b.file_cells >= 100000 THEN '100000' WHEN b.file_cells >= 10000 THEN '10000' ELSE '1' END AS value, COUNT(*) AS n FROM ${bextra.name} b WHERE b.file_cells IS NOT NULL GROUP BY value` });
+  items.push({ base: bextra, select: `SELECT 'file_size' AS facet, CASE WHEN b.file_size <= 1073741824 THEN '1073741824' WHEN b.file_size <= 5368709120 THEN '5368709120' WHEN b.file_size <= 10737418240 THEN '10737418240' ELSE 'other' END AS value, COUNT(*) AS n FROM ${bextra.name} b WHERE b.file_size IS NOT NULL GROUP BY value` });
+  items.push({ base: bextra, select: `SELECT 'protocol' AS facet, CASE WHEN lower(q.protocol) LIKE '%multiome%' OR lower(q.protocol) LIKE '%atac%' THEN 'multiome' WHEN lower(q.protocol) LIKE '%5%prime%' OR lower(q.protocol) LIKE '%5''%' THEN '10x 5''' WHEN lower(q.protocol) LIKE '%v2%' THEN '10xv2' WHEN lower(q.protocol) LIKE '%v3%' THEN '10xv3' ELSE 'other' END AS value, COUNT(DISTINCT q.gse_id) AS n FROM sample_qc q WHERE q.gse_id IN (SELECT gse_id FROM ${bextra.name}) GROUP BY value` });
   const ball = baseFor("none");
   items.push({ base: ball, select: `SELECT '_total' AS facet, NULL AS value, COUNT(*) AS n FROM ${ball.name}` });
 
@@ -227,6 +247,11 @@ function emptyFacets(level: Level): FacetsResponse {
     assay_family: [],
     cell_type: [],
     year: [],
+    reference_build: [],
+    protocol: [],
+    file_samples: [],
+    file_cells: [],
+    file_size: [],
     vocab: { tissue_group: TISSUE_GROUPS, disease_group: DISEASE_GROUPS, assay_family: ASSAY_FAMILIES },
     total: 0,
   };
@@ -244,7 +269,7 @@ function assemble(level: Level, rows: FacetRow[]): FacetsResponse {
     if (r.facet === "organism") opt.label = organismToCommon(r.value);
     (out[r.facet as FacetName] as FacetOption[]).push(opt);
   }
-  for (const k of ["organism", "tissue_group", "disease_group", "assay_family", "cell_type"] as const) {
+  for (const k of ["organism", "tissue_group", "disease_group", "assay_family", "cell_type", "reference_build", "protocol", "file_samples", "file_cells", "file_size"] as const) {
     out[k].sort((a, b) => b.count - a.count || a.value.localeCompare(b.value));
   }
   out.year.sort((a, b) => Number(b.value) - Number(a.value));
@@ -283,7 +308,7 @@ async function textScope(
 export async function computeFacets(ctx: Ctx, f: SearchFilters, level: Level): Promise<FacetsResponse> {
   const unfiltered = !hasAnyFilter(f) && !f.q;
   if (unfiltered) {
-    const key = `facets:${level}:all:${f.has_bundle === true ? "hb1" : "hb0"}`;
+    const key = `facets:v11:${level}:all:${f.has_bundle === true ? "hb1" : "hb0"}`;
     return metaCached(ctx.db, ctx.waitUntil, key, DAY_MS, () => computeFacetsLive(ctx, f, level));
   }
   return computeFacetsLive(ctx, f, level);
