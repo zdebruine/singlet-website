@@ -1016,7 +1016,7 @@ function facetMention(r: StudyRow, value: string): string | null {
   return sample ? "sample characteristics" : null;
 }
 
-function scoreStudy(r: StudyRow, signals: SoftSignals): { score: number; full: boolean } {
+export function scoreStudy(r: StudyRow, signals: SoftSignals): { score: number; full: boolean } {
   let score = 0;
   let full = true;
   const addFacet = (key: keyof Omit<SoftSignals, "q" | "cell_type">, label: string, have: string[], weight: number) => {
