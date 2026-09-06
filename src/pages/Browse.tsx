@@ -244,26 +244,6 @@ const Browse = () => {
   const readingQuery = aiMode && result.isFetching && !fresh;
   const refreshing = result.isFetching && !!shown;
   const chipsApplied = fresh ? fresh.applied : applied;
-  // Facets the interpreter read out of the question are shown in the rail as
-  // violet "read as" markers, not ticked boxes — ticking one makes it a filter.
-  const SOFT_FIELDS = ["organism", "tissue_group", "disease_group", "assay_family"] as const;
-  const softFacets = useMemo(() => {
-    if (!showAiRow || !nl?.interpreted) return undefined;
-    const out: Partial<Record<(typeof SOFT_FIELDS)[number], string[]>> = {};
-    for (const f of SOFT_FIELDS) {
-      const wanted = (nl.interpreted?.[f] ?? []) as string[];
-      out[f] = wanted.filter((v) => !(state[f] ?? []).includes(v));
-    }
-    return out;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showAiRow, nl?.interpreted, stateKey]);
-  const railCurrent = useMemo(() => {
-    if (!softFacets) return chipsApplied;
-    const out = { ...chipsApplied };
-    for (const f of SOFT_FIELDS) out[f] = (chipsApplied[f] ?? []).filter((v) => !(softFacets[f] ?? []).includes(v));
-    return out;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chipsApplied, softFacets]);
 
   const exportHref = apiClient.exportAccessionsUrl(appliedQuery);
 
@@ -374,8 +354,7 @@ const Browse = () => {
                 facets={facets.data}
                 loading={facets.isFetching && !facets.data}
                 level={state.level}
-                current={railCurrent}
-                soft={softFacets}
+                current={chipsApplied}
                 onToggle={onToggle}
                  onMode={onMode}
                 onAddCellType={onAddCellType}

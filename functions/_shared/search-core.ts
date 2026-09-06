@@ -242,13 +242,6 @@ const KEYWORD_SYNONYMS: Record<string, string[]> = {
   pediatric: ["pediatric", "paediatric", "children", "child"],
   paediatric: ["pediatric", "paediatric", "children", "child"],
   infant: ["infant", "neonatal", "neonate", "newborn"],
-  "tumor infiltrating": ["tumor infiltrating", "tumour infiltrating", "til", "tils", "tumor-infiltrating", "tumour-infiltrating"],
-  "tumour infiltrating": ["tumor infiltrating", "tumour infiltrating", "til", "tils"],
-  til: ["til", "tils", "tumor infiltrating", "tumour infiltrating"],
-  "t cells": ["t cell", "t cells", "t-cell", "t lymphocyte", "lymphocyte", "cd3 t", "cd4 t", "cd8 t"],
-  "cd8 t cell": ["cd8 t cell", "cd8+ t cell", "cd8 t cells", "cytotoxic t cell"],
-  "cd4 t cell": ["cd4 t cell", "cd4+ t cell", "cd4 t cells", "helper t cell"],
-  melanoma: ["melanoma", "cutaneous melanoma", "malignant melanoma"],
   neonatal: ["neonatal", "neonate", "newborn", "infant"],
   covid: ["covid", "sars cov 2", "coronavirus"],
   obese: ["obese", "obesity", "high fat diet", "hfd"],
@@ -269,7 +262,7 @@ const KEYWORD_SYNONYMS: Record<string, string[]> = {
   ad: ["ad", "alzheimer", "alzheimers", "alzheimer disease"],
   alzheimer: ["alzheimer", "alzheimers", "alzheimer disease", "ad"],
   pbmc: ["pbmc", "pbmcs", "peripheral blood mononuclear cell", "peripheral blood mononuclear cells"],
-  "t cell": ["t cell", "t cells", "t-cell", "t-cells", "lymphocyte", "t lymphocyte", "cd3 t", "cd4 t", "cd8 t"],
+  "t cell": ["t cell", "t cells", "t-cell", "t-cells", "lymphocyte"],
   xenograft: ["xenograft", "pdx", "xenografts"],
   pdx: ["pdx", "xenograft"],
   metastasis: ["metastasis", "metastases", "metastatic"],
@@ -1043,7 +1036,9 @@ export function scoreStudy(r: StudyRow, signals: SoftSignals): { score: number; 
       const mention = wanted.map((value) => ({ value, where: facetMention(r, value) })).find((x) => x.where);
       if (mention) {
         score += 1.5;
-        r.match.facets.push({ key, label, status: "partial", detail: `mentioned in ${mention.where}` });
+        // Value first, evidence second: "COVID-19 · mentioned in title".
+        const shownValue = key === "organism" ? organismToCommon(mention.value) : mention.value;
+        r.match.facets.push({ key, label: shownValue, status: "partial", detail: `mentioned in ${mention.where}` });
         return;
       }
       full = false;
@@ -1097,29 +1092,22 @@ function softFromQuery(p: SearchParams): SoftSignals {
 }
 
 /** Candidate union for soft evidence; hard constraints are applied before the 200-row cap. */
-export async function rankedCandidateIds(db: D1Database, p: SearchParams, signals: SoftSignals): Promise<string[]> {
+async function rankedCandidateIds(db: D1Database, p: SearchParams, signals: SoftSignals): Promise<string[]> {
   const hard: SearchParams = { ...p, q: "", page: 1, limit: RANKED_CANDIDATE_LIMIT };
   const where = buildStudyWhere(hard);
   const soft: string[] = [];
   const params: (string | number)[] = [...where.params];
-  // Facet clauses also count as evidence, so a study that matches an
-  // interpreted facet outranks a huge unrelated study before the 200-row cap.
-  const facetClauses: { clause: string; params: (string | number)[] }[] = [];
   const jsonFacet = (col: string, values: string[]) => {
     if (!values.length) return;
-    const clause = `EXISTS (SELECT 1 FROM json_each(m.${col}) je WHERE je.value IN (SELECT value FROM json_each(?)))`;
-    soft.push(clause);
+    soft.push(`EXISTS (SELECT 1 FROM json_each(m.${col}) je WHERE je.value IN (SELECT value FROM json_each(?)))`);
     params.push(jsonArray(values));
-    facetClauses.push({ clause, params: [jsonArray(values)] });
   };
   jsonFacet("tissue_groups", signals.tissue_group);
   jsonFacet("disease_groups", signals.disease_group);
   jsonFacet("assay_families", signals.assay_family);
   if (signals.organism.length) {
-    const clause = `(m.organism_primary IN (SELECT value FROM json_each(?)) OR EXISTS (SELECT 1 FROM json_each(m.organisms) je WHERE je.value IN (SELECT value FROM json_each(?))))`;
-    soft.push(clause);
+    soft.push(`(m.organism_primary IN (SELECT value FROM json_each(?)) OR EXISTS (SELECT 1 FROM json_each(m.organisms) je WHERE je.value IN (SELECT value FROM json_each(?))))`);
     params.push(jsonArray(signals.organism), jsonArray(signals.organism));
-    facetClauses.push({ clause, params: [jsonArray(signals.organism), jsonArray(signals.organism)] });
   }
   const text = [...signals.q, ...signals.cell_type];
   const match = tokenizeQuery(text.join(" ")).or;
@@ -1135,10 +1123,6 @@ export async function rankedCandidateIds(db: D1Database, p: SearchParams, signal
     params.push(match, match);
     evParts.push(`CASE WHEN m.gse_id IN (SELECT id FROM fts_gse WHERE fts_gse MATCH ? UNION SELECT gse_id FROM fts_gsm WHERE fts_gsm MATCH ?) THEN 2 ELSE 0 END`);
     evParams.push(match, match);
-  }
-  for (const f of facetClauses) {
-    evParts.push(`CASE WHEN ${f.clause} THEN 1 ELSE 0 END`);
-    evParams.push(...f.params);
   }
   if (!soft.length) return [];
   const clauses = [...where.clauses, `(${soft.join(" OR ")})`];

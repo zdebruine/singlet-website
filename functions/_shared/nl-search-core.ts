@@ -55,6 +55,8 @@ const INTERPRET_FN = "interpret-search-query";
 const INTERPRET_TIMEOUT_MS = 9000;
 const INTERPRET_CACHE_TTL = 3600;
 const INTERPRET_CACHE_URL = "https://singlet.bio/__internal/interpret";
+/** Bump whenever the interpreter prompt or its pinned examples change, so cached readings expire at once. */
+const INTERPRET_RULES_VERSION = "11f-1";
 const MAX_SUGGESTIONS = 5;
 
 export interface Interpreted {
@@ -144,7 +146,7 @@ const isQuota = (v: unknown): v is Quota =>
  */
 async function interpret(env: NlEnv, ctx: Ctx, request: Request, query: string): Promise<InterpretOutcome> {
   const normQ = query.toLowerCase().replace(/\s+/g, " ").trim();
-  const cacheKey = `${INTERPRET_CACHE_URL}?v=2&q=${encodeURIComponent(normQ)}`;
+  const cacheKey = `${INTERPRET_CACHE_URL}?v=${INTERPRET_RULES_VERSION}&q=${encodeURIComponent(normQ)}`;
   let cache: Cache | null = null;
   try {
     cache = (caches as unknown as { default?: Cache }).default ?? null;
@@ -152,24 +154,6 @@ async function interpret(env: NlEnv, ctx: Ctx, request: Request, query: string):
     if (hit) {
       const c = (await hit.json()) as { interpreted: Interpreted; model?: string };
       return { ok: true, interpreted: c.interpreted, model: c.model, cached: true };
-    }
-  } catch {
-    /* ignore cache errors */
-  }
-  // Durable second layer: the Cache API is per-colo, so a repeated query could
-  // otherwise reach the model (and spend budget) once per data centre.
-  const dbKey = `interpret:v2:${normQ}`;
-  try {
-    const row = await ctx.db
-      .prepare(`SELECT value, updated_at FROM meta_cache WHERE key = ?`)
-      .bind(dbKey)
-      .first<{ value: string; updated_at: string }>();
-    if (row) {
-      const age = Date.now() - Date.parse(row.updated_at ?? "");
-      if (Number.isFinite(age) && age < INTERPRET_CACHE_TTL * 1000) {
-        const c = JSON.parse(row.value) as { interpreted: Interpreted; model?: string };
-        if (c?.interpreted) return { ok: true, interpreted: c.interpreted, model: c.model, cached: true };
-      }
     }
   } catch {
     /* ignore cache errors */
@@ -233,13 +217,6 @@ async function interpret(env: NlEnv, ctx: Ctx, request: Request, query: string):
           .catch(() => undefined)
       );
     }
-    ctx.waitUntil(
-      ctx.db
-        .prepare(`INSERT OR REPLACE INTO meta_cache (key, value, updated_at) VALUES (?, ?, ?)`)
-        .bind(dbKey, JSON.stringify(stored), new Date().toISOString().replace(/\.\d{3}Z$/, "Z"))
-        .run()
-        .catch(() => undefined)
-    );
     return { ok: true, ...stored, quota: isQuota(data.quota) ? data.quota : undefined, cached: false };
   } catch {
     return { ok: false, reason: "unavailable" };

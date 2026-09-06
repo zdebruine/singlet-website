@@ -115,8 +115,6 @@ Rules:
 - Use ONLY vocabulary strings for organism, tissue_group, disease_group and assay_family. If nothing fits, leave the array empty and put the concept in q.
 - Interpret common synonyms: PBMC/blood/leukocytes → "Blood / PBMC"; cortex/hippocampus/neurons/CNS → "Brain / CNS"; lung/airway/bronchial → "Lung / airway"; colon/ileum/intestinal → "Gut / intestine"; tumour/tumor/carcinoma/melanoma/glioma/leukemia/lymphoma → disease_group "Cancer" (and tissue_group when the site is named, e.g. melanoma → "Skin"; glioma/glioblastoma → "Brain / CNS"; leukemia → "Blood / PBMC" or "Bone marrow"); SARS-CoV-2 → "COVID-19"; AD → "Alzheimer's disease"; injury/transplant → "Injury / transplant / aging"; aging, aged, old vs young, development stages, treatments and perturbations are NOT diseases — put them in q (e.g. "aging"); 10x/Chromium (unspecified chemistry) → leave assay_family empty; "10x 3 prime" → "10x 3'"; Smart-seq2/plate → "Smart-seq / plate-based"; organoids → tissue_group "Organoid"; embryo/fetal/developing → "Embryo / development".
 - Never guess a species. Set organism ONLY when the query names one (human, patient, donor, mouse, mice, murine, rat, zebrafish, …). A disease, tissue or cell type alone says nothing about species — leave organism empty.
-- NEVER infer a tissue from a disease or from a cell type. A disease name (melanoma, glioma, leukemia, AML, breast cancer …) sets disease_group only, plus the disease word as a keyword in q; leave tissue_group empty unless the query itself names an anatomical site or sample source ("skin biopsy", "bone marrow aspirate", "lung tissue"). A cell type never sets a tissue either.
-- Write keywords in q in their plain hyphenated form ("tumor-infiltrating"); the search matches hyphen and space forms and common abbreviations (TIL) on its own. Cell types are singular ("t cell", "cd8 t cell"), never "T cells" or "T-cell".
 - Never guess an assay chemistry. Bare "10x", "Chromium" or "droplet" → assay_family empty. Only a stated chemistry (3', 5', v2/v3 with prime, Multiome, Smart-seq2, Drop-seq, …) sets assay_family.
 - Output STRICT JSON only — no prose, no markdown fences.
 
@@ -128,11 +126,7 @@ Query: human PBMC COVID-19 10x 5'
 Query: AML bone marrow 10x
 {"organism":[],"tissue_group":["Bone marrow"],"disease_group":["Cancer"],"assay_family":[],"cell_type":[],"min_cells":null,"year_min":null,"year_max":null,"q":["AML"]}
 Query: tumor-infiltrating T cells in melanoma
-{"organism":[],"tissue_group":[],"disease_group":["Cancer"],"assay_family":[],"cell_type":["t cell"],"min_cells":null,"year_min":null,"year_max":null,"q":["melanoma","tumor-infiltrating"]}
-Query: CD8+ T cells in glioblastoma
-{"organism":[],"tissue_group":[],"disease_group":["Cancer"],"assay_family":[],"cell_type":["cd8 t cell"],"min_cells":null,"year_min":null,"year_max":null,"q":["glioblastoma"]}
-Query: TILs from human breast tumours
-{"organism":["Homo sapiens"],"tissue_group":[],"disease_group":["Cancer"],"assay_family":[],"cell_type":["t cell"],"min_cells":null,"year_min":null,"year_max":null,"q":["breast","tumor-infiltrating"]}
+{"organism":[],"tissue_group":["Skin"],"disease_group":["Cancer"],"assay_family":[],"cell_type":["t cell"],"min_cells":null,"year_min":null,"year_max":null,"q":["melanoma","tumor-infiltrating"]}
 Query: FOXP3 knockout regulatory T cells with at least 20k cells since 2022
 {"organism":[],"tissue_group":[],"disease_group":[],"assay_family":[],"cell_type":["regulatory t cell"],"min_cells":20000,"year_min":2022,"year_max":null,"q":["FOXP3","knockout"]}`;
 

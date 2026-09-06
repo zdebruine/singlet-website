@@ -345,12 +345,8 @@ const COOLDOWN_MS = 1_000;
 
 // Studies that cannot be read (missing/corrupt file) are parked here so the
 // backfill loop can reach remaining = 0 instead of retrying them forever.
-// "Missing sample QC" is measured against the bundle's own sample count, so a
-// study whose four samples are all indexed is done — not pending forever.
 const PENDING_SQL = `FROM bundle_manifest m
-  WHERE (NOT EXISTS (SELECT 1 FROM bundle_index i WHERE i.gse_id = m.gse_id)
-      OR (SELECT COUNT(*) FROM sample_qc q WHERE q.gse_id = m.gse_id)
-          < COALESCE(NULLIF(m.n_gsms_in_bundle, 0), NULLIF(m.manifest_n_gsms, 0), 1))
+  WHERE NOT EXISTS (SELECT 1 FROM bundle_index i WHERE i.gse_id = m.gse_id)
     AND NOT EXISTS (SELECT 1 FROM bundle_index_failure f WHERE f.gse_id = m.gse_id)`;
 
 async function ensureFailureTable(db: D1Database): Promise<void> {
@@ -406,37 +402,38 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env, params })
       .all<{ gse_id: string }>();
 
     for (const { gse_id } of pending.results ?? []) {
+      let parked: string | null = null;
       try {
         const index = await getBundleIndex(env.DB, gse_id, { refresh: true });
         const samples = await readSampleSummaries(gse_id, index);
-        if (samples.length === 0) throw new Error("no summary.json");
-        const st = nowIso();
-        const statements = samples.map((s) => upsertSampleQcStatement(env.DB, s as unknown as Record<string, unknown>, st));
-        for (let i = 0; i < statements.length; i += BATCH_SIZE) await env.DB.batch(statements.slice(i, i + BATCH_SIZE));
-        indexed.push(gse_id);
-        // Fewer summaries than the bundle claims samples: park it so the loop
-        // can finish instead of re-reading the same file on every call.
-        const still = await env.DB.prepare(`SELECT COUNT(*) AS c ${PENDING_SQL} AND m.gse_id = ?`)
-          .bind(gse_id)
-          .first<{ c: number }>()
-          .catch(() => null);
-        if (Number(still?.c ?? 0) > 0) {
-          await env.DB.prepare(`INSERT OR REPLACE INTO bundle_index_failure (gse_id, error, updated_at) VALUES (?, ?, ?)`)
-            .bind(gse_id, `only ${samples.length} summary.json files for the samples in the bundle`, nowIso())
-            .run()
-            .catch(() => undefined);
+        // Keep every row we did parse — never delete existing sample_qc rows.
+        if (samples.length > 0) {
+          const st = nowIso();
+          const statements = samples.map((s) => upsertSampleQcStatement(env.DB, s as unknown as Record<string, unknown>, st));
+          for (let i = 0; i < statements.length; i += BATCH_SIZE) await env.DB.batch(statements.slice(i, i + BATCH_SIZE));
         }
+        const expected = await env.DB.prepare(`SELECT n_gsms_in_bundle AS n FROM bundle_manifest WHERE gse_id = ?`)
+          .bind(gse_id)
+          .first<{ n: number }>()
+          .catch(() => null);
+        const want = Number(expected?.n ?? 0);
+        if (samples.length === 0) parked = "no summary.json";
+        else if (want > 0 && samples.length < want) parked = `partial summaries: ${samples.length}/${want} samples`;
+        indexed.push(gse_id);
       } catch (e) {
-        const error = String(e).slice(0, 500);
-        failed.push({ gse_id, error });
+        parked = String(e).slice(0, 500);
+      }
+      if (parked) {
+        failed.push({ gse_id, error: parked });
         await env.DB.prepare(
           `INSERT OR REPLACE INTO bundle_index_failure (gse_id, error, updated_at) VALUES (?, ?, ?)`
         )
-          .bind(gse_id, error, nowIso())
+          .bind(gse_id, parked, nowIso())
           .run()
           .catch(() => undefined);
       }
     }
+
 
     const rest = await env.DB.prepare(`SELECT COUNT(*) AS c ${PENDING_SQL}`).first<{ c: number }>();
     return json(
