@@ -547,7 +547,7 @@ const StudyDetail = () => {
                 ),
               },
             ]
-              .filter((row): row is { label: string; value: ReactNode } => row !== null)
+              .filter((row) => row !== null)
               .map((row) => (
                 <Fragment key={row.label}>
                   <dt className="text-muted-foreground">{row.label}</dt>
