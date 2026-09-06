@@ -965,6 +965,7 @@ function scoreStudy(r: StudyRow, signals: SoftSignals): { score: number; full: b
     if (matches.some((x) => x.field === "abstract")) { keywordScore += 1; hits.push("abstract"); }
     const sampleN = Math.max(0, ...matches.filter((x) => !["title", "abstract", "accession"].includes(x.field)).map((x) => x.n_samples));
     if (sampleN) { keywordScore += 0.5 * Math.min(1, sampleN / Math.max(1, r.n_total)); hits.push(`${sampleN} of ${r.n_total} samples`); }
+    if (!hits.length) full = false;
     r.match.keywords.push({ term, hits });
   }
   score += Math.min(4, keywordScore);
@@ -990,8 +991,9 @@ export async function runStudySearch(
   const signals = opts.soft ?? softFromQuery(p);
   const isRanked = !extractAccessions(p.q).gse.length && !extractAccessions(p.q).gsm.length &&
     (signals.q.length > 0 || signals.tissue_group.length > 0 || signals.disease_group.length > 0 || signals.assay_family.length > 0 || signals.cell_type.length > 0);
-  const candidateParams = isRanked ? { ...p, page: 1, limit: RANKED_CANDIDATE_LIMIT } : p;
-  const orMatch = signals.q.length ? tokenizeQuery(signals.q.join(" ")).or : null;
+  const candidateText = [...signals.q, ...signals.tissue_group, ...signals.disease_group, ...signals.assay_family, ...signals.cell_type].join(" ");
+  const candidateParams = isRanked ? { ...p, q: candidateText, page: 1, limit: RANKED_CANDIDATE_LIMIT } : p;
+  const orMatch = candidateText ? tokenizeQuery(candidateText).or : null;
   let plan = planStudyQuery(candidateParams, isRanked ? orMatch : undefined);
   let res = await db.prepare(plan.sql).bind(...plan.params).all<StudyDbRow>();
   let anyWord = false;
@@ -1032,7 +1034,16 @@ export async function runStudySearch(
     const scored = rows.map((row) => ({ row, ...scoreStudy(row, signals) }));
     const top = Math.max(0, ...scored.map((x) => x.score));
     const kept = scored.filter((x) => x.full || x.score >= Math.max(2, 0.35 * top));
-    kept.sort((a, b) => Number(b.full) - Number(a.full) || b.score - a.score || (b.row.bundle_n_samples ?? b.row.n_done) - (a.row.bundle_n_samples ?? a.row.n_done));
+    const best = (a: typeof kept[number], b: typeof kept[number]) => Number(b.full) - Number(a.full) || b.score - a.score || (b.row.bundle_n_samples ?? b.row.n_done) - (a.row.bundle_n_samples ?? a.row.n_done);
+    const alternate = (a: typeof kept[number], b: typeof kept[number]) => {
+      if (p.sort === "year") return (b.row.year ?? 0) - (a.row.year ?? 0) || best(a, b);
+      if (p.sort === "samples") return (b.row.bundle_n_samples ?? b.row.n_done) - (a.row.bundle_n_samples ?? a.row.n_done) || best(a, b);
+      if (p.sort === "file_cells") return (b.row.file_cells ?? -1) - (a.row.file_cells ?? -1) || best(a, b);
+      if (p.sort === "file_size") return (a.row.bundle_bytes ?? Number.MAX_SAFE_INTEGER) - (b.row.bundle_bytes ?? Number.MAX_SAFE_INTEGER) || best(a, b);
+      if (p.sort === "alphabetical") return (a.row.title ?? a.row.gse_id).localeCompare(b.row.title ?? b.row.gse_id);
+      return best(a, b);
+    };
+    kept.sort(alternate);
     groups = { full: kept.filter((x) => x.full).length, partial: kept.filter((x) => !x.full).length };
     total = kept.length;
     const start = (p.page - 1) * p.limit;
