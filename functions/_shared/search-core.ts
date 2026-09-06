@@ -1036,7 +1036,9 @@ export function scoreStudy(r: StudyRow, signals: SoftSignals): { score: number; 
       const mention = wanted.map((value) => ({ value, where: facetMention(r, value) })).find((x) => x.where);
       if (mention) {
         score += 1.5;
-        r.match.facets.push({ key, label, status: "partial", detail: `mentioned in ${mention.where}` });
+        // Value first, evidence second: "COVID-19 · mentioned in title".
+        const shownValue = key === "organism" ? organismToCommon(mention.value) : mention.value;
+        r.match.facets.push({ key, label: shownValue, status: "partial", detail: `mentioned in ${mention.where}` });
         return;
       }
       full = false;
