@@ -85,8 +85,8 @@ interface Snapshot {
 }
 
 const COLORS = {
-  success: "#10b981", warning: "#f59e0b", danger: "#ef4444",
-  info: "#3b82f6", muted: "#6b7280", purple: "#8b5cf6",
+  success: "var(--chart-success)", warning: "var(--chart-warning)", danger: "var(--chart-danger)",
+  info: "var(--chart-info)", muted: "var(--chart-muted)", purple: "var(--chart-violet)",
 };
 
 const STATE_COLOR: Record<string, string> = {
@@ -548,12 +548,12 @@ const HpcDashboard = () => {
                 <h3 className="font-display text-base font-bold mb-3">Total Cells Processed</h3>
                 <ResponsiveContainer width="100%" height={280}>
                   <LineChart data={timeseries} margin={{ top: 5, right: 20, left: 20, bottom: 5 }}>
-                    <CartesianGrid stroke="#374151" strokeDasharray="3 3" />
-                    <XAxis dataKey="t" stroke="#9ca3af" fontSize={11} tickFormatter={fmtDateTick} />
-                    <YAxis stroke="#9ca3af" fontSize={11} tickFormatter={(v) => fmtNum(Number(v))} />
-                    <Tooltip contentStyle={{ background: "#1f2937", border: "1px solid #374151" }}
+                    <CartesianGrid stroke="var(--chart-grid)" strokeDasharray="3 3" />
+                    <XAxis dataKey="t" stroke="var(--chart-axis)" fontSize={11} tickFormatter={fmtDateTick} />
+                    <YAxis stroke="var(--chart-axis)" fontSize={11} tickFormatter={(v) => fmtNum(Number(v))} />
+                    <Tooltip contentStyle={{ background: "var(--chart-tooltip)", border: "1px solid var(--chart-grid)" }}
                              formatter={(v: any) => [fmtNum(Number(v)), "Cells"]} />
-                    <Line type="monotone" dataKey="cells" stroke="#10b981" dot={false} connectNulls />
+                    <Line type="monotone" dataKey="cells" stroke="var(--chart-success)" dot={false} connectNulls />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
@@ -563,14 +563,14 @@ const HpcDashboard = () => {
                 <h3 className="font-display text-base font-bold mb-3">Samples Over Time</h3>
                 <ResponsiveContainer width="100%" height={280}>
                   <LineChart data={timeseries} margin={{ top: 5, right: 20, left: 20, bottom: 5 }}>
-                    <CartesianGrid stroke="#374151" strokeDasharray="3 3" />
-                    <XAxis dataKey="t" stroke="#9ca3af" fontSize={11} tickFormatter={fmtDateTick} />
-                    <YAxis stroke="#9ca3af" fontSize={11} tickFormatter={(v) => fmtNum(Number(v))} />
-                    <Tooltip contentStyle={{ background: "#1f2937", border: "1px solid #374151" }}
+                    <CartesianGrid stroke="var(--chart-grid)" strokeDasharray="3 3" />
+                    <XAxis dataKey="t" stroke="var(--chart-axis)" fontSize={11} tickFormatter={fmtDateTick} />
+                    <YAxis stroke="var(--chart-axis)" fontSize={11} tickFormatter={(v) => fmtNum(Number(v))} />
+                    <Tooltip contentStyle={{ background: "var(--chart-tooltip)", border: "1px solid var(--chart-grid)" }}
                              formatter={(v: any, name: string) => [fmtNum(Number(v)), name]} />
                     <Legend />
-                    <Line type="monotone" dataKey="samples" stroke="#10b981" dot={false} connectNulls name="Success" />
-                    <Line type="monotone" dataKey="failed" stroke="#ef4444" dot={false} connectNulls name="Failed" />
+                    <Line type="monotone" dataKey="samples" stroke="var(--chart-success)" dot={false} connectNulls name="Success" />
+                    <Line type="monotone" dataKey="failed" stroke="var(--chart-danger)" dot={false} connectNulls name="Failed" />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
@@ -580,12 +580,12 @@ const HpcDashboard = () => {
                 <h3 className="font-display text-base font-bold mb-3">CPU Utilization</h3>
                 <ResponsiveContainer width="100%" height={280}>
                   <LineChart data={timeseries} margin={{ top: 5, right: 20, left: 20, bottom: 5 }}>
-                    <CartesianGrid stroke="#374151" strokeDasharray="3 3" />
-                    <XAxis dataKey="t" stroke="#9ca3af" fontSize={11} tickFormatter={fmtDateTick} />
-                    <YAxis stroke="#9ca3af" fontSize={11} domain={[0, 100]} tickFormatter={(v) => `${v}%`} />
-                    <Tooltip contentStyle={{ background: "#1f2937", border: "1px solid #374151" }}
+                    <CartesianGrid stroke="var(--chart-grid)" strokeDasharray="3 3" />
+                    <XAxis dataKey="t" stroke="var(--chart-axis)" fontSize={11} tickFormatter={fmtDateTick} />
+                    <YAxis stroke="var(--chart-axis)" fontSize={11} domain={[0, 100]} tickFormatter={(v) => `${v}%`} />
+                    <Tooltip contentStyle={{ background: "var(--chart-tooltip)", border: "1px solid var(--chart-grid)" }}
                              formatter={(v: any) => [`${Number(v).toFixed(1)}%`, "CPU"]} />
-                    <Line type="monotone" dataKey="cpu_pct" stroke="#3b82f6" dot={false} connectNulls />
+                    <Line type="monotone" dataKey="cpu_pct" stroke="var(--chart-info)" dot={false} connectNulls />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
@@ -604,10 +604,10 @@ const HpcDashboard = () => {
               ) : (
                 <ResponsiveContainer width="100%" height={240}>
                   <BarChart data={fmData} layout="vertical" margin={{ top: 5, right: 20, left: 60, bottom: 5 }}>
-                    <CartesianGrid stroke="#374151" strokeDasharray="3 3" />
-                    <XAxis type="number" stroke="#9ca3af" fontSize={11} />
-                    <YAxis dataKey="name" type="category" stroke="#9ca3af" fontSize={11} width={120} />
-                    <Tooltip contentStyle={{ background: "#1f2937", border: "1px solid #374151" }} />
+                    <CartesianGrid stroke="var(--chart-grid)" strokeDasharray="3 3" />
+                    <XAxis type="number" stroke="var(--chart-axis)" fontSize={11} />
+                    <YAxis dataKey="name" type="category" stroke="var(--chart-axis)" fontSize={11} width={120} />
+                    <Tooltip contentStyle={{ background: "var(--chart-tooltip)", border: "1px solid var(--chart-grid)" }} />
                     <Bar dataKey="count">
                       {fmData.map((d, i) => <Cell key={i} fill={d.fill} />)}
                     </Bar>
@@ -627,7 +627,7 @@ const HpcDashboard = () => {
                     <Pie data={statusPie} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label={(e) => `${e.name}: ${e.value}`}>
                       {statusPie.map((d, i) => <Cell key={i} fill={d.color} />)}
                     </Pie>
-                    <Tooltip contentStyle={{ background: "#1f2937", border: "1px solid #374151" }} />
+                    <Tooltip contentStyle={{ background: "var(--chart-tooltip)", border: "1px solid var(--chart-grid)" }} />
                   </PieChart>
                 </ResponsiveContainer>
               )}
@@ -641,10 +641,10 @@ const HpcDashboard = () => {
               ) : (
                 <ResponsiveContainer width="100%" height={240}>
                   <ScatterChart margin={{ top: 10, right: 20, left: 10, bottom: 30 }}>
-                    <CartesianGrid stroke="#374151" strokeDasharray="3 3" />
-                    <XAxis type="number" dataKey="mem" name="Mem eff" unit="%" stroke="#9ca3af" fontSize={11} label={{ value: "Mem efficiency %", position: "insideBottom", offset: -5, fill: "#9ca3af", fontSize: 11 }} domain={[0, 100]} />
-                    <YAxis type="number" dataKey="time" name="Time eff" unit="%" stroke="#9ca3af" fontSize={11} label={{ value: "Time eff %", angle: -90, position: "insideLeft", fill: "#9ca3af", fontSize: 11 }} domain={[0, 100]} />
-                    <Tooltip contentStyle={{ background: "#1f2937", border: "1px solid #374151" }} cursor={{ strokeDasharray: "3 3" }} />
+                    <CartesianGrid stroke="var(--chart-grid)" strokeDasharray="3 3" />
+                    <XAxis type="number" dataKey="mem" name="Mem eff" unit="%" stroke="var(--chart-axis)" fontSize={11} label={{ value: "Mem efficiency %", position: "insideBottom", offset: -5, fill: "var(--chart-axis)", fontSize: 11 }} domain={[0, 100]} />
+                    <YAxis type="number" dataKey="time" name="Time eff" unit="%" stroke="var(--chart-axis)" fontSize={11} label={{ value: "Time eff %", angle: -90, position: "insideLeft", fill: "var(--chart-axis)", fontSize: 11 }} domain={[0, 100]} />
+                    <Tooltip contentStyle={{ background: "var(--chart-tooltip)", border: "1px solid var(--chart-grid)" }} cursor={{ strokeDasharray: "3 3" }} />
                     <Scatter data={effData} fill={COLORS.info}>
                       {effData.map((d, i) => <Cell key={i} fill={d.mem >= 50 && d.time >= 50 ? COLORS.success : d.mem < 25 || d.time < 25 ? COLORS.warning : COLORS.info} />)}
                     </Scatter>
@@ -705,7 +705,7 @@ const HpcDashboard = () => {
               },
               OUT_OF_MEMORY: {
                 title: "Out of memory (OOM kill)",
-                detail: "Job was killed by SLURM's OOM handler. These samples need routing to a higher-memory tier (bigmem or xlarge). Cross-reference GSM against the panel to upgrade their tier assignment.",
+                detail: "Job was killed by SLURM's OOM handler. These samples need routing to a higher-memory tier (bigmem or xlarge). Cross-reference GSM against the panel to raise their memory assignment.",
                 severity: "danger",
               },
               barcode_stripped: {

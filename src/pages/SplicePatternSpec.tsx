@@ -1,5 +1,6 @@
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import { usePageMeta } from "@/hooks/usePageMeta";
 
 const Mono = ({ children }: { children: React.ReactNode }) => (
   <code className="font-mono text-[0.85em] bg-muted/60 px-1 py-0.5 rounded">{children}</code>
@@ -11,7 +12,9 @@ const Block = ({ children }: { children: React.ReactNode }) => (
   </pre>
 );
 
-const SplicePatternSpec = () => (
+const SplicePatternSpec = () => {
+  usePageMeta({ title: "Splice pattern format", description: "Draft technical specification for the singlet splice pattern format.", path: "/specs/splice-patterns" });
+  return (
   <div className="min-h-screen bg-background">
     <Navbar />
     <section className="py-12 md:py-16 px-6">
@@ -259,6 +262,7 @@ intron_retention[c, i] = Σ count[c, p]
     </section>
     <Footer />
   </div>
-);
+  );
+};
 
 export default SplicePatternSpec;

@@ -230,6 +230,9 @@ export interface CorpusStats {
   success_rate: number | null;
   /** Why samples fail, most common first. */
   failure_categories: FacetOption[];
+  studies_with_files: number;
+  samples_in_files: number;
+  cells_in_files: number;
 }
 
 // ── Study / sample detail (/api/gse/:id, /api/gsm/:id) ──────────────────────

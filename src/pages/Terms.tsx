@@ -1,7 +1,10 @@
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import { usePageMeta } from "@/hooks/usePageMeta";
 
-const Terms = () => (
+const Terms = () => {
+  usePageMeta({ title: "Terms", description: "Terms for using singlet.bio, the public atlas, and the singlet software.", path: "/terms" });
+  return (
   <div className="min-h-screen bg-background">
     <Navbar />
     <section className="py-12 md:py-16 px-6">
@@ -24,8 +27,8 @@ const Terms = () => (
             <p className="text-sm leading-relaxed">
               Singlet Bio is an open single-cell resource. It consists of a public single-cell dataset (the atlas),
               the open-source <span className="font-mono">singlet</span> software package (Python, R, and C++), and this website,
-              which lets you browse and download the data. There are no paid tiers or subscriptions. Data downloads are
-              public and free, served from our CDN with no account and no API key required. A free account exists only to
+              which lets you browse and download the data. Data downloads are
+              public, served from our CDN with no account and no API key required. An account exists only to
               raise the daily limit on AI-assisted searches and to issue API keys for programmatic search.
             </p>
           </section>
@@ -87,6 +90,7 @@ const Terms = () => (
     </section>
     <Footer />
   </div>
-);
+  );
+};
 
 export default Terms;

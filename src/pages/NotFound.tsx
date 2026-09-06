@@ -5,6 +5,7 @@ import Footer from "@/components/Footer";
 import { SearchBox } from "@/components/SearchBox";
 import { usePageMeta } from "@/hooks/usePageMeta";
 import { GITHUB_ISSUES } from "@/lib/install-snippets";
+import { Logo } from "@/components/Logo";
 
 /** Looks like a GEO accession the visitor may have typed into the URL bar. */
 const ACCESSION_RE = /\b(GSE\d{3,7}|GSM\d{3,8})\b/i;
@@ -25,6 +26,7 @@ const NotFound = () => {
       <Navbar search={false} />
       <main className="container-site flex-1 py-20 md:py-24">
         <div className="mx-auto max-w-[720px] text-center">
+          <Logo variant="mark" height={48} link={false} className="mx-auto mb-4 opacity-40" />
           <p className="font-mono text-sm text-muted-foreground mb-2">404</p>
           <h1 className="text-[28px] md:text-[32px] font-semibold tracking-tight mb-3">Page not found</h1>
           <p className="text-muted-foreground mb-6">

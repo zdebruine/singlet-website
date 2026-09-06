@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { Logo } from "@/components/Logo";
 import { Link, useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import Navbar from "@/components/Navbar";
@@ -65,7 +66,8 @@ const About = () => {
       <main className="container-site flex-1 py-10 md:py-14">
         <article className="prose-doc max-w-[760px]">
           <header className="mb-10">
-            <h1 className="text-[36px] md:text-[42px] mb-3">About the data</h1>
+            <Logo variant="mark" height={28} link={false} className="docs-brand-mark mb-4" />
+              <h1 className="text-[36px] md:text-[42px] mb-3">About the data</h1>
             <p className="text-[17px] text-muted-foreground">
               The atlas is every public single-cell RNA-seq study on GEO that the pipeline can process, reprocessed from
               raw reads the same way, so numbers from different labs are directly comparable.

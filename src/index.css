@@ -51,20 +51,20 @@
   }
 
   :focus-visible {
-    outline: 2px solid hsl(var(--ring));
+    outline: 2px solid var(--ring);
     outline-offset: 2px;
   }
 
   ::selection {
-    background: hsl(var(--primary) / 0.18);
+    background: color-mix(in srgb, var(--primary) 18%, transparent);
   }
 
   input[type="radio"], input[type="checkbox"] {
-    accent-color: hsl(var(--primary));
+    accent-color: var(--primary);
   }
 
   input[type="range"] {
-    accent-color: hsl(var(--primary));
+    accent-color: var(--primary);
   }
 }
 
@@ -89,7 +89,7 @@
 
   .btn-secondary {
     @apply inline-flex items-center justify-center gap-2 rounded px-4 h-10 text-sm font-medium text-foreground bg-card transition-colors select-none;
-    border: 1px solid hsl(var(--border-strong));
+    border: 1px solid var(--border-strong);
   }
   .btn-secondary:hover:not(:disabled) {
     @apply bg-background;
@@ -116,8 +116,8 @@
   }
 
   .surface-dark {
-    background: hsl(var(--dark-surface));
-    color: hsl(var(--dark-foreground));
+    background: var(--dark-surface);
+    color: var(--dark-foreground);
   }
 
   /* Chips — 3px radius, never pills */
@@ -125,80 +125,80 @@
     @apply inline-flex items-center gap-1.5 rounded border border-border bg-card px-2.5 h-7 text-[13px] text-foreground whitespace-nowrap transition-colors;
   }
   .chip:hover {
-    border-color: hsl(var(--border-strong));
+    border-color: var(--border-strong);
     @apply bg-background;
   }
 
   .chip-active {
     @apply inline-flex items-center gap-1 rounded px-2 h-6 text-xs font-medium whitespace-nowrap;
-    background: hsl(var(--primary) / 0.08);
-    border: 1px solid hsl(var(--primary) / 0.3);
-    color: hsl(var(--primary));
+    background: color-mix(in srgb, var(--primary) 8%, transparent);
+    border: 1px solid color-mix(in srgb, var(--primary) 30%, transparent);
+    color: var(--primary);
   }
 
   /* AI-derived UI only */
   .ai-chip {
     @apply inline-flex items-center gap-1 rounded px-2 h-6 text-xs font-medium whitespace-nowrap;
-    background: hsl(var(--ai-tint));
-    border: 1px solid hsl(var(--ai-border));
-    color: hsl(var(--ai));
+    background: var(--ai-tint);
+    border: 1px solid var(--ai-border);
+    color: var(--ai);
   }
   .ai-badge {
     @apply inline-flex items-center rounded px-1.5 h-[18px] text-[10px] font-semibold tracking-wide uppercase;
-    background: hsl(var(--ai));
+    background: var(--ai);
     color: var(--surface);
   }
   .ai-surface {
     @apply rounded border;
-    background: hsl(var(--ai-tint));
-    border-color: hsl(var(--ai-border));
+    background: var(--ai-tint);
+    border-color: var(--ai-border);
   }
 
   /* Warnings / flags */
   .flag {
     @apply inline-flex items-center gap-1 rounded px-2 h-6 text-xs font-medium whitespace-nowrap;
-    background: hsl(var(--warning-tint));
-    border: 1px solid hsl(var(--warning-border));
-    color: hsl(var(--warning));
+    background: var(--warning-tint);
+    border: 1px solid var(--warning-border);
+    color: var(--warning);
   }
   .warning-surface {
     @apply rounded border;
-    background: hsl(var(--warning-tint));
-    border-color: hsl(var(--warning-border));
-    color: hsl(var(--warning));
+    background: var(--warning-tint);
+    border-color: var(--warning-border);
+    color: var(--warning);
   }
 
   /* Status */
   .status-ok {
     @apply inline-flex items-center gap-1 rounded px-2 h-6 text-xs font-medium whitespace-nowrap;
-    background: hsl(var(--primary) / 0.08);
-    border: 1px solid hsl(var(--primary) / 0.25);
-    color: hsl(var(--primary));
+    background: color-mix(in srgb, var(--primary) 8%, transparent);
+    border: 1px solid color-mix(in srgb, var(--primary) 25%, transparent);
+    color: var(--primary);
   }
   .status-fail {
     @apply inline-flex items-center gap-1 rounded px-2 h-6 text-xs font-medium whitespace-nowrap;
-    background: hsl(var(--destructive) / 0.06);
-    border: 1px solid hsl(var(--destructive) / 0.25);
-    color: hsl(var(--destructive));
+    background: color-mix(in srgb, var(--destructive) 6%, transparent);
+    border: 1px solid color-mix(in srgb, var(--destructive) 25%, transparent);
+    color: var(--destructive);
   }
 
   /* Code */
   .code-block {
     @apply rounded font-mono text-[13px] leading-[1.6] overflow-x-auto;
-    background: hsl(var(--dark-surface));
-    color: hsl(var(--dark-foreground));
-    border: 1px solid hsl(var(--dark-border));
+    background: var(--dark-surface);
+    color: var(--dark-foreground);
+    border: 1px solid var(--dark-border);
   }
   .code-block .tok-comment {
-    color: hsl(var(--dark-muted));
+    color: var(--dark-muted);
   }
   .code-block .tok-prompt {
     color: var(--primary);
   }
   .code-inline {
     @apply font-mono text-[0.9em] rounded px-1 py-0.5;
-    background: hsl(var(--secondary));
-    color: hsl(var(--foreground));
+    background: var(--secondary);
+    color: var(--foreground);
   }
 
   /* Inputs */
@@ -207,7 +207,7 @@
   }
   .input:focus {
     outline: none;
-    border-color: hsl(var(--primary));
+    border-color: var(--primary);
     box-shadow: 0 0 0 2px var(--teal-200);
   }
 
@@ -238,7 +238,8 @@
     max-width: 66ch;
   }
   .prose-doc p {
-    @apply mb-4 text-foreground/90;
+    @apply mb-4 text-foreground;
+    opacity: 0.9;
   }
   .prose-doc h2 {
     @apply text-[20px] leading-7 font-semibold mt-2 mb-3 scroll-mt-24;
@@ -247,13 +248,16 @@
     @apply text-[15px] leading-[22px] font-semibold mt-8 mb-2 scroll-mt-24;
   }
   .prose-doc ul {
-    @apply list-disc pl-5 mb-4 space-y-1.5 text-foreground/90;
+    @apply list-disc pl-5 mb-4 space-y-1.5 text-foreground;
+    opacity: 0.9;
   }
   .prose-doc ol {
-    @apply list-decimal pl-5 mb-4 space-y-1.5 text-foreground/90;
+    @apply list-decimal pl-5 mb-4 space-y-1.5 text-foreground;
+    opacity: 0.9;
   }
   .prose-doc a {
-    @apply text-primary underline underline-offset-2 decoration-primary/40 hover:decoration-primary;
+    @apply text-primary underline underline-offset-2;
+    text-decoration-color: color-mix(in srgb, var(--primary) 40%, transparent);
   }
   .prose-doc table {
     @apply w-full text-[13px] mb-5;
@@ -273,19 +277,16 @@
     font-variant-numeric: tabular-nums;
   }
   .text-ai {
-    color: hsl(var(--ai));
+    color: var(--ai);
   }
   .text-warning {
-    color: hsl(var(--warning));
+    color: var(--warning);
   }
-  .text-cyan {
-    color: var(--primary);
-  }
-  .bg-dark {
-    background: hsl(var(--dark-surface));
+    .bg-dark {
+    background: var(--dark-surface);
   }
   .border-strong {
-    border-color: hsl(var(--border-strong));
+    border-color: var(--border-strong);
   }
   .no-scrollbar::-webkit-scrollbar {
     display: none;
@@ -322,21 +323,10 @@
 
 @layer components {
   .singlet-logo { width: auto; overflow: visible; }
-  .logo-cell { fill: var(--cell); }
-  .logo-lit { fill: var(--teal-500); }
-  .logo-word { fill: var(--ink); font-family: "IBM Plex Sans", sans-serif; font-size: 100px; font-weight: 600; letter-spacing: -2px; }
-  .logo-bio { fill: var(--teal-500); }
-  .logo-dark .logo-cell { fill: #2A3F3B; }
-  .logo-dark .logo-lit { fill: #2EBFAE; }
-  .logo-dark.logo-word { fill: #FFFFFF; }
-  .logo-dark .logo-bio { fill: #2EBFAE; }
-  .logo-mono .logo-cell { fill: currentColor; opacity: .3; }
-  .logo-mono .logo-lit { fill: currentColor; }
-  .logo-mono.logo-word, .logo-mono .logo-bio { fill: currentColor; }
-}
-@media (prefers-color-scheme: dark) {
-  .logo-auto .logo-cell { fill: #2A3F3B; }
-  .logo-auto .logo-lit { fill: #2EBFAE; }
-  .logo-auto.logo-word { fill: #E6EEEC; }
-  .logo-auto .logo-bio { fill: #2EBFAE; }
+
+.outlined-logo { display: inline-flex; width: auto; }
+.outlined-logo > svg { display: block; width: auto; height: 100%; }
+.logo-auto-dark { display: none; }
+@media (prefers-color-scheme: dark) { .logo-auto-light { display: none; } .logo-auto-dark { display: inline-flex; } }
+
 }

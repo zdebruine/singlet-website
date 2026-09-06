@@ -1,7 +1,10 @@
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import { usePageMeta } from "@/hooks/usePageMeta";
 
-const Privacy = () => (
+const Privacy = () => {
+  usePageMeta({ title: "Privacy", description: "What singlet.bio stores when you browse, search, sign in, or create an API key.", path: "/privacy" });
+  return (
   <div className="min-h-screen bg-background">
     <Navbar />
     <section className="py-12 md:py-16 px-6">
@@ -111,6 +114,7 @@ const Privacy = () => (
     </section>
     <Footer />
   </div>
-);
+  );
+};
 
 export default Privacy;

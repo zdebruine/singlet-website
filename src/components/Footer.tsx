@@ -22,7 +22,7 @@ const Footer = () => (
     <div className="container-site py-7 flex flex-col md:flex-row md:items-center gap-5 md:gap-8">
       <Logo variant="lockup" theme="dark" height={24} />
       <p className="text-[13px] text-dark-muted md:flex-1">
-        Data CC0 · Code MIT · Free download, no account ·{" "}
+        Data CC0 · Code MIT · No account required ·{" "}
         <a href={GITHUB_ISSUES} target="_blank" rel="noopener noreferrer" className="text-dark-foreground/85 hover:text-dark-foreground transition-colors">
           Questions or bugs → GitHub Issues
         </a>

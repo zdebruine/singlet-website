@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Logo } from "@/components/Logo";
 import { Link, useLocation } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
@@ -103,6 +104,7 @@ const Docs = () => {
           {/* Content */}
           <article className="prose-doc max-w-[760px]">
             <header className="mb-10">
+              <Logo variant="mark" height={28} link={false} className="docs-brand-mark mb-4" />
               <h1 className="text-[36px] md:text-[42px] mb-3">Docs</h1>
               <p className="text-[17px] text-muted-foreground">
                 Everything on this page is the same for every study in the atlas: install once, load by GEO accession, and the

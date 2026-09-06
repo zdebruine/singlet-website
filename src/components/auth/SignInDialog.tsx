@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { Github, Loader2, Mail } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Logo } from "@/components/Logo";
 import type { OAuthProviderName, SignInResult } from "./AuthProvider";
 
 interface Props {
@@ -15,10 +16,10 @@ interface Props {
 function GoogleMark() {
   return (
     <svg width="16" height="16" viewBox="0 0 48 48" aria-hidden="true">
-      <path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9 3.5l6.7-6.7C35.6 2.6 30.2 0 24 0 14.6 0 6.5 5.4 2.6 13.3l7.8 6C12.3 13.6 17.7 9.5 24 9.5z" />
-      <path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-2.8-.4-4H24v7.6h12.8c-.3 2.1-1.7 5.3-4.8 7.4l7.4 5.7c4.4-4.1 7.1-10.1 7.1-16.7z" />
-      <path fill="#FBBC05" d="M10.4 28.7c-.5-1.5-.8-3-.8-4.7s.3-3.2.8-4.7l-7.8-6C1 16.5 0 20.1 0 24s1 7.5 2.6 10.7l7.8-6z" />
-      <path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.4-5.7c-2 1.4-4.7 2.4-8.5 2.4-6.3 0-11.7-4.1-13.6-9.8l-7.8 6C6.5 42.6 14.6 48 24 48z" />
+      <path fill="var(--google-red)" d="M24 9.5c3.5 0 6.6 1.2 9 3.5l6.7-6.7C35.6 2.6 30.2 0 24 0 14.6 0 6.5 5.4 2.6 13.3l7.8 6C12.3 13.6 17.7 9.5 24 9.5z" />
+      <path fill="var(--google-blue)" d="M46.5 24.5c0-1.6-.1-2.8-.4-4H24v7.6h12.8c-.3 2.1-1.7 5.3-4.8 7.4l7.4 5.7c4.4-4.1 7.1-10.1 7.1-16.7z" />
+      <path fill="var(--google-yellow)" d="M10.4 28.7c-.5-1.5-.8-3-.8-4.7s.3-3.2.8-4.7l-7.8-6C1 16.5 0 20.1 0 24s1 7.5 2.6 10.7l7.8-6z" />
+      <path fill="var(--google-green)" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.4-5.7c-2 1.4-4.7 2.4-8.5 2.4-6.3 0-11.7-4.1-13.6-9.8l-7.8 6C6.5 42.6 14.6 48 24 48z" />
     </svg>
   );
 }
@@ -65,8 +66,9 @@ export function SignInDialog({ open, reason, onOpenChange, signInWithEmail, sign
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[400px] rounded border-border p-6 gap-0">
+      <DialogContent className="dialog-surface max-w-[400px] border-border p-6 gap-0">
         <DialogHeader className="text-left space-y-1.5">
+          <Logo variant="mark" height={32} link={false} className="mb-2" />
           <DialogTitle className="font-display text-[19px] font-semibold tracking-tight">Sign in to singlet.bio</DialogTitle>
           <DialogDescription className="text-[13px] leading-relaxed text-muted-foreground">
             {reason ?? "Free, and only needed for more AI: 200 AI searches a day instead of 10, AI explanations of why a study matches, and API keys for scripts."}{" "}

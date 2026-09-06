@@ -184,17 +184,13 @@ const Account = () => {
               </p>
             </header>
 
-            {/* ── Plan + usage ── */}
+            {/* ── AI usage ── */}
             <section className="surface p-5" aria-labelledby="usage-h">
               <h2 id="usage-h" className="text-[15px] font-semibold text-foreground">
-                Plan and today's AI usage
+                Today's AI usage
               </h2>
-              <dl className="mt-3 grid sm:grid-cols-3 gap-4 text-[13.5px]">
-                <div>
-                  <dt className="text-muted-foreground">Plan</dt>
-                  <dd className="mt-0.5 font-medium text-foreground">Free</dd>
-                  <dd className="text-[12px] text-muted-foreground">The only plan. Data and downloads are free for everyone.</dd>
-                </div>
+              <p className="mt-1 type-small text-muted-foreground">Signing in raises the daily AI allowance. Data and downloads are available to everyone.</p>
+              <dl className="mt-3 grid sm:grid-cols-2 gap-4 text-[13.5px]">
                 <div>
                   <dt className="text-muted-foreground">AI searches</dt>
                   <dd className="mt-0.5 font-medium tabular text-foreground">

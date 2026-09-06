@@ -533,6 +533,9 @@ function normalizeStats(raw: unknown): CorpusStats {
     avg_median_genes: numOrNull(r.avg_median_genes),
     success_rate: numOrNull(r.success_rate),
     failure_categories: normalizeFacetOptions(r.failure_categories),
+    studies_with_files: num(r.studies_with_files),
+    samples_in_files: num(r.samples_in_files),
+    cells_in_files: num(r.cells_in_files),
   };
 }
 
