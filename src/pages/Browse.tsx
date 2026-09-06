@@ -11,7 +11,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, Download, LayoutGrid, List, Loader2, Search, SlidersHorizontal, Sparkles } from "lucide-react";
+import { ChevronLeft, ChevronRight, LayoutGrid, List, Loader2, Search, SlidersHorizontal, Sparkles } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { cn } from "@/lib/utils";
@@ -50,6 +50,7 @@ import { StudyTable } from "@/components/browse/StudyTable";
 import { SampleTable } from "@/components/browse/SampleTable";
 import { SelectionBar } from "@/components/browse/SelectionBar";
 import { EmptyState } from "@/components/browse/EmptyState";
+import { ExportMenu } from "@/components/browse/ExportMenu";
 import { useSelection } from "@/components/browse/useSelection";
 
 type Result = SearchResponse | NlSearchResponse;
@@ -413,10 +414,7 @@ const Browse = () => {
                   </select>
                 </label>
                 {state.level === "gse" && total > 0 && (
-                  <a href={exportHref} download="singlet-accessions.txt" className="btn-secondary btn-sm" title="Text file of matching accessions (up to 5,000)">
-                    <Download size={13} />
-                    Export accessions
-                  </a>
+                  <ExportMenu query={appliedQuery} total={total} accessionsHref={exportHref} />
                 )}
                 <button
                   type="button"

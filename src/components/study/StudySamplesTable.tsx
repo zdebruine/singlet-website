@@ -13,10 +13,10 @@ import {
   protocolLabel,
 } from "@/lib/catalog-display";
 import { conditionPairs } from "@/components/browse/SampleTable";
-import type { GsmRow } from "@/integrations/api/types";
+import type { GsmRow, SampleQc } from "@/integrations/api/types";
 import type { ConditionFilter } from "./ConditionsPanel";
 
-type SortCol = "gsm_id" | "status" | "n_cells" | "mapping_rate" | "median_genes" | "assay";
+type SortCol = "gsm_id" | "status" | "n_cells" | "mapping_rate" | "median_genes" | "assay" | "n_input_reads" | "seq_saturation";
 type StatusFilter = "all" | "processed" | "failed";
 
 const INITIAL_ROWS = 150;
@@ -28,6 +28,8 @@ interface Props {
   highlightGsm: string | null;
   condition: ConditionFilter | null;
   onClearCondition: () => void;
+  /** Per-sample QC read straight from the published file, keyed by gsm_id (upper-cased). */
+  qcByGsm?: Record<string, SampleQc>;
 }
 
 function gsmNumber(id: string): number {
@@ -90,7 +92,7 @@ function Detail({ label, children }: { label: string; children: React.ReactNode 
   );
 }
 
-function ExpandedRow({ s, gseId, studyTitle, colSpan }: { s: GsmRow; gseId: string; studyTitle: string | null; colSpan: number }) {
+function ExpandedRow({ s, gseId, studyTitle, colSpan, qc }: { s: GsmRow; gseId: string; studyTitle: string | null; colSpan: number; qc?: SampleQc }) {
   const ch = s.characteristics ?? {};
   const chEntries = Object.entries(ch);
   const ownTitle = s.title && s.title.trim() !== (studyTitle ?? "").trim() ? s.title : null;
@@ -164,6 +166,26 @@ function ExpandedRow({ s, gseId, studyTitle, colSpan }: { s: GsmRow; gseId: stri
               )}
             </div>
 
+            {qc && (
+              <div>
+                <h4 className="text-[12px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5">QC from the published file</h4>
+                <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4">
+                  {qc.n_input_reads != null && <Detail label="Input reads"><span className="font-mono tabular">{fmtInt(qc.n_input_reads)}</span></Detail>}
+                  {qc.uniquely_mapped_pct != null && <Detail label="Uniquely mapped"><span className="font-mono tabular">{fmtPct(qc.uniquely_mapped_pct)}</span></Detail>}
+                  {qc.n_cells_called != null && <Detail label="Cells called"><span className="font-mono tabular">{fmtInt(qc.n_cells_called)}</span></Detail>}
+                  {qc.median_umi != null && <Detail label="Median UMI"><span className="font-mono tabular">{fmtInt(qc.median_umi)}</span></Detail>}
+                  {qc.median_genes != null && <Detail label="Median genes"><span className="font-mono tabular">{fmtInt(qc.median_genes)}</span></Detail>}
+                  {qc.exonic_fraction != null && <Detail label="Exonic"><span className="font-mono tabular">{fmtPct(qc.exonic_fraction)}</span></Detail>}
+                  {qc.intronic_fraction != null && <Detail label="Intronic"><span className="font-mono tabular">{fmtPct(qc.intronic_fraction)}</span></Detail>}
+                  {qc.sequencing_saturation != null && <Detail label="Seq. saturation"><span className="font-mono tabular">{fmtPct(qc.sequencing_saturation)}</span></Detail>}
+                  {qc.median_mito_fraction != null && <Detail label="Median mito"><span className="font-mono tabular">{fmtPct(qc.median_mito_fraction)}</span></Detail>}
+                  {qc.fraction_reads_in_cells != null && <Detail label="Reads in cells"><span className="font-mono tabular">{fmtPct(qc.fraction_reads_in_cells)}</span></Detail>}
+                  {qc.total_genes_detected != null && <Detail label="Genes detected"><span className="font-mono tabular">{fmtInt(qc.total_genes_detected)}</span></Detail>}
+                  {qc.reference_build && <Detail label="Reference">{qc.reference_build}</Detail>}
+                </dl>
+              </div>
+            )}
+
             {processed && (
               <div>
                 <h4 className="text-[12px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5">Select this sample after loading {gseId}</h4>
@@ -206,7 +228,7 @@ function ExpandedRow({ s, gseId, studyTitle, colSpan }: { s: GsmRow; gseId: stri
   );
 }
 
-export function StudySamplesTable({ gseId, studyTitle, samples, highlightGsm, condition, onClearCondition }: Props) {
+export function StudySamplesTable({ gseId, studyTitle, samples, highlightGsm, condition, onClearCondition, qcByGsm }: Props) {
   const [sortCol, setSortCol] = useState<SortCol>("gsm_id");
   const [sortAsc, setSortAsc] = useState(true);
   const [status, setStatus] = useState<StatusFilter>("all");
@@ -215,6 +237,8 @@ export function StudySamplesTable({ gseId, studyTitle, samples, highlightGsm, co
   const [showAll, setShowAll] = useState(false);
 
   const hasQc = useMemo(() => samples.some((s) => s.mapping_rate != null || s.median_genes != null), [samples]);
+  const hasReads = useMemo(() => !!qcByGsm && samples.some((s) => qcByGsm[s.gsm_id.toUpperCase()]?.n_input_reads != null), [samples, qcByGsm]);
+  const hasSaturation = useMemo(() => !!qcByGsm && samples.some((s) => qcByGsm[s.gsm_id.toUpperCase()]?.sequencing_saturation != null), [samples, qcByGsm]);
   const nProcessed = useMemo(() => samples.filter((s) => isProcessed(s.status)).length, [samples]);
   const nFailed = useMemo(() => samples.filter((s) => isFailed(s.status)).length, [samples]);
 
@@ -291,6 +315,12 @@ export function StudySamplesTable({ gseId, studyTitle, samples, highlightGsm, co
         case "median_genes":
           cmp = (a.median_genes ?? -1) - (b.median_genes ?? -1);
           break;
+        case "n_input_reads":
+          cmp = ((qcByGsm?.[a.gsm_id.toUpperCase()]?.n_input_reads) ?? -1) - ((qcByGsm?.[b.gsm_id.toUpperCase()]?.n_input_reads) ?? -1);
+          break;
+        case "seq_saturation":
+          cmp = ((qcByGsm?.[a.gsm_id.toUpperCase()]?.sequencing_saturation) ?? -1) - ((qcByGsm?.[b.gsm_id.toUpperCase()]?.sequencing_saturation) ?? -1);
+          break;
         case "assay":
           cmp = (a.assay_family ?? a.protocol ?? "").localeCompare(b.assay_family ?? b.protocol ?? "");
           break;
@@ -314,6 +344,8 @@ export function StudySamplesTable({ gseId, studyTitle, samples, highlightGsm, co
     { col: "n_cells", label: "Cells", cls: "num" },
     { col: "mapping_rate", label: "Mapped", cls: "num", hidden: !hasQc },
     { col: "median_genes", label: "Genes / cell", cls: "num", hidden: !hasQc },
+    { col: "n_input_reads", label: "Input reads", cls: "num", hidden: !hasReads },
+    { col: "seq_saturation", label: "Seq. saturation", cls: "num", hidden: !hasSaturation },
     { col: "assay", label: "Assay" },
     { col: null, label: "Tissue · cell type" },
     { col: null, label: "Characteristics" },
@@ -408,6 +440,7 @@ export function StudySamplesTable({ gseId, studyTitle, samples, highlightGsm, co
               const pairs = conditionPairs(s.characteristics, 3);
               const nPairs = Object.keys(s.characteristics ?? {}).length;
               const tissueCell = [s.tissue, s.cell_type].filter(Boolean).join(" · ");
+              const qc = qcByGsm?.[s.gsm_id.toUpperCase()];
               return (
                 <Fragment key={s.gsm_id}>
                   <tr
@@ -450,6 +483,8 @@ export function StudySamplesTable({ gseId, studyTitle, samples, highlightGsm, co
                     </td>
                     {hasQc && <td className="num text-[12.5px]">{fmtPct(s.mapping_rate)}</td>}
                     {hasQc && <td className="num text-[12.5px]">{fmtInt(s.median_genes)}</td>}
+                    {hasReads && <td className="num text-[12.5px] font-mono">{fmtInt(qc?.n_input_reads)}</td>}
+                    {hasSaturation && <td className="num text-[12.5px] font-mono">{fmtPct(qc?.sequencing_saturation)}</td>}
                     <td className="whitespace-nowrap text-[12.5px]" title={s.protocol ?? undefined}>
                       {s.assay_family ?? protocolLabel(s.protocol)}
                     </td>
@@ -473,7 +508,7 @@ export function StudySamplesTable({ gseId, studyTitle, samples, highlightGsm, co
                       )}
                     </td>
                   </tr>
-                  {open && <ExpandedRow s={s} gseId={gseId} studyTitle={studyTitle} colSpan={colSpan} />}
+                  {open && <ExpandedRow s={s} gseId={gseId} studyTitle={studyTitle} colSpan={colSpan} qc={qc} />}
                 </Fragment>
               );
             })}

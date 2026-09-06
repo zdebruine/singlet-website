@@ -12,6 +12,10 @@ const SECTIONS = [
   { id: "load", label: "Load a study" },
   { id: "search", label: "Search" },
   { id: "singlet-file", label: "What's in a .singlet file" },
+  { id: "partial-download", label: "Download just part of a study" },
+  { id: "bulk-manifests", label: "Bulk downloads and manifests" },
+  { id: "provenance", label: "Provenance and versioning" },
+  { id: "comparison", label: "How singlet compares" },
   { id: "r", label: "R" },
   { id: "python", label: "Python API" },
   { id: "api-keys", label: "API keys & MCP" },
@@ -302,6 +306,192 @@ sce  <- find_load("human PBMC, COVID-19, 10x 5'")`}
                 count matrix; the other members can be read with the lower-level bundle API (
                 <Mono>singlet.bundle.SingletBundle</Mono> in Python, <Mono>read_1pz()</Mono> in R) without unpacking the
                 archive.
+              </p>
+            </Section>
+
+            {/* ── Download just part of a study ── */}
+            <Section id="partial-download" title="Download just part of a study">
+              <p>
+                A <Mono>.singlet</Mono> file is a ZIP64 archive, so you don't have to fetch the whole thing to see
+                what's inside or to pull out one sample. <Mono>GET /api/bundle/:gse/index</Mono> lists every member —
+                per-sample files, compressed and uncompressed size — without downloading anything:
+              </p>
+              <CodeBlock
+                label="bash"
+                code={`curl "https://singlet.bio/api/bundle/GSE178957/index"`}
+              />
+              <p>
+                Per-sample QC (mapping rate, cells called, median genes/UMIs, mitochondrial fraction) computed straight
+                from the file is at <Mono>GET /api/bundle/:gse/samples</Mono>:
+              </p>
+              <CodeBlock
+                label="bash"
+                code={`curl "https://singlet.bio/api/bundle/GSE178957/samples"`}
+              />
+              <p>
+                <Mono>GET /api/bundle/:gse/entry?path=…</Mono> returns one member. Small entries come back inflated
+                directly. Large entries (most count matrices) come back as a small JSON recipe — a byte range on{" "}
+                <Mono>data.singlet.bio</Mono> plus how to inflate it — instead of the file itself, so you only ever
+                transfer the bytes you asked for:
+              </p>
+              <CodeBlock
+                label="json"
+                code={`{
+  "gse_id": "GSE178957",
+  "path": "samples/GSM5426415/exon_counts.1pz",
+  "url": "https://data.singlet.bio/data/GSE178957/GSE178957.singlet",
+  "range": "bytes=10485760-20971519",
+  "method": "deflate-raw",
+  "how": "curl -r 10485760-20971519 \"https://data.singlet.bio/data/GSE178957/GSE178957.singlet\" | python -c \"import sys,zlib; sys.stdout.buffer.write(zlib.decompress(sys.stdin.buffer.read(), -15))\" > exon_counts.1pz"
+}`}
+              />
+              <p>The <Mono>how</Mono> field is a ready-to-run command; the same pattern in one line:</p>
+              <CodeBlock
+                label="bash"
+                code={`curl -r 10485760-20971519 "https://data.singlet.bio/data/GSE178957/GSE178957.singlet" \
+  | python -c "import sys,zlib; sys.stdout.buffer.write(zlib.decompress(sys.stdin.buffer.read(), -15))" \
+  > exon_counts.1pz`}
+              />
+              <p className="text-sm text-muted-foreground">
+                Entries stored without compression report <Mono>"method": "stored"</Mono>; in that case the ranged{" "}
+                <Mono>curl</Mono> line is already the finished file, no inflate step needed. This is the same mechanism{" "}
+                <Mono>singlet.load(gse, samples=[...])</Mono> will use under the hood; the HTTP endpoints above are the
+                same thing exposed directly, for use from any language.
+              </p>
+            </Section>
+
+            {/* ── Bulk downloads and manifests ── */}
+            <Section id="bulk-manifests" title="Bulk downloads and manifests">
+              <p>
+                <Mono>GET /api/manifest</Mono> takes the same filters as <Mono>/api/search</Mono> (organism,
+                tissue_group, disease_group, assay_family, cell_type, q, min_cells, year_min/max, has_bundle) and
+                returns every matching study — up to 2,000 — as a manifest or a ready-to-run download script, chosen
+                with <Mono>format=</Mono>:
+              </p>
+              <table>
+                <thead>
+                  <tr>
+                    <th>format</th>
+                    <th>What you get</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><Mono>tsv</Mono> (default)</td>
+                    <td>One row per study: accession, title, organism, tissue/disease/assay groups, cell and sample counts, reference build, size, download URL.</td>
+                  </tr>
+                  <tr>
+                    <td><Mono>json</Mono></td>
+                    <td>The same rows as structured JSON, plus the total match count and the filters that were applied.</td>
+                  </tr>
+                  <tr>
+                    <td><Mono>curl</Mono> / <Mono>wget</Mono></td>
+                    <td>A shell script / URL list that downloads every matching <Mono>.singlet</Mono> file.</td>
+                  </tr>
+                  <tr>
+                    <td><Mono>python</Mono> / <Mono>r</Mono></td>
+                    <td>A script that loads every matching study with <Mono>singlet.load()</Mono> / <Mono>load()</Mono>.</td>
+                  </tr>
+                </tbody>
+              </table>
+              <div className="grid md:grid-cols-2 gap-3">
+                <CodeBlock
+                  label="bash — download everything matching a search"
+                  code={`curl -L "https://singlet.bio/api/manifest?organism=Homo+sapiens&tissue_group=Brain+%2F+CNS&format=curl" \
+  -o get-studies.sh
+bash get-studies.sh`}
+                />
+                <CodeBlock
+                  label="python — load everything matching a search"
+                  code={`curl -L "https://singlet.bio/api/manifest?disease_group=COVID-19&format=python" -o load_studies.py
+python load_studies.py`}
+                />
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Manifests are capped at 2,000 studies per request; the JSON response's <Mono>total</Mono> field tells
+                you if a search matched more than that, so you can narrow the filters. All rows are CC0.
+              </p>
+            </Section>
+
+            {/* ── Provenance and versioning ── */}
+            <Section id="provenance" title="Provenance and versioning">
+              <p>
+                Every study records which reference it was mapped to and which pipeline release produced it, so a
+                number from the atlas is always traceable back to how it was made:
+              </p>
+              <ul>
+                <li><Mono>reference_build</Mono> — the genome build and annotation the sample was mapped to (see <Link to="/about#references">About the data</Link> for the exact builds per organism). Recorded per cell in <Mono>obs["reference_build"]</Mono> and in <Mono>feature_vocab.json</Mono> inside the bundle.</li>
+                <li><Mono>singlet_version</Mono> — the pipeline release that produced the bundle, in the file's <Mono>manifest.json</Mono>, the study page and <Mono>/api/gse/:id</Mono>.</li>
+                <li><Mono>packed_at</Mono> — when the <Mono>.singlet</Mono> file was published, also in the manifest and on the study page.</li>
+              </ul>
+              <p>
+                "Uniform reprocessing" means every sample of an organism — regardless of which lab produced it or which
+                GEO series it came from — goes through the same reference, the same pipeline version and the same QC
+                thresholds (see <Link to="/about#processing">What a study goes through</Link>). That is what makes a
+                gene count from one study comparable to a gene count from another. The atlas data is <Mono>CC0</Mono>{" "}
+                (public domain, no attribution required); the pipeline and packages are <Mono>MIT</Mono> licensed.
+                Details on the <Link to="/data-license">license page</Link>.
+              </p>
+            </Section>
+
+            {/* ── How singlet compares ── */}
+            <Section id="comparison" title="How singlet compares">
+              <p>
+                An honest comparison against the two other ways to get this data. Only claims we can support are
+                listed; "depends" means it genuinely varies by study or by your setup.
+              </p>
+              <table>
+                <thead>
+                  <tr>
+                    <th></th>
+                    <th>singlet atlas</th>
+                    <th>Download raw GEO/SRA yourself</th>
+                    <th>Re-run a pipeline yourself</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Format</td>
+                    <td>One <Mono>.singlet</Mono> file per study; loads as AnnData or SingleCellExperiment in one line</td>
+                    <td>Raw FASTQ/SRA plus whatever matrix the authors uploaded, if any — format varies per study</td>
+                    <td>Whatever your pipeline emits</td>
+                  </tr>
+                  <tr>
+                    <td>Uniformity across studies</td>
+                    <td>Same reference build and pipeline version for every sample of an organism</td>
+                    <td>None — each lab used its own protocol, reference and pipeline version</td>
+                    <td>Uniform across studies you process yourself, with the version you chose</td>
+                  </tr>
+                  <tr>
+                    <td>Time to first matrix</td>
+                    <td>Seconds to minutes — download or stream the published file</td>
+                    <td>Minutes to hours to fetch raw reads, then you still need to align and count them</td>
+                    <td>Hours to days per study (alignment + counting), plus pipeline setup</td>
+                  </tr>
+                  <tr>
+                    <td>Compute needed</td>
+                    <td>None — the counting already happened</td>
+                    <td>None to download; substantial to process afterwards</td>
+                    <td>A read aligner, a reference index and enough CPU/RAM per sample</td>
+                  </tr>
+                  <tr>
+                    <td>Cost</td>
+                    <td>Free, no account</td>
+                    <td>Free (GEO/SRA are public); your own bandwidth and storage</td>
+                    <td>Free software; your own compute cost</td>
+                  </tr>
+                  <tr>
+                    <td>Control over parameters</td>
+                    <td>None — fixed pipeline, documented in <Link to="/about">About the data</Link></td>
+                    <td>Full — you choose everything downstream</td>
+                    <td>Full — your reference, your parameters, your pipeline version</td>
+                  </tr>
+                </tbody>
+              </table>
+              <p className="text-sm text-muted-foreground">
+                Reprocessing from raw reads is the only way to get output identical to the atlas's; a matrix a study's
+                original authors uploaded to GEO may already exist and load faster, but it was very likely produced
+                with different parameters or a different reference, so it isn't directly comparable to another study's.
               </p>
             </Section>
 

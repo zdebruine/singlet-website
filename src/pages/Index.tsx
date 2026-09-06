@@ -9,26 +9,11 @@ import { usePageMeta } from "@/hooks/usePageMeta";
 import { fmtCompact, fmtInt } from "@/lib/catalog-display";
 import { EXAMPLE_QUERIES, searchDestination } from "@/lib/search-routing";
 import { pySnippet, rSnippet } from "@/lib/install-snippets";
+import { QuickStartHubs } from "@/components/QuickStartHubs";
 
 // Install + load, from the single source of truth in lib/install-snippets.
 const PY_SNIPPET = pySnippet("GSE178957");
 const R_SNIPPET = rSnippet("GSE178957");
-
-interface StartTile {
-  label: string;
-  /** Facet group + canonical value; drives both the link and the live study count. */
-  field: "organism" | "tissue_group" | "disease_group";
-  value: string;
-}
-
-const START_TILES: StartTile[] = [
-  { label: "Human", field: "organism", value: "Homo sapiens" },
-  { label: "Mouse", field: "organism", value: "Mus musculus" },
-  { label: "Brain / CNS", field: "tissue_group", value: "Brain / CNS" },
-  { label: "Blood / PBMC", field: "tissue_group", value: "Blood / PBMC" },
-  { label: "Lung / airway", field: "tissue_group", value: "Lung / airway" },
-  { label: "Cancer", field: "disease_group", value: "Cancer" },
-];
 
 function StatSkeleton() {
   return <span className="inline-block h-8 w-20 rounded bg-secondary animate-pulse align-middle" aria-hidden="true" />;
@@ -42,15 +27,6 @@ const Index = () => {
     queryFn: () => apiClient.stats(),
     staleTime: 120_000,
   });
-  const { data: facets } = useQuery({
-    queryKey: ["facets", "gse", "all"],
-    queryFn: () => apiClient.facets({ level: "gse" }),
-    staleTime: 300_000,
-  });
-
-  const studyCount = (t: StartTile): number | undefined =>
-    facets?.[t.field]?.find((o) => o.value === t.value)?.count;
-
   const statItems = [
     { value: stats ? fmtInt(stats.series_count) : null, label: "studies" },
     { value: stats ? fmtInt(stats.success_samples) : null, label: "samples processed" },
@@ -110,31 +86,7 @@ const Index = () => {
 
         {/* ── Start from ── */}
         <section className="container-site pb-16">
-          <h2 className="text-[13px] font-sans font-medium tracking-wide text-muted-foreground mb-3 uppercase">Or start from</h2>
-          <ul className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
-            {START_TILES.map((t) => {
-              const count = studyCount(t);
-              return (
-                <li key={t.label}>
-                  <Link
-                    to={`/browse?${t.field}=${encodeURIComponent(t.value)}`}
-                    className="surface flex flex-col justify-between gap-3 px-4 py-3.5 h-full hover:border-strong hover:bg-card transition-colors group"
-                  >
-                    <span className="text-[15px] font-medium text-foreground group-hover:text-primary transition-colors">{t.label}</span>
-                    <span className="text-xs text-muted-foreground tabular">
-                      {count != null ? (
-                        `${fmtInt(count)} studies`
-                      ) : facets ? (
-                        "Browse studies →"
-                      ) : (
-                        <span className="inline-block h-3.5 w-16 rounded bg-secondary animate-pulse" />
-                      )}
-                    </span>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
+          <QuickStartHubs title="Or start from" />
         </section>
 
         {/* ── Install / load ── */}

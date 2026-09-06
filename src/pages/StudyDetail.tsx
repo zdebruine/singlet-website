@@ -7,6 +7,10 @@ import Footer from "@/components/Footer";
 import { DownloadPanel } from "@/components/DownloadPanel";
 import { ConditionsPanel, type ConditionFilter } from "@/components/study/ConditionsPanel";
 import { StudySamplesTable } from "@/components/study/StudySamplesTable";
+import { CiteDialog } from "@/components/study/CiteDialog";
+import { FileTreePanel } from "@/components/study/FileTreePanel";
+import { ProvenancePanel } from "@/components/study/ProvenancePanel";
+import { RelatedStudies } from "@/components/study/RelatedStudies";
 import { apiClient, bundleUrl } from "@/integrations/api/client";
 import type { GseDetailResponse, GsmRow, PublicationRow } from "@/integrations/api/types";
 import { usePageMeta } from "@/hooks/usePageMeta";
@@ -96,6 +100,37 @@ const StudyDetail = () => {
     staleTime: 300_000,
     retry: 1,
   });
+
+  const { data: bundleIndex, isLoading: bundleIndexLoading, isError: bundleIndexError } = useQuery({
+    queryKey: ["bundle-index", gseId],
+    queryFn: () => apiClient.bundleIndex(gseId),
+    enabled: !!data,
+    staleTime: 300_000,
+    retry: 1,
+  });
+
+  const { data: bundleSamples } = useQuery({
+    queryKey: ["bundle-samples", gseId],
+    queryFn: () => apiClient.bundleSamples(gseId),
+    enabled: !!data,
+    staleTime: 300_000,
+    retry: 1,
+  });
+
+  const { data: relatedData } = useQuery({
+    queryKey: ["related", gseId],
+    queryFn: () => apiClient.related(gseId),
+    enabled: !!data,
+    staleTime: 300_000,
+    retry: 1,
+  });
+
+  const qcByGsm = useMemo(() => {
+    if (!bundleSamples) return undefined;
+    const map: Record<string, (typeof bundleSamples.samples)[number]> = {};
+    for (const s of bundleSamples.samples) map[s.gsm_id.toUpperCase()] = s;
+    return map;
+  }, [bundleSamples]);
 
   const [abstractOpen, setAbstractOpen] = useState(false);
   const [condition, setCondition] = useState<ConditionFilter | null>(null);
@@ -348,6 +383,7 @@ const StudyDetail = () => {
           <a href={GEO(gseId)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-muted-foreground hover:text-primary">
             View on GEO <ExternalLink size={11} />
           </a>
+          <CiteDialog gseId={gseId} title={series.title} year={year} pubmedIds={series.pubmed_ids} doi={series.doi} />
           {year && <span className="font-mono text-muted-foreground tabular">{year}</span>}
           {series.reference_build && (
             <span className="text-muted-foreground">
@@ -468,6 +504,12 @@ const StudyDetail = () => {
             </section>
           )}
 
+          {/* What's in the file */}
+          <FileTreePanel index={bundleIndex} isLoading={bundleIndexLoading} isError={bundleIndexError} />
+
+          {/* Provenance */}
+          <ProvenancePanel index={bundleIndex} nCatalogProcessed={processed.length} />
+
           {/* Publications */}
           {publications.length > 0 && (
             <section className="mb-6" aria-labelledby="pubs-h">
@@ -528,8 +570,12 @@ const StudyDetail = () => {
           highlightGsm={highlightGsm}
           condition={condition}
           onClearCondition={() => setCondition(null)}
+          qcByGsm={qcByGsm}
         />
       </section>
+
+      {/* Related studies */}
+      <RelatedStudies related={relatedData?.related ?? []} />
     </Shell>
   );
 };
