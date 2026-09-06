@@ -36,6 +36,8 @@ import type {
   SearchQuery,
   SearchResponse,
   StudyRow,
+  ProductDashboard,
+  ShareVisibility,
 } from "./types";
 import { authToken } from "@/lib/auth-token";
 import { aiQuotaStore, parseQuota } from "@/lib/ai-quota";
@@ -601,6 +603,58 @@ function searchParams(q: SearchQuery): Record<string, ParamValue> {
 }
 
 export const apiClient = {
+  product: {
+    async dashboard(): Promise<ProductDashboard> {
+      return (await cloudPost("product-data", { action: "dashboard" })) as ProductDashboard;
+    },
+    async createProject(input: { name: string; description: string; visibility: ShareVisibility; workspace_id?: string | null }) {
+      return cloudPost("product-data", { action: "create_project", ...input }) as Promise<Record<string, unknown>>;
+    },
+    async project(id: string) { return cloudPost("product-data", { action: "get_project", id }) as Promise<Record<string, unknown>>; },
+    async privateStudies(query = "") { return cloudPost("product-data", { action: "list_private_studies", query }) as Promise<Record<string, unknown>>; },
+    async privateStudy(projectId: string, studyId: string) { return cloudPost("product-data", { action: "get_private_study", project_id: projectId, study_id: studyId }) as Promise<Record<string, unknown>>; },
+    async registerUrl(projectId: string, url: string) {
+      const token = authToken.get();
+      if (!token) throw new ApiError(401, "Sign in to add files.");
+      const res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/upload/register`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ url }) });
+      return readJson(res);
+    },
+    async upload(projectId: string, file: File, onProgress?: (pct: number) => void) {
+      const token = authToken.get();
+      if (!token) throw new ApiError(401, "Sign in to upload files.");
+      const auth = { Authorization: `Bearer ${token}` };
+      let res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/upload/init`, { method: "POST", headers: { ...auth, "Content-Type": "application/json" }, body: JSON.stringify({ filename: file.name, bytes: file.size }) });
+      const init = rec(await readJson(res));
+      const partBytes = num(init.part_bytes, 50 * 1024 * 1024);
+      const parts: { partNumber: number; etag: string }[] = [];
+      for (let offset = 0, n = 1; offset < file.size; offset += partBytes, n++) {
+        res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/upload/part?file_id=${encodeURIComponent(str(init.file_id))}&n=${n}`, { method: "PUT", headers: { ...auth, "Content-Type": "application/octet-stream" }, body: file.slice(offset, offset + partBytes) });
+        const part = rec(await readJson(res));
+        parts.push({ partNumber: num(part.partNumber), etag: str(part.etag) });
+        onProgress?.(Math.round(Math.min(file.size, offset + partBytes) / file.size * 100));
+      }
+      res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/upload/complete`, { method: "POST", headers: { ...auth, "Content-Type": "application/json" }, body: JSON.stringify({ file_id: init.file_id, parts }) });
+      return readJson(res);
+    },
+    async deleteProject(id: string) {
+      const token = authToken.get();
+      const res = await fetch(`/api/projects/${encodeURIComponent(id)}`, { method: "DELETE", headers: token ? { Authorization: `Bearer ${token}` } : {} });
+      return readJson(res);
+    },
+    async deleteFile(id: string) {
+      const token = authToken.get();
+      const res = await fetch(`/api/projects/files/${encodeURIComponent(id)}`, { method: "DELETE", headers: token ? { Authorization: `Bearer ${token}` } : {} });
+      return readJson(res);
+    },
+    async createWorkspace(name: string, slug: string) { return cloudPost("product-data", { action: "create_workspace", name, slug }) as Promise<Record<string, unknown>>; },
+    async workspace(slug: string) { return cloudPost("product-data", { action: "get_workspace", slug }) as Promise<Record<string, unknown>>; },
+    async inviteWorkspace(workspaceId: string, email?: string) { return cloudPost("product-data", { action: "invite_workspace", workspace_id: workspaceId, ...(email ? { email } : {}) }) as Promise<Record<string, unknown>>; },
+    async acceptInvite(token: string) { return cloudPost("product-data", { action: "accept_invite", token }) as Promise<Record<string, unknown>>; },
+    async saveCohort(input: Record<string, unknown>) { return cloudPost("product-data", { action: "save_cohort", ...input }) as Promise<Record<string, unknown>>; },
+    async cohort(id: string, token?: string) { return (token ? cloudPostAnon : cloudPost)("product-data", { action: "get_cohort", id, token }) as Promise<Record<string, unknown>>; },
+    async comment(cohortId: string, body: string) { return cloudPost("product-data", { action: "comment_cohort", cohort_id: cohortId, body }) as Promise<Record<string, unknown>>; },
+    async setWeeklySummary(enabled: boolean) { return cloudPost("product-data", { action: "set_weekly_summary", enabled }); },
+  },
   /** GET /api/stats — corpus-wide statistics (edge-cached). */
   async stats(): Promise<CorpusStats> {
     return normalizeStats(await get<unknown>("/api/stats"));

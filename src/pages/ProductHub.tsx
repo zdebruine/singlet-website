@@ -1,0 +1,38 @@
+import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { Link } from "react-router-dom";
+import { Database, FolderLock, Loader2, Plus, Users } from "lucide-react";
+import Navbar from "@/components/Navbar";
+import Footer from "@/components/Footer";
+import { useAuth } from "@/components/auth/AuthProvider";
+import { apiClient, isApiError } from "@/integrations/api/client";
+import type { ProductDashboard, ShareVisibility } from "@/integrations/api/types";
+import { fmtBytes, fmtInt } from "@/lib/catalog-display";
+import { usePageMeta } from "@/hooks/usePageMeta";
+
+const ProductHub = () => {
+  usePageMeta({ title: "Your data", description: "Private projects, cohorts and lab workspaces in singlet.bio.", noindex: true });
+  const { user, loading, openSignIn } = useAuth();
+  const [data, setData] = useState<ProductDashboard | null>(null);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [project, setProject] = useState({ name: "", description: "", visibility: "private" as ShareVisibility });
+  const [workspace, setWorkspace] = useState({ name: "", slug: "" });
+  const load = () => apiClient.product.dashboard().then(setData).catch((e) => setError(isApiError(e) ? e.message : "Could not load your data."));
+  useEffect(() => { if (user) void load(); else setData(null); }, [user]);
+  const filesByProject = useMemo(() => new Map((data?.projects ?? []).map((p) => [p.id, (data?.files ?? []).filter((f) => f.project_id === p.id)])), [data]);
+  const createProject = async (e: FormEvent) => { e.preventDefault(); setBusy(true); setError(""); try { const r = await apiClient.product.createProject(project); const p = r.project as { id: string }; window.location.assign(`/projects/${p.id}`); } catch (x) { setError(isApiError(x) ? x.message : "Could not create project."); } finally { setBusy(false); } };
+  const createWorkspace = async (e: FormEvent) => { e.preventDefault(); setBusy(true); setError(""); try { const r = await apiClient.product.createWorkspace(workspace.name, workspace.slug); const w = r.workspace as { slug: string }; window.location.assign(`/workspaces/${w.slug}`); } catch (x) { setError(isApiError(x) ? x.message : "Could not create workspace."); } finally { setBusy(false); } };
+  return <div className="min-h-screen flex flex-col bg-background"><Navbar/><main className="container-site flex-1 py-10 md:py-14">
+    <header className="max-w-[760px]"><h1>Your data</h1><p className="mt-2 text-muted-foreground">Bring your own <code className="code-inline">.singlet</code> files, save cohorts and collaborate with your lab. Free while in preview; limits are shown below.</p></header>
+    {loading ? <Loader2 className="mt-8 animate-spin text-primary"/> : !user ? <div className="surface mt-8 p-6 max-w-xl"><h2>Sign in to bring your own data</h2><p className="mt-2 text-muted-foreground">Public atlas search and downloads remain open without an account.</p><button className="btn-primary mt-4" onClick={() => openSignIn()}>Sign in</button></div> : <div className="mt-8 space-y-8 max-w-[960px]">
+      {error && <p className="error-surface p-3 text-[13px]" role="alert">{error}</p>}
+      <section className="grid gap-3 sm:grid-cols-4" aria-label="Usage"><div className="surface p-4"><span className="type-label">Storage</span><strong className="block mt-1 tabular">{fmtBytes(data?.usage.storage_bytes ?? 0)} / 10 GB</strong></div><div className="surface p-4"><span className="type-label">Projects</span><strong className="block mt-1 tabular">{fmtInt(data?.projects.length ?? 0)} / 5</strong></div><div className="surface p-4"><span className="type-label">Cohorts</span><strong className="block mt-1 tabular">{fmtInt(data?.cohorts.length ?? 0)}</strong></div><div className="surface p-4"><span className="type-label">Downloads this month</span><strong className="block mt-1 tabular">{fmtInt(data?.usage.downloads_month ?? 0)} · {fmtBytes(data?.usage.download_bytes_month ?? 0)}</strong></div></section>
+      <section><div className="flex items-center justify-between"><h2 className="inline-flex items-center gap-2"><FolderLock size={18}/> Private projects</h2><span className="type-small text-muted-foreground">5 projects · 20 files each · 10 GB stored</span></div><div className="mt-3 grid md:grid-cols-2 gap-3">{data?.projects.map((p) => <Link key={p.id} to={`/projects/${p.id}`} className="surface p-4 hover:border-primary"><strong>{p.name}</strong><p className="type-small text-muted-foreground mt-1">{p.description || "No description"}</p><p className="type-label mt-3">{p.visibility} · {filesByProject.get(p.id)?.length ?? 0} files</p></Link>)}{!data?.projects.length && <div className="surface p-4 text-muted-foreground">No projects yet.</div>}</div>
+      <form onSubmit={createProject} className="surface p-4 mt-3 grid sm:grid-cols-[1fr_1fr_auto_auto] gap-2"><input className="input" required maxLength={100} placeholder="Project name" value={project.name} onChange={(e)=>setProject({...project,name:e.target.value})}/><input className="input" maxLength={4000} placeholder="Description" value={project.description} onChange={(e)=>setProject({...project,description:e.target.value})}/><select className="input" value={project.visibility} onChange={(e)=>setProject({...project,visibility:e.target.value as ShareVisibility})}><option value="private">Private</option><option value="workspace">Workspace</option><option value="link">Link</option></select><button className="btn-primary" disabled={busy}><Plus size={14}/>Create</button></form></section>
+      <section><h2 className="inline-flex items-center gap-2"><Database size={18}/> Saved cohorts</h2><div className="mt-3 grid md:grid-cols-2 gap-3">{data?.cohorts.map((c)=><Link key={c.id} to={`/c/${c.id}`} className="surface p-4 hover:border-primary"><strong>{c.name}</strong><p className="type-small text-muted-foreground mt-1">Snapshot {c.catalog_version} · {c.visibility}</p></Link>)}{!data?.cohorts.length && <p className="surface p-4 text-muted-foreground">Select studies in Browse, then save the selection as a cohort.</p>}</div></section>
+      <section><h2 className="inline-flex items-center gap-2"><Users size={18}/> Workspaces</h2><div className="mt-3 flex flex-wrap gap-2">{data?.workspaces.map((w)=><Link className="chip" key={w.id} to={`/workspaces/${w.slug}`}>{w.name}</Link>)}</div><form onSubmit={createWorkspace} className="surface p-4 mt-3 grid sm:grid-cols-[1fr_1fr_auto] gap-2"><input className="input" required maxLength={80} placeholder="Lab name" value={workspace.name} onChange={(e)=>setWorkspace({...workspace,name:e.target.value})}/><input className="input font-mono" required pattern="[a-z0-9][a-z0-9-]{1,47}[a-z0-9]" placeholder="lab-slug" value={workspace.slug} onChange={(e)=>setWorkspace({...workspace,slug:e.target.value.toLowerCase().replace(/[^a-z0-9-]/g,"")})}/><button className="btn-primary" disabled={busy}>Create workspace</button></form></section>
+      <label className="surface p-4 flex gap-3 items-start"><input type="checkbox" checked={data?.weekly_summary ?? false} onChange={async(e)=>{await apiClient.product.setWeeklySummary(e.target.checked); setData((d)=>d?{...d,weekly_summary:e.target.checked}:d)}}/><span><strong>Weekly email summary</strong><small className="block text-muted-foreground">Uploads, saved cohorts and workspace activity. You can turn this off here at any time.</small></span></label>
+    </div>}
+  </main><Footer/></div>;
+};
+export default ProductHub;

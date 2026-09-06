@@ -11,7 +11,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { ChevronRight, LayoutGrid, List, Loader2, Search, SlidersHorizontal, Sparkles } from "lucide-react";
+import { ChevronRight, LayoutGrid, List, Loader2, LockKeyhole, Search, SlidersHorizontal, Sparkles } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { cn } from "@/lib/utils";
@@ -97,6 +97,14 @@ const Browse = () => {
   const navigate = useNavigate();
   const state = useMemo(() => parseBrowseState(sp), [sp]);
   const aiMode = isAiMode(state);
+  const [mine, setMine] = useState(false);
+  const { user, openSignIn } = useAuth();
+  const privateResult = useQuery({
+    queryKey: ["private-studies", state.q],
+    queryFn: () => apiClient.product.privateStudies(state.q),
+    enabled: mine && !!user,
+  });
+  const privateStudies = ((privateResult.data?.studies ?? []) as Array<Record<string, unknown>>);
   const stateKey = serializeBrowseState(state).toString();
 
   usePageMeta({
@@ -225,7 +233,6 @@ const Browse = () => {
   // ── AI explanations (signed in) ───────────────────────────────────────────
   // One sentence per study from the model, replacing the rule-based "why".
   // Never automatic: each uncached batch spends one unit of the daily budget.
-  const { user, openSignIn } = useAuth();
   const [explained, setExplained] = useState<{ key: string; map: Record<string, string> }>({ key: "", map: {} });
   const [explaining, setExplaining] = useState(false);
   const [explainError, setExplainError] = useState<string | null>(null);
@@ -299,6 +306,15 @@ const Browse = () => {
           </button>
           <button
             type="button"
+            aria-pressed={mine}
+            className={cn("btn-secondary h-10 px-3", mine && "!border-primary !text-primary")}
+            onClick={() => user ? setMine((v) => !v) : openSignIn()}
+            title="Search studies in your private projects"
+          >
+            <LockKeyhole size={14} /> Mine
+          </button>
+          <button
+            type="button"
             className="btn-secondary h-10 px-3 lg:hidden"
             onClick={() => setRailOpen(true)}
             aria-expanded={railOpen}
@@ -338,6 +354,20 @@ const Browse = () => {
 
           {/* Results */}
           <section aria-label="Results" className="min-w-0">
+            {mine && (
+              <section className="mb-5" aria-label="Private project results">
+                <div className="flex items-center justify-between mb-2"><h2 className="text-[13px] inline-flex items-center gap-1.5"><LockKeyhole size={13}/>Your private studies ({fmtInt(privateStudies.length)})</h2><a href="/my-data" className="type-small text-primary">Manage data</a></div>
+                {privateResult.isLoading ? <div className="surface p-4 text-muted-foreground">Searching your projects…</div> : privateStudies.length ? <div className="grid gap-2">
+                  {privateStudies.map((s) => {
+                    const project = s.projects as { name?: string } | undefined;
+                    return <a key={String(s.id)} href={`/p/${String(s.project_id)}/${encodeURIComponent(String(s.study_id))}`} className="surface p-4 hover:border-primary">
+                      <span className="font-mono text-[12px] text-primary">{String(s.study_id)}</span><strong className="block mt-1">{String(s.title || "Untitled private study")}</strong>
+                      <span className="type-small text-muted-foreground">{project?.name || "Private project"} · {fmtInt(Number(s.n_samples) || 0)} samples · {fmtCompact(Number(s.n_cells) || 0)} cells</span>
+                    </a>;
+                  })}
+                </div> : <div className="surface p-4 text-muted-foreground">No private studies match. Add a <code className="code-inline">.singlet</code> file from Your data.</div>}
+              </section>
+            )}
             {quotaExceeded && nl?.quota && <AiQuotaExceeded quota={nl.quota} message={nl.note ?? "Today's free AI searches are used up."} />}
 
             <ActiveFiltersRow

@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 
 const NAV = [
   { to: "/browse", label: "Browse" },
+  { to: "/my-data", label: "Your data" },
   { to: "/quickstart", label: "Quickstart" },
   { to: "/docs", label: "Docs" },
   { to: "/about", label: "About the data" },

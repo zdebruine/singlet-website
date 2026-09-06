@@ -23,6 +23,12 @@ import HpcDashboard from "./pages/HpcDashboard.tsx";
 import AuthCallback from "./pages/AuthCallback.tsx";
 import Account from "./pages/Account.tsx";
 import Brand from "./pages/Brand.tsx";
+import ProductHub from "./pages/ProductHub.tsx";
+import ProjectDetail from "./pages/ProjectDetail.tsx";
+import PrivateStudyDetail from "./pages/PrivateStudyDetail.tsx";
+import CohortDetail from "./pages/CohortDetail.tsx";
+import WorkspaceDetail from "./pages/WorkspaceDetail.tsx";
+import JoinWorkspace from "./pages/JoinWorkspace.tsx";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -96,6 +102,12 @@ const App = () => (
               <Route path="/auth/callback" element={<AuthCallback />} />
               <Route path="/auth" element={<Navigate to="/auth/callback" replace />} />
               <Route path="/account" element={<Account />} />
+              <Route path="/my-data" element={<ProductHub />} />
+              <Route path="/projects/:id" element={<ProjectDetail />} />
+              <Route path="/p/:projectId/:studyId" element={<PrivateStudyDetail />} />
+              <Route path="/c/:id" element={<CohortDetail />} />
+              <Route path="/workspaces/:slug" element={<WorkspaceDetail />} />
+              <Route path="/join/:token" element={<JoinWorkspace />} />
 
               {/* Legal + technical reference (linked from footer / docs) */}
               <Route path="/data-license" element={<DataLicense />} />

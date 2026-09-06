@@ -5,6 +5,7 @@ import { GITHUB_ISSUES, GITHUB_REPO } from "@/lib/install-snippets";
 const LINKS: { label: string; to?: string; href?: string }[] = [
   { label: "Docs", to: "/docs" },
   { label: "MCP", to: "/docs/mcp" },
+  { label: "Your data", to: "/my-data" },
   { label: "Brand", to: "/brand" },
   { label: "About the data", to: "/about" },
   { label: "Cite", to: "/about#cite" },

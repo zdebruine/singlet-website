@@ -1,0 +1,28 @@
+DROP POLICY workspaces_read_member ON public.workspaces;
+CREATE POLICY workspaces_read_member ON public.workspaces FOR SELECT TO authenticated USING (owner_id = auth.uid() OR EXISTS (SELECT 1 FROM public.workspace_members m WHERE m.workspace_id = id AND m.user_id = auth.uid()));
+DROP POLICY workspace_members_read_member ON public.workspace_members;
+CREATE POLICY workspace_members_read_own ON public.workspace_members FOR SELECT TO authenticated USING (user_id = auth.uid());
+DROP POLICY workspace_invites_read_owner ON public.workspace_invites;
+CREATE POLICY workspace_invites_read_owner ON public.workspace_invites FOR SELECT TO authenticated USING (EXISTS (SELECT 1 FROM public.workspaces w WHERE w.id = workspace_id AND w.owner_id = auth.uid()));
+DROP POLICY projects_read_allowed ON public.projects;
+CREATE POLICY projects_read_allowed ON public.projects FOR SELECT TO authenticated USING (owner_id = auth.uid() OR (visibility = 'workspace' AND workspace_id IS NOT NULL AND EXISTS (SELECT 1 FROM public.workspace_members m WHERE m.workspace_id = projects.workspace_id AND m.user_id = auth.uid())));
+DROP POLICY user_files_read_allowed ON public.user_files;
+CREATE POLICY user_files_read_allowed ON public.user_files FOR SELECT TO authenticated USING (EXISTS (SELECT 1 FROM public.projects p WHERE p.id = project_id AND (p.owner_id = auth.uid() OR (p.visibility = 'workspace' AND p.workspace_id IS NOT NULL AND EXISTS (SELECT 1 FROM public.workspace_members m WHERE m.workspace_id = p.workspace_id AND m.user_id = auth.uid())))));
+DROP POLICY user_studies_read_allowed ON public.user_studies;
+CREATE POLICY user_studies_read_allowed ON public.user_studies FOR SELECT TO authenticated USING (EXISTS (SELECT 1 FROM public.projects p WHERE p.id = project_id AND (p.owner_id = auth.uid() OR (p.visibility = 'workspace' AND p.workspace_id IS NOT NULL AND EXISTS (SELECT 1 FROM public.workspace_members m WHERE m.workspace_id = p.workspace_id AND m.user_id = auth.uid())))));
+DROP POLICY user_samples_read_allowed ON public.user_samples;
+CREATE POLICY user_samples_read_allowed ON public.user_samples FOR SELECT TO authenticated USING (EXISTS (SELECT 1 FROM public.projects p WHERE p.id = project_id AND (p.owner_id = auth.uid() OR (p.visibility = 'workspace' AND p.workspace_id IS NOT NULL AND EXISTS (SELECT 1 FROM public.workspace_members m WHERE m.workspace_id = p.workspace_id AND m.user_id = auth.uid())))));
+DROP POLICY user_sample_qc_read_allowed ON public.user_sample_qc;
+CREATE POLICY user_sample_qc_read_allowed ON public.user_sample_qc FOR SELECT TO authenticated USING (EXISTS (SELECT 1 FROM public.projects p WHERE p.id = project_id AND (p.owner_id = auth.uid() OR (p.visibility = 'workspace' AND p.workspace_id IS NOT NULL AND EXISTS (SELECT 1 FROM public.workspace_members m WHERE m.workspace_id = p.workspace_id AND m.user_id = auth.uid())))));
+DROP POLICY cohorts_read_allowed ON public.cohorts;
+CREATE POLICY cohorts_read_allowed ON public.cohorts FOR SELECT TO authenticated USING (owner_id = auth.uid() OR (visibility = 'workspace' AND workspace_id IS NOT NULL AND EXISTS (SELECT 1 FROM public.workspace_members m WHERE m.workspace_id = cohorts.workspace_id AND m.user_id = auth.uid())));
+DROP POLICY cohort_items_read_allowed ON public.cohort_items;
+CREATE POLICY cohort_items_read_allowed ON public.cohort_items FOR SELECT TO authenticated USING (EXISTS (SELECT 1 FROM public.cohorts c WHERE c.id = cohort_id AND (c.owner_id = auth.uid() OR (c.visibility = 'workspace' AND c.workspace_id IS NOT NULL AND EXISTS (SELECT 1 FROM public.workspace_members m WHERE m.workspace_id = c.workspace_id AND m.user_id = auth.uid())))));
+DROP POLICY cohort_comments_read_allowed ON public.cohort_comments;
+CREATE POLICY cohort_comments_read_allowed ON public.cohort_comments FOR SELECT TO authenticated USING (EXISTS (SELECT 1 FROM public.cohorts c WHERE c.id = cohort_id AND (c.owner_id = auth.uid() OR (c.visibility = 'workspace' AND c.workspace_id IS NOT NULL AND EXISTS (SELECT 1 FROM public.workspace_members m WHERE m.workspace_id = c.workspace_id AND m.user_id = auth.uid())))));
+DROP POLICY activity_events_read_member ON public.activity_events;
+CREATE POLICY activity_events_read_member ON public.activity_events FOR SELECT TO authenticated USING (EXISTS (SELECT 1 FROM public.workspace_members m WHERE m.workspace_id = activity_events.workspace_id AND m.user_id = auth.uid()));
+
+DROP FUNCTION app_private.is_workspace_member(uuid, uuid);
+DROP FUNCTION app_private.is_workspace_owner(uuid, uuid);
+DROP SCHEMA app_private;

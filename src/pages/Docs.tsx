@@ -20,6 +20,7 @@ const SECTIONS = [
   { id: "r", label: "R" },
   { id: "python", label: "Python API" },
   { id: "api-keys", label: "API keys & MCP" },
+  { id: "private-projects", label: "Private projects & cohorts" },
   { id: "pipeline", label: "Bring your own data" },
 ] as const;
 
@@ -741,6 +742,22 @@ accs <- find("microglia in the aging mouse brain")`}
                 <Mono>python -m singlet.mcp</Mono>) that loads data on your machine. Questions or problems →{" "}
                 <a href={GITHUB_ISSUES} target="_blank" rel="noopener noreferrer">GitHub Issues</a>.
               </p>
+            </Section>
+
+            <Section id="private-projects" title="Private projects, cohorts and workspaces">
+              <p>
+                Signed-in researchers can put their own <Mono>.singlet</Mono> files beside the public catalogue without
+                publishing them. Open <Link to="/my-data">Your data</Link>, create a project, then upload a file or register
+                a public HTTPS URL. singlet validates the bundle and indexes its study metadata and per-sample QC.
+              </p>
+              <ul>
+                <li>Preview limits are enforced in code: 5 projects per account, 20 files per project, 2 GB per file, and 10 GB stored per account.</li>
+                <li>Uploaded files use resumable 50 MB parts. Registered URLs are read with HTTP ranges and do not use your storage allowance.</li>
+                <li>Private studies appear under <strong>Mine</strong> in Browse. Project read tokens let Python, R and API clients load a file without exposing your account session.</li>
+                <li>Select public studies in Browse and choose <strong>Save cohort</strong> to pin the selection to catalogue version <Mono>2026.09</Mono>. Cohorts can be private, shared by link, or attached to a workspace.</li>
+                <li>Workspaces support owner/member collaboration, invite links, comments and activity, up to 25 members and 3 workspaces per user.</li>
+              </ul>
+              <p className="text-sm text-muted-foreground">These features are free while in preview. There is no billing or paid plan.</p>
             </Section>
 
             {/* ── BYOD / pipeline ── */}

@@ -137,6 +137,19 @@ head(colData(sce)$gsm_id)`}
             />
           </section>
 
+          <section className="pb-12 mb-12 border-b border-border scroll-mt-20">
+            <h2 className="mb-4">Bring your own studies</h2>
+            <p>
+              Sign in, open <Link to="/my-data" className="text-primary hover:underline">Your data</Link>, and create a private
+              project. Upload a <code className="code-inline">.singlet</code> file or register its public HTTPS URL; validated
+              metadata and QC then appear under <strong>Mine</strong> in Browse.
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Free while in preview. Limits: 5 projects, 20 files per project, 2 GB per file and 10 GB stored per account.
+              Save selected public studies as a versioned cohort or share work in a lab workspace.
+            </p>
+          </section>
+
           {/* ── Good to know ── */}
           <section className="pb-12 mb-12 border-b border-border scroll-mt-20">
             <h2 className="mb-4">Good to know</h2>

@@ -4,6 +4,8 @@ import { cn } from "@/lib/utils";
 import { fmtBytes, fmtCompact, fmtInt } from "@/lib/catalog-display";
 import { bundleUrl } from "@/integrations/api/client";
 import { PY_INSTALL, R_INSTALL } from "@/lib/install-snippets";
+import { apiClient, isApiError } from "@/integrations/api/client";
+import { useAuth } from "@/components/auth/AuthProvider";
 import type { Selection } from "./useSelection";
 
 type Tab = "python" | "r" | "curl";
@@ -48,6 +50,9 @@ export const SelectionBar = forwardRef<HTMLDivElement, Props>(function Selection
   const [tab, setTab] = useState<Tab>("python");
   const [copied, setCopied] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState("");
+  const { user, openSignIn } = useAuth();
   const { items, totals, clear, toggle } = selection;
   if (!items.length) return null;
 
@@ -60,6 +65,19 @@ export const SelectionBar = forwardRef<HTMLDivElement, Props>(function Selection
       setCopied(true);
       setTimeout(() => setCopied(false), 1400);
     });
+  };
+  const saveCohort = async () => {
+    if (!user) { openSignIn(); return; }
+    const name = window.prompt("Cohort name", `Cohort of ${ids.length} studies`);
+    if (!name?.trim()) return;
+    setSaving(true); setSaveMessage("");
+    try {
+      const result = await apiClient.product.saveCohort({ name: name.trim(), notes: "Saved from Browse", visibility: "private", public_gse_ids: ids, catalog_version: "2026.09" });
+      const cohort = result.cohort as { id?: string } | undefined;
+      setSaveMessage("Saved");
+      if (cohort?.id) window.location.assign(`/c/${cohort.id}`);
+    } catch (e) { setSaveMessage(isApiError(e) ? e.message : "Could not save cohort."); }
+    finally { setSaving(false); }
   };
 
   return (
@@ -105,6 +123,9 @@ export const SelectionBar = forwardRef<HTMLDivElement, Props>(function Selection
           </div>
 
           <div className="ml-auto flex items-center gap-2">
+            <button type="button" onClick={saveCohort} disabled={saving} className="btn-secondary btn-sm !bg-transparent !text-dark-foreground !border-dark-border hover:!bg-white/5">
+              {saving ? "Saving…" : "Save cohort"}
+            </button>
             <button type="button" onClick={copy} className="btn-secondary btn-sm !bg-transparent !text-dark-foreground !border-dark-border hover:!bg-white/5">
               {copied ? <Check size={13} /> : <Copy size={13} />}
               {copied ? "Copied" : "Copy"}
@@ -124,6 +145,7 @@ export const SelectionBar = forwardRef<HTMLDivElement, Props>(function Selection
             </button>
           </div>
         </div>
+        {saveMessage && <p className="mt-1 text-[12px] text-dark-muted">{saveMessage}</p>}
 
         <pre className="mt-2.5 font-mono text-[12.5px] leading-[1.55] text-dark-foreground whitespace-pre overflow-x-auto max-h-[112px]">{code}</pre>
 

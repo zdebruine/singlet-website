@@ -17,6 +17,12 @@ database_id = "fb42f359-92a0-452c-91e4-f630f627c4c7"
 binding = "SINGLET_DATA"
 bucket_name = "singlet-data"
 
+# Private, account-owned .singlet files. Objects are never publicly exposed;
+# Pages Functions authorize every read and issue one-hour signed loader URLs.
+[[r2_buckets]]
+binding = "USER_DATA"
+bucket_name = "singlet-user-data"
+
 # ── Environment variables (non-secret) ───────────────────────────────────────
 # NOTE: VITE_R2_PUBLIC_URL is a Vite *build-time* var (baked into the static
 # bundle), NOT a Worker runtime var, so it does NOT belong here. Its committed

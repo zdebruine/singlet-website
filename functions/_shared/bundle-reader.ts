@@ -65,6 +65,30 @@ async function fetchRange(url: string, start: number, end: number): Promise<Uint
   return new Uint8Array(await res.arrayBuffer());
 }
 
+export interface BundleByteSource {
+  size(): Promise<number>;
+  range(start: number, end: number): Promise<Uint8Array>;
+}
+
+export function httpBundleSource(url: string): BundleByteSource {
+  return { size: () => headSize(url), range: (start, end) => fetchRange(url, start, end) };
+}
+
+export function r2BundleSource(bucket: R2Bucket, key: string): BundleByteSource {
+  return {
+    async size() {
+      const head = await bucket.head(key);
+      if (!head) throw new Error("File not found");
+      return head.size;
+    },
+    async range(start, end) {
+      const object = await bucket.get(key, { range: { offset: start, length: end - start + 1 } });
+      if (!object) throw new Error("File not found");
+      return new Uint8Array(await object.arrayBuffer());
+    },
+  };
+}
+
 // ── little-endian readers ───────────────────────────────────────────────────
 
 const u16 = (b: Uint8Array, o: number) => b[o] | (b[o + 1] << 8);
@@ -75,10 +99,10 @@ const decoder = new TextDecoder();
 
 // ── central-directory parse ─────────────────────────────────────────────────
 
-export async function parseZipIndex(url: string): Promise<{ bytes: number; entries: ZipEntry[] }> {
-  const bytes = await headSize(url);
+export async function parseZipSource(source: BundleByteSource): Promise<{ bytes: number; entries: ZipEntry[] }> {
+  const bytes = await source.size();
   const tailLen = Math.min(TAIL_BYTES, bytes);
-  const tail = await fetchRange(url, bytes - tailLen, bytes - 1);
+  const tail = await source.range(bytes - tailLen, bytes - 1);
 
   // EOCD: scan backwards for the signature.
   let eocd = -1;
@@ -102,14 +126,14 @@ export async function parseZipIndex(url: string): Promise<{ bytes: number; entri
     // The zip64 EOCD record may or may not be inside the tail we already have.
     const tailStart = bytes - tailLen;
     const rec =
-      z64Offset >= tailStart ? tail.subarray(z64Offset - tailStart) : await fetchRange(url, z64Offset, z64Offset + 55);
+      z64Offset >= tailStart ? tail.subarray(z64Offset - tailStart) : await source.range(z64Offset, z64Offset + 55);
     if (u32(rec, 0) !== ZIP64_EOCD_SIG) throw new Error("zip64 EOCD record not found");
     nEntries = u64(rec, 32);
     cdSize = u64(rec, 40);
     cdOffset = u64(rec, 48);
   }
 
-  const cd = await fetchRange(url, cdOffset, cdOffset + cdSize - 1);
+  const cd = await source.range(cdOffset, cdOffset + cdSize - 1);
   const entries: ZipEntry[] = [];
   let p = 0;
   while (p + 46 <= cd.length && u32(cd, p) === CEN_SIG) {
@@ -154,6 +178,10 @@ export async function parseZipIndex(url: string): Promise<{ bytes: number; entri
     p += 46 + nameLen + extraLen + commentLen;
   }
   return { bytes, entries };
+}
+
+export async function parseZipIndex(url: string): Promise<{ bytes: number; entries: ZipEntry[] }> {
+  return parseZipSource(httpBundleSource(url));
 }
 
 // ── D1 index cache ──────────────────────────────────────────────────────────
@@ -242,18 +270,22 @@ async function inflateRaw(data: Uint8Array): Promise<Uint8Array> {
 }
 
 /** Fetch + inflate one entry. Throws when it is larger than MAX_INFLATE_BYTES. */
-export async function readEntry(gse: string, entry: ZipEntry): Promise<Uint8Array> {
+export async function readEntryFromSource(source: BundleByteSource, entry: ZipEntry): Promise<Uint8Array> {
   if (entry.u > MAX_INFLATE_BYTES) throw new Error(`Entry ${entry.p} is ${entry.u} bytes (limit ${MAX_INFLATE_BYTES})`);
-  const url = bundleUrl(gse);
   // One request covers the local header (30 + name + extra, extra ≤ 512 in practice) and the data.
   const start = entry.o;
   const end = entry.o + 30 + 512 + entry.c + 512;
-  const blob = await fetchRange(url, start, end);
+  const blob = await source.range(start, end);
   const nameLen = u16(blob, 26);
   const extraLen = u16(blob, 28);
   const dataStart = 30 + nameLen + extraLen;
   const raw = blob.subarray(dataStart, dataStart + entry.c);
   return entry.n === 8 ? inflateRaw(raw) : raw;
+}
+
+
+export async function readEntry(gse: string, entry: ZipEntry): Promise<Uint8Array> {
+  return readEntryFromSource(httpBundleSource(bundleUrl(gse)), entry);
 }
 
 export async function readEntryText(gse: string, entry: ZipEntry): Promise<string> {
@@ -270,6 +302,12 @@ export async function entryRange(gse: string, entry: ZipEntry): Promise<{ url: s
   const head = await fetchRange(url, entry.o, entry.o + 29);
   const start = entry.o + 30 + u16(head, 26) + u16(head, 28);
   return { url, start, end: start + entry.c - 1 };
+}
+
+export async function entryPayloadRange(source: BundleByteSource, entry: ZipEntry): Promise<{ start: number; end: number }> {
+  const head = await source.range(entry.o, entry.o + 29);
+  const start = entry.o + 30 + u16(head, 26) + u16(head, 28);
+  return { start, end: start + entry.c - 1 };
 }
 
 // ── path helpers ────────────────────────────────────────────────────────────

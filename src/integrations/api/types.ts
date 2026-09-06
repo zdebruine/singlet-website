@@ -412,6 +412,84 @@ export interface ApiKeyCreated {
   secret: string;
 }
 
+export type ShareVisibility = "private" | "workspace" | "link";
+
+export interface UserFile {
+  id: string;
+  project_id: string;
+  filename: string;
+  kind: "upload" | "url";
+  bytes: number;
+  status: "uploading" | "indexing" | "ready" | "failed";
+  error: string | null;
+  source_url?: string | null;
+}
+
+export interface Project {
+  id: string;
+  name: string;
+  description: string;
+  visibility: ShareVisibility;
+  workspace_id: string | null;
+  read_token_prefix: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PrivateStudy {
+  id: string;
+  project_id: string;
+  study_id: string;
+  title: string | null;
+  abstract: string | null;
+  organism_primary: string | null;
+  organisms: string[];
+  tissue_groups: string[];
+  disease_groups: string[];
+  assay_families: string[];
+  cell_types_raw: string[];
+  n_samples: number;
+  n_cells: number | null;
+  bytes: number;
+  reference_build: string | null;
+  singlet_version: string | null;
+  year: number | null;
+  manifest: Record<string, unknown>;
+  study_meta: Record<string, unknown>;
+}
+
+export interface Cohort {
+  id: string;
+  name: string;
+  notes: string;
+  query: string;
+  filters: Record<string, unknown>;
+  catalog_version: string;
+  visibility: ShareVisibility;
+  workspace_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Workspace {
+  id: string;
+  name: string;
+  slug: string;
+  owner_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProductDashboard {
+  projects: Project[];
+  files: UserFile[];
+  cohorts: Cohort[];
+  workspaces: Workspace[];
+  usage: { mcp_week?: Record<string, number>; downloads_month?: number; download_bytes_month?: number; storage_bytes?: number; projects?: number; cohorts?: number };
+  weekly_summary: boolean;
+  limits: { projects: number; files_per_project: number; storage_bytes: number; workspaces: number; members_per_workspace: number; file_bytes: number };
+}
+
 // ── Bundle contents (/api/bundle/:gse/*) ────────────────────────────────────
 
 export interface BundleFile {

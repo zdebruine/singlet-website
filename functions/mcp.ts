@@ -28,6 +28,7 @@ import { computeStats } from "./_shared/stats-core";
 import { TISSUE_GROUPS, DISEASE_GROUPS, ASSAY_FAMILIES } from "./_shared/vocab";
 import { MANIFEST_FORMATS } from "./_shared/manifest-core";
 import type { StudyRow, SampleRow } from "./_shared/search-core";
+import { productCall } from "./_shared/private-project";
 import {
   ACCOUNT_URL,
   LOADERS,
@@ -272,6 +273,20 @@ const TOOLS = [
       additionalProperties: false,
     },
     annotations: { title: "Is this study usable?", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  },
+  {
+    name: "get_cohort",
+    title: "Get a saved cohort",
+    description: "Return a version-pinned cohort and its public/private study identifiers. A session or personal API key is required for private cohorts; a shared-link token can open link cohorts.",
+    inputSchema: { type: "object", properties: { id: { type: "string", format: "uuid" }, token: { type: "string", description: "Optional sco_… shared-link token." } }, required: ["id"], additionalProperties: false },
+    annotations: { title: "Get a saved cohort", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  },
+  {
+    name: "save_cohort",
+    title: "Save a cohort",
+    description: "Save up to 2,000 public GSE accessions as a private, link-shared or workspace cohort pinned to the current catalogue. Requires a session or personal API key.",
+    inputSchema: { type: "object", properties: { name: { type: "string", minLength: 1, maxLength: 120 }, notes: { type: "string", maxLength: 20000 }, gse_ids: { type: "array", items: { type: "string", pattern: "^GSE\\d+$" }, minItems: 1, maxItems: 2000 }, visibility: { type: "string", enum: ["private", "link", "workspace"], default: "private" }, workspace_id: { type: "string", format: "uuid" } }, required: ["name", "gse_ids"], additionalProperties: false },
+    annotations: { title: "Save a cohort", readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
   },
 ];
 
@@ -800,6 +815,15 @@ async function callTool(ctx: CallContext, params: Record<string, unknown>) {
         return { result: withQuota(await compareStudies(db, args), meta) };
       case "assess_study":
         return { result: withQuota(await assessStudy(db, args), meta) };
+      case "get_cohort": {
+        const cohort = await productCall<Record<string, unknown>>(ctx.request, ctx.env, "get_cohort", { id: args.id, token: args.token });
+        return { result: withQuota(toolResult(JSON.stringify(cohort), cohort), meta) };
+      }
+      case "save_cohort": {
+        if (!hasKey && !ctx.request.headers.get("Authorization")) return { result: toolError(`save_cohort needs a signed-in session or personal API key from ${ACCOUNT_URL}.`, { ...meta, auth: "required" }) };
+        const saved = await productCall<Record<string, unknown>>(ctx.request, ctx.env, "save_cohort", { name: args.name, notes: args.notes ?? "", visibility: args.visibility ?? "private", workspace_id: args.workspace_id ?? null, public_gse_ids: args.gse_ids });
+        return { result: withQuota(toolResult(JSON.stringify(saved), saved), meta) };
+      }
       default:
         return { error: rpcError(null, -32602, `Unknown tool: ${name}`) };
     }
