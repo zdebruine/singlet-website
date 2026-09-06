@@ -626,7 +626,16 @@ export async function compareStudies(ctx: SampleQcArgs, args: Record<string, unk
       missing.push(id);
       continue;
     }
-    studies.push(comparisonRow(d, await sampleQcFromD1(ctx.db, id)));
+    // Prefer the memoised QC; otherwise read the file's summaries once (and cache them).
+    let qc = await sampleQcFromD1(ctx.db, id);
+    if (!qc.length) {
+      try {
+        qc = (await loadSampleQc(ctx.db, id, { waitUntil: ctx.waitUntil })).samples;
+      } catch {
+        qc = [];
+      }
+    }
+    studies.push(comparisonRow(d, qc));
   }
   if (studies.length < 2)
     return toolError(`Only ${studies.length} of those accessions are in the atlas${missing.length ? ` (missing: ${missing.join(", ")})` : ""}, so there is nothing to compare.`);
