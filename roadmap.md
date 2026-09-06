@@ -119,4 +119,4 @@
 - [ ] Usage events, account usage summaries and weekly email opt-in
 - [ ] Documentation and quickstart updates with preview-limit language
 - [ ] Build/typecheck/package-lock verification and production throwaway-account acceptance
-- [ ] Fix all current preview typecheck/build errors from observability log
+- [x] Fix all current preview typecheck/build errors from observability log
