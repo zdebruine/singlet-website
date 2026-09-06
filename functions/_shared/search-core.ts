@@ -933,15 +933,71 @@ function shapeStudy(r: StudyDbRow): StudyRow {
   };
 }
 
+function scoreStudy(r: StudyRow, signals: SoftSignals): { score: number; full: boolean } {
+  let score = 0;
+  let full = true;
+  const addFacet = (key: keyof Omit<SoftSignals, "q">, label: string, have: string[], weight: number) => {
+    const wanted = signals[key];
+    if (!wanted.length) return;
+    const hits = wanted.filter((value) => have.some((v) => v.toLowerCase() === value.toLowerCase()));
+    const status = hits.length === wanted.length ? "hit" : hits.length ? "partial" : "miss";
+    if (status !== "hit") full = false;
+    if (hits.length) score += weight * (hits.length / wanted.length);
+    r.match.facets.push({ key, label, status, detail: hits.length ? hits.join(" / ") : "not annotated" });
+  };
+  addFacet("tissue_group", "Tissue", r.tissue_groups, 3);
+  addFacet("disease_group", "Disease", r.disease_groups, 3);
+  addFacet("assay_family", "Assay", r.assay_families, 1.5);
+  for (const ct of signals.cell_type) {
+    const hit = r.match.filters.find((x) => x.field === "cell_type" && x.value === ct);
+    const n = hit?.n_samples ?? 0;
+    const fraction = r.n_total ? Math.min(1, n / r.n_total) : 0;
+    const status = n >= r.n_total && r.n_total > 0 ? "hit" : n > 0 ? "partial" : "miss";
+    if (status !== "hit") full = false;
+    if (n) score += 1 + 2 * fraction;
+    r.match.facets.push({ key: "cell_type", label: ct, status, detail: n ? `${n} of ${r.n_total} samples annotated` : "not annotated" });
+  }
+  let keywordScore = 0;
+  for (const term of signals.q) {
+    const matches = r.match.text.filter((x) => x.term === term || termVariants(term).includes(x.term));
+    const hits: string[] = [];
+    if (matches.some((x) => x.field === "title")) { keywordScore += 1.5; hits.push("title"); }
+    if (matches.some((x) => x.field === "abstract")) { keywordScore += 1; hits.push("abstract"); }
+    const sampleN = Math.max(0, ...matches.filter((x) => !["title", "abstract", "accession"].includes(x.field)).map((x) => x.n_samples));
+    if (sampleN) { keywordScore += 0.5 * Math.min(1, sampleN / Math.max(1, r.n_total)); hits.push(`${sampleN} of ${r.n_total} samples`); }
+    r.match.keywords.push({ term, hits });
+  }
+  score += Math.min(4, keywordScore);
+  if (r.has_bundle) score += 0.5;
+  if (r.bundle_n_samples != null) score += Math.log10(r.bundle_n_samples + 1) * 0.3;
+  if ((r.year ?? 0) >= 2020) score += 0.2;
+  r.match.score = Number(score.toFixed(3));
+  r.score = r.match.score;
+  return { score, full };
+}
+
+function softFromQuery(p: SearchParams): SoftSignals {
+  return { tissue_group: [], disease_group: [], assay_family: [], cell_type: [], q: tokenizeQuery(p.q).terms };
+}
+
 /** Run the study query; fills match/conditions/why for the page. */
-export async function runStudySearch(ctx: Ctx, p: SearchParams, opts: { orFallback?: boolean } = {}): Promise<SearchResult<StudyRow>> {
+export async function runStudySearch(
+  ctx: Ctx,
+  p: SearchParams,
+  opts: { orFallback?: boolean; soft?: SoftSignals } = {}
+): Promise<SearchResult<StudyRow>> {
   const { db } = ctx;
-  let plan = planStudyQuery(p);
+  const signals = opts.soft ?? softFromQuery(p);
+  const isRanked = !extractAccessions(p.q).gse.length && !extractAccessions(p.q).gsm.length &&
+    (signals.q.length > 0 || signals.tissue_group.length > 0 || signals.disease_group.length > 0 || signals.assay_family.length > 0 || signals.cell_type.length > 0);
+  const candidateParams = isRanked ? { ...p, page: 1, limit: RANKED_CANDIDATE_LIMIT } : p;
+  const orMatch = signals.q.length ? tokenizeQuery(signals.q.join(" ")).or : null;
+  let plan = planStudyQuery(candidateParams, isRanked ? orMatch : undefined);
   let res = await db.prepare(plan.sql).bind(...plan.params).all<StudyDbRow>();
   let anyWord = false;
 
   // AND found nothing → try OR over the same terms (only when there are ≥2 terms).
-  if (!res.results.length && plan.match && opts.orFallback !== false && plan.terms.length > 1) {
+  if (!isRanked && !res.results.length && plan.match && opts.orFallback !== false && plan.terms.length > 1) {
     const fts = tokenizeQuery(p.q);
     const orPlan = planStudyQuery(p, fts.or);
     const orRes = await db.prepare(orPlan.sql).bind(...orPlan.params).all<StudyDbRow>();
@@ -962,13 +1018,29 @@ export async function runStudySearch(ctx: Ctx, p: SearchParams, opts: { orFallba
     cells = c?.cells ?? null;
   }
 
-  const rows = res.results.map(shapeStudy);
-  await Promise.all([
-    attachStudyMatches(ctx, rows, p, plan),
-    attachConditions(ctx, rows),
-  ]);
+  let rows = res.results.map(shapeStudy);
+  const evidenceParams: SearchParams = { ...p,
+    tissue_group: [...new Set([...p.tissue_group, ...signals.tissue_group])],
+    disease_group: [...new Set([...p.disease_group, ...signals.disease_group])],
+    assay_family: [...new Set([...p.assay_family, ...signals.assay_family])],
+    cell_type: [...new Set([...p.cell_type, ...signals.cell_type])],
+    q: signals.q.join(" ") };
+  const evidencePlan = { ...plan, terms: signals.q, match: orMatch };
+  await attachStudyMatches(ctx, rows, evidenceParams, evidencePlan);
+  let groups: { full: number; partial: number } | undefined;
+  if (isRanked) {
+    const scored = rows.map((row) => ({ row, ...scoreStudy(row, signals) }));
+    const top = Math.max(0, ...scored.map((x) => x.score));
+    const kept = scored.filter((x) => x.full || x.score >= Math.max(2, 0.35 * top));
+    kept.sort((a, b) => Number(b.full) - Number(a.full) || b.score - a.score || (b.row.bundle_n_samples ?? b.row.n_done) - (a.row.bundle_n_samples ?? a.row.n_done));
+    groups = { full: kept.filter((x) => x.full).length, partial: kept.filter((x) => !x.full).length };
+    total = kept.length;
+    const start = (p.page - 1) * p.limit;
+    rows = kept.slice(start, start + p.limit).map((x) => x.row);
+  }
+  await attachConditions(ctx, rows);
   for (const r of rows) {
-    r.why = whyText(r, p);
+    r.why = whyText(r, evidenceParams);
     r.abstract = truncateAbstract(r.abstract);
   }
 
@@ -981,6 +1053,7 @@ export async function runStudySearch(ctx: Ctx, p: SearchParams, opts: { orFallba
     accessions: rows.map((r) => r.gse_id),
     ...(plan.accessionLookup ? { accession_lookup: plan.accessionLookup } : {}),
     ...(anyWord ? { any_word: true } : {}),
+    ...(groups ? { groups } : {}),
   };
 }
 
@@ -1473,5 +1546,13 @@ export function pickFilters(p: SearchFilters): SearchFilters {
     has_bundle: p.has_bundle,
     year_min: p.year_min,
     year_max: p.year_max,
+    min_file_samples: p.min_file_samples,
+    min_file_cells: p.min_file_cells,
+    reference_build: p.reference_build,
+    protocol: p.protocol,
+    has_pubmed: p.has_pubmed,
+    max_file_bytes: p.max_file_bytes,
+    has_conditions: p.has_conditions,
+    match_mode: p.match_mode,
   };
 }
