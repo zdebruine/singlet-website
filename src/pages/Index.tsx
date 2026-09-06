@@ -28,10 +28,9 @@ const Index = () => {
     staleTime: 120_000,
   });
   const statItems = [
-    { value: stats ? fmtInt(stats.series_count) : null, label: "studies" },
-    { value: stats ? fmtInt(stats.success_samples) : null, label: "samples processed" },
-    { value: stats ? fmtCompact(stats.total_cells) : null, label: "cells" },
-    { value: stats ? fmtInt(stats.species_count) : null, label: "species" },
+    { value: stats ? fmtInt(stats.studies_with_files) : null, label: "studies with files" },
+    { value: stats ? fmtInt(stats.samples_in_files) : null, label: "samples in files" },
+    { value: stats ? fmtCompact(stats.cells_in_files) : null, label: "cells called in files" },
   ];
 
   return (
@@ -40,14 +39,14 @@ const Index = () => {
 
       <main className="flex-1">
         {/* ── Hero ── */}
-        <section className="container-site pt-[72px] md:pt-[90px] pb-10 text-center">
-          <h1 className="font-display font-bold text-[34px] sm:text-[44px] md:text-[52px] leading-[1.05] tracking-[-0.03em] text-foreground mx-auto max-w-[760px]">
+        <section className="container-site pt-16 md:pt-20 pb-10 text-center">
+          <h1 className="type-display text-foreground mx-auto max-w-[760px]">
             Find single-cell data.
             <br />
             Load it in one line.
           </h1>
           <p className="mt-5 text-[17px] md:text-[19px] leading-relaxed text-muted-foreground mx-auto max-w-[720px]">
-            Every public scRNA-seq study on GEO, reprocessed the same way, one file per study — free, no account.
+            Every public scRNA-seq study on GEO, reprocessed the same way, one file per study — Free, CC0.
           </p>
 
           <div className="mt-9 mx-auto max-w-[820px]">
@@ -72,10 +71,10 @@ const Index = () => {
 
         {/* ── Live stats ── */}
         <section className="container-site pb-14" aria-label="Atlas size">
-          <dl className="mx-auto max-w-[900px] grid grid-cols-2 md:grid-cols-4 gap-y-6 text-center">
+          <dl className="mx-auto max-w-[900px] grid sm:grid-cols-3 border-y border-border text-center">
             {statItems.map((s) => (
-              <div key={s.label}>
-                <dd className="font-display font-bold text-[30px] md:text-[34px] leading-none tracking-tight text-foreground tabular">
+              <div key={s.label} className="py-6 sm:border-r sm:last:border-r-0 border-border">
+                <dd className="font-mono font-medium text-[30px] leading-none text-foreground tabular">
                   {s.value ?? <StatSkeleton />}
                 </dd>
                 <dt className="mt-2 text-[13px] text-muted-foreground lowercase">{s.label}</dt>
@@ -87,6 +86,23 @@ const Index = () => {
         {/* ── Start from ── */}
         <section className="container-site pb-16">
           <QuickStartHubs title="Or start from" />
+        </section>
+
+        <section className="container-site pb-16" aria-labelledby="how-it-works">
+          <h2 id="how-it-works" className="type-h2 mb-6">How it works</h2>
+          <ol className="grid md:grid-cols-3 border-y border-border">
+            {[
+              ["01", "Find a study", "Search by tissue, disease, cell type, organism, assay, or GEO accession."],
+              ["02", "Check the file", "Review sample-level QC, reference build, provenance, and exact file contents."],
+              ["03", "Load it", "pip install singlet · singlet.load(\"GSE178957\")"],
+            ].map(([n, title, copy]) => (
+              <li key={n} className="py-6 md:px-6 md:first:pl-0 md:border-r md:last:border-r-0 border-border">
+                <span className="type-mono text-primary">{n}</span>
+                <h3 className="type-h3 mt-2">{title}</h3>
+                <p className={n === "03" ? "type-mono mt-2 text-muted-foreground" : "type-small mt-2 text-muted-foreground"}>{copy}</p>
+              </li>
+            ))}
+          </ol>
         </section>
 
         {/* ── Install / load ── */}

@@ -15,6 +15,12 @@ interface StatsRow {
   avg_median_genes: number | null;
 }
 
+interface FileStatsRow {
+  studies_with_files: number;
+  samples_in_files: number;
+  cells_in_files: number | null;
+}
+
 export interface CorpusStats {
   total_samples: number;
   success_samples: number;
@@ -25,10 +31,13 @@ export interface CorpusStats {
   avg_median_genes: number | null;
   success_rate: number | null;
   failure_categories: { value: string; count: number }[];
+  studies_with_files: number;
+  samples_in_files: number;
+  cells_in_files: number;
 }
 
 export async function computeStats(db: D1Database): Promise<CorpusStats | null> {
-  const [row, failures] = await Promise.all([
+  const [row, failures, fileStats] = await Promise.all([
     db
       .prepare(
         `SELECT
@@ -55,6 +64,15 @@ export async function computeStats(db: D1Database): Promise<CorpusStats | null> 
           LIMIT 40`
       )
       .all<{ value: string; count: number }>(),
+    db
+      .prepare(
+        `SELECT
+           (SELECT COUNT(*) FROM bundle_manifest) AS studies_with_files,
+           (SELECT COUNT(*) FROM sample_qc) AS samples_in_files,
+           (SELECT SUM(COALESCE(n_cells_called, 0)) FROM sample_qc) AS cells_in_files`
+      )
+      .first<FileStatsRow>()
+      .catch(() => null),
   ]);
 
   if (!row) return null;
@@ -70,5 +88,8 @@ export async function computeStats(db: D1Database): Promise<CorpusStats | null> 
     avg_median_genes: row.avg_median_genes != null ? Math.round(row.avg_median_genes) : null,
     success_rate: total > 0 ? done / total : null,
     failure_categories: failures.results.map((f) => ({ value: f.value, count: Number(f.count) })),
+    studies_with_files: fileStats?.studies_with_files ?? 0,
+    samples_in_files: fileStats?.samples_in_files ?? 0,
+    cells_in_files: fileStats?.cells_in_files ?? 0,
   };
 }
