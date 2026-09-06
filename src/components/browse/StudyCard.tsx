@@ -62,7 +62,7 @@ export function StudyCard({ row, selected, onToggle, ai, why, aiWhy }: Props) {
   const evidenceClass = (status: "hit" | "partial" | "miss") => cn(
     "chip h-6 text-[11px]",
     status === "hit" && "chip-active",
-    status === "partial" && "border-warning/40 bg-warning-soft text-warning",
+    status === "partial" && "border-warning-border bg-warning-tint text-warning",
     status === "miss" && "bg-transparent text-muted-foreground line-through"
   );
 
