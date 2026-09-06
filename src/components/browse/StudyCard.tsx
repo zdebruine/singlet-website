@@ -22,8 +22,8 @@ export function metaLine(r: StudyRow): string[] {
   parts.push(r.organism_label || "Unknown organism");
   if (r.tissue_groups.length) parts.push(r.tissue_groups.slice(0, 2).join(", ") + (r.tissue_groups.length > 2 ? " +" + (r.tissue_groups.length - 2) : ""));
   if (r.assay_families.length) parts.push(r.assay_families.slice(0, 2).join(", "));
-  parts.push(`${fmtInt(r.n_done)} / ${fmtInt(r.n_total)} samples`);
-  parts.push(`${fmtCompact(r.n_cells)} cells`);
+  parts.push(`${fmtInt(r.bundle_n_samples ?? r.n_done)} samples in file`);
+  parts.push(r.file_cells != null ? `${fmtCompact(r.file_cells)} cells (file)` : `${fmtCompact(r.n_cells)} cells (catalog)`);
   if (r.year) parts.push(String(r.year));
   return parts;
 }
@@ -58,7 +58,7 @@ export function StudyCard({ row, selected, onToggle, ai, why, aiWhy }: Props) {
 
   return (
     <article
-      className={cn("surface p-4 transition-colors", selected && "border-primary/60 bg-primary/[0.02]")}
+      className={cn("surface group p-4 transition-colors", selected && "border-primary/60 bg-primary/[0.02]")}
       aria-labelledby={`${row.gse_id}-title`}
     >
       <div className="flex items-start gap-3">
@@ -76,7 +76,7 @@ export function StudyCard({ row, selected, onToggle, ai, why, aiWhy }: Props) {
             </Link>
             {row.year && <span className="font-mono text-[12px] text-muted-foreground tabular">{row.year}</span>}
           </div>
-          <h3 id={`${row.gse_id}-title`} className="mt-0.5 text-[15px] font-semibold leading-snug text-foreground">
+          <h3 id={`${row.gse_id}-title`} className="mt-0.5 text-[15px] font-semibold leading-snug text-foreground line-clamp-2">
             <Link to={`/study/${row.gse_id}`} className="hover:text-primary transition-colors">
               {row.title ?? "Untitled study"}
             </Link>
@@ -94,6 +94,19 @@ export function StudyCard({ row, selected, onToggle, ai, why, aiWhy }: Props) {
               </span>
             )}
           </p>
+
+          {(row.match.facets.length > 0 || row.match.keywords.some((k) => k.hits.length)) && (
+            <ul className="mt-2 flex flex-wrap gap-1.5" aria-label="Match evidence">
+              {row.match.facets.map((facet) => (
+                <li key={`${facet.key}-${facet.label}`} title={facet.detail} className={cn("chip h-6 text-[11px]", facet.status === "hit" && "chip-active", facet.status === "miss" && "text-muted-foreground")}>
+                  {facet.label}: {facet.status}
+                </li>
+              ))}
+              {row.match.keywords.filter((k) => k.hits.length).map((keyword) => (
+                <li key={keyword.term} title={keyword.hits.join(" · ")} className="chip h-6 text-[11px]">“{keyword.term}”</li>
+              ))}
+            </ul>
+          )}
 
           {row.abstract && <p className="mt-2 text-[13px] leading-relaxed text-foreground/75 line-clamp-2">{row.abstract}</p>}
 
@@ -135,7 +148,7 @@ export function StudyCard({ row, selected, onToggle, ai, why, aiWhy }: Props) {
             </p>
           )}
 
-          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 lg:group-focus-within:opacity-100 transition-opacity">
             <LoadSnippet gseId={row.gse_id} />
             {row.has_bundle ? (
               <a
