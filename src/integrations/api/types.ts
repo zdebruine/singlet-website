@@ -3,7 +3,7 @@
 // Keep additive: the Python/R packages consume `data`, `total`, `accessions`.
 
 export type Level = "gse" | "gsm";
-export type Sort = "relevance" | "cells" | "samples" | "year" | "accession";
+export type Sort = "relevance" | "cells" | "samples" | "year" | "accession" | "file_cells" | "file_size" | "alphabetical";
 
 // ── Study / sample rows returned by /api/search and /api/nl-search ──────────
 
@@ -22,6 +22,9 @@ export interface TextMatch {
 export interface MatchInfo {
   filters: FilterMatch[];
   text: TextMatch[];
+  facets: { key: string; label: string; status: "hit" | "partial" | "miss"; detail: string }[];
+  keywords: { term: string; hits: string[] }[];
+  score: number;
 }
 
 export interface Condition {
@@ -51,6 +54,9 @@ export interface StudyRow {
   has_bundle: boolean;
   bundle_bytes: number | null;
   bundle_key: string | null;
+  bundle_n_samples: number | null;
+  file_cells: number | null;
+  reference_build: string | null;
   year: number | null;
   n_conditions: number;
   conditions: Condition[];
@@ -107,6 +113,14 @@ export interface AppliedFilters {
   has_bundle: boolean | null;
   year_min: number | null;
   year_max: number | null;
+  min_file_samples: number | null;
+  min_file_cells: number | null;
+  reference_build: string[];
+  protocol: string[];
+  has_pubmed: boolean | null;
+  max_file_bytes: number | null;
+  has_conditions: boolean | null;
+  match_mode: Record<string, "any" | "all">;
 }
 
 export interface DroppedValue {
@@ -128,6 +142,9 @@ export interface SearchResponse<T = StudyRow | SampleRow> {
   /** Set when no study matched every word and results match any of them instead. */
   any_word?: boolean;
   note?: string;
+  groups?: { full: number; partial: number };
+  hard_applied?: AppliedFilters;
+  ms?: number;
 }
 
 export interface Interpreted {
@@ -207,6 +224,11 @@ export interface FacetsResponse {
   assay_family: FacetOption[];
   cell_type: FacetOption[];
   year: FacetOption[];
+  reference_build: FacetOption[];
+  protocol: FacetOption[];
+  file_samples: FacetOption[];
+  file_cells: FacetOption[];
+  file_size: FacetOption[];
   vocab: {
     tissue_group: string[];
     disease_group: string[];
@@ -358,6 +380,14 @@ export interface SearchQuery {
   has_bundle?: boolean;
   year_min?: number;
   year_max?: number;
+  min_file_samples?: number;
+  min_file_cells?: number;
+  reference_build?: string[];
+  protocol?: string[];
+  has_pubmed?: boolean;
+  max_file_bytes?: number;
+  has_conditions?: boolean;
+  match_mode?: Record<string, "any" | "all">;
   sort?: Sort;
   page?: number;
   limit?: number;

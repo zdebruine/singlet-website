@@ -469,6 +469,10 @@ function studySummary(r: StudyRow, why: string) {
     has_bundle: r.has_bundle,
     bundle_url: r.has_bundle ? bundleUrl(r.gse_id) : null,
     bundle_bytes: r.bundle_bytes,
+    bundle_n_samples: r.bundle_n_samples,
+    file_cells: r.file_cells,
+    reference_build: r.reference_build,
+    match: r.match,
     why,
     study_url: `${SITE}/study/${r.gse_id}`,
     geo_url: `https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=${r.gse_id}`,
@@ -557,7 +561,10 @@ async function searchDatasets(
     if (b.note) lines.push(b.note);
     if (b.quota_exceeded) lines.push("Today's AI-search budget is used up; this was a keyword search.");
     lines.push("");
-    for (const s of rows) {
+    const fullCount = Math.min(rows.length, b.groups?.full ?? rows.length);
+    for (const [index, s] of rows.entries()) {
+      if (index === 0 && b.groups) lines.push(`Matches everything (${fmt(b.groups.full)}):`);
+      if (index === fullCount && (b.groups?.partial ?? 0) > 0) lines.push(`Partial matches, best first (${fmt(b.groups?.partial)}):`);
       lines.push(`- ${s.gse_id} — ${s.title ?? "(untitled)"}`);
       lines.push(`  ${[s.organism, s.tissues.join("/"), s.diseases.join("/"), s.assays.join("/")].filter(Boolean).join(" · ")} · ${fmt(s.n_samples)} samples · ${s.n_cells != null ? fmt(s.n_cells) + " cells" : "cell count unreliable"}${s.year ? " · " + s.year : ""}`);
       if (s.why) lines.push(`  why: ${s.why}`);
@@ -584,6 +591,8 @@ async function searchDatasets(
         page: b.page,
         limit: b.limit,
         results: rows,
+         groups: b.groups ?? { full: b.total, partial: 0 },
+         hard_applied: b.hard_applied ?? b.applied,
         suggestions: b.suggestions,
         note: b.note ?? null,
         quota_exceeded: exhausted,

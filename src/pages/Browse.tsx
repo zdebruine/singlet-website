@@ -8,15 +8,15 @@
  * list studies through /api/search. AND across filter groups, any-of within a
  * group, never loosened silently.
  */
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, LayoutGrid, List, Loader2, Search, SlidersHorizontal, Sparkles } from "lucide-react";
+import { ChevronRight, LayoutGrid, List, Loader2, Search, SlidersHorizontal, Sparkles } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { cn } from "@/lib/utils";
 import { usePageMeta } from "@/hooks/usePageMeta";
-import { fmtCompact, fmtInt } from "@/lib/catalog-display";
+import { fmtCompact, fmtInt, organismLabel } from "@/lib/catalog-display";
 import { searchDestination } from "@/lib/search-routing";
 import { SEARCH_PLACEHOLDER } from "@/components/SearchBox";
 import { apiClient, isApiError } from "@/integrations/api/client";
@@ -28,6 +28,7 @@ import {
   PAGE_SIZE,
   SORTS,
   appliedToQuery,
+  activeFilters,
   appliedToState,
   browseHref,
   hasExplicitFilters,
@@ -39,7 +40,7 @@ import {
   toSearchQuery,
   toggleValue,
   withoutFilter,
-  type ArrayField,
+  type MultiField,
   type BrowseState,
   type View,
 } from "@/components/browse/browse-state";
@@ -127,7 +128,7 @@ const Browse = () => {
   };
 
   // ── Results ───────────────────────────────────────────────────────────────
-  const query = useMemo(() => toSearchQuery(state, PAGE_SIZE), [state]);
+  const query = useMemo(() => ({ ...toSearchQuery(state, Math.min(200, state.page * PAGE_SIZE)), page: 1 }), [state]);
   const result = useQuery<Result>({
     queryKey: ["browse", state.q ? (aiMode ? "nl" : "nl-edited") : "list", stateKey],
     queryFn: async ({ signal }) => {
@@ -172,7 +173,11 @@ const Browse = () => {
     return { ...state, page: 1 };
   }, [aiMode, fresh, state]);
 
-  const onToggle = (field: ArrayField, value: string) => go(toggleValue(explicitBase(), field, value));
+  const onToggle = (field: MultiField, value: string) => go(toggleValue(explicitBase(), field, value));
+  const onMode = (field: MultiField, mode: "any" | "all") => {
+    const b = explicitBase();
+    go({ ...b, match_mode: { ...b.match_mode, [field]: mode } });
+  };
   const onAddCellType = (v: string) => {
     const b = explicitBase();
     if (b.cell_type.includes(v)) return;
@@ -181,6 +186,7 @@ const Browse = () => {
   const onMinCells = (n: number | null) => go({ ...explicitBase(), min_cells: n });
   const onYear = (min: number | null, max: number | null) => go({ ...explicitBase(), year_min: min, year_max: max });
   const onBundle = (only: boolean) => go({ ...explicitBase(), has_bundle: only });
+  const onBoolean = (field: "has_pubmed" | "has_conditions", value: boolean | null) => go({ ...explicitBase(), [field]: value });
   const onRemove = (field: string, value: string) => go(withoutFilter(explicitBase(), field, value));
   const onClear = () => go({ ...DEFAULT_STATE, level: state.level, view: state.view });
   const setLevel = (level: "gse" | "gsm") => go({ ...state, level, page: 1, view: level === "gsm" ? state.view : state.view });
@@ -188,7 +194,6 @@ const Browse = () => {
   const setSort = (sort: Sort) => go({ ...state, sort, page: 1 });
   const setPage = (page: number) => {
     go({ ...state, page });
-    window.scrollTo({ top: 0, behavior: "smooth" });
   };
   const applySuggestion = (params: string) => go(stateFromParams(params, state));
 
@@ -206,7 +211,7 @@ const Browse = () => {
   const samples = (shown?.level === "gsm" ? (shown.data as SampleRow[]) : []) ?? [];
   const totals = shown?.totals;
   const total = shown?.total ?? 0;
-  const pages = shown ? Math.max(1, Math.ceil(shown.total / shown.limit)) : 1;
+  const canLoadMore = !!shown && shown.data.length < shown.total && shown.data.length < 200;
   const nl = isNl(fresh) ? fresh : undefined;
   const showAiRow = aiMode && !!nl?.interpreted;
   const quotaExceeded = !!nl?.quota_exceeded && !!nl.quota;
@@ -295,12 +300,12 @@ const Browse = () => {
           <button
             type="button"
             className="btn-secondary h-10 px-3 lg:hidden"
-            onClick={() => setRailOpen((v) => !v)}
+            onClick={() => setRailOpen(true)}
             aria-expanded={railOpen}
             aria-controls="browse-filters"
           >
             <SlidersHorizontal size={15} />
-            <span className="sr-only sm:not-sr-only">Filters</span>
+            <span className="sr-only sm:not-sr-only">Filters ({activeFilters(chipsApplied, organismLabel).length})</span>
           </button>
         </form>
       </div>
@@ -308,7 +313,9 @@ const Browse = () => {
       <main className="container-site flex-1 py-5 pb-40">
         <div className="lg:grid lg:grid-cols-[240px_minmax(0,1fr)] lg:gap-8">
           {/* Left rail */}
-          <div id="browse-filters" ref={railRef} className={cn("lg:block scroll-mt-32", railOpen ? "block mb-6" : "hidden")}>
+          {railOpen && <button type="button" aria-label="Close filters" className="fixed inset-0 z-30 bg-foreground/25 lg:hidden" onClick={() => setRailOpen(false)} />}
+          <div id="browse-filters" ref={railRef} role="dialog" aria-modal={railOpen || undefined} aria-label="Search filters" className={cn("fixed inset-y-0 left-0 z-40 w-[min(88vw,340px)] overflow-y-auto bg-background px-5 pt-16 shadow-overlay transition-transform lg:static lg:z-auto lg:block lg:w-auto lg:translate-x-0 lg:overflow-visible lg:bg-transparent lg:px-0 lg:pt-0 lg:shadow-none", railOpen ? "translate-x-0" : "-translate-x-full")}>
+            <div className="mb-2 flex items-center justify-between lg:hidden"><strong className="text-[15px]">Filters</strong><button type="button" className="btn-secondary btn-sm" onClick={() => setRailOpen(false)}>Close</button></div>
             <div className="lg:sticky lg:top-[120px] lg:max-h-[calc(100vh-136px)] lg:overflow-y-auto lg:pr-2 no-scrollbar">
               <FilterRail
                 facets={facets.data}
@@ -316,10 +323,15 @@ const Browse = () => {
                 level={state.level}
                 current={chipsApplied}
                 onToggle={onToggle}
+                 onMode={onMode}
                 onAddCellType={onAddCellType}
                 onMinCells={onMinCells}
                 onYear={onYear}
                 onBundle={onBundle}
+                 onFileSamples={(n) => go({ ...explicitBase(), min_file_samples: n })}
+                 onFileCells={(n) => go({ ...explicitBase(), min_file_cells: n })}
+                 onFileSize={(n) => go({ ...explicitBase(), max_file_bytes: n })}
+                 onBoolean={onBoolean}
               />
             </div>
           </div>
@@ -376,6 +388,7 @@ const Browse = () => {
                     )}
                     {totals.cells != null && <span className="text-muted-foreground font-normal"> · {fmtCompact(totals.cells)} cells</span>}
                     <span className="text-muted-foreground font-normal"> match</span>
+                    {shown.ms != null && <span className="text-muted-foreground font-normal"> · {fmtInt(shown.ms)} ms</span>}
                   </>
                 ) : (
                   "Studies"
@@ -482,10 +495,18 @@ const Browse = () => {
                         </label>
                       </div>
                     )}
+                    {state.sort === "relevance" && shown?.groups && shown.groups.full > 0 && (
+                      <h2 className="mb-2 text-[13px] font-semibold text-foreground">Matches everything ({fmtInt(shown.groups.full)})</h2>
+                    )}
                     <div className="space-y-3">
-                      {studies.map((r) => (
+                      {studies.map((r, index) => (
+                        <Fragment key={r.gse_id}>
+                        {state.sort === "relevance" && shown?.groups && index === shown.groups.full && shown.groups.partial > 0 && (
+                          <div className="border-t border-border pt-4 mt-5">
+                            <h2 className="text-[13px] font-semibold text-foreground">Partial matches, best first ({fmtInt(shown.groups.partial)})</h2>
+                          </div>
+                        )}
                         <StudyCard
-                          key={r.gse_id}
                           row={r}
                           selected={selection.ids.has(r.gse_id)}
                           onToggle={selection.toggle}
@@ -493,23 +514,17 @@ const Browse = () => {
                           why={explanations[r.gse_id] ?? nl?.why?.[r.gse_id]}
                           aiWhy={!!explanations[r.gse_id]}
                         />
+                        </Fragment>
                       ))}
                     </div>
                   </>
                 )}
 
                 {/* Pagination */}
-                {pages > 1 && (
-                  <nav className="mt-5 flex items-center justify-between text-[13px]" aria-label="Pagination">
-                    <button type="button" className="btn-secondary btn-sm" disabled={state.page <= 1} onClick={() => setPage(state.page - 1)}>
-                      <ChevronLeft size={13} /> Previous
-                    </button>
-                    <span className="text-muted-foreground tabular">
-                      Page <span className="font-mono text-foreground">{fmtInt(state.page)}</span> of <span className="font-mono text-foreground">{fmtInt(pages)}</span>
-                    </span>
-                    <button type="button" className="btn-secondary btn-sm" disabled={state.page >= pages} onClick={() => setPage(state.page + 1)}>
-                      Next <ChevronRight size={13} />
-                    </button>
+                {shown && (
+                  <nav className="mt-5 flex items-center justify-center gap-4 text-[13px]" aria-label="More results">
+                    <span className="text-muted-foreground tabular">Showing 1–{fmtInt(shown.data.length)} of {fmtInt(total)}</span>
+                    {canLoadMore && <button type="button" className="btn-secondary btn-sm" onClick={() => setPage(state.page + 1)}>Load 25 more <ChevronRight size={13} /></button>}
                   </nav>
                 )}
               </div>

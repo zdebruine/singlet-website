@@ -44,6 +44,7 @@ import {
   type FilterMatch,
   type SearchFilters,
   type SearchParams,
+  type SoftSignals,
   type StudyRow,
 } from "./search-core";
 
@@ -222,21 +223,28 @@ async function interpret(env: NlEnv, ctx: Ctx, request: Request, query: string):
   }
 }
 
-/** Merge explicit URL filters with the interpretation (union per field). */
-function mergeFilters(explicit: SearchParams, interp: Interpreted, rules: VocabRule[]): { filters: SearchParams; dropped: FilterMatch[] } {
-  const merged: SearchParams = {
+/** Keep rail filters hard; only interpreted organism is hard. Other interpreted facets are ranking signals. */
+function mergeFilters(explicit: SearchParams, interp: Interpreted, rules: VocabRule[]): { filters: SearchParams; display: SearchParams; soft: SoftSignals; dropped: FilterMatch[] } {
+  const hardInput: SearchParams = {
     ...explicit,
     q: interp.q.join(" "),
     organism: [...explicit.organism, ...interp.organism],
-    tissue_group: [...explicit.tissue_group, ...interp.tissue_group],
-    disease_group: [...explicit.disease_group, ...interp.disease_group],
-    assay_family: [...explicit.assay_family, ...interp.assay_family],
-    cell_type: [...explicit.cell_type, ...interp.cell_type],
     min_cells: explicit.min_cells ?? interp.min_cells,
     year_min: explicit.year_min ?? interp.year_min,
     year_max: explicit.year_max ?? interp.year_max,
   };
-  const { filters, dropped } = normalizeFilters(merged, rules);
+  const displayInput = {
+    ...hardInput,
+    tissue_group: [...explicit.tissue_group, ...interp.tissue_group],
+    disease_group: [...explicit.disease_group, ...interp.disease_group],
+    assay_family: [...explicit.assay_family, ...interp.assay_family],
+    cell_type: [...explicit.cell_type, ...interp.cell_type],
+  };
+  const hard = normalizeFilters(hardInput, rules);
+  const shown = normalizeFilters(displayInput, rules);
+  const filters = hard.filters;
+  const display = shown.filters;
+  const dropped = shown.dropped;
   // Values the vocabulary could not place are removed rather than left to match nothing —
   // the interpretation row shows them as "not recognised" instead.
   for (const d of dropped) {
@@ -244,7 +252,14 @@ function mergeFilters(explicit: SearchParams, interp: Interpreted, rules: VocabR
     const arr = filters[key];
     if (Array.isArray(arr)) (filters as unknown as Record<string, string[]>)[key] = arr.filter((v) => v !== d.value);
   }
-  return { filters, dropped };
+  const soft: SoftSignals = {
+    tissue_group: display.tissue_group.filter((v) => !explicit.tissue_group.includes(v)),
+    disease_group: display.disease_group.filter((v) => !explicit.disease_group.includes(v)),
+    assay_family: display.assay_family.filter((v) => !explicit.assay_family.includes(v)),
+    cell_type: display.cell_type.filter((v) => !explicit.cell_type.map((x) => x.toLowerCase()).includes(v)),
+    q: interp.q,
+  };
+  return { filters, display, soft, dropped };
 }
 
 /** Atomic filters currently applied, as (field, value) pairs. */
@@ -370,6 +385,9 @@ export interface NlSearchBody {
   quota_exceeded?: boolean;
   quota?: Quota;
   accession_lookup?: string[];
+  hard_applied?: SearchFilters;
+  groups?: { full: number; partial: number };
+  ms?: number;
 }
 
 export type NlSearchOutcome =
@@ -387,6 +405,7 @@ export async function nlSearch(
   waitUntil: (p: Promise<unknown>) => void,
   url: URL
 ): Promise<NlSearchOutcome> {
+  const started = Date.now();
   const explicit = parseSearchParams(url);
   const q = explicit.q;
   if (!q) return { ok: false, status: 400, error: "missing_query", message: "Missing query parameter 'q'" };
@@ -433,15 +452,16 @@ export async function nlSearch(
     }
   }
 
-  const { filters, dropped } = interpreted
-    ? mergeFilters(explicit, interpreted, rules)
-    : normalizeFilters(explicit, rules);
+  const merged = interpreted ? mergeFilters(explicit, interpreted, rules) : null;
+  const normalized = merged ?? normalizeFilters(explicit, rules);
+  const filters = normalized.filters;
+  const dropped = normalized.dropped;
   // When the model returned nothing usable, fall back to the raw text.
   if (interpreted && !hasAnyFilter(filters) && !filters.q) filters.q = q;
 
   const result =
     filters.level === "gse"
-      ? await runStudySearch(ctx, filters, { orFallback: !interpreted })
+      ? await runStudySearch(ctx, filters, { orFallback: !interpreted, soft: merged?.soft })
       : await runSampleSearch(ctx, filters);
 
   const why: Record<string, string> = {};
@@ -467,7 +487,8 @@ export async function nlSearch(
   const body: NlSearchBody = {
     configured,
     interpreted,
-    applied: pickFilters(filters),
+    applied: pickFilters(merged?.display ?? filters),
+    hard_applied: pickFilters(filters),
     dropped,
     level: filters.level,
     data: result.data,
@@ -483,6 +504,8 @@ export async function nlSearch(
     ...(note ? { note } : {}),
     ...(quotaExceeded && quota ? { quota_exceeded: true, quota } : {}),
     ...(result.accession_lookup ? { accession_lookup: result.accession_lookup } : {}),
+    ...(result.groups ? { groups: result.groups } : {}),
+    ms: Date.now() - started,
   };
   return { ok: true, body, headers, quota };
 }

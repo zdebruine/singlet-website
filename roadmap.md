@@ -103,9 +103,11 @@
 - Accessibility pass (labels, teal focus rings, contrast) on the auth dialog, account menu and /account
 
 ## Stage 11 — ranked search, filters and browse experience
-- [ ] Replace interpreted-facet AND search with weighted full/partial ranking and structured match evidence
+- [x] Replace interpreted-facet AND search with weighted full/partial ranking and structured match evidence
 - [ ] Share ranking with keyword search, MCP search, and healthy-control matching
-- [ ] Add file/QC/publication/condition filters, Any/All semantics, URL state, conditional facets, caching, and indexes
+- [x] Add file/QC/publication/condition filters, Any/All semantics, URL state, conditional facets, caching, and indexes
 - [ ] Rebuild browse cards, grouped results, drawer, sorting, and 25-row progressive pagination
 - [ ] Preserve package-lock.json; pass app build and Functions typecheck
 - [ ] Verify specified production queries, timings, mobile drawer, and URL round-trip after deployment
+
+- [x] Fix all current preview typecheck/build errors from observability log

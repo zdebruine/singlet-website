@@ -191,6 +191,14 @@ const EMPTY_APPLIED = (): FacetsResponse["applied"] => ({
   has_bundle: null,
   year_min: null,
   year_max: null,
+  min_file_samples: null,
+  min_file_cells: null,
+  reference_build: [],
+  protocol: [],
+  has_pubmed: null,
+  max_file_bytes: null,
+  has_conditions: null,
+  match_mode: {},
 });
 
 function normalizeApplied(v: unknown): FacetsResponse["applied"] {
@@ -206,6 +214,14 @@ function normalizeApplied(v: unknown): FacetsResponse["applied"] {
     has_bundle: typeof a.has_bundle === "boolean" ? a.has_bundle : null,
     year_min: numOrNull(a.year_min),
     year_max: numOrNull(a.year_max),
+    min_file_samples: numOrNull(a.min_file_samples),
+    min_file_cells: numOrNull(a.min_file_cells),
+    reference_build: strArr(a.reference_build),
+    protocol: strArr(a.protocol),
+    has_pubmed: typeof a.has_pubmed === "boolean" ? a.has_pubmed : null,
+    max_file_bytes: numOrNull(a.max_file_bytes),
+    has_conditions: typeof a.has_conditions === "boolean" ? a.has_conditions : null,
+    match_mode: rec(a.match_mode) as Record<string, "any" | "all">,
   };
 }
 
@@ -227,6 +243,11 @@ export function normalizeFacets(raw: unknown, fallbackLevel: "gse" | "gsm" = "gs
     assay_family: normalizeFacetOptions(r.assay_family),
     cell_type: normalizeFacetOptions(r.cell_type),
     year: normalizeFacetOptions(r.year),
+    reference_build: normalizeFacetOptions(r.reference_build),
+    protocol: normalizeFacetOptions(r.protocol),
+    file_samples: normalizeFacetOptions(r.file_samples),
+    file_cells: normalizeFacetOptions(r.file_cells),
+    file_size: normalizeFacetOptions(r.file_size),
     vocab: {
       tissue_group: strArr(vocab.tissue_group),
       disease_group: strArr(vocab.disease_group),
@@ -262,6 +283,9 @@ export function normalizeStudyRow(raw: unknown): StudyRow | null {
     has_bundle: r.has_bundle === true || r.has_bundle === 1,
     bundle_bytes: numOrNull(r.bundle_bytes),
     bundle_key: strOrNull(r.bundle_key),
+    bundle_n_samples: numOrNull(r.bundle_n_samples),
+    file_cells: numOrNull(r.file_cells),
+    reference_build: strOrNull(r.reference_build),
     year: numOrNull(r.year),
     n_conditions: num(r.n_conditions),
     conditions: normalizeConditions(r.conditions),
@@ -269,6 +293,9 @@ export function normalizeStudyRow(raw: unknown): StudyRow | null {
     match: {
       filters: arr<StudyRow["match"]["filters"][number]>(match.filters).filter((m) => m && typeof m.field === "string"),
       text: arr<StudyRow["match"]["text"][number]>(match.text).filter((m) => m && typeof m.term === "string"),
+      facets: arr<StudyRow["match"]["facets"][number]>(match.facets).filter((m) => m && typeof m.key === "string"),
+      keywords: arr<StudyRow["match"]["keywords"][number]>(match.keywords).filter((m) => m && typeof m.term === "string"),
+      score: num(match.score),
     },
     why: str(r.why),
     score: numOrNull(r.score),
@@ -327,6 +354,9 @@ function normalizeSearch<T>(raw: unknown, level: "gse" | "gsm"): SearchResponse<
     accession_lookup: r.accession_lookup ? strArr(r.accession_lookup) : undefined,
     any_word: r.any_word === true ? true : undefined,
     note: typeof r.note === "string" ? r.note : undefined,
+    groups: r.groups ? { full: num(rec(r.groups).full), partial: num(rec(r.groups).partial) } : undefined,
+    hard_applied: r.hard_applied ? normalizeApplied(r.hard_applied) : undefined,
+    ms: typeof r.ms === "number" ? r.ms : undefined,
   };
 }
 
@@ -355,6 +385,8 @@ function normalizeNlSearch<T>(raw: unknown, level: "gse" | "gsm"): NlSearchRespo
     model: typeof r.model === "string" ? r.model : undefined,
     quota_exceeded: r.quota_exceeded === true ? true : undefined,
     quota: parseQuota(r.quota) ?? undefined,
+    groups: r.groups ? { full: num(rec(r.groups).full), partial: num(rec(r.groups).partial) } : undefined,
+    hard_applied: r.hard_applied ? normalizeApplied(r.hard_applied) : undefined,
   };
 }
 
@@ -554,6 +586,14 @@ function searchParams(q: SearchQuery): Record<string, ParamValue> {
     has_bundle: q.has_bundle,
     year_min: q.year_min,
     year_max: q.year_max,
+    min_file_samples: q.min_file_samples,
+    min_file_cells: q.min_file_cells,
+    reference_build: q.reference_build,
+    protocol: q.protocol,
+    has_pubmed: q.has_pubmed,
+    max_file_bytes: q.max_file_bytes,
+    has_conditions: q.has_conditions,
+    ...Object.fromEntries(Object.entries(q.match_mode ?? {}).map(([field, mode]) => [`${field}_mode`, mode])),
     sort: q.sort,
     page: q.page,
     limit: q.limit,

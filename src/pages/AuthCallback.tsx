@@ -78,7 +78,7 @@ const AuthCallback = () => {
 
   return (
     <main className="min-h-screen flex flex-col items-center justify-center bg-background px-5 text-center">
-      <Logo size={22} />
+      <Logo height={22} />
       {failed ? (
         <div className="mt-6 max-w-[380px]">
           <h1 className="text-[17px] font-semibold text-foreground">Sign-in didn't complete</h1>

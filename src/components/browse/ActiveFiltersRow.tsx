@@ -63,7 +63,7 @@ export function ActiveFiltersRow({ applied, ai, dropped, note, trailing, onRemov
         )}
         <span className="ml-auto inline-flex flex-wrap items-center gap-x-3 gap-y-1">
           {trailing}
-          <span className="text-[11px] text-muted-foreground whitespace-nowrap">AND across groups · any-of within a group</span>
+          <span className="text-[11px] text-muted-foreground whitespace-nowrap">AND across groups · Any/All within groups</span>
         </span>
       </div>
       {(note || (dropped && dropped.length > 0)) && (

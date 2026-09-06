@@ -27,8 +27,8 @@ import {
 // ── Types ───────────────────────────────────────────────────────────────────
 
 export type Level = "gse" | "gsm";
-export type Sort = "relevance" | "cells" | "samples" | "year" | "accession";
-export const SORTS: readonly Sort[] = ["relevance", "cells", "samples", "year", "accession"];
+export type Sort = "relevance" | "cells" | "samples" | "year" | "accession" | "file_cells" | "file_size" | "alphabetical";
+export const SORTS: readonly Sort[] = ["relevance", "cells", "samples", "year", "accession", "file_cells", "file_size", "alphabetical"];
 
 export const ARRAY_FILTER_FIELDS = ["organism", "tissue_group", "disease_group", "assay_family", "cell_type"] as const;
 export type ArrayFilterField = (typeof ARRAY_FILTER_FIELDS)[number];
@@ -44,6 +44,22 @@ export interface SearchFilters {
   has_bundle: boolean | null;
   year_min: number | null;
   year_max: number | null;
+  min_file_samples: number | null;
+  min_file_cells: number | null;
+  reference_build: string[];
+  protocol: string[];
+  has_pubmed: boolean | null;
+  max_file_bytes: number | null;
+  has_conditions: boolean | null;
+  match_mode: Partial<Record<ArrayFilterField | "reference_build" | "protocol", "any" | "all">>;
+}
+
+export interface SoftSignals {
+  tissue_group: string[];
+  disease_group: string[];
+  assay_family: string[];
+  cell_type: string[];
+  q: string[];
 }
 
 export interface SearchParams extends SearchFilters {
@@ -69,6 +85,9 @@ export interface TextMatch {
 export interface MatchInfo {
   filters: FilterMatch[];
   text: TextMatch[];
+  facets: { key: string; label: string; status: "hit" | "partial" | "miss"; detail: string }[];
+  keywords: { term: string; hits: string[] }[];
+  score: number;
 }
 
 export interface StudyRow {
@@ -91,6 +110,9 @@ export interface StudyRow {
   has_bundle: boolean;
   bundle_bytes: number | null;
   bundle_key: string | null;
+  bundle_n_samples: number | null;
+  file_cells: number | null;
+  reference_build: string | null;
   year: number | null;
   n_conditions: number;
   conditions: ConditionSummary["conditions"];
@@ -145,6 +167,7 @@ export interface SearchResult<T> {
   accession_lookup?: string[];
   /** True when no study matched every word, so results match ANY of the words instead. */
   any_word?: boolean;
+  groups?: { full: number; partial: number };
 }
 
 export interface Ctx {
@@ -156,12 +179,13 @@ export interface Ctx {
 // ── Constants ───────────────────────────────────────────────────────────────
 
 export const DEFAULT_LIMIT = 20;
-export const MAX_LIMIT = 100;
+export const MAX_LIMIT = 200;
 export const MAX_EXPORT = 5000;
 /** Per-sample cap applied when ranking by cells so plate-protocol artifacts don't dominate. */
 const CAP_CELLS_PER_SAMPLE = 250_000;
 const CAPPED_STUDY_CELLS = `MIN(m.n_cells, ${CAP_CELLS_PER_SAMPLE} * MAX(m.n_done, 1))`;
 const MAX_TERMS = 6;
+const RANKED_CANDIDATE_LIMIT = 200;
 const ABSTRACT_CHARS = 300;
 const CONDITIONS_TTL_MS = 7 * 24 * 3600 * 1000;
 const CONDITIONS_SAMPLE_CAP = 300;
@@ -232,6 +256,10 @@ const KEYWORD_SYNONYMS: Record<string, string[]> = {
   nuclei: ["nuclei", "nucleus", "snrna seq", "snrnaseq"],
   organoid: ["organoid", "organoids", "spheroid", "spheroids"],
   organoids: ["organoid", "organoids", "spheroid", "spheroids"],
+  ad: ["ad", "alzheimer", "alzheimers", "alzheimer disease"],
+  alzheimer: ["alzheimer", "alzheimers", "alzheimer disease", "ad"],
+  pbmc: ["pbmc", "pbmcs", "peripheral blood mononuclear cell", "peripheral blood mononuclear cells"],
+  "t cell": ["t cell", "t cells", "t-cell", "t-cells", "lymphocyte"],
   xenograft: ["xenograft", "pdx", "xenografts"],
   pdx: ["pdx", "xenograft"],
   metastasis: ["metastasis", "metastases", "metastatic"],
@@ -310,6 +338,14 @@ export function emptyFilters(): SearchFilters {
     has_bundle: null,
     year_min: null,
     year_max: null,
+    min_file_samples: null,
+    min_file_cells: null,
+    reference_build: [],
+    protocol: [],
+    has_pubmed: null,
+    max_file_bytes: null,
+    has_conditions: null,
+    match_mode: {},
   };
 }
 
@@ -321,6 +357,14 @@ export function parseSearchParams(url: URL): SearchParams {
   const limit = Math.min(MAX_LIMIT, Math.max(1, intOrNull(url.searchParams.get("limit")) ?? DEFAULT_LIMIT));
   const hb = url.searchParams.get("has_bundle");
   const has_bundle = hb == null || hb === "" ? true : hb === "1" || hb === "true";
+  const bool = (key: string): boolean | null => {
+    const value = url.searchParams.get(key);
+    return value == null || value === "" ? null : value === "1" || value === "true";
+  };
+  const mode: SearchFilters["match_mode"] = {};
+  for (const field of [...ARRAY_FILTER_FIELDS, "reference_build", "protocol"] as const) {
+    if (url.searchParams.get(`${field}_mode`) === "all") mode[field] = "all";
+  }
   return {
     q: (url.searchParams.get("q") ?? "").trim(),
     organism: multi(url, "organism"),
@@ -332,6 +376,14 @@ export function parseSearchParams(url: URL): SearchParams {
     has_bundle,
     year_min: intOrNull(url.searchParams.get("year_min")),
     year_max: intOrNull(url.searchParams.get("year_max")),
+    min_file_samples: intOrNull(url.searchParams.get("min_file_samples")),
+    min_file_cells: intOrNull(url.searchParams.get("min_file_cells")),
+    reference_build: multi(url, "reference_build"),
+    protocol: multi(url, "protocol"),
+    has_pubmed: bool("has_pubmed"),
+    max_file_bytes: intOrNull(url.searchParams.get("max_file_bytes")),
+    has_conditions: bool("has_conditions"),
+    match_mode: mode,
     level,
     sort,
     page,
@@ -389,10 +441,18 @@ export function canonicalQuery(p: SearchParams | (SearchFilters & Partial<Search
   add("disease_group", p.disease_group);
   add("assay_family", p.assay_family);
   add("cell_type", p.cell_type);
+  add("reference_build", p.reference_build);
+  add("protocol", p.protocol);
   if (p.min_cells != null) sp.set("min_cells", String(p.min_cells));
   if (p.has_bundle != null) sp.set("has_bundle", p.has_bundle ? "1" : "0");
   if (p.year_min != null) sp.set("year_min", String(p.year_min));
   if (p.year_max != null) sp.set("year_max", String(p.year_max));
+  if (p.min_file_samples != null) sp.set("min_file_samples", String(p.min_file_samples));
+  if (p.min_file_cells != null) sp.set("min_file_cells", String(p.min_file_cells));
+  if (p.has_pubmed != null) sp.set("has_pubmed", p.has_pubmed ? "1" : "0");
+  if (p.max_file_bytes != null) sp.set("max_file_bytes", String(p.max_file_bytes));
+  if (p.has_conditions != null) sp.set("has_conditions", p.has_conditions ? "1" : "0");
+  for (const [field, mode] of Object.entries(p.match_mode)) if (mode === "all") sp.set(`${field}_mode`, "all");
   if (p.level) sp.set("level", p.level);
   if (p.sort) sp.set("sort", p.sort);
   if (p.page) sp.set("page", String(p.page));
@@ -412,6 +472,8 @@ export function hasAnyFilter(f: SearchFilters): boolean {
     f.min_cells != null ||
     f.year_min != null ||
     f.year_max != null
+    || f.min_file_samples != null || f.min_file_cells != null || f.reference_build.length > 0 || f.protocol.length > 0
+    || f.has_pubmed != null || f.max_file_bytes != null || f.has_conditions != null
   );
 }
 
@@ -452,16 +514,28 @@ function ftsPhrase(term: string): string {
  * terms still holds while spelling/phrasing variants are tolerated.
  */
 function ftsTerm(term: string): string {
-  const syn = KEYWORD_SYNONYMS[term];
-  if (!syn) return ftsPhrase(term);
-  const alts = [...new Set([term, ...syn])].map(ftsPhrase);
+  const syn = termVariants(term);
+  const alts = syn.map(ftsPhrase);
   return alts.length > 1 ? `(${alts.join(" OR ")})` : alts[0];
 }
 
 /** Every word form a term expands to (lowercase), for substring highlighting. */
 export function termVariants(term: string): string[] {
-  const syn = KEYWORD_SYNONYMS[term];
-  return syn ? [...new Set([term, ...syn])] : [term];
+  const base = term.toLowerCase().replace(/-/g, " ").replace(/\s+/g, " ").trim();
+  const variants = new Set<string>([base, base.replace(/ /g, "-")]);
+  const addInflection = (value: string) => {
+    if (value.endsWith("ies") && value.length > 4) variants.add(`${value.slice(0, -3)}y`);
+    else if (value.endsWith("s") && !value.endsWith("ss") && value.length > 3) variants.add(value.slice(0, -1));
+    else if (value.length > 3) variants.add(`${value}s`);
+  };
+  addInflection(base);
+  for (const synonym of KEYWORD_SYNONYMS[base] ?? []) {
+    const normalized = synonym.replace(/-/g, " ").replace(/\s+/g, " ").trim();
+    variants.add(normalized);
+    variants.add(normalized.replace(/ /g, "-"));
+    addInflection(normalized);
+  }
+  return [...variants].filter(Boolean);
 }
 
 /**
@@ -529,7 +603,7 @@ export interface Built {
 
 export interface StudyWhereOpts {
   /** Facet field whose own constraint should be skipped (contextual facet counts). */
-  exclude?: ArrayFilterField | "year" | "min_cells" | "q";
+  exclude?: ArrayFilterField | "year" | "min_cells" | "q" | "reference_build" | "protocol" | "file_samples" | "file_cells" | "file_size";
   /** Restrict to these gse_ids (JSON array string is built here). */
   gseIds?: string[] | null;
 }
@@ -543,9 +617,9 @@ export function buildStudyWhere(f: SearchFilters, opts: StudyWhereOpts = {}): Bu
   const arr = (field: ArrayFilterField, col: string) => {
     const vals = f[field];
     if (!vals.length || ex === field) return;
-    clauses.push(
-      `EXISTS (SELECT 1 FROM json_each(m.${col}) je WHERE je.value IN (${vals.map(() => "?").join(",")}))`
-    );
+    clauses.push(f.match_mode[field] === "all"
+      ? `(SELECT COUNT(DISTINCT je.value) FROM json_each(m.${col}) je WHERE je.value IN (${vals.map(() => "?").join(",")})) = ${vals.length}`
+      : `EXISTS (SELECT 1 FROM json_each(m.${col}) je WHERE je.value IN (${vals.map(() => "?").join(",")}))`);
     params.push(...vals);
   };
   arr("organism", "organisms");
@@ -554,12 +628,22 @@ export function buildStudyWhere(f: SearchFilters, opts: StudyWhereOpts = {}): Bu
   arr("assay_family", "assay_families");
 
   if (f.cell_type.length && ex !== "cell_type") {
-    const match = cellTypeMatch(f.cell_type);
-    if (match) {
-      clauses.push(`m.gse_id IN (SELECT gse_id FROM fts_gsm WHERE fts_gsm MATCH ?)`);
-      params.push(match);
+    if (f.match_mode.cell_type === "all") {
+      for (const value of f.cell_type) {
+        const match = cellTypeMatch([value]);
+        if (match) {
+          clauses.push(`m.gse_id IN (SELECT gse_id FROM fts_gsm WHERE fts_gsm MATCH ?)`);
+          params.push(match);
+        }
+      }
     } else {
-      clauses.push("0");
+      const match = cellTypeMatch(f.cell_type);
+      if (match) {
+        clauses.push(`m.gse_id IN (SELECT gse_id FROM fts_gsm WHERE fts_gsm MATCH ?)`);
+        params.push(match);
+      } else {
+        clauses.push("0");
+      }
     }
   }
   if (f.min_cells != null && ex !== "min_cells") {
@@ -575,6 +659,37 @@ export function buildStudyWhere(f: SearchFilters, opts: StudyWhereOpts = {}): Bu
     clauses.push("m.year <= ?");
     params.push(f.year_max);
   }
+  if (f.min_file_samples != null && ex !== "file_samples") {
+    clauses.push("COALESCE((SELECT b.n_gsms_in_bundle FROM bundle_manifest b WHERE b.gse_id = m.gse_id), 0) >= ?");
+    params.push(f.min_file_samples);
+  }
+  if (f.min_file_cells != null && ex !== "file_cells") {
+    clauses.push("COALESCE((SELECT SUM(q.n_cells_called) FROM sample_qc q WHERE q.gse_id = m.gse_id), 0) >= ?");
+    params.push(f.min_file_cells);
+  }
+  const multiExists = (values: string[], mode: "any" | "all" | undefined, sql: string) => {
+    if (!values.length) return;
+    clauses.push(mode === "all"
+      ? `(SELECT COUNT(DISTINCT value) FROM (${sql})) = ${values.length}`
+      : `EXISTS (SELECT 1 FROM (${sql}))`);
+    params.push(jsonArray(values));
+  };
+  if (ex !== "reference_build") multiExists(f.reference_build, f.match_mode.reference_build,
+    "SELECT b.reference_build AS value FROM bundle_manifest b WHERE b.gse_id = m.gse_id AND b.reference_build IN (SELECT value FROM json_each(?))");
+  const protocolExpr = `CASE
+    WHEN lower(q.protocol) LIKE '%multiome%' OR lower(q.protocol) LIKE '%atac%' THEN 'multiome'
+    WHEN lower(q.protocol) LIKE '%5%prime%' OR lower(q.protocol) LIKE '%5''%' THEN '10x 5'''
+    WHEN lower(q.protocol) LIKE '%v2%' THEN '10xv2'
+    WHEN lower(q.protocol) LIKE '%v3%' THEN '10xv3'
+    ELSE 'other' END`;
+  if (ex !== "protocol") multiExists(f.protocol, f.match_mode.protocol,
+    `SELECT ${protocolExpr} AS value FROM sample_qc q WHERE q.gse_id = m.gse_id AND ${protocolExpr} IN (SELECT value FROM json_each(?))`);
+  if (f.has_pubmed === true) clauses.push("EXISTS (SELECT 1 FROM gse gx WHERE gx.id = m.gse_id AND gx.pubmed_ids IS NOT NULL AND gx.pubmed_ids NOT IN ('', '[]'))");
+  if (f.max_file_bytes != null && ex !== "file_size") {
+    clauses.push("EXISTS (SELECT 1 FROM gse gx WHERE gx.id = m.gse_id AND gx.r2_bundle_bytes <= ?)");
+    params.push(f.max_file_bytes);
+  }
+  if (f.has_conditions === true) clauses.push("m.n_conditions >= 1");
   if (opts.gseIds) {
     clauses.push("m.gse_id IN (SELECT value FROM json_each(?))");
     params.push(jsonArray(opts.gseIds));
@@ -600,7 +715,9 @@ export function buildSampleWhere(f: SearchFilters, opts: StudyWhereOpts = {}): B
   col("assay_family", "assay_family");
 
   if (f.cell_type.length && ex !== "cell_type") {
-    const match = cellTypeMatch(f.cell_type);
+    const match = f.match_mode.cell_type === "all"
+      ? f.cell_type.map((value) => cellTypeMatch([value])).filter(Boolean).join(" AND ")
+      : cellTypeMatch(f.cell_type);
     if (match) {
       clauses.push(`s.gsm_id IN (SELECT gsm_id FROM fts_gsm WHERE fts_gsm MATCH ?)`);
       params.push(match);
@@ -680,6 +797,9 @@ interface StudyDbRow {
   abstract: string | null;
   r2_bundle_bytes: number | null;
   r2_bundle_key: string | null;
+  bundle_n_samples: number | null;
+  file_cells: number | null;
+  reference_build: string | null;
   n_gsm_failed: number | null;
   s_gse: number | null;
   s_gsm: number | null;
@@ -693,7 +813,10 @@ interface StudyDbRow {
 const STUDY_SELECT = `
   m.gse_id, m.organism_primary, m.organisms, m.tissue_groups, m.disease_groups, m.assay_families,
   m.tissues_raw, m.cell_types_raw, m.n_conditions, m.n_done, m.n_total, m.n_cells, m.has_bundle, m.year,
-  g.title, g.abstract, g.r2_bundle_bytes, g.r2_bundle_key, g.n_gsm_failed`;
+  g.title, g.abstract, g.r2_bundle_bytes, g.r2_bundle_key, g.n_gsm_failed,
+  (SELECT b.n_gsms_in_bundle FROM bundle_manifest b WHERE b.gse_id = m.gse_id) AS bundle_n_samples,
+  (SELECT b.reference_build FROM bundle_manifest b WHERE b.gse_id = m.gse_id) AS reference_build,
+  (SELECT SUM(q.n_cells_called) FROM sample_qc q WHERE q.gse_id = m.gse_id) AS file_cells`;
 
 function studyOrder(sort: Sort, hasQ: boolean): string {
   switch (sort) {
@@ -726,13 +849,13 @@ interface StudyQueryPlan {
  * Build the paged study query. `matchOverride` lets the caller force the OR
  * form of the FTS expression (fallback when AND finds nothing).
  */
-export function planStudyQuery(p: SearchParams, matchOverride?: string | null): StudyQueryPlan {
+export function planStudyQuery(p: SearchParams, matchOverride?: string | null, candidateIds?: string[]): StudyQueryPlan {
   const acc = p.q ? extractAccessions(p.q) : { gse: [], gsm: [] };
   const fts = p.q ? tokenizeQuery(p.q) : { terms: [], and: null, or: null };
   const isAccession = acc.gse.length > 0 || acc.gsm.length > 0;
   const match = isAccession ? null : matchOverride !== undefined ? matchOverride : fts.and;
 
-  const where = buildStudyWhere(isAccession ? { ...p, has_bundle: null } : p);
+  const where = buildStudyWhere(p, { gseIds: candidateIds });
   const clauses = [...where.clauses];
   const params: (string | number)[] = [];
   let cte = "";
@@ -740,7 +863,7 @@ export function planStudyQuery(p: SearchParams, matchOverride?: string | null): 
   let join = "";
 
   if (isAccession) {
-    // Direct lookup — other filters are ignored on purpose (an accession is an exact ask).
+    // Direct lookup remains exact, while explicit rail filters stay hard.
     const gseIds = [...acc.gse];
     const lookup = [`m.gse_id IN (SELECT value FROM json_each(?))`];
     params.push(jsonArray(gseIds));
@@ -748,7 +871,6 @@ export function planStudyQuery(p: SearchParams, matchOverride?: string | null): 
       lookup.push(`m.gse_id IN (SELECT gse_id FROM gsm WHERE gsm_id IN (SELECT value FROM json_each(?)))`);
       params.push(jsonArray(acc.gsm));
     }
-    clauses.length = 0;
     clauses.push(`(${lookup.join(" OR ")})`);
   } else if (match) {
     cte = `WITH ${HITS_CTE}`;
@@ -821,25 +943,116 @@ function shapeStudy(r: StudyDbRow): StudyRow {
     has_bundle: Number(r.has_bundle ?? 0) === 1,
     bundle_bytes: r.r2_bundle_bytes != null ? Number(r.r2_bundle_bytes) : null,
     bundle_key: r.r2_bundle_key,
+    bundle_n_samples: r.bundle_n_samples != null ? Number(r.bundle_n_samples) : null,
+    file_cells: r.file_cells != null ? Number(r.file_cells) : null,
+    reference_build: r.reference_build,
     year: r.year != null ? Number(r.year) : null,
     n_conditions: Number(r.n_conditions ?? 0),
     conditions: [],
     conditions_label: "",
-    match: { filters: [], text: [] },
+    match: { filters: [], text: [], facets: [], keywords: [], score: 0 },
     why: "",
     score: r.score != null ? Number(r.score) : null,
   };
 }
 
+function scoreStudy(r: StudyRow, signals: SoftSignals): { score: number; full: boolean } {
+  let score = 0;
+  let full = true;
+  const addFacet = (key: keyof Omit<SoftSignals, "q">, label: string, have: string[], weight: number) => {
+    const wanted = signals[key];
+    if (!wanted.length) return;
+    const hits = wanted.filter((value) => have.some((v) => v.toLowerCase() === value.toLowerCase()));
+    const status = hits.length === wanted.length ? "hit" : hits.length ? "partial" : "miss";
+    if (status === "miss") full = false;
+    if (hits.length) score += weight * (hits.length / wanted.length);
+    r.match.facets.push({ key, label, status, detail: hits.length ? hits.join(" / ") : "not annotated" });
+  };
+  addFacet("tissue_group", "Tissue", r.tissue_groups, 3);
+  addFacet("disease_group", "Disease", r.disease_groups, 3);
+  addFacet("assay_family", "Assay", r.assay_families, 1.5);
+  for (const ct of signals.cell_type) {
+    const hit = r.match.filters.find((x) => x.field === "cell_type" && x.value === ct);
+    const n = hit?.n_samples ?? 0;
+    const fraction = r.n_total ? Math.min(1, n / r.n_total) : 0;
+    const status = n >= r.n_total && r.n_total > 0 ? "hit" : n > 0 ? "partial" : "miss";
+    if (status !== "hit") full = false;
+    if (n) score += 1 + 2 * fraction;
+    r.match.facets.push({ key: "cell_type", label: ct, status, detail: n ? `${n} of ${r.n_total} samples annotated` : "not annotated" });
+  }
+  let keywordScore = 0;
+  for (const term of signals.q) {
+    const matches = r.match.text.filter((x) => x.term === term || termVariants(term).includes(x.term));
+    const hits: string[] = [];
+    if (matches.some((x) => x.field === "title")) { keywordScore += 1.5; hits.push("title"); }
+    if (matches.some((x) => x.field === "abstract")) { keywordScore += 1; hits.push("abstract"); }
+    const sampleN = Math.max(0, ...matches.filter((x) => !["title", "abstract", "accession"].includes(x.field)).map((x) => x.n_samples));
+    if (sampleN) { keywordScore += 0.5 * Math.min(1, sampleN / Math.max(1, r.n_total)); hits.push(`${sampleN} of ${r.n_total} samples`); }
+    if (!hits.length) full = false;
+    r.match.keywords.push({ term, hits });
+  }
+  score += Math.min(4, keywordScore);
+  if (r.has_bundle) score += 0.5;
+  if (r.bundle_n_samples != null) score += Math.log10(r.bundle_n_samples + 1) * 0.3;
+  if ((r.year ?? 0) >= 2020) score += 0.2;
+  r.match.score = Number(score.toFixed(3));
+  r.score = r.match.score;
+  return { score, full };
+}
+
+function softFromQuery(p: SearchParams): SoftSignals {
+  return { tissue_group: [], disease_group: [], assay_family: [], cell_type: [], q: tokenizeQuery(p.q).terms };
+}
+
+/** Candidate union for soft evidence; hard constraints are applied before the 200-row cap. */
+async function rankedCandidateIds(db: D1Database, p: SearchParams, signals: SoftSignals): Promise<string[]> {
+  const hard: SearchParams = { ...p, q: "", page: 1, limit: RANKED_CANDIDATE_LIMIT };
+  const where = buildStudyWhere(hard);
+  const soft: string[] = [];
+  const params: (string | number)[] = [...where.params];
+  const jsonFacet = (col: string, values: string[]) => {
+    if (!values.length) return;
+    soft.push(`EXISTS (SELECT 1 FROM json_each(m.${col}) je WHERE je.value IN (SELECT value FROM json_each(?)))`);
+    params.push(jsonArray(values));
+  };
+  jsonFacet("tissue_groups", signals.tissue_group);
+  jsonFacet("disease_groups", signals.disease_group);
+  jsonFacet("assay_families", signals.assay_family);
+  const text = [...signals.q, ...signals.cell_type];
+  const match = tokenizeQuery(text.join(" ")).or;
+  if (match) {
+    soft.push(`m.gse_id IN (SELECT id FROM fts_gse WHERE fts_gse MATCH ? UNION SELECT gse_id FROM fts_gsm WHERE fts_gsm MATCH ?)`);
+    params.push(match, match);
+  }
+  if (!soft.length) return [];
+  const clauses = [...where.clauses, `(${soft.join(" OR ")})`];
+  const result = await db.prepare(
+    `SELECT m.gse_id FROM gse_meta m WHERE ${clauses.join(" AND ")}
+      ORDER BY m.has_bundle DESC, ${CAPPED_STUDY_CELLS} DESC LIMIT ${RANKED_CANDIDATE_LIMIT}`
+  ).bind(...params).all<{ gse_id: string }>();
+  return result.results.map((r) => r.gse_id);
+}
+
 /** Run the study query; fills match/conditions/why for the page. */
-export async function runStudySearch(ctx: Ctx, p: SearchParams, opts: { orFallback?: boolean } = {}): Promise<SearchResult<StudyRow>> {
+export async function runStudySearch(
+  ctx: Ctx,
+  p: SearchParams,
+  opts: { orFallback?: boolean; soft?: SoftSignals } = {}
+): Promise<SearchResult<StudyRow>> {
   const { db } = ctx;
-  let plan = planStudyQuery(p);
+  const signals = opts.soft ?? softFromQuery(p);
+  const isRanked = !extractAccessions(p.q).gse.length && !extractAccessions(p.q).gsm.length &&
+    (signals.q.length > 0 || signals.tissue_group.length > 0 || signals.disease_group.length > 0 || signals.assay_family.length > 0 || signals.cell_type.length > 0);
+  const evidenceText = [...signals.q, ...signals.cell_type].join(" ");
+  const orMatch = evidenceText ? tokenizeQuery(evidenceText).or : null;
+  const candidateIds = isRanked ? await rankedCandidateIds(db, p, signals) : undefined;
+  const candidateParams = isRanked ? { ...p, q: "", page: 1, limit: RANKED_CANDIDATE_LIMIT } : p;
+  let plan = planStudyQuery(candidateParams, undefined, candidateIds);
   let res = await db.prepare(plan.sql).bind(...plan.params).all<StudyDbRow>();
   let anyWord = false;
 
   // AND found nothing → try OR over the same terms (only when there are ≥2 terms).
-  if (!res.results.length && plan.match && opts.orFallback !== false && plan.terms.length > 1) {
+  if (!isRanked && !res.results.length && plan.match && opts.orFallback !== false && plan.terms.length > 1) {
     const fts = tokenizeQuery(p.q);
     const orPlan = planStudyQuery(p, fts.or);
     const orRes = await db.prepare(orPlan.sql).bind(...orPlan.params).all<StudyDbRow>();
@@ -860,13 +1073,38 @@ export async function runStudySearch(ctx: Ctx, p: SearchParams, opts: { orFallba
     cells = c?.cells ?? null;
   }
 
-  const rows = res.results.map(shapeStudy);
-  await Promise.all([
-    attachStudyMatches(ctx, rows, p, plan),
-    attachConditions(ctx, rows),
-  ]);
+  let rows = res.results.map(shapeStudy);
+  const evidenceParams: SearchParams = { ...p,
+    tissue_group: [...new Set([...p.tissue_group, ...signals.tissue_group])],
+    disease_group: [...new Set([...p.disease_group, ...signals.disease_group])],
+    assay_family: [...new Set([...p.assay_family, ...signals.assay_family])],
+    cell_type: [...new Set([...p.cell_type, ...signals.cell_type])],
+    q: signals.q.join(" ") };
+  const evidencePlan = { ...plan, terms: signals.q, match: orMatch };
+  await attachStudyMatches(ctx, rows, evidenceParams, evidencePlan);
+  let groups: { full: number; partial: number } | undefined;
+  if (isRanked) {
+    const scored = rows.map((row) => ({ row, ...scoreStudy(row, signals) }));
+    const top = Math.max(0, ...scored.map((x) => x.score));
+    const kept = scored.filter((x) => x.full || x.score >= Math.max(2, 0.35 * top));
+    const best = (a: typeof kept[number], b: typeof kept[number]) => Number(b.full) - Number(a.full) || b.score - a.score || (b.row.bundle_n_samples ?? b.row.n_done) - (a.row.bundle_n_samples ?? a.row.n_done);
+    const alternate = (a: typeof kept[number], b: typeof kept[number]) => {
+      if (p.sort === "year") return (b.row.year ?? 0) - (a.row.year ?? 0) || best(a, b);
+      if (p.sort === "samples") return (b.row.bundle_n_samples ?? b.row.n_done) - (a.row.bundle_n_samples ?? a.row.n_done) || best(a, b);
+      if (p.sort === "file_cells") return (b.row.file_cells ?? -1) - (a.row.file_cells ?? -1) || best(a, b);
+      if (p.sort === "file_size") return (a.row.bundle_bytes ?? Number.MAX_SAFE_INTEGER) - (b.row.bundle_bytes ?? Number.MAX_SAFE_INTEGER) || best(a, b);
+      if (p.sort === "alphabetical") return (a.row.title ?? a.row.gse_id).localeCompare(b.row.title ?? b.row.gse_id);
+      return best(a, b);
+    };
+    kept.sort(alternate);
+    groups = { full: kept.filter((x) => x.full).length, partial: kept.filter((x) => !x.full).length };
+    total = kept.length;
+    const start = (p.page - 1) * p.limit;
+    rows = kept.slice(start, start + p.limit).map((x) => x.row);
+  }
+  await attachConditions(ctx, rows);
   for (const r of rows) {
-    r.why = whyText(r, p);
+    r.why = whyText(r, evidenceParams);
     r.abstract = truncateAbstract(r.abstract);
   }
 
@@ -879,6 +1117,7 @@ export async function runStudySearch(ctx: Ctx, p: SearchParams, opts: { orFallba
     accessions: rows.map((r) => r.gse_id),
     ...(plan.accessionLookup ? { accession_lookup: plan.accessionLookup } : {}),
     ...(anyWord ? { any_word: true } : {}),
+    ...(groups ? { groups } : {}),
   };
 }
 
@@ -966,10 +1205,8 @@ async function attachStudyMatches(ctx: Ctx, rows: StudyRow[], p: SearchParams, p
         const variants = termVariants(t);
         const inTitle = variants.find((v) => wordHit(title, v));
         if (inTitle) r.match.text.push({ field: "title", term: inTitle, n_samples: 0 });
-        else {
-          const inAbstract = variants.find((v) => wordHit(abstract, v));
-          if (inAbstract) r.match.text.push({ field: "abstract", term: inAbstract, n_samples: 0 });
-        }
+        const inAbstract = variants.find((v) => wordHit(abstract, v));
+        if (inAbstract) r.match.text.push({ field: "abstract", term: inAbstract, n_samples: 0 });
       }
     }
     const fields: ["characteristics" | "source" | "cell_type" | "tissue" | "sample_title", string][] = [
@@ -1371,5 +1608,13 @@ export function pickFilters(p: SearchFilters): SearchFilters {
     has_bundle: p.has_bundle,
     year_min: p.year_min,
     year_max: p.year_max,
+    min_file_samples: p.min_file_samples,
+    min_file_cells: p.min_file_cells,
+    reference_build: p.reference_build,
+    protocol: p.protocol,
+    has_pubmed: p.has_pubmed,
+    max_file_bytes: p.max_file_bytes,
+    has_conditions: p.has_conditions,
+    match_mode: p.match_mode,
   };
 }

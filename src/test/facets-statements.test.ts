@@ -25,6 +25,14 @@ const empty: SearchFilters = {
   has_bundle: null,
   year_min: null,
   year_max: null,
+  min_file_samples: null,
+  min_file_cells: null,
+  reference_build: [],
+  protocol: [],
+  has_pubmed: null,
+  max_file_bytes: null,
+  has_conditions: null,
+  match_mode: {},
 };
 
 const everything: SearchFilters = {
@@ -38,6 +46,14 @@ const everything: SearchFilters = {
   has_bundle: true,
   year_min: 2019,
   year_max: 2024,
+  min_file_samples: 10,
+  min_file_cells: 10_000,
+  reference_build: ["GRCm39-2024-A"],
+  protocol: ["10xv3"],
+  has_pubmed: true,
+  max_file_bytes: 10_737_418_240,
+  has_conditions: true,
+  match_mode: {},
 };
 
 const cases: [string, SearchFilters][] = [
