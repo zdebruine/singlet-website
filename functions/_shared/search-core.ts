@@ -1026,6 +1026,10 @@ async function rankedCandidateIds(db: D1Database, p: SearchParams, signals: Soft
   jsonFacet("tissue_groups", signals.tissue_group);
   jsonFacet("disease_groups", signals.disease_group);
   jsonFacet("assay_families", signals.assay_family);
+  if (signals.organism.length) {
+    soft.push(`(m.organism_primary IN (SELECT value FROM json_each(?)) OR EXISTS (SELECT 1 FROM json_each(m.organisms) je WHERE je.value IN (SELECT value FROM json_each(?))))`);
+    params.push(jsonArray(signals.organism), jsonArray(signals.organism));
+  }
   const text = [...signals.q, ...signals.cell_type];
   const match = tokenizeQuery(text.join(" ")).or;
   if (match) {
@@ -1383,6 +1387,12 @@ function joinAnd(xs: string[]): string {
 }
 
 export function whyText(r: StudyRow, p: SearchFilters): string {
+  if (r.match.facets.length || r.match.keywords.length) {
+    return [
+      ...r.match.facets.map((x) => x.status === "hit" ? `${x.label}: ${x.detail}` : x.status === "partial" ? `${x.label}: ${x.detail} (weaker text match)` : `${x.label}: not found`),
+      ...r.match.keywords.map((x) => x.status === "hit" ? `${quote(x.term)}: ${x.detail}` : x.status === "partial" ? `${quote(x.term)}: ${x.detail} (synonym)` : `${quote(x.term)}: not found`),
+    ].join(" · ");
+  }
   const parts: string[] = [];
   const f = r.match.filters;
 

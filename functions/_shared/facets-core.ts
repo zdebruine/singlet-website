@@ -320,7 +320,7 @@ export async function computeFacets(ctx: Ctx, f: SearchFilters, level: Level, sc
 }
 
 async function computeFacetsLive(ctx: Ctx, f: SearchFilters, level: Level, scopedGseIds: string[] | null = null): Promise<FacetsResponse> {
-  const scope = await textScope(ctx, f, level);
+  const scope = scopedGseIds ? { gseIds: scopedGseIds, gsmIds: null, empty: scopedGseIds.length === 0 } : await textScope(ctx, f, level);
   if (scope.empty) return emptyFacets(level);
   const gseIds = scopedGseIds ?? scope.gseIds;
   const statements =

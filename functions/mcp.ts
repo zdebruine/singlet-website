@@ -477,7 +477,8 @@ function studySummary(r: StudyRow, why: string) {
     assays: r.assay_families,
     cell_types: r.cell_types_raw.slice(0, 12),
     conditions: r.conditions_label || null,
-    n_samples: r.n_done,
+    n_samples: r.bundle_n_samples ?? r.n_done,
+    sample_count_source: r.bundle_n_samples != null ? "file" : "catalog",
     n_samples_total: r.n_total,
     n_cells: r.suspect_cells ? null : r.n_cells,
     year: r.year,
@@ -581,7 +582,7 @@ async function searchDatasets(
       if (index === 0 && b.groups) lines.push(`Matches everything (${fmt(b.groups.full)}):`);
       if (index === fullCount && (b.groups?.partial ?? 0) > 0) lines.push(`Partial matches, best first (${fmt(b.groups?.partial)}):`);
       lines.push(`- ${s.gse_id} — ${s.title ?? "(untitled)"}`);
-      lines.push(`  ${[s.organism, s.tissues.join("/"), s.diseases.join("/"), s.assays.join("/")].filter(Boolean).join(" · ")} · ${fmt(s.n_samples)} samples · ${s.n_cells != null ? fmt(s.n_cells) + " cells" : "cell count unreliable"}${s.year ? " · " + s.year : ""}`);
+      lines.push(`  ${[s.organism, s.tissues.join("/"), s.diseases.join("/"), s.assays.join("/")].filter(Boolean).join(" · ")} · ${fmt(s.n_samples)} samples${s.sample_count_source === "catalog" ? " (catalog)" : " in file"} · ${s.file_cells != null ? fmt(s.file_cells) + " cells in file" : s.n_cells != null ? fmt(s.n_cells) + " cells (catalog)" : "cell count unreliable"}${s.year ? " · " + s.year : ""}`);
       if (s.why) lines.push(`  why: ${s.why}`);
       lines.push(`  ${s.has_bundle ? `load: singlet.load("${s.gse_id}")` : "file not built yet"} · ${s.study_url}`);
     }

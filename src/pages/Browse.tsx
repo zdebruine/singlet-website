@@ -132,7 +132,7 @@ const Browse = () => {
       return;
     }
     // A new question starts clean: the interpreter (or you, via the rail) adds filters back.
-    go({ ...DEFAULT_STATE, q: t, level: state.level, view: state.view });
+    go({ ...DEFAULT_STATE, q: t, level: state.level, view: state.view, sort: state.sort });
   };
 
   // ── Results ───────────────────────────────────────────────────────────────
@@ -156,15 +156,30 @@ const Browse = () => {
     staleTime: 120_000,
     retry: 1,
   });
+  const [showKeywordFallback, setShowKeywordFallback] = useState(false);
+  useEffect(() => {
+    setShowKeywordFallback(false);
+    if (!aiMode || !state.q || !result.isFetching) return;
+    const timer = window.setTimeout(() => setShowKeywordFallback(true), 800);
+    return () => window.clearTimeout(timer);
+  }, [aiMode, state.q, stateKey, result.isFetching]);
+  const keywordFallback = useQuery<Result>({
+    queryKey: ["browse-keyword-fallback", stateKey],
+    queryFn: ({ signal }) => apiClient.nlSearch({ ...query, q: state.q, interpret: false }, signal),
+    enabled: showKeywordFallback && aiMode && !!state.q && result.isFetching,
+    staleTime: 120_000,
+    retry: 0,
+  });
   const data = result.data;
   // While a new AI query is in flight, previous data belongs to another question.
   const fresh = data && !result.isPlaceholderData ? data : undefined;
   // Keep the previous page on screen while refreshing — unless it is the other
   // result level, in which case its totals/rows would be mislabelled.
-  const shown = fresh ?? (data && data.level === state.level ? data : undefined);
+  const fallbackData = keywordFallback.data;
+  const shown = fresh ?? (fallbackData && fallbackData.level === state.level ? fallbackData : undefined) ?? (data && data.level === state.level ? data : undefined);
 
   const applied: AppliedFilters = useMemo(() => fresh?.applied ?? stateToApplied(state), [fresh, state]);
-  const appliedQuery = useMemo(() => appliedToQuery(applied, state.level), [applied, state.level]);
+  const appliedQuery = useMemo(() => ({ ...appliedToQuery(applied, state.level), candidate_ids: fresh?.candidate_accessions }), [applied, state.level, fresh?.candidate_accessions]);
   const appliedKey = JSON.stringify(appliedQuery);
 
   const facets = useQuery({
@@ -225,6 +240,7 @@ const Browse = () => {
   const quotaExceeded = !!nl?.quota_exceeded && !!nl.quota;
   const hasActive = !!fresh && (hasExplicitFilters(appliedToState(fresh.applied, state)) || !!fresh.applied.q);
   const loadingInitial = result.isLoading && !shown;
+  const readingQuery = aiMode && result.isFetching && !fresh;
   const refreshing = result.isFetching && !!shown;
   const chipsApplied = fresh ? fresh.applied : applied;
 
@@ -399,6 +415,7 @@ const Browse = () => {
             )}
 
             {/* Header */}
+            {readingQuery && <p className="mb-3 text-[13px] text-muted-foreground" aria-live="polite">Reading your query…</p>}
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mb-3">
               <h1 className="text-[15px] font-sans font-semibold tracking-normal text-foreground tabular" aria-live="polite">
                 {loadingInitial ? (

@@ -132,12 +132,12 @@ export function StudyTable({ rows, selectedIds, onToggle, onTogglePage, sort, on
                   {r.assay_families.join(", ") || "—"}
                 </td>
                 <td className="num whitespace-nowrap align-top">
-                  {fmtInt(r.n_done)}
-                  <span className="text-muted-foreground"> / {fmtInt(r.n_total)}</span>
+                  {r.bundle_n_samples != null ? <>{fmtInt(r.bundle_n_samples)} <span className="text-muted-foreground">file</span></> : <>{fmtInt(r.n_done)} <span className="text-muted-foreground">(catalog)</span></>}
                 </td>
                 <td className="num whitespace-nowrap align-top">
                   {r.suspect_cells && <AlertTriangle size={11} className="inline mr-1 text-warning" aria-label="Some counts flagged" />}
-                  {fmtCompact(r.n_cells)}
+                  {fmtCompact(r.file_cells ?? r.n_cells)}
+                  <span className="text-muted-foreground"> {r.file_cells != null ? "file" : "(catalog)"}</span>
                 </td>
                 <td className="text-right whitespace-nowrap align-top">
                   {r.has_bundle ? (

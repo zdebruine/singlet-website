@@ -406,6 +406,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env, params })
       try {
         const index = await getBundleIndex(env.DB, gse_id, { refresh: true });
         const samples = await readSampleSummaries(gse_id, index);
+        if (samples.length === 0) throw new Error("No sample QC summaries in bundle; parked after successful ZIP indexing");
         const st = nowIso();
         const statements = samples.map((s) => upsertSampleQcStatement(env.DB, s as unknown as Record<string, unknown>, st));
         for (let i = 0; i < statements.length; i += BATCH_SIZE) await env.DB.batch(statements.slice(i, i + BATCH_SIZE));

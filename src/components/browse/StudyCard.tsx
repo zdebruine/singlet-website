@@ -55,6 +55,16 @@ export function StudyCard({ row, selected, onToggle, ai, why, aiWhy }: Props) {
   const conditions = row.conditions.slice(0, 3);
   const explanation = why ?? row.why;
   const failed = row.n_failed ?? Math.max(0, row.n_total - row.n_done);
+  const orderedFacets = [...row.match.facets].sort((a, b) => {
+    const order = ["organism", "tissue_group", "disease_group", "assay_family", "cell_type"];
+    return order.indexOf(a.key) - order.indexOf(b.key);
+  });
+  const evidenceClass = (status: "hit" | "partial" | "miss") => cn(
+    "chip h-6 text-[11px]",
+    status === "hit" && "chip-active",
+    status === "partial" && "border-warning/40 bg-warning-soft text-warning",
+    status === "miss" && "bg-transparent text-muted-foreground line-through"
+  );
 
   return (
     <article
@@ -95,15 +105,16 @@ export function StudyCard({ row, selected, onToggle, ai, why, aiWhy }: Props) {
             )}
           </p>
 
-          {(row.match.facets.length > 0 || row.match.keywords.some((k) => k.hits.length)) && (
+          {(row.match.facets.length > 0 || row.match.keywords.length > 0) && (
             <ul className="mt-2 flex flex-wrap gap-1.5" aria-label="Match evidence">
-              {row.match.facets.map((facet) => (
-                <li key={`${facet.key}-${facet.label}`} title={facet.detail} className={cn("chip h-6 text-[11px]", facet.status === "hit" && "chip-active", facet.status === "miss" && "text-muted-foreground")}>
-                  {facet.label}: {facet.status}
+              {orderedFacets.map((facet) => (
+                <li key={`${facet.key}-${facet.label}`} title={facet.detail} className={evidenceClass(facet.status)}>
+                  {facet.key === "cell_type" ? `${facet.label} · ${facet.detail}` : facet.status === "hit" ? `${facet.detail} ✓` : facet.status === "partial" ? `${facet.label} · ${facet.detail}` : facet.label}
                 </li>
               ))}
-              {row.match.keywords.filter((k) => k.hits.length).map((keyword) => (
-                <li key={keyword.term} title={keyword.hits.join(" · ")} className="chip h-6 text-[11px]">“{keyword.term}”</li>
+              {row.match.keywords.map((keyword) => (
+                <li key={keyword.term} title={keyword.detail} className={evidenceClass(keyword.status)}>
+                  {keyword.status === "hit" ? `${keyword.term} ✓` : keyword.status === "partial" ? keyword.detail : keyword.term}
               ))}
             </ul>
           )}
