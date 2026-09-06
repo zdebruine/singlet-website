@@ -110,4 +110,4 @@
 - [ ] Preserve package-lock.json; pass app build and Functions typecheck
 - [ ] Verify specified production queries, timings, mobile drawer, and URL round-trip after deployment
 
-- [ ] Fix all current preview typecheck/build errors from observability log
+- [x] Fix all current preview typecheck/build errors from observability log
