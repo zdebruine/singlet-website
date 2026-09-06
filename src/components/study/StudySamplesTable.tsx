@@ -238,7 +238,9 @@ export function StudySamplesTable({ gseId, studyTitle, samples, highlightGsm, co
 
   const hasQc = useMemo(() => samples.some((s) => s.mapping_rate != null || s.median_genes != null), [samples]);
   const hasReads = useMemo(() => !!qcByGsm && samples.some((s) => qcByGsm[s.gsm_id.toUpperCase()]?.n_input_reads != null), [samples, qcByGsm]);
+  const hasCellsCalled = useMemo(() => !!qcByGsm && samples.some((s) => qcByGsm[s.gsm_id.toUpperCase()]?.n_cells_called != null), [samples, qcByGsm]);
   const hasSaturation = useMemo(() => !!qcByGsm && samples.some((s) => qcByGsm[s.gsm_id.toUpperCase()]?.sequencing_saturation != null), [samples, qcByGsm]);
+
   const nProcessed = useMemo(() => samples.filter((s) => isProcessed(s.status)).length, [samples]);
   const nFailed = useMemo(() => samples.filter((s) => isFailed(s.status)).length, [samples]);
 
