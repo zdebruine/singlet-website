@@ -91,7 +91,7 @@ const TOOLS = [
     name: "search_datasets",
     title: "Search single-cell studies",
     description:
-      "Find public scRNA-seq studies (or individual samples) in the singlet.bio atlas from a plain-English question, e.g. \"microglia in the aging mouse brain\" or \"human PBMC covid-19 10x\". GEO accessions (GSE…, GSM…) are looked up directly. The question is turned into structured filters (organism, tissue, disease, assay, cell type) which are ANDed and never relaxed silently; when nothing matches, `suggestions` says what dropping one filter would return. Each result carries a deterministic `why` explaining the match, the download URL and one-line Python/R loaders. Costs one unit of the key owner's daily AI-search budget (200/day) unless the interpretation is cached.",
+      "Find public scRNA-seq studies (or individual samples) in the singlet.bio atlas from a plain-English question, e.g. \"microglia in the aging mouse brain\" or \"human PBMC covid-19 10x\". GEO accessions (GSE…, GSM…) are looked up directly. The question is turned into structured filters (organism, tissue, disease, assay, cell type) which are ANDed and never relaxed silently; when nothing matches, `suggestions` says what dropping one filter would return. Each result carries a deterministic `why` explaining the match, the download URL and one-line Python/R loaders. Works without an API key at the anonymous allowance (10 AI-interpreted searches per day per visitor); a free key from https://singlet.bio/account raises it to 200/day. Remaining budget is in `_meta.quota`.",
     inputSchema: {
       type: "object",
       properties: {
@@ -514,7 +514,13 @@ function describeApplied(applied: NlSearchBody["applied"]): string {
 
 // ── Tool implementations ────────────────────────────────────────────────────
 
-async function searchDatasets(env: Env, request: Request, waitUntil: (p: Promise<unknown>) => void, args: Record<string, unknown>) {
+async function searchDatasets(
+  env: Env,
+  request: Request,
+  waitUntil: (p: Promise<unknown>) => void,
+  args: Record<string, unknown>,
+  hasKey: boolean
+): Promise<ToolResult> {
   const query = typeof args.query === "string" ? args.query.trim() : "";
   if (!query) return toolError("`query` is required — describe what you are looking for, or give a GEO accession.");
 
@@ -535,7 +541,12 @@ async function searchDatasets(env: Env, request: Request, waitUntil: (p: Promise
   const r = await nlSearch(env, request, waitUntil, url);
   if (!r.ok) return toolError(r.message, { error: r.error });
   const b = r.body;
-  const meta = rateLimitMeta(r.quota);
+  const quota = r.quota ?? b.quota;
+  const meta = quotaMeta(hasKey, quota);
+  // The budget is spent: nlSearch already fell back to a plain keyword search,
+  // so the caller still gets results — flagged as an error so the assistant
+  // relays the sign-in advice rather than pretending the AI reading happened.
+  const exhausted = !!b.quota_exceeded;
 
   if (b.level === "gse") {
     const rows = (b.data as StudyRow[]).map((row) => studySummary(row, b.why[row.gse_id] ?? row.why));
@@ -560,7 +571,7 @@ async function searchDatasets(env: Env, request: Request, waitUntil: (p: Promise
         lines.push(`- ${what} → ${fmt(s.total)} studies`);
       }
     }
-    return toolResult(
+    const result = toolResult(
       lines.join("\n"),
       {
         query,
@@ -575,11 +586,12 @@ async function searchDatasets(env: Env, request: Request, waitUntil: (p: Promise
         results: rows,
         suggestions: b.suggestions,
         note: b.note ?? null,
-        quota_exceeded: !!b.quota_exceeded,
+        quota_exceeded: exhausted,
         model: b.model ?? null,
       },
       meta
     );
+    return exhausted ? { ...result, isError: true } : result;
   }
 
   const rows = (b.data as SampleRow[]).map(sampleSummary);
@@ -594,11 +606,12 @@ async function searchDatasets(env: Env, request: Request, waitUntil: (p: Promise
   }
   lines.push("");
   lines.push("Note: files are per study — load the parent GSE and subset to these samples.");
-  return toolResult(
+  const result = toolResult(
     lines.join("\n"),
-    { query, level: "sample", interpreted: b.interpreted, applied: b.applied, not_recognised: b.dropped, total: b.total, totals: b.totals, page: b.page, limit: b.limit, results: rows, note: b.note ?? null, quota_exceeded: !!b.quota_exceeded },
+    { query, level: "sample", interpreted: b.interpreted, applied: b.applied, not_recognised: b.dropped, total: b.total, totals: b.totals, page: b.page, limit: b.limit, results: rows, note: b.note ?? null, quota_exceeded: exhausted },
     meta
   );
+  return exhausted ? { ...result, isError: true } : result;
 }
 
 function studyText(d: StudyDetail): string {
