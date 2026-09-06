@@ -319,3 +319,24 @@
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
 }
+
+@layer components {
+  .singlet-logo { width: auto; overflow: visible; }
+  .logo-cell { fill: var(--cell); }
+  .logo-lit { fill: var(--teal-500); }
+  .logo-word { fill: var(--ink); font-family: "IBM Plex Sans", sans-serif; font-size: 100px; font-weight: 600; letter-spacing: -2px; }
+  .logo-bio { fill: var(--teal-500); }
+  .logo-dark .logo-cell { fill: #2A3F3B; }
+  .logo-dark .logo-lit { fill: #2EBFAE; }
+  .logo-dark.logo-word { fill: #FFFFFF; }
+  .logo-dark .logo-bio { fill: #2EBFAE; }
+  .logo-mono .logo-cell { fill: currentColor; opacity: .3; }
+  .logo-mono .logo-lit { fill: currentColor; }
+  .logo-mono.logo-word, .logo-mono .logo-bio { fill: currentColor; }
+}
+@media (prefers-color-scheme: dark) {
+  .logo-auto .logo-cell { fill: #2A3F3B; }
+  .logo-auto .logo-lit { fill: #2EBFAE; }
+  .logo-auto.logo-word { fill: #E6EEEC; }
+  .logo-auto .logo-bio { fill: #2EBFAE; }
+}

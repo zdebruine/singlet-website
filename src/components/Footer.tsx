@@ -4,6 +4,8 @@ import { GITHUB_ISSUES, GITHUB_REPO } from "@/lib/install-snippets";
 
 const LINKS: { label: string; to?: string; href?: string }[] = [
   { label: "Docs", to: "/docs" },
+  { label: "MCP", to: "/docs/mcp" },
+  { label: "Brand", to: "/brand" },
   { label: "About the data", to: "/about" },
   { label: "Cite", to: "/about#cite" },
   { label: "GitHub", href: GITHUB_REPO },
@@ -18,7 +20,7 @@ const LEGAL = [
 const Footer = () => (
   <footer className="surface-dark mt-auto">
     <div className="container-site py-7 flex flex-col md:flex-row md:items-center gap-5 md:gap-8">
-      <Logo size={18} variant="dark" />
+      <Logo variant="lockup" theme="dark" height={24} />
       <p className="text-[13px] text-dark-muted md:flex-1">
         Data CC0 · Code MIT · Free download, no account ·{" "}
         <a href={GITHUB_ISSUES} target="_blank" rel="noopener noreferrer" className="text-dark-foreground/85 hover:text-dark-foreground transition-colors">

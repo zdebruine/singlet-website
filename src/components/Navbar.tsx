@@ -34,7 +34,7 @@ const Navbar = ({ search = true }: { search?: boolean }) => {
   return (
     <header className="sticky top-0 z-40 bg-background/95 backdrop-blur-sm border-b border-border">
       <nav className="container-site h-14 flex items-center gap-6" aria-label="Main">
-        <Logo size={20} />
+        <Logo variant="lockup" height={24} />
 
         {/* Desktop links */}
         <div className="hidden md:flex items-center gap-5 ml-2">
