@@ -172,12 +172,16 @@ export function studyFacetStatements(f: SearchFilters, gseIds: string[] | null):
     base: by,
     select: `SELECT * FROM (SELECT 'year' AS facet, CAST(b.year AS TEXT) AS value, COUNT(*) AS n FROM ${by.name} b WHERE b.year IS NOT NULL GROUP BY b.year ORDER BY b.year DESC LIMIT ${YEAR_FACET_LIMIT})`,
   });
-  const bextra = baseFor("none");
-  items.push({ base: bextra, select: `SELECT 'reference_build' AS facet, b.reference_build AS value, COUNT(*) AS n FROM ${bextra.name} b WHERE b.reference_build IS NOT NULL AND b.reference_build != '' GROUP BY b.reference_build` });
-  items.push({ base: bextra, select: `SELECT 'file_samples' AS facet, CASE WHEN b.file_samples >= 100 THEN '100' WHEN b.file_samples >= 50 THEN '50' WHEN b.file_samples >= 25 THEN '25' WHEN b.file_samples >= 10 THEN '10' ELSE '1' END AS value, COUNT(*) AS n FROM ${bextra.name} b WHERE b.file_samples IS NOT NULL GROUP BY value` });
-  items.push({ base: bextra, select: `SELECT 'file_cells' AS facet, CASE WHEN b.file_cells >= 1000000 THEN '1000000' WHEN b.file_cells >= 100000 THEN '100000' WHEN b.file_cells >= 10000 THEN '10000' ELSE '1' END AS value, COUNT(*) AS n FROM ${bextra.name} b WHERE b.file_cells IS NOT NULL GROUP BY value` });
-  items.push({ base: bextra, select: `SELECT 'file_size' AS facet, CASE WHEN b.file_size <= 1073741824 THEN '1073741824' WHEN b.file_size <= 5368709120 THEN '5368709120' WHEN b.file_size <= 10737418240 THEN '10737418240' ELSE 'other' END AS value, COUNT(*) AS n FROM ${bextra.name} b WHERE b.file_size IS NOT NULL GROUP BY value` });
-  items.push({ base: bextra, select: `SELECT 'protocol' AS facet, CASE WHEN lower(q.protocol) LIKE '%multiome%' OR lower(q.protocol) LIKE '%atac%' THEN 'multiome' WHEN lower(q.protocol) LIKE '%5%prime%' OR lower(q.protocol) LIKE '%5''%' THEN '10x 5''' WHEN lower(q.protocol) LIKE '%v2%' THEN '10xv2' WHEN lower(q.protocol) LIKE '%v3%' THEN '10xv3' ELSE 'other' END AS value, COUNT(DISTINCT q.gse_id) AS n FROM sample_qc q WHERE q.gse_id IN (SELECT gse_id FROM ${bextra.name}) GROUP BY value` });
+  const bref = baseFor("reference_build");
+  items.push({ base: bref, select: `SELECT 'reference_build' AS facet, b.reference_build AS value, COUNT(*) AS n FROM ${bref.name} b WHERE b.reference_build IS NOT NULL AND b.reference_build != '' GROUP BY b.reference_build` });
+  const bsamples = baseFor("file_samples");
+  items.push({ base: bsamples, select: `SELECT 'file_samples' AS facet, CASE WHEN b.file_samples >= 100 THEN '100' WHEN b.file_samples >= 50 THEN '50' WHEN b.file_samples >= 25 THEN '25' WHEN b.file_samples >= 10 THEN '10' ELSE '1' END AS value, COUNT(*) AS n FROM ${bsamples.name} b WHERE b.file_samples IS NOT NULL GROUP BY value` });
+  const bcells = baseFor("file_cells");
+  items.push({ base: bcells, select: `SELECT 'file_cells' AS facet, CASE WHEN b.file_cells >= 1000000 THEN '1000000' WHEN b.file_cells >= 100000 THEN '100000' WHEN b.file_cells >= 10000 THEN '10000' ELSE '1' END AS value, COUNT(*) AS n FROM ${bcells.name} b WHERE b.file_cells IS NOT NULL GROUP BY value` });
+  const bsize = baseFor("file_size");
+  items.push({ base: bsize, select: `SELECT 'file_size' AS facet, CASE WHEN b.file_size <= 1073741824 THEN '1073741824' WHEN b.file_size <= 5368709120 THEN '5368709120' WHEN b.file_size <= 10737418240 THEN '10737418240' ELSE 'other' END AS value, COUNT(*) AS n FROM ${bsize.name} b WHERE b.file_size IS NOT NULL GROUP BY value` });
+  const bprotocol = baseFor("protocol");
+  items.push({ base: bprotocol, select: `SELECT 'protocol' AS facet, CASE WHEN lower(q.protocol) LIKE '%multiome%' OR lower(q.protocol) LIKE '%atac%' THEN 'multiome' WHEN lower(q.protocol) LIKE '%5%prime%' OR lower(q.protocol) LIKE '%5''%' THEN '10x 5''' WHEN lower(q.protocol) LIKE '%v2%' THEN '10xv2' WHEN lower(q.protocol) LIKE '%v3%' THEN '10xv3' ELSE 'other' END AS value, COUNT(DISTINCT q.gse_id) AS n FROM sample_qc q WHERE q.gse_id IN (SELECT gse_id FROM ${bprotocol.name}) GROUP BY value` });
   const ball = baseFor("none");
   items.push({ base: ball, select: `SELECT '_total' AS facet, NULL AS value, COUNT(*) AS n FROM ${ball.name}` });
 
