@@ -757,7 +757,7 @@ accs <- find("microglia in the aging mouse brain")`}
                 <li>Select public studies in Browse and choose <strong>Save cohort</strong> to pin the selection to catalogue version <Mono>2026.09</Mono>. Cohorts can be private, shared by link, or attached to a workspace.</li>
                 <li>Workspaces support owner/member collaboration, invite links, comments and activity, up to 25 members and 3 workspaces per user.</li>
               </ul>
-              <p className="text-sm text-muted-foreground">These features are free while in preview.</p>
+              <p className="text-sm text-muted-foreground">These features are included with a free account.</p>
             </Section>
 
             {/* ── BYOD / pipeline ── */}
