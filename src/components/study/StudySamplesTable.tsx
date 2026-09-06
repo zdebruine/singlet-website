@@ -489,6 +489,8 @@ export function StudySamplesTable({ gseId, studyTitle, samples, highlightGsm, co
                         fmtInt(s.n_cells)
                       )}
                     </td>
+                    {hasCellsCalled && <td className="num text-[12.5px] font-mono">{fmtInt(qc?.n_cells_called)}</td>}
+
                     {hasQc && <td className="num text-[12.5px]">{fmtPct(s.mapping_rate)}</td>}
                     {hasQc && <td className="num text-[12.5px]">{fmtInt(s.median_genes)}</td>}
                     {hasReads && <td className="num text-[12.5px] font-mono">{fmtInt(qc?.n_input_reads)}</td>}
