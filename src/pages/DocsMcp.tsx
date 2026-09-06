@@ -93,15 +93,15 @@ export default function DocsMcp() {
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <Navbar />
-      <main className="flex-1">
-        <div className="container-page py-12 md:py-16 max-w-3xl prose-singlet">
+      <main className="container-site flex-1 py-10 md:py-14">
+        <article className="prose-doc max-w-[760px]">
           <p className="text-xs uppercase tracking-wider text-muted-foreground mb-2">
             <Link to="/docs" className="hover:underline">
               Docs
             </Link>{" "}
             / MCP
           </p>
-          <h1 className="mb-4">Use singlet from Claude, Cursor or ChatGPT</h1>
+          <h1 className="text-[36px] md:text-[42px] mb-3">Use singlet from Claude, Cursor or ChatGPT</h1>
           <p className="text-lg text-muted-foreground">
             Finding the right public single-cell study, checking whether its samples are any good, and getting the counts
             onto your machine used to be an afternoon of GEO clicking, GEOquery calls and FASTQ processing. Connected to
@@ -277,7 +277,7 @@ export default function DocsMcp() {
               Still stuck? Open an issue on GitHub, or read the rest of the <Link to="/docs">documentation</Link>.
             </p>
           </Section>
-        </div>
+        </article>
       </main>
       <Footer />
     </div>
