@@ -256,7 +256,7 @@ describe("ranked candidate generation", () => {
     });
     const hit = result.data.find((r) => r.gse_id === "GSE900001");
     expect(hit, "the microglia / aging / mouse brain study must be a candidate").toBeTruthy();
-    expect(result.totals.full).toBeGreaterThan(0);
+    expect(result.groups?.full ?? 0).toBeGreaterThan(0);
     expect(result.data.filter((r) => r.match.score >= (hit?.match.score ?? 0))[0]?.gse_id).toBe("GSE900001");
   });
 
