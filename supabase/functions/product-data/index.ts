@@ -98,16 +98,18 @@ Deno.serve(async (req) => {
     const uid = who.id;
 
     if (action === "dashboard") {
-      const [{ data: projects }, { data: cohorts }, { data: workspaces }, { data: usage }, { data: preferences }] = await Promise.all([
+      const { data: memberships } = await db.from("workspace_members").select("workspace_id").eq("user_id", uid);
+      const workspaceIds = (memberships ?? []).map((m: { workspace_id: string }) => m.workspace_id);
+      const [{ data: projects }, { data: cohorts }, workspaceResult, { data: usage }, { data: preferences }] = await Promise.all([
         db.from("projects").select("id, name, description, visibility, workspace_id, read_token_prefix, created_at, updated_at").eq("owner_id", uid).order("updated_at", { ascending: false }),
         db.from("cohorts").select("id, name, notes, query, visibility, workspace_id, catalog_version, created_at, updated_at").eq("owner_id", uid).order("updated_at", { ascending: false }),
-        db.from("workspaces").select("id, name, slug, owner_id, created_at, updated_at").order("updated_at", { ascending: false }),
+        workspaceIds.length ? db.from("workspaces").select("id, name, slug, owner_id, created_at, updated_at").in("id", workspaceIds).order("updated_at", { ascending: false }) : Promise.resolve({ data: [] }),
         db.rpc("my_product_usage"),
         db.from("account_preferences").select("weekly_summary").eq("user_id", uid).maybeSingle(),
       ]);
       const projectIds = (projects ?? []).map((p: { id: string }) => p.id);
       const { data: files } = projectIds.length ? await db.from("user_files").select("id, project_id, filename, kind, bytes, status, error, created_at, updated_at").in("project_id", projectIds).order("created_at") : { data: [] };
-      return json({ projects: projects ?? [], files: files ?? [], cohorts: cohorts ?? [], workspaces: workspaces ?? [], usage: usage ?? {}, weekly_summary: preferences?.weekly_summary ?? false, limits: { projects: PROJECT_CAP, files_per_project: FILE_CAP, storage_bytes: ACCOUNT_BYTES_CAP, workspaces: WORKSPACE_CAP, members_per_workspace: MEMBER_CAP, file_bytes: FILE_BYTES_CAP } });
+      return json({ projects: projects ?? [], files: files ?? [], cohorts: cohorts ?? [], workspaces: workspaceResult.data ?? [], usage: usage ?? {}, weekly_summary: preferences?.weekly_summary ?? false, limits: { projects: PROJECT_CAP, files_per_project: FILE_CAP, storage_bytes: ACCOUNT_BYTES_CAP, workspaces: WORKSPACE_CAP, members_per_workspace: MEMBER_CAP, file_bytes: FILE_BYTES_CAP } });
     }
 
     if (action === "create_project") {
@@ -128,17 +130,13 @@ Deno.serve(async (req) => {
 
     if (action === "list_private_studies") {
       const q = text(body.query, 500).toLowerCase();
-      const { data } = await db.from("user_studies").select("*, projects!inner(name, visibility, workspace_id)").order("indexed_at", { ascending: false }).limit(200);
+      const [{ data: owned }, { data: memberships }] = await Promise.all([db.from("projects").select("id").eq("owner_id", uid), db.from("workspace_members").select("workspace_id").eq("user_id", uid)]);
+      const workspaceIds = (memberships ?? []).map((m: { workspace_id: string }) => m.workspace_id);
+      const { data: shared } = workspaceIds.length ? await db.from("projects").select("id").eq("visibility", "workspace").in("workspace_id", workspaceIds) : { data: [] };
+      const projectIds = [...new Set([...(owned ?? []), ...(shared ?? [])].map((p: { id: string }) => p.id))];
+      const { data } = projectIds.length ? await db.from("user_studies").select("*, projects!inner(name, visibility, workspace_id)").in("project_id", projectIds).order("indexed_at", { ascending: false }).limit(200) : { data: [] };
       const rows = (data ?? []).filter((s: Record<string, unknown>) => !q || [s.study_id, s.title, s.abstract, s.organism_primary, JSON.stringify(s.tissue_groups), JSON.stringify(s.disease_groups), JSON.stringify(s.cell_types_raw)].join(" ").toLowerCase().includes(q));
       return json({ studies: rows });
-    }
-
-    if (action === "search_private_studies") {
-      const q = text(body.query, 500).toLowerCase();
-      const limit = Math.min(200, Math.max(1, Number(body.limit) || 25));
-      const { data } = await db.from("user_studies").select("*, projects!inner(name, visibility, workspace_id)").order("indexed_at", { ascending: false }).limit(500);
-      const rows = (data ?? []).filter((s: Record<string, unknown>) => !q || [s.study_id, s.title, s.abstract, s.organism_primary, JSON.stringify(s.tissue_groups), JSON.stringify(s.disease_groups), JSON.stringify(s.cell_types_raw)].join(" ").toLowerCase().includes(q)).slice(0, limit);
-      return json({ studies: rows, total: rows.length });
     }
 
     if (action === "get_project") {
