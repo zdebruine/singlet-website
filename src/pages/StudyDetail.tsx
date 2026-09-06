@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, ChevronDown, ChevronRight, ExternalLink } from "lucide-react";
@@ -547,12 +547,12 @@ const StudyDetail = () => {
                 ),
               },
             ]
-              .filter((row): row is { label: string; value: React.ReactNode } => row !== null)
+              .filter((row): row is { label: string; value: ReactNode } => row !== null)
               .map((row) => (
-                <React.Fragment key={row.label}>
+                <Fragment key={row.label}>
                   <dt className="text-muted-foreground">{row.label}</dt>
                   <dd className="text-foreground">{row.value}</dd>
-                </React.Fragment>
+                </Fragment>
               ))}
           </dl>
           <p className="text-[12px] text-muted-foreground leading-relaxed px-0.5">

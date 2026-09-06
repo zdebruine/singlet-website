@@ -76,7 +76,7 @@ export function FileTreePanel({ index, isLoading, isError }: FileTreePanelProps)
 
   const meta = [
     index.reference_build ? `Reference ${index.reference_build}` : null,
-    index.singlet_version ? `pipeline ${index.singlet_version}` : null,
+    index.singlet_version && index.singlet_version !== "unknown" ? `pipeline ${index.singlet_version}` : null,
     index.created_at ? `packed ${index.created_at.slice(0, 10)}` : null,
   ].filter(Boolean);
 
