@@ -16,7 +16,7 @@ import { conditionPairs } from "@/components/browse/SampleTable";
 import type { GsmRow, SampleQc } from "@/integrations/api/types";
 import type { ConditionFilter } from "./ConditionsPanel";
 
-type SortCol = "gsm_id" | "status" | "n_cells" | "mapping_rate" | "median_genes" | "assay" | "n_input_reads" | "seq_saturation";
+type SortCol = "gsm_id" | "status" | "n_cells" | "n_cells_called" | "mapping_rate" | "median_genes" | "assay" | "n_input_reads" | "seq_saturation";
 type StatusFilter = "all" | "processed" | "failed";
 
 const INITIAL_ROWS = 150;
