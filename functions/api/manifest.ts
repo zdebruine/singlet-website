@@ -10,155 +10,19 @@ import { cachedJson } from "../_shared/cache";
 import { type CloudEnv } from "../_shared/cloud";
 import { resolveIdentity } from "../_shared/identity";
 import { loadRules } from "../_shared/vocab";
-import { canonicalQuery, normalizeFilters, parseSearchParams, exportStudyAccessions } from "../_shared/search-core";
-import { safeList } from "../_shared/json";
-import { bundleUrl } from "../_shared/study-core";
-import { organismToCommon } from "../_shared/vocab";
+import { canonicalQuery, normalizeFilters, parseSearchParams } from "../_shared/search-core";
+import {
+  buildManifestFromSearch,
+  MANIFEST_FORMATS,
+  MAX_MANIFEST_STUDIES,
+  type ManifestFormat,
+} from "../_shared/manifest-core";
 
 interface Env extends CloudEnv {
   DB: D1Database;
 }
 
-const MAX_STUDIES = 2000;
 const TTL = 300;
-const FORMATS = ["tsv", "json", "curl", "wget", "python", "r"] as const;
-type Format = (typeof FORMATS)[number];
-
-interface ManifestRow {
-  gse_id: string;
-  title: string | null;
-  organism: string;
-  tissue_groups: string[];
-  disease_groups: string[];
-  assay_families: string[];
-  n_samples_in_file: number | null;
-  n_cells: number;
-  year: number | null;
-  pubmed_ids: string[];
-  reference_build: string | null;
-  bytes: number | null;
-  download_url: string;
-  license: "CC0";
-}
-
-async function loadRows(db: D1Database, ids: string[]): Promise<ManifestRow[]> {
-  const out: ManifestRow[] = [];
-  for (let i = 0; i < ids.length; i += 200) {
-    const chunk = ids.slice(i, i + 200);
-    const inList = chunk.map(() => "?").join(", ");
-    const res = await db
-      .prepare(
-        `SELECT g.id AS gse_id, g.title, g.pubmed_ids, g.n_cells AS g_cells, g.r2_bundle_bytes, g.r2_bundle_n_gsms,
-                m.organism_primary, m.tissue_groups, m.disease_groups, m.assay_families, m.n_cells AS m_cells, m.year,
-                b.reference_build, b.n_gsms_in_bundle, b.bytes AS b_bytes
-           FROM gse g
-           LEFT JOIN gse_meta m ON m.gse_id = g.id
-           LEFT JOIN bundle_manifest b ON b.gse_id = g.id
-          WHERE g.id IN (${inList})`
-      )
-      .bind(...chunk)
-      .all<Record<string, unknown>>();
-    for (const r of res.results) {
-      const nInFile =
-        r.n_gsms_in_bundle != null ? Number(r.n_gsms_in_bundle) : r.r2_bundle_n_gsms != null ? Number(r.r2_bundle_n_gsms) : null;
-      out.push({
-        gse_id: String(r.gse_id),
-        title: (r.title as string | null) ?? null,
-        organism: organismToCommon((r.organism_primary as string | null) ?? null),
-        tissue_groups: safeList(r.tissue_groups),
-        disease_groups: safeList(r.disease_groups),
-        assay_families: safeList(r.assay_families),
-        n_samples_in_file: nInFile,
-        n_cells: Number(r.m_cells ?? r.g_cells ?? 0),
-        year: r.year != null ? Number(r.year) : null,
-        pubmed_ids: safeList(r.pubmed_ids),
-        reference_build: (r.reference_build as string | null) ?? null,
-        bytes: r.b_bytes != null ? Number(r.b_bytes) : r.r2_bundle_bytes != null ? Number(r.r2_bundle_bytes) : null,
-        download_url: bundleUrl(String(r.gse_id)),
-        license: "CC0",
-      });
-    }
-  }
-  const order = new Map(ids.map((id, i) => [id, i]));
-  return out.sort((a, b) => (order.get(a.gse_id) ?? 0) - (order.get(b.gse_id) ?? 0));
-}
-
-const TSV_COLUMNS = [
-  "gse_id",
-  "title",
-  "organism",
-  "tissue_groups",
-  "disease_groups",
-  "assay_families",
-  "n_samples_in_file",
-  "n_cells",
-  "year",
-  "pubmed_ids",
-  "reference_build",
-  "bytes",
-  "download_url",
-  "license",
-] as const;
-
-function tsvCell(v: unknown): string {
-  if (v == null) return "";
-  const s = Array.isArray(v) ? v.join("; ") : String(v);
-  return s.replace(/[\t\r\n]+/g, " ").trim();
-}
-
-function renderTsv(rows: ManifestRow[]): string {
-  const lines = [TSV_COLUMNS.join("\t")];
-  for (const r of rows) lines.push(TSV_COLUMNS.map((c) => tsvCell((r as unknown as Record<string, unknown>)[c])).join("\t"));
-  return lines.join("\n") + "\n";
-}
-
-function header(rows: ManifestRow[], total: number): string[] {
-  const bytes = rows.reduce((n, r) => n + (r.bytes ?? 0), 0);
-  return [
-    `# singlet.bio manifest — ${rows.length} studies (of ${total} matching)`,
-    `# data: CC0 · one .singlet file per GEO series · https://singlet.bio`,
-    `# total download size: ${(bytes / 1e9).toFixed(1)} GB`,
-  ];
-}
-
-function renderCurl(rows: ManifestRow[], total: number): string {
-  return (
-    ["#!/usr/bin/env bash", "set -euo pipefail", ...header(rows, total), ""]
-      .concat(rows.map((r) => `curl -fL --retry 3 -C - -o "${r.gse_id}.singlet" "${r.download_url}"`))
-      .join("\n") + "\n"
-  );
-}
-
-function renderWget(rows: ManifestRow[], total: number): string {
-  return [...header(rows, total), ...rows.map((r) => r.download_url)].join("\n") + "\n";
-}
-
-function renderPython(rows: ManifestRow[], total: number): string {
-  const ids = rows.map((r) => `    "${r.gse_id}",`).join("\n");
-  return `${header(rows, total).join("\n")}
-import singlet
-
-studies = [
-${ids}
-]
-
-adatas = {g: singlet.load(g) for g in studies}
-`;
-}
-
-function renderR(rows: ManifestRow[], total: number): string {
-  const ids = rows.map((r) => `  "${r.gse_id}"`).join(",\n");
-  return `${header(rows, total).join("\n")}
-library(singlet)
-
-studies <- c(
-${ids}
-)
-
-objects <- lapply(studies, load)
-names(objects) <- studies
-`;
-}
 
 export const onRequestGet: PagesFunction<Env> = async ({ env, request, waitUntil }) => {
   const id = await resolveIdentity(request, env, waitUntil);
@@ -167,10 +31,10 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request, waitUntil
   const url = new URL(request.url);
   const params = parseSearchParams(url);
   const rawFormat = (url.searchParams.get("format") ?? "tsv").toLowerCase();
-  if (!FORMATS.includes(rawFormat as Format)) {
-    return corsErr(`Unknown format '${rawFormat}'. Use ${FORMATS.join(", ")}.`, 400);
+  if (!MANIFEST_FORMATS.includes(rawFormat as ManifestFormat)) {
+    return corsErr(`Unknown format '${rawFormat}'. Use ${MANIFEST_FORMATS.join(", ")}.`, 400);
   }
-  const format = rawFormat as Format;
+  const format = rawFormat as ManifestFormat;
 
   const rules = await loadRules(env.DB, waitUntil);
   const { filters, dropped } = normalizeFilters(params, rules);
@@ -181,59 +45,18 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request, waitUntil
     waitUntil,
     async () => {
       try {
-        const { total, accessions } = await exportStudyAccessions({ db: env.DB, rules, waitUntil }, filters);
-        const ids = accessions.slice(0, MAX_STUDIES);
-        const rows = await loadRows(env.DB, ids);
-
-        const stamp = new Date().toISOString().slice(0, 10);
-        const base = `singlet-manifest-${stamp}`;
-        let body: string;
-        let type: string;
-        let filename: string;
-        switch (format) {
-          case "json":
-            body = JSON.stringify(
-              { total, returned: rows.length, limit: MAX_STUDIES, license: "CC0", applied: filters, dropped, studies: rows },
-              null,
-              2
-            );
-            type = "application/json; charset=utf-8";
-            filename = `${base}.json`;
-            break;
-          case "curl":
-            body = renderCurl(rows, total);
-            type = "text/x-shellscript; charset=utf-8";
-            filename = `${base}-download.sh`;
-            break;
-          case "wget":
-            body = renderWget(rows, total);
-            type = "text/plain; charset=utf-8";
-            filename = `${base}-urls.txt`;
-            break;
-          case "python":
-            body = renderPython(rows, total);
-            type = "text/x-python; charset=utf-8";
-            filename = `${base}.py`;
-            break;
-          case "r":
-            body = renderR(rows, total);
-            type = "text/plain; charset=utf-8";
-            filename = `${base}.R`;
-            break;
-          default:
-            body = renderTsv(rows);
-            type = "text/tab-separated-values; charset=utf-8";
-            filename = `${base}.tsv`;
-        }
-
-        return new Response(body, {
+        const m = await buildManifestFromSearch({ db: env.DB, rules, waitUntil }, filters, format, {
+          applied: filters,
+          dropped,
+        });
+        return new Response(m.body, {
           status: 200,
           headers: {
             ...CORS_HEADERS,
-            "Content-Type": type,
-            "Content-Disposition": `attachment; filename="${filename}"`,
-            "X-Total-Count": String(total),
-            "X-Export-Limit": String(MAX_STUDIES),
+            "Content-Type": m.content_type,
+            "Content-Disposition": `attachment; filename="${m.filename}"`,
+            "X-Total-Count": String(m.total),
+            "X-Export-Limit": String(MAX_MANIFEST_STUDIES),
           },
         });
       } catch (e) {
