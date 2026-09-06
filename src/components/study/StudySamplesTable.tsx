@@ -341,7 +341,9 @@ export function StudySamplesTable({ gseId, studyTitle, samples, highlightGsm, co
   const columns: { col: SortCol | null; label: string; cls?: string; hidden?: boolean }[] = [
     { col: "gsm_id", label: "Sample" },
     { col: "status", label: "Status" },
-    { col: "n_cells", label: "Cells", cls: "num" },
+    { col: "n_cells", label: hasCellsCalled ? "Cells (catalog)" : "Cells", cls: "num" },
+    { col: "n_cells_called", label: "Cells (file)", cls: "num", hidden: !hasCellsCalled },
+
     { col: "mapping_rate", label: "Mapped", cls: "num", hidden: !hasQc },
     { col: "median_genes", label: "Genes / cell", cls: "num", hidden: !hasQc },
     { col: "n_input_reads", label: "Input reads", cls: "num", hidden: !hasReads },
