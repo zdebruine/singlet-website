@@ -3,7 +3,7 @@ import { Check, Copy } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**
- * Dark code block (#0F1F1D, JetBrains Mono, 3px radius) with a copy button.
+ * Dark token-backed code block (IBM Plex Mono, 3px radius) with a copy button.
  * Lines starting with `#` (Python/R/shell comments) are dimmed.
  */
 export function CodeBlock({

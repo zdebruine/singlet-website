@@ -6,10 +6,10 @@ import { cn } from "@/lib/utils";
 
 /**
  * Design-system buttons. No black or near-black buttons anywhere:
- *  - default: teal gradient, white text
- *  - secondary: white, 1px #B9C9C5 border, ink text
+ *  - default: flat teal, high-contrast text
+ *  - secondary: surface, 1px line border, ink text
  *  - outline: same as secondary (kept for shadcn compatibility)
- *  - destructive: #B42318
+ *  - destructive: semantic red
  */
 const buttonVariants = cva(
   "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-45 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
