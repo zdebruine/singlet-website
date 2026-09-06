@@ -89,10 +89,22 @@ export async function indexPrivateBundle(db: D1Database, source: BundleByteSourc
   };
 }
 
+/**
+ * Only public http(s) hosts may be registered. Private, loopback, link-local,
+ * carrier-grade-NAT and cloud metadata addresses are refused, and the caller
+ * must reject redirects so a public host cannot bounce us into one.
+ */
 export function assertPublicBundleUrl(value: string): URL {
   const url = new URL(value);
-  if (url.protocol !== "https:" || !url.pathname.toLowerCase().endsWith(".singlet") || url.username || url.password) throw new Error("Register a public HTTPS URL ending in .singlet.");
-  const h = url.hostname.toLowerCase();
-  if (h === "localhost" || h.endsWith(".local") || h === "0.0.0.0" || h === "::1" || /^(10\.|127\.|169\.254\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(h)) throw new Error("That address is not public.");
+  if (!["https:", "http:"].includes(url.protocol) || url.username || url.password) throw new Error("Register a public HTTPS URL ending in .singlet.");
+  if (url.protocol !== "https:") throw new Error("Register a public HTTPS URL ending in .singlet.");
+  if (!url.pathname.toLowerCase().endsWith(".singlet")) throw new Error("Register a public HTTPS URL ending in .singlet.");
+  const h = url.hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  const blocked =
+    h === "localhost" || h.endsWith(".local") || h.endsWith(".internal") || h === "metadata.google.internal" ||
+    h === "0.0.0.0" || h === "::1" || h === "::" ||
+    /^(10\.|127\.|169\.254\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.)/.test(h) ||
+    /^(fc|fd|fe8|fe9|fea|feb)/.test(h);
+  if (blocked) throw new Error("That address is not public.");
   return url;
 }

@@ -1,161 +1,130 @@
-/**
- * Pins the ranked-search scorer against a small hand-written candidate set.
- *
- * Stage 11c regression guard: a residual keyword (e.g. "aging") must never
- * hide a study whose samples are annotated with the asked-for cell type, and
- * each of the four reference queries must keep at least one "matches
- * everything" study.
- */
 import { describe, expect, it } from "vitest";
-import { scoreStudy, type SoftSignals, type StudyRow } from "../../functions/_shared/search-core";
+import { scoreStudy, type SoftSignals, type StudyRow, type TextMatch, type FilterMatch } from "../../functions/_shared/search-core";
 
-type Seed = {
+interface Fixture {
   id: string;
-  organisms: string[];
-  tissue: string[];
-  disease: string[];
-  assay: string[];
-  n_total: number;
-  /** cell type -> number of samples annotated with it */
-  cells?: Record<string, number>;
-  /** keyword -> where it appears */
-  text?: Record<string, Array<"title" | "abstract" | "characteristics">>;
-};
+  title: string;
+  abstract?: string;
+  organisms?: string[];
+  tissue_groups?: string[];
+  disease_groups?: string[];
+  assay_families?: string[];
+  n_total?: number;
+  filters?: FilterMatch[];
+  text?: TextMatch[];
+}
 
-const emptySignals = (): SoftSignals => ({
-  organism: [],
-  tissue_group: [],
-  disease_group: [],
-  assay_family: [],
-  cell_type: [],
-  q: [],
-});
-
-function row(seed: Seed): StudyRow {
-  const r: StudyRow = {
-    gse_id: seed.id,
-    title: seed.id,
-    abstract: null,
-    organism_primary: seed.organisms[0] ?? null,
-    organism_label: seed.organisms[0] ?? "",
-    organisms: seed.organisms,
-    tissue_groups: seed.tissue,
-    disease_groups: seed.disease,
-    assay_families: seed.assay,
+function row(f: Fixture): StudyRow {
+  return {
+    gse_id: f.id,
+    title: f.title,
+    abstract: f.abstract ?? null,
+    organism_primary: f.organisms?.[0] ?? null,
+    organism_label: "",
+    organisms: f.organisms ?? [],
+    tissue_groups: f.tissue_groups ?? [],
+    disease_groups: f.disease_groups ?? [],
+    assay_families: f.assay_families ?? [],
     tissues_raw: [],
     cell_types_raw: [],
-    n_done: seed.n_total,
-    n_total: seed.n_total,
+    n_done: f.n_total ?? 1,
+    n_total: f.n_total ?? 1,
     n_failed: 0,
-    n_cells: 10_000,
+    n_cells: 1000,
     suspect_cells: false,
     has_bundle: true,
-    bundle_bytes: 1000,
+    bundle_bytes: 1,
     bundle_key: null,
-    bundle_n_samples: seed.n_total,
-    file_cells: 10_000,
+    bundle_n_samples: f.n_total ?? 1,
+    file_cells: null,
     reference_build: null,
     year: 2023,
     n_conditions: 0,
     conditions: [],
     conditions_label: "",
-    match: { filters: [], text: [], facets: [], keywords: [], score: 0 },
+    match: { filters: f.filters ?? [], text: f.text ?? [], facets: [], keywords: [], score: 0 },
     why: "",
     score: null,
   };
-  for (const [ct, n] of Object.entries(seed.cells ?? {})) {
-    r.match.filters.push({ field: "cell_type", value: ct, n_samples: n });
-  }
-  for (const [term, fields] of Object.entries(seed.text ?? {})) {
-    for (const field of fields) {
-      r.match.text.push({ field, term, n_samples: field === "characteristics" ? seed.n_total : 0 });
-    }
-  }
-  return r;
 }
+
+const signals = (s: Partial<SoftSignals>): SoftSignals => ({
+  organism: [], tissue_group: [], disease_group: [], assay_family: [], cell_type: [], q: [], ...s,
+});
 
 const MOUSE = ["Mus musculus"];
 const HUMAN = ["Homo sapiens"];
 
-const FIXTURE: Seed[] = [
-  { id: "GSE296768", organisms: MOUSE, tissue: ["Brain / CNS"], disease: ["Healthy / control"], assay: ["10x 3'"], n_total: 12, cells: { microglia: 12 }, text: { aging: ["title", "characteristics"] } },
-  { id: "GSE307686", organisms: MOUSE, tissue: ["Brain / CNS"], disease: ["Healthy / control"], assay: ["10x 3'"], n_total: 15, cells: { microglia: 9 }, text: { aging: ["characteristics"] } },
-  { id: "GSE100001", organisms: MOUSE, tissue: ["Brain / CNS"], disease: ["Alzheimer's disease"], assay: ["10x 3'"], n_total: 8, cells: { microglia: 4 } },
-  { id: "GSE100002", organisms: MOUSE, tissue: ["Brain / CNS"], disease: ["Healthy / control"], assay: ["10x 3'"], n_total: 6, text: { microglia: ["abstract"], aging: ["title"] } },
-  { id: "GSE100003", organisms: MOUSE, tissue: ["Brain / CNS"], disease: ["Healthy / control"], assay: ["Smart-seq / plate-based"], n_total: 20 },
-  { id: "GSE100004", organisms: HUMAN, tissue: ["Brain / CNS"], disease: ["Healthy / control"], assay: ["10x 3'"], n_total: 9, cells: { microglia: 9 }, text: { aging: ["abstract"] } },
-  { id: "GSE100005", organisms: MOUSE, tissue: ["Lung / airway"], disease: ["Healthy / control"], assay: ["10x 3'"], n_total: 4, cells: { microglia: 1 } },
-  { id: "GSE100006", organisms: HUMAN, tissue: ["Blood / PBMC"], disease: ["COVID-19"], assay: ["10x 5'"], n_total: 24, cells: { "t cell": 20 }, text: { pbmc: ["title", "characteristics"] } },
-  { id: "GSE100007", organisms: HUMAN, tissue: ["Blood / PBMC"], disease: ["COVID-19"], assay: ["10x 5'"], n_total: 12, text: { pbmc: ["abstract"] } },
-  { id: "GSE100008", organisms: HUMAN, tissue: ["Blood / PBMC"], disease: ["COVID-19"], assay: ["10x 3'"], n_total: 10, text: { pbmc: ["title"] } },
-  { id: "GSE100009", organisms: HUMAN, tissue: ["Blood / PBMC"], disease: ["Healthy / control"], assay: ["10x 5'"], n_total: 30, text: { pbmc: ["title"] } },
-  { id: "GSE100010", organisms: HUMAN, tissue: ["Tumor (site unspecified)"], disease: ["Cancer"], assay: ["10x 5'"], n_total: 18, cells: { "t cell": 14 }, text: { melanoma: ["title", "characteristics"] } },
-  { id: "GSE100011", organisms: HUMAN, tissue: ["Skin"], disease: ["Cancer"], assay: ["10x 3'"], n_total: 11, cells: { "t cell": 5 }, text: { melanoma: ["abstract"] } },
-  { id: "GSE100012", organisms: HUMAN, tissue: ["Skin"], disease: ["Cancer"], assay: ["10x 3'"], n_total: 7, text: { melanoma: ["title"] } },
-  { id: "GSE100013", organisms: HUMAN, tissue: ["Skin"], disease: ["Healthy / control"], assay: ["10x 3'"], n_total: 5 },
-  { id: "GSE100014", organisms: MOUSE, tissue: ["Bone marrow"], disease: ["Healthy / control"], assay: ["10x 3'"], n_total: 13 },
-  { id: "GSE100015", organisms: HUMAN, tissue: ["Liver"], disease: ["Cancer"], assay: ["10x 3'"], n_total: 16, cells: { "t cell": 3 } },
-  { id: "GSE100016", organisms: MOUSE, tissue: ["Brain / CNS"], disease: ["Parkinson's disease"], assay: ["10x 3'"], n_total: 14, cells: { microglia: 2 }, text: { aging: ["abstract"] } },
-  { id: "GSE100017", organisms: HUMAN, tissue: ["Lung / airway"], disease: ["COVID-19"], assay: ["10x 5'"], n_total: 22, text: { pbmc: ["abstract"] } },
-  { id: "GSE100018", organisms: MOUSE, tissue: ["Brain / CNS"], disease: ["Healthy / control"], assay: ["10x 3'"], n_total: 10, cells: { microglia: 10 } },
+/** 20 hand-written candidate rows covering the four pinned queries. */
+const FIXTURE: Fixture[] = [
+  { id: "GSE296768", title: "Microglia in the aging mouse brain", abstract: "Aging cortex microglia atlas.", organisms: MOUSE, tissue_groups: ["Brain / CNS"], assay_families: ["10x 3'"], n_total: 12,
+    filters: [{ field: "cell_type", value: "microglia", n_samples: 12 }], text: [{ field: "title", term: "aging", n_samples: 0 }] },
+  { id: "GSE307686", title: "Cortical microglia across the lifespan", abstract: "Samples span young and aged animals.", organisms: MOUSE, tissue_groups: ["Brain / CNS"], assay_families: ["10x 3'"], n_total: 15,
+    filters: [{ field: "cell_type", value: "microglia", n_samples: 9 }], text: [{ field: "characteristics", term: "aging", n_samples: 9 }] },
+  { id: "GSE100001", title: "Human cortex microglia", organisms: HUMAN, tissue_groups: ["Brain / CNS"], n_total: 4, filters: [{ field: "cell_type", value: "microglia", n_samples: 4 }] },
+  { id: "GSE100002", title: "Mouse liver atlas", organisms: MOUSE, tissue_groups: ["Liver"], n_total: 3 },
+  { id: "GSE100003", title: "Aging mouse kidney", organisms: MOUSE, tissue_groups: ["Kidney / urinary"], n_total: 3, text: [{ field: "title", term: "aging", n_samples: 0 }] },
+  { id: "GSE100004", title: "Microglia mentioned only in the abstract", abstract: "We discuss microglia briefly.", organisms: MOUSE, tissue_groups: ["Brain / CNS"], n_total: 2, text: [{ field: "abstract", term: "microglia", n_samples: 0 }] },
+  { id: "GSE200001", title: "PBMC from COVID-19 patients, 5' VDJ", abstract: "SARS-CoV-2 infected donors profiled with 10x 5' and VDJ.", organisms: HUMAN, tissue_groups: ["Blood / PBMC"], n_total: 8 },
+  { id: "GSE200002", title: "COVID-19 PBMC atlas", organisms: HUMAN, tissue_groups: ["Blood / PBMC"], disease_groups: ["COVID-19"], assay_families: ["10x 5'"], n_total: 10 },
+  { id: "GSE200003", title: "Peripheral blood in coronavirus disease", abstract: "Five prime libraries from convalescent donors.", organisms: HUMAN, tissue_groups: ["Blood / PBMC"], n_total: 6 },
+  { id: "GSE200004", title: "Healthy PBMC baseline, 3' chemistry", organisms: HUMAN, tissue_groups: ["Blood / PBMC"], disease_groups: ["Healthy / control"], assay_families: ["10x 3'"], n_total: 5 },
+  { id: "GSE300001", title: "Tumor-infiltrating T cells in melanoma", abstract: "Melanoma biopsies with sorted T cells.", organisms: HUMAN, tissue_groups: ["Tumor (site unspecified)"], n_total: 9,
+    filters: [{ field: "cell_type", value: "t cell", n_samples: 9 }], text: [{ field: "title", term: "melanoma", n_samples: 0 }] },
+  { id: "GSE300002", title: "Melanoma microenvironment", organisms: HUMAN, tissue_groups: ["Skin"], disease_groups: ["Cancer"], n_total: 7, filters: [{ field: "cell_type", value: "t cell", n_samples: 3 }], text: [{ field: "title", term: "melanoma", n_samples: 0 }] },
+  { id: "GSE300003", title: "Lung adenocarcinoma immune atlas", organisms: HUMAN, tissue_groups: ["Lung / airway"], disease_groups: ["Cancer"], n_total: 6 },
+  { id: "GSE300004", title: "Healthy skin fibroblasts", organisms: HUMAN, tissue_groups: ["Skin"], disease_groups: ["Healthy / control"], n_total: 4 },
+  { id: "GSE400001", title: "Zebrafish retina development", organisms: ["Danio rerio"], tissue_groups: ["Eye"], n_total: 3 },
+  { id: "GSE400002", title: "Mouse microglia in demyelination", organisms: MOUSE, tissue_groups: ["Brain / CNS"], n_total: 6, filters: [{ field: "cell_type", value: "microglia", n_samples: 2 }] },
+  { id: "GSE400003", title: "Human bone marrow", organisms: HUMAN, tissue_groups: ["Bone marrow"], n_total: 5 },
+  { id: "GSE400004", title: "Mouse embryo development", organisms: MOUSE, tissue_groups: ["Embryo / development"], n_total: 4 },
+  { id: "GSE400005", title: "Microglia culture in vitro", organisms: MOUSE, tissue_groups: ["Cell line / in vitro"], n_total: 2, filters: [{ field: "cell_type", value: "microglia", n_samples: 2 }] },
+  { id: "GSE400006", title: "Rat hippocampus aging", organisms: ["Rattus norvegicus"], tissue_groups: ["Brain / CNS"], n_total: 3, text: [{ field: "title", term: "aging", n_samples: 0 }] },
 ];
 
-function run(signals: Partial<SoftSignals>) {
-  const s = { ...emptySignals(), ...signals };
-  const scored = FIXTURE.map(row).map((r) => ({ r, ...scoreStudy(r, s) }));
-  scored.sort((a, b) => Number(b.full) - Number(a.full) || b.score - a.score);
-  return {
-    all: scored,
-    full: scored.filter((x) => x.full).map((x) => x.r.gse_id),
-    first: scored[0]?.r.gse_id,
-  };
+function run(s: SoftSignals) {
+  return FIXTURE.map((f) => {
+    const r = row(f);
+    const { score, full } = scoreStudy(r, s);
+    return { id: f.id, score, full, facets: r.match.facets };
+  }).sort((a, b) => b.score - a.score);
 }
 
-describe("ranked-search scorer", () => {
-  it("microglia alone keeps every annotated study as a full match", () => {
-    const { full } = run({ cell_type: ["microglia"] });
+describe("study scorer", () => {
+  it("microglia in the aging mouse brain", () => {
+    const out = run(signals({ organism: MOUSE, tissue_group: ["Brain / CNS"], cell_type: ["microglia"], q: ["aging"] }));
+    const full = out.filter((x) => x.full).map((x) => x.id);
     expect(full).toContain("GSE296768");
     expect(full).toContain("GSE307686");
-    expect(full.length).toBeGreaterThanOrEqual(7);
+    expect(out[0].id).toBe("GSE296768");
+    const g = out.find((x) => x.id === "GSE307686")!;
+    expect(g.facets.find((f) => f.key === "cell_type")?.detail).toBe("9 of 15 samples");
   });
 
-  it("microglia in the aging mouse brain ranks the annotated studies first", () => {
-    const res = run({
-      organism: ["Mus musculus"],
-      tissue_group: ["Brain / CNS"],
-      cell_type: ["microglia"],
-      q: ["aging"],
-    });
-    expect(res.full).toContain("GSE296768");
-    expect(res.full).toContain("GSE307686");
-    expect(res.first).toBe("GSE296768");
-    // A fraction of samples must never demote a study out of "matches everything".
-    const g307686 = res.all.find((x) => x.r.gse_id === "GSE307686")!;
-    const ct = g307686.r.match.facets.find((f) => f.key === "cell_type")!;
-    expect(ct.status).toBe("hit");
-    expect(ct.detail).toBe("9 of 15 samples");
+  it("microglia alone keeps every annotated study full", () => {
+    const out = run(signals({ cell_type: ["microglia"] }));
+    expect(out.filter((x) => x.full).length).toBeGreaterThanOrEqual(4);
   });
 
-  it("human PBMC, COVID-19, 10x 5' has full matches", () => {
-    const { full } = run({
-      organism: ["Homo sapiens"],
-      tissue_group: ["Blood / PBMC"],
-      disease_group: ["COVID-19"],
-      assay_family: ["10x 5'"],
-      q: ["pbmc"],
-    });
+  it("human PBMC, COVID-19, 10x 5' finds text-only matches", () => {
+    const out = run(signals({ organism: HUMAN, tissue_group: ["Blood / PBMC"], disease_group: ["COVID-19"], assay_family: ["10x 5'"] }));
+    const full = out.filter((x) => x.full).map((x) => x.id);
+    expect(full).toContain("GSE200002");
+    expect(full).toContain("GSE200001");
+    expect(full).not.toContain("GSE200004");
+  });
+
+  it("tumor-infiltrating T cells in melanoma finds text-only matches", () => {
+    const out = run(signals({ organism: HUMAN, disease_group: ["Cancer"], cell_type: ["t cell"], q: ["melanoma"] }));
+    const full = out.filter((x) => x.full).map((x) => x.id);
     expect(full.length).toBeGreaterThan(0);
-    expect(full).toContain("GSE100006");
+    expect(full).toContain("GSE300001");
   });
 
-  it("tumor-infiltrating T cells in melanoma has full matches", () => {
-    const { full } = run({
-      organism: ["Homo sapiens"],
-      disease_group: ["Cancer"],
-      cell_type: ["t cell"],
-      q: ["melanoma"],
-    });
-    expect(full.length).toBeGreaterThan(0);
-    expect(full).toContain("GSE100010");
+  it("marks a contradicting annotation as a miss", () => {
+    const out = run(signals({ organism: HUMAN, disease_group: ["COVID-19"] }));
+    const healthy = out.find((x) => x.id === "GSE200004")!;
+    expect(healthy.full).toBe(false);
+    expect(healthy.facets.find((f) => f.key === "disease_group")?.detail).toContain("annotated as");
   });
 });

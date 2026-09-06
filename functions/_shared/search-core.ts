@@ -959,6 +959,63 @@ function shapeStudy(r: StudyDbRow): StudyRow {
   };
 }
 
+/**
+ * Words that stand in for a canonical facet value in free text, so a study
+ * that was never annotated for the facet can still be recognised from its
+ * title, abstract or sample characteristics.
+ */
+const FACET_TEXT_TERMS: Record<string, string[]> = {
+  "COVID-19": ["covid", "covid 19", "sars cov 2", "sars-cov-2", "coronavirus"],
+  "Cancer": ["cancer", "tumor", "tumour", "tumour-infiltrating", "carcinoma", "melanoma", "lymphoma", "leukemia", "leukaemia", "sarcoma", "glioma", "glioblastoma", "myeloma", "adenocarcinoma", "malignant", "metastatic", "metastasis", "oncology"],
+  "Autoimmune / inflammatory": ["autoimmune", "inflammatory", "lupus", "rheumatoid", "colitis", "psoriasis", "multiple sclerosis"],
+  "Other infection": ["infection", "infected", "sepsis", "tuberculosis", "influenza", "viral"],
+  "Alzheimer's disease": ["alzheimer", "alzheimers", "amyloid", "tauopathy"],
+  "Parkinson's disease": ["parkinson", "parkinsons"],
+  "Metabolic / cardiovascular": ["diabetes", "diabetic", "obesity", "atherosclerosis", "cardiac", "cardiovascular"],
+  "Healthy / control": ["healthy", "control", "normal"],
+  "Injury / transplant / aging": ["injury", "transplant", "aging", "ageing", "aged"],
+  "10x 5'": ["5'", "5 prime", "five prime", "vdj", "v(d)j", "tcr-seq", "bcr-seq", "5' gene expression"],
+  "10x 3'": ["3'", "3 prime", "three prime", "3' gene expression"],
+  "10x Multiome / ATAC": ["multiome", "atac"],
+  "CITE-seq": ["cite seq", "cite-seq", "totalseq", "adt"],
+  "Spatial": ["spatial", "visium", "slide-seq", "merfish", "xenium"],
+  "Smart-seq / plate-based": ["smart seq", "smart-seq", "smartseq", "plate based", "plate-based"],
+  "Drop-seq / inDrop": ["drop seq", "drop-seq", "indrop"],
+  "Parse / SPLiT-seq": ["parse biosciences", "split seq", "split-seq", "evercode"],
+  "BD Rhapsody": ["rhapsody"],
+  "Seq-Well / Microwell": ["seq well", "seq-well", "microwell"],
+  "Blood / PBMC": ["pbmc", "peripheral blood", "whole blood", "blood"],
+  "Brain / CNS": ["brain", "cortex", "hippocampus", "cns", "cerebral", "spinal cord"],
+  "Lung / airway": ["lung", "airway", "bronchial", "alveolar", "pulmonary"],
+  "Gut / intestine": ["gut", "intestine", "intestinal", "colon", "colonic", "ileum"],
+  "Tumor (site unspecified)": ["tumor", "tumour"],
+};
+
+function facetTextTerms(value: string): string[] {
+  const base = value.toLowerCase();
+  const extra = value
+    .toLowerCase()
+    .split(/[/,]| and /)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 3);
+  return [...new Set([base, ...extra, ...(FACET_TEXT_TERMS[value] ?? [])])].filter(Boolean);
+}
+
+/** Where a facet value is mentioned in free text, if it is annotated nowhere. */
+function facetMention(r: StudyRow, value: string): string | null {
+  const terms = facetTextTerms(value);
+  const title = (r.title ?? "").toLowerCase();
+  const abstract = (r.abstract ?? "").toLowerCase();
+  for (const t of terms) {
+    if (title.includes(t)) return "title";
+    if (abstract.includes(t)) return "abstract";
+  }
+  const sample = r.match.text.find(
+    (x) => !["title", "abstract", "accession"].includes(x.field) && terms.some((t) => x.term.includes(t) || t.includes(x.term)),
+  );
+  return sample ? "sample characteristics" : null;
+}
+
 export function scoreStudy(r: StudyRow, signals: SoftSignals): { score: number; full: boolean } {
   let score = 0;
   let full = true;
@@ -966,16 +1023,35 @@ export function scoreStudy(r: StudyRow, signals: SoftSignals): { score: number; 
     const wanted = signals[key];
     if (!wanted.length) return;
     const hits = wanted.filter((value) => have.some((v) => v.toLowerCase() === value.toLowerCase()));
-    const status = hits.length ? "hit" : "miss";
-    if (status === "miss") full = false;
-    if (hits.length) score += weight * (hits.length / wanted.length);
-    const detail = key === "organism" ? hits.map(organismToCommon).join(" / ") : hits.join(" / ");
-    r.match.facets.push({ key, label, status, detail: hits.length ? detail : "not annotated" });
+    if (hits.length) {
+      score += weight * (hits.length / wanted.length);
+      const detail = key === "organism" ? hits.map(organismToCommon).join(" / ") : hits.join(" / ");
+      r.match.facets.push({ key, label, status: "hit", detail });
+      return;
+    }
+    // Not annotated with the wanted value. Only a study that carries a
+    // *different* annotation for this facet is a real contradiction; an
+    // unannotated study can still be recognised from its text.
+    if (!have.length) {
+      const mention = wanted.map((value) => ({ value, where: facetMention(r, value) })).find((x) => x.where);
+      if (mention) {
+        score += 1.5;
+        r.match.facets.push({ key, label, status: "partial", detail: `mentioned in ${mention.where}` });
+        return;
+      }
+      full = false;
+      r.match.facets.push({ key, label, status: "miss", detail: "unannotated · not mentioned" });
+      return;
+    }
+    full = false;
+    const shown = key === "organism" ? have.map(organismToCommon) : have;
+    r.match.facets.push({ key, label, status: "miss", detail: `annotated as ${shown.slice(0, 2).join(" / ")}` });
   };
   addFacet("organism", "Organism", r.organisms.length ? r.organisms : r.organism_primary ? [r.organism_primary] : [], 0);
   addFacet("tissue_group", "Tissue", r.tissue_groups, 3);
   addFacet("disease_group", "Disease", r.disease_groups, 3);
   addFacet("assay_family", "Assay", r.assay_families, 1.5);
+
   for (const ct of signals.cell_type) {
     const hit = r.match.filters.find((x) => x.field === "cell_type" && x.value === ct);
     const n = hit?.n_samples ?? 0;
@@ -1013,61 +1089,36 @@ function softFromQuery(p: SearchParams): SoftSignals {
   return { organism: [], tissue_group: [], disease_group: [], assay_family: [], cell_type: [], q: tokenizeQuery(p.q).terms };
 }
 
-/**
- * Candidate union for soft evidence; hard constraints are applied before the cap.
- * Evidence-bearing candidates (cell-type sample annotations, then keyword text
- * hits) are ordered first so the cap can never drop the studies the query is
- * actually about in favour of large facet-only studies.
- */
+/** Candidate union for soft evidence; hard constraints are applied before the 200-row cap. */
 async function rankedCandidateIds(db: D1Database, p: SearchParams, signals: SoftSignals): Promise<string[]> {
   const hard: SearchParams = { ...p, q: "", page: 1, limit: RANKED_CANDIDATE_LIMIT };
   const where = buildStudyWhere(hard);
   const soft: string[] = [];
-  const softParams: (string | number)[] = [];
+  const params: (string | number)[] = [...where.params];
   const jsonFacet = (col: string, values: string[]) => {
     if (!values.length) return;
     soft.push(`EXISTS (SELECT 1 FROM json_each(m.${col}) je WHERE je.value IN (SELECT value FROM json_each(?)))`);
-    softParams.push(jsonArray(values));
+    params.push(jsonArray(values));
   };
   jsonFacet("tissue_groups", signals.tissue_group);
   jsonFacet("disease_groups", signals.disease_group);
   jsonFacet("assay_families", signals.assay_family);
   if (signals.organism.length) {
     soft.push(`(m.organism_primary IN (SELECT value FROM json_each(?)) OR EXISTS (SELECT 1 FROM json_each(m.organisms) je WHERE je.value IN (SELECT value FROM json_each(?))))`);
-    softParams.push(jsonArray(signals.organism), jsonArray(signals.organism));
+    params.push(jsonArray(signals.organism), jsonArray(signals.organism));
   }
-
-  // Evidence clauses, kept separate so they can also drive the ordering.
-  const cellMatch = signals.cell_type.length ? cellTypeMatch(signals.cell_type) : null;
-  const cellClause = cellMatch ? `m.gse_id IN (SELECT gse_id FROM fts_gsm WHERE fts_gsm MATCH ?)` : null;
-  const textTerms = [...signals.q, ...signals.cell_type].join(" ");
-  const textMatch = textTerms ? tokenizeQuery(textTerms).or : null;
-  const textClause = textMatch
-    ? `m.gse_id IN (SELECT id FROM fts_gse WHERE fts_gse MATCH ? UNION SELECT gse_id FROM fts_gsm WHERE fts_gsm MATCH ?)`
-    : null;
-  if (cellClause) soft.push(cellClause);
-  if (textClause) soft.push(textClause);
+  const text = [...signals.q, ...signals.cell_type];
+  const match = tokenizeQuery(text.join(" ")).or;
+  if (match) {
+    soft.push(`m.gse_id IN (SELECT id FROM fts_gse WHERE fts_gse MATCH ? UNION SELECT gse_id FROM fts_gsm WHERE fts_gsm MATCH ?)`);
+    params.push(match, match);
+  }
   if (!soft.length) return [];
-
-  const selectParams: (string | number)[] = [];
-  const evParts: string[] = [];
-  if (cellClause) {
-    evParts.push(`CASE WHEN ${cellClause} THEN 4 ELSE 0 END`);
-    selectParams.push(cellMatch as string);
-  }
-  if (textClause) {
-    evParts.push(`CASE WHEN ${textClause} THEN 2 ELSE 0 END`);
-    selectParams.push(textMatch as string, textMatch as string);
-  }
-  if (cellMatch) softParams.push(cellMatch);
-  if (textMatch) softParams.push(textMatch, textMatch);
-
-  const ev = evParts.length ? evParts.join(" + ") : "0";
   const clauses = [...where.clauses, `(${soft.join(" OR ")})`];
   const result = await db.prepare(
-    `SELECT m.gse_id, (${ev}) AS _ev FROM gse_meta m WHERE ${clauses.join(" AND ")}
-      ORDER BY _ev DESC, m.has_bundle DESC, ${CAPPED_STUDY_CELLS} DESC LIMIT ${RANKED_CANDIDATE_LIMIT}`
-  ).bind(...selectParams, ...where.params, ...softParams).all<{ gse_id: string }>();
+    `SELECT m.gse_id FROM gse_meta m WHERE ${clauses.join(" AND ")}
+      ORDER BY m.has_bundle DESC, ${CAPPED_STUDY_CELLS} DESC LIMIT ${RANKED_CANDIDATE_LIMIT}`
+  ).bind(...params).all<{ gse_id: string }>();
   return result.results.map((r) => r.gse_id);
 }
 
