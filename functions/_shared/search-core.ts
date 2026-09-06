@@ -514,16 +514,28 @@ function ftsPhrase(term: string): string {
  * terms still holds while spelling/phrasing variants are tolerated.
  */
 function ftsTerm(term: string): string {
-  const syn = KEYWORD_SYNONYMS[term];
-  if (!syn) return ftsPhrase(term);
-  const alts = [...new Set([term, ...syn])].map(ftsPhrase);
+  const syn = termVariants(term);
+  const alts = syn.map(ftsPhrase);
   return alts.length > 1 ? `(${alts.join(" OR ")})` : alts[0];
 }
 
 /** Every word form a term expands to (lowercase), for substring highlighting. */
 export function termVariants(term: string): string[] {
-  const syn = KEYWORD_SYNONYMS[term];
-  return syn ? [...new Set([term, ...syn])] : [term];
+  const base = term.toLowerCase().replace(/-/g, " ").replace(/\s+/g, " ").trim();
+  const variants = new Set<string>([base, base.replace(/ /g, "-")]);
+  const addInflection = (value: string) => {
+    if (value.endsWith("ies") && value.length > 4) variants.add(`${value.slice(0, -3)}y`);
+    else if (value.endsWith("s") && !value.endsWith("ss") && value.length > 3) variants.add(value.slice(0, -1));
+    else if (value.length > 3) variants.add(`${value}s`);
+  };
+  addInflection(base);
+  for (const synonym of KEYWORD_SYNONYMS[base] ?? []) {
+    const normalized = synonym.replace(/-/g, " ").replace(/\s+/g, " ").trim();
+    variants.add(normalized);
+    variants.add(normalized.replace(/ /g, "-"));
+    addInflection(normalized);
+  }
+  return [...variants].filter(Boolean);
 }
 
 /**
