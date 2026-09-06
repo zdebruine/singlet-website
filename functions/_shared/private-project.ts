@@ -61,3 +61,18 @@ export async function validSignedFileToken(env: PrivateEnv, fileId: string, expi
 }
 
 export { sha256Hex };
+/**
+ * Cheap presence check for a caller identity (session bearer or API key).
+ * Every private endpoint calls this *before* reading a body, fetching a URL
+ * or touching the database, so an anonymous request can never cause work.
+ */
+export function hasPrivateIdentity(request: Request, env: CloudEnv): boolean {
+  return Boolean(userBearer(request, cloudAnonKey(env)) || apiKeyFromRequest(request));
+}
+
+export function unauthorized(): Response {
+  return new Response(
+    JSON.stringify({ error: "sign_in_required", message: "Sign in to use private projects, cohorts and workspaces." }),
+    { status: 401, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } },
+  );
+}
