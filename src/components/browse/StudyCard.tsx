@@ -115,6 +115,7 @@ export function StudyCard({ row, selected, onToggle, ai, why, aiWhy }: Props) {
               {row.match.keywords.map((keyword) => (
                 <li key={keyword.term} title={keyword.detail} className={evidenceClass(keyword.status)}>
                   {keyword.status === "hit" ? `${keyword.term} ✓` : keyword.status === "partial" ? keyword.detail : keyword.term}
+                </li>
               ))}
             </ul>
           )}

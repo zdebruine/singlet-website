@@ -1099,7 +1099,7 @@ export async function runStudySearch(
   if (isRanked) {
     const scored = rows.map((row) => ({ row, ...scoreStudy(row, signals) }));
     const top = Math.max(0, ...scored.map((x) => x.score));
-    const kept = scored.filter((x) => x.full || x.score >= Math.max(2, 0.35 * top));
+    const kept = p.sort === "relevance" ? scored.filter((x) => x.full || x.score >= Math.max(2, 0.35 * top)) : scored;
     const best = (a: typeof kept[number], b: typeof kept[number]) => Number(b.full) - Number(a.full) || b.score - a.score || (b.row.bundle_n_samples ?? b.row.n_done) - (a.row.bundle_n_samples ?? a.row.n_done);
     const alternate = (a: typeof kept[number], b: typeof kept[number]) => {
       if (p.sort === "year") return (b.row.year ?? 0) - (a.row.year ?? 0) || best(a, b);
