@@ -9,6 +9,7 @@ import { corsOk, corsErr, handleOptions } from "../../../_shared/cors";
 import { cachedJson } from "../../../_shared/cache";
 import { GSE_RE } from "../../../_shared/study-core";
 import { safeList } from "../../../_shared/json";
+import { organismToCommon } from "../../../_shared/search-core";
 
 interface Env {
   DB: D1Database;
@@ -20,20 +21,28 @@ const TTL = 3600;
 export interface RelatedStudy {
   gse_id: string;
   title: string | null;
-  n_samples: number;
+  organism_label: string;
+  tissue_groups: string[];
+  disease_groups: string[];
+  /** Samples processed in the catalog. */
+  n_done: number;
   n_cells: number;
   year: number | null;
-  why: string;
+  /** Plain-language reason this study is next to the one being viewed. */
+  reason: string;
 }
 
-function shape(r: Record<string, unknown>, why: string): RelatedStudy {
+function shape(r: Record<string, unknown>, reason: string): RelatedStudy {
   return {
     gse_id: String(r.gse_id),
     title: (r.title as string | null) ?? null,
-    n_samples: Number(r.n_done ?? 0),
+    organism_label: organismToCommon((r.organism_primary as string | null) ?? null),
+    tissue_groups: safeList(r.tissue_groups),
+    disease_groups: safeList(r.disease_groups),
+    n_done: Number(r.n_done ?? 0),
     n_cells: Number(r.n_cells ?? 0),
     year: r.year != null ? Number(r.year) : null,
-    why,
+    reason,
   };
 }
 
@@ -62,7 +71,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, params, request, w
         for (const pmid of pmids) {
           if (out.length >= LIMIT) break;
           const res = await env.DB.prepare(
-            `SELECT g.id AS gse_id, g.title, m.n_done, m.n_cells, m.year
+            `SELECT g.id AS gse_id, g.title, m.organism_primary, m.tissue_groups, m.disease_groups, m.n_done, m.n_cells, m.year
                FROM gse g LEFT JOIN gse_meta m ON m.gse_id = g.id
               WHERE g.id != ? AND g.pubmed_ids LIKE ?
               ORDER BY m.n_cells DESC LIMIT ?`
@@ -85,7 +94,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, params, request, w
         const disease = safeList(self.disease_groups)[0] ?? null;
         if (out.length < LIMIT && organism && tissue) {
           const res = await env.DB.prepare(
-            `SELECT m.gse_id, g.title, m.n_done, m.n_cells, m.year
+            `SELECT m.gse_id, g.title, m.organism_primary, m.tissue_groups, m.disease_groups, m.n_done, m.n_cells, m.year
                FROM gse_meta m JOIN gse g ON g.id = m.gse_id
               WHERE m.gse_id != ? AND m.organism_primary = ? AND m.has_bundle = 1
                 AND EXISTS (SELECT 1 FROM json_each(m.tissue_groups) t WHERE t.value = ?)
