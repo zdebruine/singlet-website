@@ -181,7 +181,7 @@ const Browse = () => {
   const applied: AppliedFilters = useMemo(() => fresh?.applied ?? stateToApplied(state), [fresh, state]);
   const appliedQuery = useMemo(() => ({ ...appliedToQuery(applied, state.level), candidate_ids: fresh?.candidate_accessions }), [applied, state.level, fresh?.candidate_accessions]);
   const facetsQuery = useMemo(() => ({ ...appliedToQuery(fresh?.hard_applied ?? applied, state.level), candidate_ids: fresh?.candidate_accessions }), [applied, state.level, fresh?.candidate_accessions, fresh?.hard_applied]);
-  const appliedKey = JSON.stringify(appliedQuery);
+  const appliedKey = JSON.stringify(facetsQuery);
 
   const facets = useQuery({
     queryKey: ["facets", appliedKey],

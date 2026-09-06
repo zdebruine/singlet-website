@@ -969,7 +969,8 @@ function scoreStudy(r: StudyRow, signals: SoftSignals): { score: number; full: b
     const status = hits.length ? "hit" : "miss";
     if (status === "miss") full = false;
     if (hits.length) score += weight * (hits.length / wanted.length);
-    r.match.facets.push({ key, label, status, detail: hits.length ? hits.join(" / ") : "not annotated" });
+    const detail = key === "organism" ? hits.map(organismToCommon).join(" / ") : hits.join(" / ");
+    r.match.facets.push({ key, label, status, detail: hits.length ? detail : "not annotated" });
   };
   addFacet("organism", "Organism", r.organisms.length ? r.organisms : r.organism_primary ? [r.organism_primary] : [], 0);
   addFacet("tissue_group", "Tissue", r.tissue_groups, 3);
