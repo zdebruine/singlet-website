@@ -9,7 +9,7 @@ import { corsOk, corsErr, handleOptions } from "../../../_shared/cors";
 import { cachedJson } from "../../../_shared/cache";
 import { GSE_RE } from "../../../_shared/study-core";
 import { safeList } from "../../../_shared/json";
-import { organismToCommon } from "../../../_shared/search-core";
+import { organismToCommon } from "../../../_shared/vocab";
 
 interface Env {
   DB: D1Database;
