@@ -144,6 +144,7 @@ export interface SearchResponse<T = StudyRow | SampleRow> {
   note?: string;
   groups?: { full: number; partial: number };
   hard_applied?: AppliedFilters;
+  ms?: number;
 }
 
 export interface Interpreted {

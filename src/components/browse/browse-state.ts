@@ -20,6 +20,7 @@ export type Mode = "ai" | "filters";
 
 export const ARRAY_FIELDS = ["organism", "tissue_group", "disease_group", "assay_family", "cell_type"] as const;
 export type ArrayField = (typeof ARRAY_FIELDS)[number];
+export type MultiField = ArrayField | "reference_build" | "protocol";
 
 export const SORTS: { value: Sort; label: string }[] = [
   { value: "relevance", label: "Best match" },
@@ -308,9 +309,16 @@ export function activeFilters(a: AppliedFilters, organismLabel: (v: string) => s
   for (const v of a.disease_group) out.push({ field: "disease_group", value: v, label: v });
   for (const v of a.assay_family) out.push({ field: "assay_family", value: v, label: v });
   for (const v of a.cell_type) out.push({ field: "cell_type", value: v, label: v });
+  for (const v of a.reference_build) out.push({ field: "reference_build", value: v, label: v });
+  for (const v of a.protocol) out.push({ field: "protocol", value: v, label: v });
   if (a.min_cells != null) out.push({ field: "min_cells", value: String(a.min_cells), label: `≥ ${a.min_cells.toLocaleString()} cells` });
   if (a.year_min != null) out.push({ field: "year_min", value: String(a.year_min), label: `from ${a.year_min}` });
   if (a.year_max != null) out.push({ field: "year_max", value: String(a.year_max), label: `to ${a.year_max}` });
+  if (a.min_file_samples != null) out.push({ field: "min_file_samples", value: String(a.min_file_samples), label: `≥ ${a.min_file_samples.toLocaleString()} file samples` });
+  if (a.min_file_cells != null) out.push({ field: "min_file_cells", value: String(a.min_file_cells), label: `≥ ${a.min_file_cells.toLocaleString()} file cells` });
+  if (a.has_pubmed) out.push({ field: "has_pubmed", value: "1", label: "has PubMed" });
+  if (a.max_file_bytes != null) out.push({ field: "max_file_bytes", value: String(a.max_file_bytes), label: `≤ ${(a.max_file_bytes / 1073741824).toLocaleString()} GB` });
+  if (a.has_conditions) out.push({ field: "has_conditions", value: "1", label: "has conditions" });
   if (a.q) out.push({ field: "q", value: a.q, label: `“${a.q}”` });
   return out;
 }
@@ -324,6 +332,8 @@ export function withoutFilter(s: BrowseState, field: string, value: string): Bro
     case "disease_group":
     case "assay_family":
     case "cell_type":
+    case "reference_build":
+    case "protocol":
       next[field] = s[field].filter((v) => v !== value);
       break;
     case "min_cells":
@@ -335,6 +345,11 @@ export function withoutFilter(s: BrowseState, field: string, value: string): Bro
     case "year_max":
       next.year_max = null;
       break;
+    case "min_file_samples": next.min_file_samples = null; break;
+    case "min_file_cells": next.min_file_cells = null; break;
+    case "has_pubmed": next.has_pubmed = null; break;
+    case "max_file_bytes": next.max_file_bytes = null; break;
+    case "has_conditions": next.has_conditions = null; break;
     case "q":
       next.q = "";
       break;
@@ -345,7 +360,7 @@ export function withoutFilter(s: BrowseState, field: string, value: string): Bro
   return next;
 }
 
-export function toggleValue(s: BrowseState, field: ArrayField, value: string): BrowseState {
+export function toggleValue(s: BrowseState, field: MultiField, value: string): BrowseState {
   const has = s[field].includes(value);
   return { ...s, page: 1, [field]: has ? s[field].filter((v) => v !== value) : [...s[field], value] };
 }

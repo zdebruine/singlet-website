@@ -588,6 +588,8 @@ async function searchDatasets(
         page: b.page,
         limit: b.limit,
         results: rows,
+         groups: b.groups ?? { full: b.total, partial: 0 },
+         hard_applied: b.hard_applied ?? b.applied,
         suggestions: b.suggestions,
         note: b.note ?? null,
         quota_exceeded: exhausted,

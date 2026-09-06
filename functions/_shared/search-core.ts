@@ -179,7 +179,7 @@ export interface Ctx {
 // ── Constants ───────────────────────────────────────────────────────────────
 
 export const DEFAULT_LIMIT = 20;
-export const MAX_LIMIT = 100;
+export const MAX_LIMIT = 200;
 export const MAX_EXPORT = 5000;
 /** Per-sample cap applied when ranking by cells so plate-protocol artifacts don't dominate. */
 const CAP_CELLS_PER_SAMPLE = 250_000;
