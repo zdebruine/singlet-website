@@ -21,18 +21,18 @@ function outlinedSvg(variant: NonNullable<LogoProps["variant"]>, mode: "light" |
 }
 
 function SvgImage({ variant, mode, height, className }: { variant: NonNullable<LogoProps["variant"]>; mode: "light" | "dark" | "mono"; height: number; className?: string }) {
-  return <span className={cn("outlined-logo", className)} style={{ height }} aria-label="singlet.bio" role="img" dangerouslySetInnerHTML={{ __html: outlinedSvg(variant, mode) }} />;
+  return <span className={cn("outlined-logo items-center", className)} style={{ height }} aria-label="singlet.bio" role="img" dangerouslySetInnerHTML={{ __html: outlinedSvg(variant, mode) }} />;
 }
 
 export function Logo({ variant = "lockup", theme = "auto", height = 24, link = true, className }: LogoProps) {
   const content = theme === "auto" ? (
-    <span className={cn("inline-flex", className)}>
+    <span className={cn("inline-flex items-center", className)}>
       <SvgImage variant={variant} mode="light" height={height} className="logo-auto-light" />
       <SvgImage variant={variant} mode="dark" height={height} className="logo-auto-dark" />
     </span>
   ) : <SvgImage variant={variant} mode={theme} height={height} className={className} />;
   if (!link) return content;
-  return <Link to="/" className="inline-flex items-center" aria-label="singlet.bio home">{content}</Link>;
+  return <Link to="/" className="inline-flex items-center self-center leading-none" aria-label="singlet.bio home">{content}</Link>;
 }
 
 export function LogoMark({ size = 24, theme = "auto", className }: { size?: number; theme?: LogoProps["theme"]; className?: string }) {
