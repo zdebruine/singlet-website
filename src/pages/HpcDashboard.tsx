@@ -148,6 +148,20 @@ function snapshotAgeMinutes(isoStr: string): number {
   return Math.floor((Date.now() - new Date(isoStr).getTime()) / 60_000);
 }
 
+// "80640 min ago" is unreadable, and a yellow "stale" pill badly understates a
+// multi-day outage. The Clipper feed was dead for 56 days behind that badge, so
+// escalate to an unmissable red "feed offline" once the snapshot is older than a
+// day: at that point the publisher is broken, not merely late.
+function fmtSnapshotAge(min: number): string {
+  if (min < 90) return `${min} min`;
+  const h = Math.floor(min / 60);
+  if (h < 48) return `${h} hr`;
+  return `${Math.floor(h / 24)} days`;
+}
+
+const STALE_AFTER_MIN = 30;
+const OFFLINE_AFTER_MIN = 24 * 60;
+
 function fmtDuration(s: number): string {
   if (!s) return "—";
   const h = Math.floor(s / 3600);
@@ -316,10 +330,19 @@ const HpcDashboard = () => {
               <p className="text-sm text-muted-foreground flex items-center gap-2 flex-wrap">
                 {CLUSTERS[cluster].sub} ·
                 Last updated: <span className="font-medium text-foreground">{fmtSnapshotTime(snap!.generated_at)}</span>
-                {snapshotAgeMinutes(snap!.generated_at) > 30 && (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-500/15 text-yellow-600 border border-yellow-500/30">
-                    <AlertTriangle size={11} /> stale ({snapshotAgeMinutes(snap!.generated_at)} min ago)
-                  </span>
+                {snapshotAgeMinutes(snap!.generated_at) > STALE_AFTER_MIN && (
+                  snapshotAgeMinutes(snap!.generated_at) > OFFLINE_AFTER_MIN ? (
+                    <span
+                      title="The publisher on this cluster has stopped reporting. The figures below are a historical snapshot, not live status."
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-500/15 text-red-600 border border-red-500/40"
+                    >
+                      <AlertTriangle size={11} /> feed offline — snapshot is {fmtSnapshotAge(snapshotAgeMinutes(snap!.generated_at))} old
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-500/15 text-yellow-600 border border-yellow-500/30">
+                      <AlertTriangle size={11} /> stale ({fmtSnapshotAge(snapshotAgeMinutes(snap!.generated_at))} ago)
+                    </span>
+                  )
                 )}
               </p>
             </div>

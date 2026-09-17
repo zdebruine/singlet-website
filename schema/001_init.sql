@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS gsm (
   median_umis       REAL,
   mt_pct            REAL,
   status            TEXT NOT NULL DEFAULT 'PENDING',
-  qc_flag           TEXT,              -- 'gold' | 'silver' | 'bronze' | null
+  qc_flag           TEXT,              -- 'HEALTHY' | 'WARN' | 'LOW_QUALITY' | null
   failure_category  TEXT,
   failure_detail    TEXT,
   singlet_version   TEXT,

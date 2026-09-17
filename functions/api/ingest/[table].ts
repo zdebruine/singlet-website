@@ -56,8 +56,25 @@ interface TableSpec {
   stamp: string;
   /** Primary key column (also the ON CONFLICT target). */
   pk?: string;
+  /** Physical table written to, when it differs from the route name. */
+  target?: string;
+  /** UPDATE existing rows only — never INSERT. For writing onto `gsm`. */
+  updateOnly?: boolean;
+  /** Closed value sets, enforced before any SQL runs. */
+  enums?: Record<string, readonly string[]>;
   /** Created on demand — the table is not part of the original catalog schema. */
   ensure?: (db: D1Database) => Promise<void>;
+}
+
+/** The pipeline's QC vocabulary (scripts/pipeline/backfill_qc_flags.py). */
+export const QC_FLAGS = ["HEALTHY", "WARN", "LOW_QUALITY"] as const;
+
+/** `gsm.qc_reasons` is not in the v0.9.0 base schema; add it on first write. */
+async function ensureGsmQcColumns(db: D1Database): Promise<void> {
+  await db
+    .prepare(`ALTER TABLE gsm ADD COLUMN qc_reasons TEXT`)
+    .run()
+    .catch(() => undefined); // already present
 }
 
 const TABLES: Record<string, TableSpec> = {
@@ -108,6 +125,22 @@ const TABLES: Record<string, TableSpec> = {
     },
     stamp: "updated_at",
     ensure: ensureSampleQcTable,
+  },
+  // Per-sample QC verdict computed on the HPC side. Writes onto the existing
+  // `gsm` row — never creates one, so a GSM absent from the catalog is a no-op.
+  gsm_qc: {
+    pk: "gsm_id",
+    target: "gsm",
+    updateOnly: true,
+    columns: {
+      gsm_id: "text",
+      qc_flag: "text",
+      qc_reasons: "text",
+      modality: "text",
+    },
+    enums: { qc_flag: QC_FLAGS },
+    stamp: "last_updated",
+    ensure: ensureGsmQcColumns,
   },
 };
 
@@ -251,6 +284,14 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, params }
         const s = typeof value === "string" ? value : Array.isArray(value) ? JSON.stringify(value) : null;
         if (s === null) return json({ error: `Row ${i}: '${key}' must be a string` }, 400, origin);
         if (s.length > MAX_STRING_BYTES) return json({ error: `Row ${i}: '${key}' exceeds 64 KB` }, 400, origin);
+        const allowed = spec.enums?.[key];
+        if (allowed && !allowed.includes(s)) {
+          return json(
+            { error: `Row ${i}: '${key}' must be one of ${allowed.join(", ")}` },
+            400,
+            origin
+          );
+        }
         out[key] = s;
       }
     }
@@ -274,15 +315,25 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, params }
   // ── Upsert ────────────────────────────────────────────────────────────────
   const stamp = nowIso();
   const pk = spec.pk ?? "gse_id";
+  const target = spec.target ?? table;
   if (spec.ensure) await spec.ensure(env.DB).catch(() => undefined);
   const statements: D1PreparedStatement[] = [];
   for (const row of clean) {
     const cols = Object.keys(row);
+    if (spec.updateOnly) {
+      const setCols = cols.filter((c) => c !== pk);
+      if (!setCols.length) continue;
+      const sql =
+        `UPDATE ${target} SET ${[...setCols, spec.stamp].map((c) => `${c} = ?`).join(", ")} ` +
+        `WHERE ${pk} = ?`;
+      statements.push(env.DB.prepare(sql).bind(...setCols.map((c) => row[c]), stamp, row[pk]));
+      continue;
+    }
     const allCols = [...cols, spec.stamp];
     const placeholders = allCols.map(() => "?").join(", ");
     const updates = [...cols.filter((c) => c !== pk), spec.stamp].map((c) => `${c} = excluded.${c}`).join(", ");
     const sql =
-      `INSERT INTO ${table} (${allCols.join(", ")}) VALUES (${placeholders}) ` +
+      `INSERT INTO ${target} (${allCols.join(", ")}) VALUES (${placeholders}) ` +
       `ON CONFLICT(${pk}) DO UPDATE SET ${updates}`;
     statements.push(env.DB.prepare(sql).bind(...cols.map((c) => row[c]), stamp));
   }
@@ -296,7 +347,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, params }
     }
 
     // ── Derived catalog columns for the ids in this batch ───────────────────
-    const ids = table === "sample_qc" ? [] : clean.map((r) => String(r.gse_id));
+    const ids = table === "sample_qc" || spec.updateOnly ? [] : clean.map((r) => String(r.gse_id));
     for (let i = 0; i < ids.length; i += BATCH_SIZE) {
       const chunk = ids.slice(i, i + BATCH_SIZE);
       const inList = chunk.map(() => "?").join(", ");

@@ -18,6 +18,7 @@
 import type {
   ApiKeyCreated,
   ApiKeySummary,
+  CellVerdict,
   Condition,
   CorpusStats,
   ExplainResponse,
@@ -164,6 +165,10 @@ const strRecord = (v: unknown): Record<string, string> => {
   for (const [k, val] of Object.entries(rec(v))) if (typeof val === "string") out[k] = val;
   return out;
 };
+
+/** Trust the server's verdict; fall back to the legacy boolean for old payloads. */
+const normalizeCellVerdict = (v: unknown, suspect: boolean): CellVerdict =>
+  v === "suspect" || v === "unverified" || v === "ok" ? v : suspect ? "suspect" : "ok";
 
 function normalizeCondition(v: unknown): Condition | null {
   const c = rec(v);
@@ -324,6 +329,7 @@ export function normalizeSampleRow(raw: unknown): SampleRow | null {
     sex: strOrNull(r.sex),
     n_cells: numOrNull(r.n_cells),
     suspect_cells: r.suspect_cells === true,
+    cell_verdict: normalizeCellVerdict(r.cell_verdict, r.suspect_cells === true),
     status: str(r.status, "unknown"),
     status_code: str(r.status_code, str(r.status)),
     failure_category: strOrNull(r.failure_category),
@@ -563,11 +569,19 @@ function normalizeStats(raw: unknown): CorpusStats {
     total_samples: num(r.total_samples),
     success_samples: num(r.success_samples),
     total_cells: num(r.total_cells),
+    suspect_cells_excluded: num(r.suspect_cells_excluded),
+    unverified_cells_excluded: num(r.unverified_cells_excluded),
+    suspect_samples: num(r.suspect_samples),
+    unverified_samples: num(r.unverified_samples),
+    raw_cells_all: num(r.raw_cells_all, num(r.total_cells)),
     species_count: num(r.species_count),
     series_count: num(r.series_count),
     avg_mapping_rate: numOrNull(r.avg_mapping_rate),
     avg_median_genes: numOrNull(r.avg_median_genes),
     success_rate: numOrNull(r.success_rate),
+    geo_samples_known: num(r.geo_samples_known),
+    ingestion_rate: numOrNull(r.ingestion_rate),
+    coverage_rate: numOrNull(r.coverage_rate),
     failure_categories: normalizeFacetOptions(r.failure_categories),
     studies_with_files: num(r.studies_with_files),
     samples_in_files: num(r.samples_in_files),

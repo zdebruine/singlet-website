@@ -5,6 +5,18 @@
 export type Level = "gse" | "gsm";
 export type Sort = "relevance" | "cells" | "samples" | "year" | "accession" | "file_cells" | "file_size" | "alphabetical";
 
+/**
+ * Server-side verdict on a sample's `n_cells`.
+ *  - "ok"         plausible, counted in headline totals
+ *  - "suspect"    provably inflated (plate overcount or ambient-UMI collapse)
+ *  - "unverified" implausibly high, but no median_umis to test it against
+ * Source of truth: functions/_shared/suspect-cells.ts
+ */
+export type CellVerdict = "ok" | "suspect" | "unverified";
+
+/** Pipeline per-sample QC verdict (scripts/pipeline/backfill_qc_flags.py). */
+export type QcFlag = "HEALTHY" | "WARN" | "LOW_QUALITY";
+
 // ── Study / sample rows returned by /api/search and /api/nl-search ──────────
 
 export interface FilterMatch {
@@ -83,6 +95,8 @@ export interface SampleRow {
   sex: string | null;
   n_cells: number | null;
   suspect_cells: boolean;
+  /** "ok" | "suspect" | "unverified" — server-side plausibility verdict. */
+  cell_verdict: CellVerdict;
   /** Plain words: "processed" | "processed (QC warning)" | "failed: …" */
   status: string;
   status_code: string;
@@ -245,12 +259,28 @@ export interface FacetsResponse {
 export interface CorpusStats {
   total_samples: number;
   success_samples: number;
+  /** Plausible cells only — excludes suspect and unverified counts. */
   total_cells: number;
+  /** Cells in counts the plausibility model rejects. */
+  suspect_cells_excluded: number;
+  /** Cells in implausibly high counts that could not be tested. */
+  unverified_cells_excluded: number;
+  suspect_samples: number;
+  unverified_samples: number;
+  /** total_cells + suspect + unverified — the naive SUM(n_cells). */
+  raw_cells_all: number;
   species_count: number;
   series_count: number;
   avg_mapping_rate: number | null;
   avg_median_genes: number | null;
+  /** DONE / ingested. Survivorship-biased — prefer coverage_rate. */
   success_rate: number | null;
+  /** Samples GEO advertises across tracked studies. */
+  geo_samples_known: number;
+  /** Ingested / advertised. */
+  ingestion_rate: number | null;
+  /** DONE / advertised — the honest end-to-end yield. */
+  coverage_rate: number | null;
   /** Why samples fail, most common first. */
   failure_categories: FacetOption[];
   studies_with_files: number;
@@ -307,6 +337,10 @@ export interface GsmRow {
   sex: string | null;
   n_cells: number | null;
   suspect_cells?: boolean;
+  /** "ok" | "suspect" | "unverified" — server-side plausibility verdict. */
+  cell_verdict?: CellVerdict;
+  /** Pipeline QC verdict, null until the sample has been scored. */
+  qc_flag?: QcFlag | null;
   mapping_rate: number | null;
   median_genes: number | null;
   median_umis: number | null;

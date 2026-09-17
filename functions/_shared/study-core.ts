@@ -3,11 +3,13 @@
  *
  * Series row + normalised study metadata + all samples (with parsed GEO
  * characteristics and a plain-words status) + conditions summary + linked
- * publications. `qc_flag` is never returned.
+ * publications. `qc_flag` is the pipeline's per-sample verdict
+ * (HEALTHY | WARN | LOW_QUALITY) and is null until the QC backfill has run for
+ * that sample.
  */
 import { safeList } from "./json";
 import { parseCharacteristics, summarizeConditions, type ConditionSummary } from "./conditions";
-import { isSuspectCellCount } from "./suspect-cells";
+import { cellCountVerdict, type CellCountVerdict } from "./suspect-cells";
 import { statusText } from "./search-core";
 import { organismToCommon } from "./vocab";
 
@@ -73,6 +75,10 @@ export interface StudySample extends Record<string, unknown> {
   characteristics_raw: string | null;
   status_text: string;
   suspect_cells: boolean;
+  /** "ok" | "suspect" | "unverified" — see ./suspect-cells. */
+  cell_verdict: CellCountVerdict;
+  /** Pipeline QC verdict: "HEALTHY" | "WARN" | "LOW_QUALITY", or null if not yet scored. */
+  qc_flag: string | null;
   organism_label: string;
 }
 
@@ -116,7 +122,7 @@ export async function loadStudy(db: D1Database, rawId: string): Promise<StudyDet
       .prepare(
         `SELECT gsm_id, gse_id, organism, organism_primary, protocol, assay_family, modality,
                 tissue, tissue_group, cell_type, donor_id, disease, disease_group, sex, n_cells,
-                mapping_rate, median_genes, median_umis, mt_pct, status, failure_category,
+                mapping_rate, median_genes, median_umis, mt_pct, status, qc_flag, failure_category,
                 failure_detail, singlet_version, pipeline_date, pz_size_bytes, title, source,
                 srr_ids, characteristics, last_updated
            FROM gsm WHERE gse_id = ? ORDER BY gsm_id ASC`
@@ -147,6 +153,12 @@ export async function loadStudy(db: D1Database, rawId: string): Promise<StudyDet
 
   const samples: StudySample[] = samplesResult.results.map((r) => {
     const nCells = r.n_cells != null ? Number(r.n_cells) : null;
+    const verdict = cellCountVerdict(
+      r.protocol as string | null,
+      r.assay_family as string | null,
+      nCells,
+      r.median_umis != null ? Number(r.median_umis) : null
+    );
     return {
       ...r,
       gsm_id: String(r.gsm_id),
@@ -155,7 +167,9 @@ export async function loadStudy(db: D1Database, rawId: string): Promise<StudyDet
       characteristics: parseCharacteristics(r.characteristics),
       characteristics_raw: typeof r.characteristics === "string" ? r.characteristics : null,
       status_text: statusText(r.status as string, r.failure_category as string | null),
-      suspect_cells: isSuspectCellCount(r.protocol as string | null, r.assay_family as string | null, nCells),
+      suspect_cells: verdict === "suspect",
+      cell_verdict: verdict,
+      qc_flag: (r.qc_flag as string | null) ?? null,
       organism_label: organismToCommon((r.organism_primary as string | null) ?? (r.organism as string | null)),
     };
   });

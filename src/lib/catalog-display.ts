@@ -4,33 +4,15 @@
  */
 
 /**
- * Known `n_cells` pipeline bug: plate-based protocols are "one well = one cell",
- * so implausibly large counts are artifacts. Tune the threshold here.
- * Keep in sync with functions/_shared/suspect-cells.ts.
+ * Cell-count plausibility is decided server-side and returned per sample as
+ * `cell_verdict` ("ok" | "suspect" | "unverified") plus the `suspect_cells`
+ * boolean. The model lives in functions/_shared/suspect-cells.ts — do not
+ * reimplement it here, or the two will drift.
  */
-export const SUSPECT_CELL_COUNT_THRESHOLD = 5000;
-
-/** Any sample above this is implausible regardless of protocol. */
-export const HARD_SUSPECT_CELL_COUNT = 2_000_000;
-
-export const PLATE_PROTOCOLS = [
-  "smartseq2",
-  "smartseq",
-  "smart-seq2",
-  "smart-seq3",
-  "plate",
-];
-
-export function isSuspectCellCount(
-  protocol: string | null | undefined,
-  nCells: number | null | undefined
-): boolean {
-  if (nCells == null) return false;
-  if (nCells > HARD_SUSPECT_CELL_COUNT) return true;
-  return PLATE_PROTOCOLS.includes((protocol ?? "").toLowerCase()) && nCells > SUSPECT_CELL_COUNT_THRESHOLD;
-}
-
 export const FLAGGED_CELLS_LABEL = "flagged — under review";
+
+/** Implausibly high, but no median-UMI value exists to confirm it either way. */
+export const UNVERIFIED_CELLS_LABEL = "unverified";
 
 /** Friendly label for protocol values whose stored form is opaque. */
 const PROTOCOL_LABELS: Record<string, string> = {

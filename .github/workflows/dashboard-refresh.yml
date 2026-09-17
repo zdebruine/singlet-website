@@ -1,6 +1,18 @@
 name: Refresh HPC Dashboard
 
-# Runs every 15 minutes (deterministic quarters of each hour).
+# Watchdog for the Clipper `reconpub` SLURM chain.
+#
+# The chain is self-perpetuating (crontab is PAM-blocked on Clipper): each run
+# queues its own successor. It therefore has a single point of failure — on
+# 2026-07-23 a bulk `scancel` removed the one PENDING successor and the chain
+# stayed dead for 56 days, silently stopping catalog reconciliation, bundle
+# packing, R2 uploads and the website dashboard.
+#
+# This workflow runs OUTSIDE the cluster, so it survives anything that happens
+# on it. It does not publish anything itself: publishing is heavy NFS/network
+# work and the campaign policy keeps that off login nodes. It only guarantees a
+# reconpub job exists; the chain does the rest on its own ~2h cadence.
+#
 # Requires these repository secrets:
 #   CLIPPER_SSH_HOST  — hostname/IP of the Clipper login node
 #   CLIPPER_SSH_USER  — SSH username (e.g. debruinz)
@@ -8,25 +20,32 @@ name: Refresh HPC Dashboard
 
 on:
   schedule:
-    - cron: '0,15,30,45 * * * *'
+    - cron: '0,30 * * * *'
   workflow_dispatch:
+    inputs:
+      start_now:
+        description: 'Start the next cycle immediately instead of +2h'
+        type: boolean
+        default: false
 
 concurrency:
   group: dashboard-refresh
   cancel-in-progress: true
 
 jobs:
-  refresh-clipper:
-    name: Clipper snapshot
+  ensure-chain:
+    name: Ensure reconpub chain is alive
     runs-on: ubuntu-latest
     if: ${{ vars.DASHBOARD_REFRESH_ENABLED != 'false' }}
     steps:
-      - name: Trigger Clipper publish_dashboard.sh
+      - name: Ensure Clipper reconpub chain is running
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.CLIPPER_SSH_HOST }}
           username: ${{ secrets.CLIPPER_SSH_USER }}
           key: ${{ secrets.CLIPPER_SSH_KEY }}
           timeout: 300s
+          # Exit 1 means "stopped deliberately via RECONPUB_STOP" — not a failure.
           script: |
-            bash /mnt/home/debruinz/Singlet-AI/singlet-agents/scripts/pipeline/publish_dashboard.sh
+            bash /mnt/projects/debruinz_project/cellarium/full_campaign/ensure_reconpub.sh \
+              ${{ inputs.start_now && '--now' || '' }} || [ $? -eq 1 ]

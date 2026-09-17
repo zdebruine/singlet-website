@@ -14,7 +14,7 @@
  */
 import { safeList } from "./json";
 import { parseCharacteristics, summarizeConditions, type ConditionSummary } from "./conditions";
-import { isSuspectCellCount, isSuspectStudyCells } from "./suspect-cells";
+import { cellCountVerdict, isSuspectStudyCells, type CellCountVerdict } from "./suspect-cells";
 import {
   canonicalGroup,
   organismToCommon,
@@ -140,6 +140,8 @@ export interface SampleRow {
   sex: string | null;
   n_cells: number | null;
   suspect_cells: boolean;
+  /** "ok" | "suspect" | "unverified" — see ./suspect-cells. */
+  cell_verdict: CellCountVerdict;
   status: string;
   status_code: string;
   failure_category: string | null;
@@ -1543,6 +1545,7 @@ interface SampleDbRow {
   disease_group: string | null;
   sex: string | null;
   n_cells: number | null;
+  median_umis: number | null;
   status: string;
   failure_category: string | null;
   title: string | null;
@@ -1557,7 +1560,7 @@ interface SampleDbRow {
 
 const SAMPLE_SELECT = `
   s.gsm_id, s.gse_id, g.title AS study_title, s.organism, s.organism_primary, s.protocol, s.assay_family,
-  s.tissue, s.tissue_group, s.cell_type, s.disease, s.disease_group, s.sex, s.n_cells, s.status,
+  s.tissue, s.tissue_group, s.cell_type, s.disease, s.disease_group, s.sex, s.n_cells, s.median_umis, s.status,
   s.failure_category, s.title, s.source, s.characteristics, m.has_bundle, m.year`;
 
 function sampleOrder(sort: Sort, hasQ: boolean): string {
@@ -1647,6 +1650,12 @@ function planSampleQuery(p: SearchParams, matchOverride?: string | null) {
 
 function shapeSample(r: SampleDbRow): SampleRow {
   const nCells = r.n_cells != null ? Number(r.n_cells) : null;
+  const verdict = cellCountVerdict(
+    r.protocol,
+    r.assay_family,
+    nCells,
+    r.median_umis != null ? Number(r.median_umis) : null
+  );
   return {
     gsm_id: r.gsm_id,
     gse_id: r.gse_id,
@@ -1663,7 +1672,8 @@ function shapeSample(r: SampleDbRow): SampleRow {
     disease_group: r.disease_group,
     sex: r.sex,
     n_cells: nCells,
-    suspect_cells: isSuspectCellCount(r.protocol, r.assay_family, nCells),
+    suspect_cells: verdict === "suspect",
+    cell_verdict: verdict,
     status: statusText(r.status, r.failure_category),
     status_code: r.status,
     failure_category: r.failure_category,
