@@ -201,13 +201,40 @@ Deno.serve(async (req) => {
     }
 
     const { email, user } = found;
+    const meta = { full_name: user.name ?? user.login, user_name: user.login, avatar_url: user.avatar_url, provider: "github" };
+
+    // One person, one account. The account is keyed on the verified email, so
+    // a GitHub account whose email already has an account signs into it.
+    let existing: AdminUser | null;
+    try {
+      existing = await findUserByEmail(email);
+    } catch (e) {
+      console.error("github-oauth lookup:", e instanceof Error ? e.message : e);
+      return fail(502, "lookup_failed", "We couldn't finish signing you in. Please try again.");
+    }
+
+    // Google addresses, and accounts whose first sign-in was Google, always go
+    // through Google — otherwise the same person would end up with two ways in.
+    if (firstProvider(existing) === "google" || (!existing && isGoogleAddress(email))) {
+      return fail(409, "use_google", "This address belongs to a Google account. Continue with Google to sign in.");
+    }
+
+    // A brand-new account must exist and be confirmed before a magic-link
+    // token can be verified for it.
+    if (!existing) {
+      const { error: createError } = await service().auth.admin.createUser({ email, email_confirm: true, user_metadata: meta });
+      if (createError && !/already/i.test(createError.message)) {
+        console.error("github-oauth createUser:", createError.message);
+        return fail(500, "sign_in_failed", "We couldn't finish signing you in. Please try again or use your email.");
+      }
+    } else if (!existing.email_confirmed_at) {
+      await service().auth.admin.updateUserById(existing.id, { email_confirm: true, user_metadata: { ...(existing.user_metadata ?? {}), ...meta } });
+    }
+
     const { data, error } = await service().auth.admin.generateLink({
       type: "magiclink",
       email,
-      options: {
-        redirectTo: `${payload.o}/auth/callback`,
-        data: { full_name: user.name ?? user.login, user_name: user.login, avatar_url: user.avatar_url, provider: "github" },
-      },
+      options: { redirectTo: `${payload.o}/auth/callback`, data: meta },
     });
     const tokenHash = data?.properties?.hashed_token;
     if (error || !tokenHash) {
