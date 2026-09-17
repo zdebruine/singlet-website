@@ -251,10 +251,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch (e) {
         const status = (e as { status?: number }).status;
         if (status === 503) return { error: unavailable("github") };
+        // The address belongs to a Google account — send them straight there
+        // so everyone keeps one account instead of two.
+        if (status === 409 && (e as { body?: { error?: string } }).body?.error === "use_google") {
+          const r = await signInWithOAuth("google");
+          if (r.error) return { error: "This address belongs to a Google account. Please continue with Google." };
+          return {};
+        }
         return { error: humanAuthError(e instanceof Error ? e.message : String(e), "github") };
       }
     },
-    [client],
+    [client, signInWithOAuth],
   );
 
   const signOut = useCallback(async () => {
