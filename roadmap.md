@@ -144,4 +144,4 @@
 
 <!-- Stage 11d re-applied 2026-09-06 17:50 UTC: ranked candidate evidence ordering restored after the ANVIL bot push race. -->
 - Stage 11f: index-next predicate + failure parking, interpreter cache version, value-first partial chips, removed stale docs workflow.
-- [ ] Brand polish: vertically center the unchanged logo mark and wordmark; add a rich-black navbar ribbon with white navigation controls.
+- [x] Brand polish: vertically center the unchanged logo mark and wordmark; add a rich-black navbar ribbon with white navigation controls.
