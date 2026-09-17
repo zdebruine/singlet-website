@@ -146,7 +146,42 @@ async function verifiedEmail(token: string): Promise<{ email: string; user: GitH
   return email ? { email, user } : null;
 }
 
+// ── existing accounts ──────────────────────────────────────────────────────
+
+interface AdminUser {
+  id: string;
+  email: string | null;
+  email_confirmed_at: string | null;
+  user_metadata?: Record<string, unknown>;
+  identities?: { provider: string; created_at?: string }[];
+}
+
+const GOOGLE_DOMAINS = new Set(["gmail.com", "googlemail.com"]);
+
+function isGoogleAddress(email: string): boolean {
+  return GOOGLE_DOMAINS.has(email.split("@")[1]?.toLowerCase() ?? "");
+}
+
+/** Which provider created the account — the one it should keep signing in with. */
+function firstProvider(u: AdminUser | null): string | null {
+  const ids = u?.identities ?? [];
+  if (ids.length === 0) return null;
+  return [...ids].sort((a, b) => (a.created_at ?? "").localeCompare(b.created_at ?? ""))[0].provider;
+}
+
+async function findUserByEmail(email: string): Promise<AdminUser | null> {
+  const url = new URL(`${Deno.env.get("SUPABASE_URL")}/auth/v1/admin/users`);
+  url.searchParams.set("filter", email);
+  url.searchParams.set("per_page", "50");
+  const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+  const res = await fetch(url, { headers: { apikey: key, Authorization: `Bearer ${key}` } });
+  if (!res.ok) throw new Error(`admin/users → ${res.status}`);
+  const data = (await res.json()) as { users?: AdminUser[] };
+  return (data.users ?? []).find((u) => (u.email ?? "").toLowerCase() === email) ?? null;
+}
+
 // ── handler ────────────────────────────────────────────────────────────────
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
