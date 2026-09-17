@@ -7,7 +7,7 @@ import Footer from "@/components/Footer";
 import { CodeBlock } from "@/components/CodeBlock";
 import { apiClient } from "@/integrations/api/client";
 import { usePageMeta } from "@/hooks/usePageMeta";
-import { FAILURE_CATEGORY_DOCS, failureLabel, fmtCompact, fmtInt, fmtPct } from "@/lib/catalog-display";
+import { fmtCompact, fmtInt, fmtPct } from "@/lib/catalog-display";
 import { QuickStartHubs } from "@/components/QuickStartHubs";
 
 const Mono = ({ children }: { children: React.ReactNode }) => <code className="code-inline">{children}</code>;
@@ -48,16 +48,13 @@ function useHashScroll() {
 const About = () => {
   usePageMeta({
     title: "About the data",
-    description: "How every study in the singlet atlas is processed, which references are used, what failed means, processing status, license (CC0 data, MIT code) and how to cite.",
+    description: "How every study in the singlet atlas is processed, which references are used, processing status, license (CC0 data, MIT code) and how to cite.",
     path: "/about",
   });
   useHashScroll();
 
   const { data: stats } = useQuery({ queryKey: ["corpus-stats"], queryFn: () => apiClient.stats(), staleTime: 120_000 });
 
-  const failed = stats ? stats.total_samples - stats.success_samples : null;
-  const failureFacets = (stats?.failure_categories ?? []).slice().sort((a, b) => b.count - a.count);
-  const failureTotal = failureFacets.reduce((a, f) => a + f.count, 0);
   const year = new Date().getFullYear();
 
   return (
@@ -130,36 +127,82 @@ const About = () => {
               <tbody>
                 <tr>
                   <td>Human</td>
-                  <td><Mono>GRCh38</Mono> (2024-A reference build)</td>
-                  <td>GENCODE gene annotation shipped with the 2024-A build</td>
+                  <td><Mono>GRCh38</Mono> (2024-A build)</td>
+                  <td>GENCODE v44 (equivalently Ensembl 110)</td>
                 </tr>
                 <tr>
                   <td>Mouse</td>
-                  <td><Mono>GRCm39</Mono> (2024-A reference build)</td>
-                  <td>GENCODE gene annotation shipped with the 2024-A build</td>
+                  <td><Mono>GRCm39</Mono> (2024-A build)</td>
+                  <td>GENCODE vM33 (equivalently Ensembl 110)</td>
+                </tr>
+                <tr>
+                  <td>Rat</td>
+                  <td><Mono>mRatBN7.2</Mono></td>
+                  <td>Ensembl 110</td>
+                </tr>
+                <tr>
+                  <td>All other organisms</td>
+                  <td>Latest Ensembl or NCBI RefSeq assembly for the species</td>
+                  <td>Ensembl 115, Ensembl Rapid Release, or NCBI RefSeq</td>
                 </tr>
               </tbody>
             </table>
             <p>
+              GENCODE only publishes human and mouse annotation, so every other organism is built from Ensembl (release
+              115 for the main vertebrate set, Rapid Release for species that are not yet in the main Ensembl release) or
+              from NCBI RefSeq for plants, fungi, protists and bacteria. There are currently 65 organism builds, plus a
+              combined human + mouse <Mono>GRCh38-GRCm39</Mono> barnyard build used for species-mixing experiments.
+            </p>
+            <p>
+              For the human 2024-A build the genome FASTA is taken from Ensembl 109 (GRCh38.p13) rather than 110, because
+              release 110 ships an unmasked pseudoautosomal region on chrY; the GTF is GENCODE v44. Mouse 2024-A uses the
+              Ensembl 110 FASTA with the GENCODE vM33 GTF.
+            </p>
+            <p>
               The build a sample was mapped to is recorded per cell in <Mono>obs["reference_build"]</Mono> and in the
               bundle's <Mono>feature_vocab.json</Mono>, so gene ids are always interpretable.
             </p>
-            <div className="warning-surface px-4 py-3 text-[13.5px]">
-              <strong className="font-medium">TODO (maintainer):</strong> confirm the exact GENCODE release numbers for
-              the 2024-A builds and list the references used for organisms other than human and mouse before this section
-              is considered final.
-            </div>
           </section>
 
           {/* ── Status ── */}
           <section id="status" className="pb-12 mb-12 border-b border-border scroll-mt-20">
             <h2>Processing status</h2>
-            <p>Live numbers from the catalog. Failed samples stay in the catalog with their reason so studies are never silently incomplete.</p>
+            <p>
+              We are continuing to perform data reprocessing today. Here are live updates on the state of our continually
+              growing catalog.
+            </p>
+
+            <h3>Available to download now</h3>
+            <p className="text-[14.5px]">
+              These are the same numbers shown on the home page: studies that have a published{" "}
+              <Mono>.singlet</Mono> file you can download right now.
+            </p>
+            <dl className="grid grid-cols-2 md:grid-cols-3 gap-3 my-5">
+              {[
+                { label: "studies with files", value: stats ? fmtInt(stats.studies_with_files) : null },
+                { label: "samples in files", value: stats ? fmtInt(stats.samples_in_files) : null },
+                { label: "cells called in files", value: stats ? fmtCompact(stats.cells_in_files) : null },
+              ].map((s) => (
+                <div key={s.label} className="surface px-4 py-3">
+                  <dd className="font-display font-bold text-[24px] leading-none tabular text-foreground">
+                    {s.value ?? <span className="inline-block h-6 w-16 rounded bg-secondary animate-pulse" />}
+                  </dd>
+                  <dt className="mt-1.5 text-xs text-muted-foreground">{s.label}</dt>
+                </div>
+              ))}
+            </dl>
+
+            <h3>Processed so far</h3>
+            <p className="text-[14.5px]">
+              Samples the pipeline has already finished. Packing and publishing runs behind processing, so these numbers
+              are larger than the download numbers above — the difference is the queue of finished samples whose study
+              bundle has not been published yet.
+            </p>
             <dl className="grid grid-cols-2 md:grid-cols-4 gap-3 my-5">
               {[
-                { label: "studies", value: stats ? fmtInt(stats.series_count) : null },
+                { label: "studies in catalog", value: stats ? fmtInt(stats.series_count) : null },
                 { label: "samples processed", value: stats ? fmtInt(stats.success_samples) : null },
-                { label: "samples failed", value: failed != null ? fmtInt(failed) : null },
+                { label: "cells called", value: stats ? fmtCompact(stats.total_cells) : null },
                 { label: "success rate", value: stats ? fmtPct(stats.success_rate) : null },
               ].map((s) => (
                 <div key={s.label} className="surface px-4 py-3">
@@ -172,63 +215,11 @@ const About = () => {
             </dl>
             {stats && (
               <p className="text-[13.5px] text-muted-foreground">
-                {fmtCompact(stats.total_cells)} cells across processed samples; mean mapping rate {fmtPct(stats.avg_mapping_rate)}; mean
-                median genes per cell {fmtInt(stats.avg_median_genes)}. Cell counts for a small number of plate-based samples are
-                withheld while a known counting bug is corrected upstream.
+                Mean mapping rate {fmtPct(stats.avg_mapping_rate)}; mean median genes per cell{" "}
+                {fmtInt(stats.avg_median_genes)}. Cell counts for a small number of plate-based samples are withheld while
+                a known counting bug is corrected upstream.
               </p>
             )}
-
-            {failureFacets.length > 0 && (
-              <>
-                <h3>Failed samples by reason</h3>
-                <ul className="!list-none !pl-0 space-y-2">
-                  {failureFacets.map((f) => {
-                    const pct = failureTotal ? (f.count / failureTotal) * 100 : 0;
-                    return (
-                      <li key={f.value} className="grid grid-cols-[minmax(0,180px)_1fr_auto] items-center gap-3 text-[13px]">
-                        <span className="truncate" title={f.value}>{failureLabel(f.value)}</span>
-                        <span className="h-2 bg-secondary rounded-none overflow-hidden">
-                          <span className="block h-full bg-warning/70" style={{ width: `${Math.max(pct, 0.5)}%` }} />
-                        </span>
-                        <span className="font-mono tabular text-muted-foreground">{fmtInt(f.count)}</span>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </>
-            )}
-          </section>
-
-          {/* ── Failed ── */}
-          <section id="failed" className="pb-12 mb-12 border-b border-border scroll-mt-20">
-            <h2>What "failed" means</h2>
-            <p>
-              A failed sample is one the pipeline could not turn into a usable count matrix. Its metadata is still in the
-              catalog and the reason is recorded in <Mono>failure_category</Mono>:
-            </p>
-            <table>
-              <thead>
-                <tr>
-                  <th>Category</th>
-                  <th>Meaning</th>
-                </tr>
-              </thead>
-              <tbody>
-                {FAILURE_CATEGORY_DOCS.map((f) => (
-                  <tr key={f.value}>
-                    <td className="whitespace-nowrap">
-                      <div className="font-medium">{f.label}</div>
-                      <div className="font-mono text-[11px] text-muted-foreground">{f.value}</div>
-                    </td>
-                    <td>{f.detail}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <p>
-              Failed samples are not included in a study's <Mono>.singlet</Mono> file. If every sample in a study failed,
-              the study has no file and the study page says so.
-            </p>
           </section>
 
           {/* ── License & citation ── */}

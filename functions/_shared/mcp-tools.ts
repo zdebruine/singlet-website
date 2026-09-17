@@ -15,6 +15,7 @@ import {
   type ManifestFormat,
 } from "./manifest-core";
 import { normalizeFilters, parseSearchParams, type Ctx } from "./search-core";
+import { MODALITIES, resolveModalities } from "./modalities";
 import { loadRules, organismToCommon } from "./vocab";
 import { safeList } from "./json";
 
@@ -214,7 +215,105 @@ export async function listBundleFiles(ctx: SampleQcArgs, args: Record<string, un
   });
 }
 
-// ── 3. get_partial_download ─────────────────────────────────────────────────
+// ── 3. get_modalities ───────────────────────────────────────────────────────
+
+/**
+ * Which of the pipeline's non-gene-expression outputs a sample actually has,
+ * with the Python and R one-liners that read each one.
+ *
+ * `list_bundle_files` answers "what files are in there"; this answers "what
+ * science can I do with it", which is the question an assistant is usually
+ * really being asked.
+ */
+export async function getModalities(ctx: SampleQcArgs, args: Record<string, unknown>): Promise<ToolResult> {
+  const gse = gseArg(args);
+  if (!gse) return toolError("`gse_id` must be a GEO series accession like GSE200901.");
+  const gsm = typeof args.gsm_id === "string" ? args.gsm_id.trim().toUpperCase() : "";
+  if (gsm && !GSM_RE.test(gsm)) return toolError("`gsm_id` must be a GEO sample accession like GSM4746717.");
+
+  let index;
+  try {
+    index = await bundleIndexResponse(ctx.db, gse, await getBundleIndex(ctx.db, gse, { waitUntil: ctx.waitUntil }), ctx.waitUntil);
+  } catch (e) {
+    return toolError(`Could not read ${gse}.singlet: ${String(e).slice(0, 200)}. The file may not be built yet.`);
+  }
+
+  const samples = gsm ? index.samples.filter((s) => s.gsm_id === gsm) : index.samples;
+  if (!samples.length)
+    return gsm
+      ? toolError(`${gsm} is not in ${gse}.singlet. Samples in the file: ${index.samples.map((s) => s.gsm_id).join(", ")}.`)
+      : toolError(`${gse}.singlet contains no samples.`);
+
+  // Every sample of a study goes through one pipeline invocation, so the first
+  // sample is representative; we still report per-sample presence because a
+  // sample can drop an output when, say, no chrM variants were called.
+  const perSample = samples.map((s) => {
+    const prefix = `samples/${s.gsm_id}/`;
+    const files = s.files.map((f) => (f.path.startsWith(prefix) ? f.path.slice(prefix.length) : f.path));
+    return { gsm_id: s.gsm_id, found: resolveModalities(files) };
+  });
+
+  const counts = new Map<string, number>();
+  for (const s of perSample) for (const { modality } of s.found) counts.set(modality.name, (counts.get(modality.name) ?? 0) + 1);
+
+  const rows = MODALITIES.filter((m) => counts.has(m.name)).map((m) => ({
+    name: m.name,
+    group: m.group,
+    kind: m.kind,
+    description: m.description,
+    n_samples: counts.get(m.name) ?? 0,
+    python: m.python,
+    r: m.r,
+  }));
+  const missing = MODALITIES.filter((m) => !counts.has(m.name)).map((m) => m.name);
+
+  const lines: string[] = [];
+  lines.push(
+    `${gse}.singlet carries ${rows.length} modalit${rows.length === 1 ? "y" : "ies"} across ${fmt(samples.length)} sample${samples.length === 1 ? "" : "s"}${index.reference_build ? ` (reference ${index.reference_build})` : ""}.`
+  );
+  lines.push("");
+  lines.push("Open the bundle once, then read any modality by name:");
+  lines.push("");
+  lines.push(`  Python:  import singlet; b = singlet.open_bundle("${gse}"); b.modalities()`);
+  lines.push(`  R:       library(singlet); singlet_modalities(load_path)`);
+  lines.push("");
+  let group = "";
+  for (const r of rows) {
+    if (r.group !== group) {
+      group = r.group;
+      lines.push(`${group}:`);
+    }
+    const scope = r.n_samples === samples.length ? "all samples" : `${r.n_samples}/${samples.length} samples`;
+    lines.push(`- ${r.name} (${r.kind}, ${scope}) — ${r.description}`);
+    lines.push(`    Python: ${r.python}    R: ${r.r}`);
+  }
+  lines.push("");
+  lines.push(
+    "For a conventional combined counts matrix (exonic + intronic, with spliced/unspliced kept as layers) use b.raw_counts(gsm) in Python or singlet_raw_counts(path, gsm) in R — do not sum the matrices by hand, the feature axis has to be projected onto the gene axis first."
+  );
+  if (missing.length) {
+    lines.push("");
+    lines.push(`Not in this bundle: ${missing.join(", ")}. Older bundles predate the donor, non-host and per-cell annotation outputs.`);
+  }
+
+  return toolResult(lines.join("\n"), {
+    gse_id: gse,
+    n_samples: samples.length,
+    reference_build: index.reference_build,
+    singlet_version: index.singlet_version,
+    modalities: rows,
+    missing,
+    per_sample: perSample.map((s) => ({ gsm_id: s.gsm_id, modalities: s.found.map((f) => f.modality.name) })),
+    raw_counts: {
+      python: `import singlet\nb = singlet.open_bundle("${gse}")\nadata = b.raw_counts(b.gsm_ids[0])        # X = exon + intron\nadata.layers["spliced"], adata.layers["unspliced"]`,
+      r: `library(singlet)\nsce <- singlet_raw_counts(path, gsm)      # counts = exon + intron\nassayNames(sce)                          # counts, spliced, unspliced`,
+    },
+    download_url: bundleUrl(gse),
+    study_url: `${SITE}/study/${gse}`,
+  });
+}
+
+// ── 4. get_partial_download ─────────────────────────────────────────────────
 
 function pythonSnippet(url: string, start: number, end: number, method: string, outName: string): string {
   if (method === "stored") {

@@ -268,11 +268,15 @@ sce  <- find_load("human PBMC, COVID-19, 10x 5'")`}
                 <tbody>
                   <tr>
                     <td><Mono>exon_counts.1pz</Mono></td>
-                    <td>Cells × genes, reads assigned to exons. This is <Mono>adata.X</Mono> / <Mono>counts(sce)</Mono>.</td>
+                    <td>Cells × features, reads assigned to exons. Summed per gene this is <Mono>adata.layers["spliced"]</Mono>.</td>
                   </tr>
                   <tr>
                     <td><Mono>intron_counts.1pz</Mono></td>
-                    <td>Cells × genes, intronic reads (for RNA velocity or nuclear fraction).</td>
+                    <td>Cells × features, intronic reads (for RNA velocity or nuclear fraction). Summed per gene this is <Mono>adata.layers["unspliced"]</Mono>.</td>
+                  </tr>
+                  <tr>
+                    <td><Mono>cell_calls.tsv</Mono></td>
+                    <td>Which barcodes the pipeline called as cells, with their scores.</td>
                   </tr>
                   <tr>
                     <td><Mono>sj_counts.1pz</Mono></td>
@@ -287,8 +291,24 @@ sce  <- find_load("human PBMC, COVID-19, 10x 5'")`}
                     <td>Mitochondrial variant allele fractions per cell.</td>
                   </tr>
                   <tr>
+                    <td><Mono>mt_variants.tsv</Mono></td>
+                    <td>Called chrM variants: depth, allele counts, annotation.</td>
+                  </tr>
+                  <tr>
+                    <td><Mono>donor_assignments.tsv</Mono></td>
+                    <td>Genotype-free donor demultiplexing: barcode → donor, with doublet calls. Newer bundles only.</td>
+                  </tr>
+                  <tr>
+                    <td><Mono>nonhost_em_abundance.tsv</Mono></td>
+                    <td>Microbial and viral abundance per taxon. Newer bundles only.</td>
+                  </tr>
+                  <tr>
                     <td><Mono>vdj_gene_usage.1pz</Mono></td>
                     <td>V(D)J gene usage per cell (when the library supports it).</td>
+                  </tr>
+                  <tr>
+                    <td><Mono>summary.json</Mono>, <Mono>pileup_stats.json</Mono></td>
+                    <td>Per-sample QC: cells called, mapping rate, median genes and UMIs.</td>
                   </tr>
                   <tr>
                     <td><Mono>study_meta.json</Mono></td>
@@ -304,11 +324,42 @@ sce  <- find_load("human PBMC, COVID-19, 10x 5'")`}
                   </tr>
                 </tbody>
               </table>
+              <h3 id="modalities" className="scroll-mt-24">Reading anything other than gene counts</h3>
               <p>
-                Optional matrices are present only when the protocol produces them. <Mono>load()</Mono> returns the exon
-                count matrix; the other members can be read with the lower-level bundle API (
-                <Mono>singlet.bundle.SingletBundle</Mono> in Python, <Mono>read_1pz()</Mono> in R) without unpacking the
-                archive.
+                <Mono>load()</Mono> returns the gene-level matrix. Everything else is addressable by name through the
+                bundle API, which never unpacks the whole archive. Which outputs a bundle has depends on when it was
+                processed — the splicing, heteroplasmy and V(D)J matrices are universal; the donor, non-host,
+                allele-specific and per-cell annotation outputs are in newer bundles only, so check rather than assume.
+              </p>
+              <div className="grid md:grid-cols-2 gap-3">
+                <CodeBlock
+                  label="python"
+                  code={`b = singlet.open_bundle("GSE178957")
+b.modalities()                       # what this bundle has
+b.has("donor_assignments")
+
+gsm = b.gsm_ids[0]
+b.raw_counts(gsm)                    # exon + intron, spliced/unspliced layers
+b.raw_counts(gsm, gene_level=False)  # native exon/intron feature axis
+b.mt_variants(gsm); b.donors(gsm); b.nonhost(gsm)`}
+                />
+                <CodeBlock
+                  label="r"
+                  code={`path <- download("GSE178957")
+singlet_modalities(path)
+singlet_has(path, "donor_assignments")
+
+gsm <- "GSM5399457"
+singlet_raw_counts(path, gsm)
+singlet_raw_counts(path, gsm, gene_level = FALSE)
+singlet_read(path, gsm, "mt_variants")`}
+                />
+              </div>
+              <p className="text-sm text-muted-foreground">
+                The full per-modality table, and how exon and intron features are merged onto genes, is on{" "}
+                <Link to="/quickstart#modalities">Getting started</Link>. From an assistant, the{" "}
+                <Mono>get_modalities</Mono> MCP tool answers the same question and returns the Python and R line for
+                each one.
               </p>
             </Section>
 
@@ -536,6 +587,22 @@ BiocManager::install(c("SingleCellExperiment", "SummarizedExperiment", "S4Vector
                   <Mono>Matrix</Mono> objects.
                 </li>
               </ul>
+              <h3>Beyond gene counts</h3>
+              <p>
+                <Mono>download()</Mono> fetches a bundle without reading it, and the <Mono>singlet_*</Mono> readers
+                reach every other per-sample output. Matrices come back features × cells, the Bioconductor orientation.
+                See <a href="#modalities" className="text-primary hover:underline">Modalities</a> for the full list.
+              </p>
+              <CodeBlock
+                label="r"
+                code={`path <- download("GSE178957")
+singlet_modalities(path)                      # what this bundle has
+singlet_has(path, "donor_assignments")
+
+sce <- singlet_raw_counts(path, "GSM5399457") # counts, spliced, unspliced
+singlet_read(path, "GSM5399457", "mt_heteroplasmy")
+singlet_read(path, "GSM5399457", "nonhost_species")`}
+              />
             </Section>
 
             {/* ── Python API ── */}
@@ -575,11 +642,18 @@ BiocManager::install(c("SingleCellExperiment", "SummarizedExperiment", "S4Vector
                     <td><Mono>singlet.summary()</Mono></td>
                     <td>Atlas overview: counts of studies, samples and cells by organism and protocol.</td>
                   </tr>
+                  <tr>
+                    <td><Mono>singlet.open_bundle(acc_or_path)</Mono></td>
+                    <td>
+                      A <Mono>SingletBundle</Mono> — the handle for everything that isn't gene counts. See{" "}
+                      <a href="#modalities" className="text-primary hover:underline">Modalities</a>.
+                    </td>
+                  </tr>
                 </tbody>
               </table>
               <h3>What you get back</h3>
               <ul>
-                <li><Mono>adata.X</Mono> — raw exon UMI counts, cells × genes, sparse CSR.</li>
+                <li><Mono>adata.X</Mono> — raw UMI counts, cells × genes, sparse CSR. Exonic + intronic, with the two halves kept in <Mono>adata.layers["spliced"]</Mono> and <Mono>adata.layers["unspliced"]</Mono>.</li>
                 <li><Mono>adata.obs</Mono> — <Mono>gsm_id</Mono>, <Mono>organism</Mono>, <Mono>protocol</Mono>, <Mono>protocol_name</Mono>, <Mono>sample_source</Mono>, <Mono>sample_characteristics</Mono> (the GEO characteristics string), <Mono>reference_build</Mono>, <Mono>n_cells_sample</Mono>.</li>
                 <li><Mono>adata.var</Mono> — indexed by <Mono>gene_id</Mono>, with <Mono>gene_name</Mono> from the reference annotation.</li>
                 <li><Mono>adata.uns["study_meta"]</Mono> and <Mono>adata.uns["manifest"]</Mono> — the study's GEO metadata and the bundle manifest (pipeline version, checksums).</li>

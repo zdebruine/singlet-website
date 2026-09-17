@@ -39,6 +39,11 @@ const EXAMPLES: { ask: string; tools: string; gets: string }[] = [
     gets: "Every per-sample and study-level file with its size.",
   },
   {
+    ask: "Does GSE296768 have mtDNA variants or donor demultiplexing? How do I read them in R?",
+    tools: "get_modalities",
+    gets: "Every modality in the file — splicing, heteroplasmy, donors, non-host species, V(D)J — with the Python and R line that reads each one.",
+  },
+  {
     ask: "Get me just GSM8976273's counts matrix — I don't want the whole 9 GB study.",
     tools: "get_partial_download",
     gets: "A byte range, a curl command and a Python snippet that fetches and inflates that one file.",
@@ -67,6 +72,7 @@ const TOOLS: { name: string; input: string; returns: string; metered: string }[]
   { name: "get_atlas_stats", input: "—", returns: "Live studies, samples, cells, species", metered: "No" },
   { name: "get_sample_qc", input: "gse_id, gsm_ids?", returns: "Per-sample QC from the file itself, totals and warnings", metered: "No" },
   { name: "list_bundle_files", input: "gse_id, gsm_id?", returns: "Everything inside the file, with sizes", metered: "No" },
+  { name: "get_modalities", input: "gse_id, gsm_id?", returns: "Which modalities the file carries, with Python and R readers for each", metered: "No" },
   { name: "get_partial_download", input: "gse_id, gsm_id, file", returns: "Byte range, curl and Python for one file", metered: "No" },
   { name: "export_manifest", input: "query / filters / gse_ids, format", returns: "TSV, JSON, curl, wget, Python or R manifest", metered: "No" },
   { name: "find_matched_controls", input: "gse_id, min_samples?, same_assay?", returns: "Candidate control studies with reasons and caveats", metered: "No — but needs a key" },

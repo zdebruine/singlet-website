@@ -39,6 +39,7 @@ import {
   findMatchedControls,
   fmt,
   fmtBytes,
+  getModalities,
   getPartialDownload,
   getSampleQc,
   listBundleFiles,
@@ -58,7 +59,9 @@ const KEY_SEARCH_LIMIT = 200;
 
 const INSTRUCTIONS = `singlet.bio is an open atlas of public single-cell RNA-seq studies from GEO, all reprocessed the same way. One CC0 .singlet file per study (zip64) holding per-sample count matrices and per-sample QC.
 
-Recommended order: search_datasets → assess_study or get_study → get_sample_qc → get_download_url (whole study) or get_partial_download (one sample's matrix, by HTTP range) → export_manifest for a cohort. compare_studies and find_matched_controls help pick controls.
+Recommended order: search_datasets → assess_study or get_study → get_sample_qc → get_modalities (what is in the file beyond gene counts) → get_download_url (whole study) or get_partial_download (one sample's matrix, by HTTP range) → export_manifest for a cohort. compare_studies and find_matched_controls help pick controls.
+
+A .singlet file is not just gene counts: it can also carry splice junctions and PSI, mitochondrial heteroplasmy and chrM variants, genotype-free donor demultiplexing, non-host (microbial/viral) abundance, V(D)J usage and per-cell doublet/cell-cycle/ambient annotations. Older bundles have fewer of these — call get_modalities before telling a user a modality is available.
 
 Every number and every "why" string is computed, not generated — quote them, don't paraphrase. Catalog cell counts can differ from the file's own QC; the file is the truth. Downloads never need a key. AI-interpreted search is 10/day anonymously; a free key from ${ACCOUNT_URL} raises it to ${KEY_SEARCH_LIMIT}/day and unlocks assess_study and find_matched_controls.`;
 
@@ -176,6 +179,22 @@ const TOOLS = [
       additionalProperties: false,
     },
     annotations: { title: "What is inside the file", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  },
+  {
+    name: "get_modalities",
+    title: "What data types the study has",
+    description:
+      "What science a study's .singlet file actually supports, beyond gene counts: splice junctions and PSI, mitochondrial heteroplasmy and chrM variant calls, genotype-free donor demultiplexing, non-host (microbial/viral) abundance, V(D)J segment usage, allele-specific expression, doublet/cell-cycle/ambient annotations and per-sample QC. Returns each modality present, how many samples have it, and the exact Python and R one-liners that read it — plus how to build a conventional combined counts matrix with spliced/unspliced layers. Older bundles predate some outputs, so always check here before promising a user a modality. Not metered.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        gse_id: { type: "string", pattern: "^GSE\\d+$", description: "GEO series accession." },
+        gsm_id: { type: "string", pattern: "^GSM\\d+$", description: "Only this sample's modalities." },
+      },
+      required: ["gse_id"],
+      additionalProperties: false,
+    },
+    annotations: { title: "What data types the study has", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   },
   {
     name: "get_partial_download",
@@ -806,6 +825,8 @@ async function callTool(ctx: CallContext, params: Record<string, unknown>) {
         return { result: withQuota(await getSampleQc(db, args), meta) };
       case "list_bundle_files":
         return { result: withQuota(await listBundleFiles(db, args), meta) };
+      case "get_modalities":
+        return { result: withQuota(await getModalities(db, args), meta) };
       case "get_partial_download":
         return { result: withQuota(await getPartialDownload(db, args), meta) };
       case "export_manifest":

@@ -450,8 +450,7 @@ const StudyDetail = () => {
               </p>
               {reasons.length > 0 && (
                 <p className="mt-1 text-warning/90">
-                  {reasons.map(([r, n]) => `${failureLabel(r === "unknown" ? null : r)} (${n})`).join(", ")}.{" "}
-                  <Link to="/about#failed" className="underline">What failed means →</Link>
+                  {reasons.map(([r, n]) => `${failureLabel(r === "unknown" ? null : r)} (${n})`).join(", ")}.
                 </p>
               )}
             </div>
