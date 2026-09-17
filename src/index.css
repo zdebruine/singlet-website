@@ -120,6 +120,28 @@
     color: var(--dark-foreground);
   }
 
+  .site-navbar {
+    background: var(--rich-black);
+  }
+
+  .site-navbar .navbar-account {
+    color: var(--dark-muted);
+  }
+
+  .site-navbar .navbar-account:hover {
+    color: var(--dark-foreground);
+  }
+
+  .site-navbar .input {
+    background: var(--rich-black-raised);
+    border-color: var(--dark-border);
+    color: var(--dark-foreground);
+  }
+
+  .site-navbar .input::placeholder {
+    color: var(--dark-muted);
+  }
+
   /* Chips — 3px radius, never pills */
   .chip {
     @apply inline-flex items-center gap-1.5 rounded border border-border bg-card px-2.5 h-7 text-[13px] text-foreground whitespace-nowrap transition-colors;
@@ -324,7 +346,7 @@
 @layer components {
   .singlet-logo { width: auto; overflow: visible; }
 
-.outlined-logo { display: inline-flex; width: auto; }
+.outlined-logo { display: inline-flex; align-items: center; width: auto; vertical-align: middle; }
 .outlined-logo > svg { display: block; width: auto; height: 100%; }
 .logo-auto-dark { display: none; }
 @media (prefers-color-scheme: dark) { .logo-auto-light { display: none; } .logo-auto-dark { display: inline-flex; } }
