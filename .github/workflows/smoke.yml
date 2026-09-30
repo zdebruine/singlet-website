@@ -1,0 +1,54 @@
+name: Smoke
+
+# Post-deploy HTTP smoke test (scripts/smoke.sh) against the live site.
+#
+# - push to main: wait for Cloudflare Pages to build and deploy, then test
+#   https://singlet.bio. CI (ci.yml) only proves the build compiles; this proves
+#   the deployed Functions, headers and data actually answer.
+# - every 6 hours: catches outages and data regressions between deploys.
+# - by hand: optionally against another base URL (e.g. a branch preview,
+#   https://<branch>.singlet-4gc.pages.dev).
+#
+# A failed run is retried once after 120 s, so a deploy that is still rolling
+# out (or one flaky request) does not page anyone.
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "23 */6 * * *"
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: "Base URL to test (default https://singlet.bio)"
+        required: false
+        default: ""
+        type: string
+
+# A newer push supersedes an older push's deploy; scheduled and manual runs
+# never cancel each other or a push run.
+concurrency:
+  group: smoke-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'push' }}
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Wait for the Cloudflare Pages deploy
+        if: github.event_name == 'push'
+        run: sleep 240
+
+      - name: Smoke test (retried once after 120 s)
+        env:
+          BASE_URL: ${{ inputs.base_url || 'https://singlet.bio' }}
+        run: |
+          if bash scripts/smoke.sh "$BASE_URL"; then exit 0; fi
+          echo "::warning::Smoke test failed against $BASE_URL; retrying once in 120 s"
+          sleep 120
+          bash scripts/smoke.sh "$BASE_URL"
