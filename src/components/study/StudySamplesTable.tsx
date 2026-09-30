@@ -45,6 +45,19 @@ function statusRank(s: GsmRow): number {
   return 4;
 }
 
+/** Reads, with the pipeline's 30M subsampling cap marked. */
+function Reads({ n }: { n: number }) {
+  if (n === 30_000_000)
+    return <span className="font-mono tabular" title="reads were subsampled to 30M for processing">30.0M (capped)</span>;
+  return <span className="font-mono tabular">{fmtInt(n)}</span>;
+}
+
+/** Fields the pipeline never computed are 0/null — show a dash, never "0.0%". */
+function NotComputed({ v }: { v: number | null | undefined }) {
+  if (!v) return <span className="text-muted-foreground" title="not computed by this pipeline version">—</span>;
+  return <span className="font-mono tabular">{fmtPct(v)}</span>;
+}
+
 function StatusCell({ s }: { s: GsmRow }) {
   if (s.status === "DONE") return <span className="status-ok">processed</span>;
   if (s.status === "DONE_QC_WARN") return <span className="flag" title="Processed, but one or more QC metrics are outside the usual range">QC warning</span>;
@@ -170,15 +183,15 @@ function ExpandedRow({ s, gseId, studyTitle, colSpan, qc }: { s: GsmRow; gseId: 
               <div>
                 <h4 className="text-[12px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5">QC from the published file</h4>
                 <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4">
-                  {qc.n_input_reads != null && <Detail label="Input reads"><span className="font-mono tabular">{fmtInt(qc.n_input_reads)}</span></Detail>}
+                  {qc.n_input_reads != null && <Detail label="Input reads"><Reads n={qc.n_input_reads} /></Detail>}
                   {qc.uniquely_mapped_pct != null && <Detail label="Uniquely mapped"><span className="font-mono tabular">{fmtPct(qc.uniquely_mapped_pct)}</span></Detail>}
                   {qc.n_cells_called != null && <Detail label="Cells called"><span className="font-mono tabular">{fmtInt(qc.n_cells_called)}</span></Detail>}
                   {qc.median_umi != null && <Detail label="Median UMI"><span className="font-mono tabular">{fmtInt(qc.median_umi)}</span></Detail>}
                   {qc.median_genes != null && <Detail label="Median genes"><span className="font-mono tabular">{fmtInt(qc.median_genes)}</span></Detail>}
                   {qc.exonic_fraction != null && <Detail label="Exonic"><span className="font-mono tabular">{fmtPct(qc.exonic_fraction)}</span></Detail>}
                   {qc.intronic_fraction != null && <Detail label="Intronic"><span className="font-mono tabular">{fmtPct(qc.intronic_fraction)}</span></Detail>}
-                  {qc.sequencing_saturation != null && <Detail label="Seq. saturation"><span className="font-mono tabular">{fmtPct(qc.sequencing_saturation)}</span></Detail>}
-                  {qc.median_mito_fraction != null && <Detail label="Median mito"><span className="font-mono tabular">{fmtPct(qc.median_mito_fraction)}</span></Detail>}
+                  <Detail label="Seq. saturation"><NotComputed v={qc.sequencing_saturation} /></Detail>
+                  <Detail label="Median mito"><NotComputed v={qc.median_mito_fraction} /></Detail>
                   {qc.fraction_reads_in_cells != null && <Detail label="Reads in cells"><span className="font-mono tabular">{fmtPct(qc.fraction_reads_in_cells)}</span></Detail>}
                   {qc.total_genes_detected != null && <Detail label="Genes detected"><span className="font-mono tabular">{fmtInt(qc.total_genes_detected)}</span></Detail>}
                   {qc.reference_build && <Detail label="Reference">{qc.reference_build}</Detail>}
@@ -477,6 +490,15 @@ export function StudySamplesTable({ gseId, studyTitle, samples, highlightGsm, co
                     </td>
                     <td>
                       <StatusCell s={s} />
+                      {qc?.usable === 0 && (
+                        <span
+                          className="mt-1 inline-block border border-warning/40 bg-warning/10 text-warning px-1.5 text-[11px] whitespace-nowrap"
+                          style={{ borderRadius: 3 }}
+                          title="Empty matrix or 0 called cells in the published file — this sample loads as empty"
+                        >
+                          no count data
+                        </span>
+                      )}
                     </td>
                     <td className={cn("num text-[12.5px]", s.suspect_cells && "text-warning")}>
                       {s.n_cells == null ? (
@@ -493,8 +515,8 @@ export function StudySamplesTable({ gseId, studyTitle, samples, highlightGsm, co
 
                     {hasQc && <td className="num text-[12.5px]">{fmtPct(s.mapping_rate)}</td>}
                     {hasQc && <td className="num text-[12.5px]">{fmtInt(s.median_genes)}</td>}
-                    {hasReads && <td className="num text-[12.5px] font-mono">{fmtInt(qc?.n_input_reads)}</td>}
-                    {hasSaturation && <td className="num text-[12.5px] font-mono">{fmtPct(qc?.sequencing_saturation)}</td>}
+                    {hasReads && <td className="num text-[12.5px]">{qc?.n_input_reads != null ? <Reads n={qc.n_input_reads} /> : "—"}</td>}
+                    {hasSaturation && <td className="num text-[12.5px]"><NotComputed v={qc?.sequencing_saturation} /></td>}
                     <td className="whitespace-nowrap text-[12.5px]" title={s.protocol ?? undefined}>
                       {s.assay_family ?? protocolLabel(s.protocol)}
                     </td>
