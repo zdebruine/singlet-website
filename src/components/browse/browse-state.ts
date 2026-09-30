@@ -11,7 +11,8 @@
  *   level        gse (studies, default) | gsm (samples)
  *   organism, tissue_group, disease_group, assay_family, cell_type — repeatable
  *   min_cells, year_min, year_max, has_bundle (default 1 at both levels)
- *   sort, page, view (cards | table)
+ *   sort (default: relevance with text, newest first without), page,
+ *   view (cards | table)
  */
 import type { AppliedFilters, Level, SearchQuery, Sort } from "@/integrations/api/types";
 
@@ -30,6 +31,22 @@ export const SORTS: { value: Sort; label: string }[] = [
   { value: "file_size", label: "Smallest file" },
   { value: "alphabetical", label: "Alphabetical" },
 ];
+
+/** Sorts the server accepts but the dropdown doesn't offer (the table's column headers use them). */
+export const EXTRA_SORTS: { value: Sort; label: string }[] = [
+  { value: "cells", label: "Most cells (catalog)" },
+  { value: "accession", label: "Accession (newest first)" },
+];
+
+const VALID_SORTS = new Set<string>([...SORTS, ...EXTRA_SORTS].map((s) => s.value));
+
+/**
+ * With no text there is nothing to rank by relevance, so the default listing
+ * is newest first ("year" — the server has no separate "newest" sort).
+ */
+export function defaultSort(q: string): Sort {
+  return q ? "relevance" : "year";
+}
 
 export const PAGE_SIZE = 25;
 
@@ -82,7 +99,7 @@ export const DEFAULT_STATE: BrowseState = {
   max_file_bytes: null,
   has_conditions: null,
   match_mode: {},
-  sort: "relevance",
+  sort: defaultSort(""),
   page: 1,
   view: "cards",
 };
@@ -105,11 +122,12 @@ function multi(sp: URLSearchParams, key: string): string[] {
 }
 
 export function parseBrowseState(sp: URLSearchParams): BrowseState {
-  const sortRaw = sp.get("sort") ?? "relevance";
-  const sort = SORTS.some((s) => s.value === sortRaw) ? (sortRaw as Sort) : "relevance";
+  const q = (sp.get("q") ?? "").trim();
+  const sortRaw = sp.get("sort") ?? defaultSort(q);
+  const sort = VALID_SORTS.has(sortRaw) ? (sortRaw as Sort) : defaultSort(q);
   const hb = sp.get("has_bundle");
   return {
-    q: (sp.get("q") ?? "").trim(),
+    q,
     raw: (sp.get("raw") ?? "").trim(),
     mode: sp.get("mode") === "filters" ? "filters" : "ai",
     level: sp.get("level") === "gsm" ? "gsm" : "gse",
@@ -155,7 +173,7 @@ export function serializeBrowseState(s: BrowseState): URLSearchParams {
   if (s.max_file_bytes != null) sp.set("max_file_bytes", String(s.max_file_bytes));
   if (s.has_conditions != null) sp.set("has_conditions", s.has_conditions ? "1" : "0");
   for (const [field, mode] of Object.entries(s.match_mode)) if (mode === "all") sp.set(`${field}_mode`, "all");
-  if (s.sort !== "relevance") sp.set("sort", s.sort);
+  if (s.sort !== defaultSort(s.q)) sp.set("sort", s.sort);
   if (s.page > 1) sp.set("page", String(s.page));
   if (s.view !== "cards") sp.set("view", s.view);
   return sp;
@@ -352,6 +370,8 @@ export function withoutFilter(s: BrowseState, field: string, value: string): Bro
     case "has_conditions": next.has_conditions = null; break;
     case "q":
       next.q = "";
+      // A sort the visitor never chose follows the text: dropping it goes back to newest first.
+      if (s.sort === defaultSort(s.q)) next.sort = defaultSort("");
       break;
     case "has_bundle":
       next.has_bundle = true;

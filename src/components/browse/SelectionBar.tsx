@@ -3,7 +3,6 @@ import { Check, Copy, Download, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { fmtBytes, fmtCompact, fmtInt } from "@/lib/catalog-display";
 import { bundleUrl } from "@/integrations/api/client";
-import { PY_INSTALL, R_INSTALL } from "@/lib/install-snippets";
 import { apiClient, isApiError } from "@/integrations/api/client";
 import { useAuth } from "@/components/auth/AuthProvider";
 import type { Selection } from "./useSelection";
@@ -16,14 +15,18 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "curl", label: "curl" },
 ];
 
+/** Install lines are on /docs#install; a pip command never goes inside a Python block. */
+const INSTALL_NOTE = "# Install: https://singlet.bio/docs#install";
+
 export function snippetFor(tab: Tab, ids: string[]): string {
   if (tab === "python") {
-    if (ids.length === 1) return `# ${PY_INSTALL}\nimport singlet\nadata = singlet.load("${ids[0]}")`;
-    return `# ${PY_INSTALL}\nimport singlet\nids = [${ids.map((i) => `"${i}"`).join(", ")}]\nadatas = {g: singlet.load(g) for g in ids}`;
+    if (ids.length === 1) return `${INSTALL_NOTE}\nimport singlet\nadata = singlet.load("${ids[0]}")`;
+    return `${INSTALL_NOTE}\nimport singlet\nids = [${ids.map((i) => `"${i}"`).join(", ")}]\nadatas = {g: singlet.load(g) for g in ids}`;
   }
+  // singlet::load, not bare load(): the package's load() masks base::load.
   if (tab === "r") {
-    if (ids.length === 1) return `# ${R_INSTALL}\nlibrary(singlet)\nsce <- load("${ids[0]}")`;
-    return `# ${R_INSTALL}\nlibrary(singlet)\nids <- c(${ids.map((i) => `"${i}"`).join(", ")})\nsces <- lapply(ids, load)`;
+    if (ids.length === 1) return `${INSTALL_NOTE}\nlibrary(singlet)\nsce <- singlet::load("${ids[0]}")`;
+    return `${INSTALL_NOTE}\nlibrary(singlet)\nids <- c(${ids.map((i) => `"${i}"`).join(", ")})\nsces <- lapply(ids, singlet::load)`;
   }
   return ids.map((i) => `curl -O ${bundleUrl(i)}`).join("\n");
 }

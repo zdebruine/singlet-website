@@ -76,7 +76,7 @@ footer{margin-top:40px;color:var(--muted);font-size:13px}
 <p class="note"><b>Read these numbers fairly.</b> The two files are not the same content. CELLxGENE H5ADs carry normalized and raw matrices, embeddings and curated metadata. singlet files carry raw counts for every barcode plus read-derived layers. Cell counts differ because each resource calls cells differently and may hold different samples. Both downloads were limited by the client's connection. The Census API path (<code>cellxgene_census.get_anndata</code>) was not timed here; the script below measures it.</p>
 
 <h2>Reproduce</h2>
-<pre>pip install cellxgene-census "singlet @ git+https://github.com/Singlet-Bio/singlet" psutil requests
+<pre>pip install cellxgene-census "singlet-bio @ git+https://github.com/Singlet-Bio/singlet" psutil requests
 python census_vs_singlet.py --n 3        # finds shared GSEs, times Census API, source H5AD, singlet.load and one-sample Range</pre>
 <p>Load the same studies from singlet.bio:</p>
 <pre>import singlet

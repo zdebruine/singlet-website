@@ -93,7 +93,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, params, request, w
           bytes_compressed: entry.c,
           bytes_uncompressed: entry.u,
           how,
-          note: "Too large to inflate at the edge. Pull just this byte range — you never download the whole study file. The Python and R packages will expose the same thing as singlet.load(\"" + gse + '", samples=[...]).',
+          note: "Too large to return at the edge. Pull just this byte range — you never download the whole study file. The Python and R packages always download the whole study; this endpoint is the way to take one sample.",
         });
       }
 

@@ -28,7 +28,7 @@
 
 ## Stage 5 — review feedback, API keys, MCP (done in code; deploy acceptance pending)
 ### A. Install commands (GitHub for now)
-- [x] `src/lib/install-snippets.ts` — single constants for Python / R; switch to `pip install singlet` / `install.packages("singlet")` is a one-line change
+- [x] `src/lib/install-snippets.ts` — single constants for Python / R; switching to a PyPI / CRAN release is a one-line change (the bare PyPI name `singlet` is taken by an unrelated package)
 - [x] Home, /docs, study page, download panel, selection bar, README use the constants; no "coming soon" notes anywhere
 ### B. Copy cleanup
 - [x] No "Cloudflare" / "R2" / `hello@singlet.bio` in user-facing copy; GitHub Issues is the only contact channel (footer, /about, /docs, 404, error card, legal pages)
@@ -90,7 +90,7 @@
 - [ ] Docs: partial downloads, bulk manifests, provenance/versioning, comparison table; /about caps disclosure; home quick-start hubs
 
 ## Backlog / discovered
-- `public/notebooks/*.html` are stale June exports (old `.1pz` format); unlinked but still served. Delete them or regenerate from the GitHub notebooks.
+- [x] `public/notebooks/*.html` (stale June exports) deleted; `/notebooks/*` redirects to the GitHub notebooks.
 - A revoked key keeps working for up to 60 s on an edge isolate that cached it (documented on /account). Add a "revoked" push (KV) if that window ever matters.
 - `explanations` table has RLS on with no policies (service role only) — intended; add a comment/policy if a client read is ever needed.
 - Sync hazard: the HPC bot commits to GitHub `main` every 15 min and races Lovable's push. Move the bot to its own branch (or a data-only repo).

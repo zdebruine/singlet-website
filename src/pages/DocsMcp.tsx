@@ -44,9 +44,9 @@ const EXAMPLES: { ask: string; tools: string; gets: string }[] = [
     gets: "Every modality in the file — splicing, heteroplasmy, donors, non-host species, V(D)J — with the Python and R line that reads each one.",
   },
   {
-    ask: "Get me just GSM8976273's counts matrix — I don't want the whole 9 GB study.",
+    ask: "Get me just GSM8976273's counts matrix from GSE296768 — I don't want the whole 1.5 GB study.",
     tools: "get_partial_download",
-    gets: "A byte range, a curl command and a Python snippet that fetches and inflates that one file.",
+    gets: "A byte range, a curl command and a Python snippet that fetch that one file (count matrices need no inflate step).",
   },
   {
     ask: "Find healthy control studies that match GSE200901.",
@@ -65,19 +65,21 @@ const EXAMPLES: { ask: string; tools: string; gets: string }[] = [
   },
 ];
 
-const TOOLS: { name: string; input: string; returns: string; metered: string }[] = [
-  { name: "search_datasets", input: "query, level, filters, limit", returns: "Matching studies or samples with a reason for each match", metered: "Yes — AI search budget" },
-  { name: "get_study", input: "gse_id", returns: "Title, abstract, groups, conditions, samples, file URL", metered: "No" },
-  { name: "get_download_url", input: "gse_id", returns: "The .singlet URL, size and loader lines", metered: "No" },
-  { name: "get_atlas_stats", input: "—", returns: "Live studies, samples, cells, species", metered: "No" },
-  { name: "get_sample_qc", input: "gse_id, gsm_ids?", returns: "Per-sample QC from the file itself, totals and warnings", metered: "No" },
-  { name: "list_bundle_files", input: "gse_id, gsm_id?", returns: "Everything inside the file, with sizes", metered: "No" },
-  { name: "get_modalities", input: "gse_id, gsm_id?", returns: "Which modalities the file carries, with Python and R readers for each", metered: "No" },
-  { name: "get_partial_download", input: "gse_id, gsm_id, file", returns: "Byte range, curl and Python for one file", metered: "No" },
-  { name: "export_manifest", input: "query / filters / gse_ids, format", returns: "TSV, JSON, curl, wget, Python or R manifest", metered: "No" },
-  { name: "find_matched_controls", input: "gse_id, min_samples?, same_assay?", returns: "Candidate control studies with reasons and caveats", metered: "No — but needs a key" },
-  { name: "compare_studies", input: "gse_ids (2–8)", returns: "Side-by-side fields and their differences", metered: "No" },
-  { name: "assess_study", input: "gse_id, purpose?", returns: "Deterministic usability report and fit checks", metered: "No — but needs a key" },
+const TOOLS: { name: string; input: string; returns: string; key: string }[] = [
+  { name: "search_datasets", input: "query, level?, limit?, page?, organism?, tissue?, disease?, assay?, min_cells?, include_unbuilt?", returns: "Matching studies or samples with a reason for each match. The only tool that calls a language model (to read the question); metered", key: "No — 10 a day without, 200 with" },
+  { name: "get_study", input: "gse_id", returns: "Title, abstract, groups, conditions, samples, file URL", key: "No" },
+  { name: "get_download_url", input: "gse_id", returns: "The .singlet URL, size and loader lines", key: "No" },
+  { name: "get_atlas_stats", input: "—", returns: "Live studies, samples, cells, species", key: "No" },
+  { name: "get_sample_qc", input: "gse_id, gsm_ids?", returns: "Per-sample QC from the file itself, totals and warnings", key: "No" },
+  { name: "list_bundle_files", input: "gse_id, gsm_id?", returns: "Everything inside the file, with sizes", key: "No" },
+  { name: "get_modalities", input: "gse_id, gsm_id?", returns: "Which modalities the file carries, with Python and R readers for each", key: "No" },
+  { name: "get_partial_download", input: "gse_id, gsm_id, file", returns: "Byte range, curl and Python for one file", key: "No" },
+  { name: "export_manifest", input: "query? / filters? / gse_ids?, format", returns: "TSV, JSON, curl, wget, Python or R manifest", key: "No" },
+  { name: "find_matched_controls", input: "gse_id, min_samples?, same_assay?", returns: "Candidate control studies with reasons and caveats", key: "No" },
+  { name: "compare_studies", input: "gse_ids (2–8)", returns: "Side-by-side fields and their differences", key: "No" },
+  { name: "assess_study", input: "gse_id, purpose?", returns: "Deterministic usability report and fit checks", key: "No" },
+  { name: "get_cohort", input: "id, token?", returns: "A saved, version-pinned cohort and its studies", key: "Yes for a private cohort; a share-link token opens a link cohort" },
+  { name: "save_cohort", input: "name, gse_ids, notes?, visibility?, workspace_id?", returns: "Saves up to 2,000 studies as a cohort pinned to the current catalogue", key: "Yes" },
 ];
 
 function Section({ id, title, children }: { id: string; title: string; children: React.ReactNode }) {
@@ -149,10 +151,10 @@ export default function DocsMcp() {
           <Section id="setup" title="Set it up">
             <p>
               The server is hosted at <code className="code-inline">{MCP_URL}</code> — nothing to install and nothing to
-              run locally. <strong>Start without a key:</strong> every tool except two works straight away, and
-              AI-interpreted search runs at 10 questions a day. A free key from{" "}
-              <Link to="/account">your account</Link> raises search to 200 a day and unlocks{" "}
-              <code className="code-inline">assess_study</code> and <code className="code-inline">find_matched_controls</code>.
+              run locally. <strong>Start without a key:</strong> every tool except the two cohort tools works straight
+              away, and AI-interpreted search runs at 10 questions a day. A free key from{" "}
+              <Link to="/account">your account</Link> raises search to 200 a day and lets you save cohorts and open
+              private ones (<code className="code-inline">save_cohort</code>, <code className="code-inline">get_cohort</code>).
             </p>
 
             <h3>Claude Desktop</h3>
@@ -209,7 +211,7 @@ export default function DocsMcp() {
                   <th>Tool</th>
                   <th>Input</th>
                   <th>Returns</th>
-                  <th>Counts against your budget?</th>
+                  <th>Needs a key?</th>
                 </tr>
               </thead>
               <tbody>
@@ -220,7 +222,7 @@ export default function DocsMcp() {
                     </td>
                     <td className="text-sm">{t.input}</td>
                     <td className="text-sm">{t.returns}</td>
-                    <td className="text-sm">{t.metered}</td>
+                    <td className="text-sm">{t.key}</td>
                   </tr>
                 ))}
               </tbody>
@@ -238,16 +240,19 @@ export default function DocsMcp() {
                 every answer. When it runs out you still get a plain keyword search, clearly labelled.
               </li>
               <li>
-                No tool calls a language model. Every number, every match reason and every caveat is computed from the
-                catalog or read out of the study's own file — quote them, don't paraphrase them.
+                Only <code className="code-inline">search_datasets</code> calls a language model, to turn your question
+                into filters; that call is what the daily budget meters. Every number, every match reason and every
+                caveat is computed from the catalog or read out of the study's own file — quote them, don't paraphrase
+                them.
               </li>
               <li>
                 Cell counts in the catalog come from the processing database; the counts in the file's QC come from the
                 file. Where they differ, the file is the truth, and the tools say so.
               </li>
               <li>
-                Reads are capped per sample during processing, so absolute read counts are not comparable to the raw
-                FASTQs. <code className="code-inline">assess_study</code> reports the cap when it applies.
+                Input is capped at 30,000,000 reads per sample (most samples hit it), so absolute read counts are not
+                comparable to the raw FASTQs. <code className="code-inline">get_sample_qc</code> and{" "}
+                <code className="code-inline">assess_study</code> report the cap when it applies.
               </li>
               <li>
                 Disease and tissue labels are study-level, taken from GEO text. Matched controls are candidates to check,
@@ -264,9 +269,9 @@ export default function DocsMcp() {
                 fall back to anonymous access, or create a new key in <Link to="/account">your account</Link>.
               </li>
               <li>
-                <strong>"needs a personal API key"</strong> — you called{" "}
-                <code className="code-inline">assess_study</code> or <code className="code-inline">find_matched_controls</code>{" "}
-                without one. Everything else works anonymously.
+                <strong>"needs a signed-in session or personal API key"</strong> — you called{" "}
+                <code className="code-inline">save_cohort</code>, or <code className="code-inline">get_cohort</code> on a
+                private cohort, without one. Everything else works anonymously.
               </li>
               <li>
                 <strong>429, or "today's budget is used up"</strong> — the daily search allowance. Wait for the reset time

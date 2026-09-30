@@ -129,6 +129,7 @@ function renderWget(rows: ManifestRow[], total: number): string {
 function renderPython(rows: ManifestRow[], total: number): string {
   const ids = rows.map((r) => `    "${r.gse_id}",`).join("\n");
   return `${header(rows, total).join("\n")}
+# install: see https://singlet.bio/docs#install
 import singlet
 
 studies = [
@@ -141,14 +142,16 @@ adatas = {g: singlet.load(g) for g in studies}
 
 function renderR(rows: ManifestRow[], total: number): string {
   const ids = rows.map((r) => `  "${r.gse_id}"`).join(",\n");
+  // singlet::load, not bare load: attaching the package masks base::load.
   return `${header(rows, total).join("\n")}
+# install: see https://singlet.bio/docs#install
 library(singlet)
 
 studies <- c(
 ${ids}
 )
 
-objects <- lapply(studies, load)
+objects <- lapply(studies, singlet::load)
 names(objects) <- studies
 `;
 }

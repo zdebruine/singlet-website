@@ -6,7 +6,7 @@ import Footer from "@/components/Footer";
 import { CodeBlock } from "@/components/CodeBlock";
 import { usePageMeta } from "@/hooks/usePageMeta";
 import { cn } from "@/lib/utils";
-import { GITHUB_ISSUES, GITHUB_REPO, PY_INSTALL, R_INSTALL_STANDALONE, pyInstallExtra } from "@/lib/install-snippets";
+import { BUILD_DEPS, EXAMPLE_GSE, GITHUB_ISSUES, GITHUB_REPO, PY_INSTALL, R_INSTALL_STANDALONE, pyInstallExtra } from "@/lib/install-snippets";
 
 const SECTIONS = [
   { id: "install", label: "Install" },
@@ -21,11 +21,19 @@ const SECTIONS = [
   { id: "python", label: "Python API" },
   { id: "api-keys", label: "API keys & MCP" },
   { id: "private-projects", label: "Private projects & cohorts" },
-  { id: "pipeline", label: "Bring your own data" },
+  { id: "pipeline", label: "Run the pipeline (advanced)" },
 ] as const;
 
 const MCP_URL = "https://singlet.bio/mcp";
 const KEY_PLACEHOLDER = "sk_live_…";
+/** Flagship example (8/8 usable samples, ~193 MB) and its first sample. */
+const GSE = EXAMPLE_GSE;
+const GSM = "GSM4120733";
+/** Second study for the multi-study example (3 samples, ~51 MB). */
+const GSE_2 = "GSE146974";
+/** A bundle with donor/, mt/ and nonhost/ outputs, for the modality examples. */
+const MODALITY_GSE = "GSE128639";
+const MODALITY_GSM = "GSM3681519";
 
 type SectionId = (typeof SECTIONS)[number]["id"];
 
@@ -66,7 +74,7 @@ const Mono = ({ children }: { children: React.ReactNode }) => <code className="c
 const Docs = () => {
   usePageMeta({
     title: "Docs",
-    description: "Install singlet, load any GEO study as AnnData or SingleCellExperiment in one line, search the atlas, and run the pipeline on your own data.",
+    description: "Install singlet, load a study as AnnData or SingleCellExperiment in one line, search the atlas, read every modality in a .singlet file, and download just part of a study.",
     path: "/docs",
   });
   const ids = SECTIONS.map((s) => s.id);
@@ -125,9 +133,14 @@ const Docs = () => {
 
             {/* ── Install ── */}
             <Section id="install" title="Install">
-              <p>Python 3.9 or newer.</p>
-              <CodeBlock label="bash" code={PY_INSTALL} />
-              <p className="mt-4">R 4.2 or newer.</p>
+              <p>
+                Both packages install from GitHub and compile a small C++17 extension against libzstd, so you need a C++
+                compiler and the zstd headers first. (The name <Mono>singlet</Mono> on PyPI belongs to an unrelated
+                package; install from GitHub as shown.)
+              </p>
+              <p>Python 3.9 or newer:</p>
+              <CodeBlock label="bash" code={`${BUILD_DEPS}\n${PY_INSTALL}`} />
+              <p className="mt-4">R 4.2 or newer (the Bioconductor packages are needed for the default return type):</p>
               <CodeBlock label="r" code={R_INSTALL_STANDALONE} />
               <p className="mt-4">
                 No account, API key or configuration is needed to load data. Files are fetched from{" "}
@@ -147,7 +160,7 @@ const Docs = () => {
                 <tbody>
                   <tr>
                     <td><Mono>[torch]</Mono></td>
-                    <td>PyTorch dataset / dataloader helpers for training on atlas data.</td>
+                    <td>PyTorch dataset / dataloader helpers. They load the whole study into memory first (no streaming).</td>
                   </tr>
                   <tr>
                     <td><Mono>[gpu]</Mono></td>
@@ -177,37 +190,52 @@ const Docs = () => {
                   label="python"
                   code={`import singlet
 
-adata = singlet.load("GSE178957")   # AnnData
+adata = singlet.load("${GSE}")   # AnnData
 adata.obs[["gsm_id", "organism", "protocol"]].head()`}
                 />
                 <CodeBlock
                   label="r"
                   code={`library(singlet)
 
-sce <- load("GSE178957")   # SingleCellExperiment
+sce <- singlet::load("${GSE}")   # SingleCellExperiment
 head(colData(sce)$gsm_id)`}
                 />
               </div>
+              <p className="text-sm text-muted-foreground">
+                In R, call <Mono>singlet::load()</Mono> and <Mono>singlet::find()</Mono> with the prefix: the package's{" "}
+                <Mono>load()</Mono> and <Mono>find()</Mono> mask <Mono>base::load</Mono> and <Mono>utils::find</Mono>.
+                In Python a sample accession works too: <Mono>singlet.load("{GSM}")</Mono> downloads the whole parent
+                study, then keeps that sample's cells.
+              </p>
               <h3>Several studies at once</h3>
               <p>
-                Pass a vector of accessions and the studies are concatenated on the shared gene space. Use{" "}
-                <Mono>obs["gsm_id"]</Mono> (and the study metadata in <Mono>uns["study_meta"]</Mono>) to tell them apart.
+                Pass a list of accessions to get one combined object. The two packages combine differently: Python
+                concatenates with an <strong>outer join</strong> (the union of genes; a gene missing from one study is
+                zero there, and <Mono>obs["source"]</Mono> records which accession each cell came from), while R keeps
+                only the <strong>genes shared</strong> by every study. Either way, <Mono>gsm_id</Mono> tells the samples
+                apart. Check that the studies share a reference build and pipeline version before merging them.
               </p>
               <div className="grid md:grid-cols-2 gap-3">
-                <CodeBlock label="python" code={`adata = singlet.load(["GSE178957", "GSE184652"])`} />
-                <CodeBlock label="r" code={`sce <- load(c("GSE178957", "GSE184652"))`} />
+                <CodeBlock label="python" code={`adata = singlet.load(["${GSE}", "${GSE_2}"])`} />
+                <CodeBlock label="r" code={`sce <- singlet::load(c("${GSE}", "${GSE_2}"))`} />
               </div>
               <h3>Files on disk</h3>
               <p>
                 Every study is a single <Mono>.singlet</Mono> file at{" "}
-                <Mono>https://data.singlet.bio/data/&lt;GSE&gt;/&lt;GSE&gt;.singlet</Mono>. You can download it with
-                curl and load the local path the same way. There are no per-sample files; filter on{" "}
-                <Mono>obs["gsm_id"]</Mono> after loading.
+                <Mono>https://data.singlet.bio/data/&lt;GSE&gt;/&lt;GSE&gt;.singlet</Mono>, from about 300 KB to over 20 GB
+                (about 9 in 10 are under 1 GB). You can download it with curl and load the local path the same way. There are no per-sample
+                files; filter on <Mono>obs["gsm_id"]</Mono> after loading, or see{" "}
+                <a href="#partial-download">Download just part of a study</a>.
               </p>
               <CodeBlock
                 label="bash"
-                code={`curl -LO https://data.singlet.bio/data/GSE178957/GSE178957.singlet
-python -c 'import singlet; print(singlet.load("GSE178957.singlet"))'`}
+                code={`curl -LO https://data.singlet.bio/data/${GSE}/${GSE}.singlet`}
+              />
+              <CodeBlock
+                className="mt-3"
+                label="python"
+                code={`import singlet
+adata = singlet.load("${GSE}.singlet")   # a local path loads the same way`}
               />
             </Section>
 
@@ -217,23 +245,33 @@ python -c 'import singlet; print(singlet.load("GSE178957.singlet"))'`}
                 The same search that powers <Link to="/browse">Browse</Link> is available in both packages. Plain English
                 is interpreted into catalog filters (organism, tissue, cell type, disease, protocol); accessions and
                 keywords are matched directly. <Mono>find</Mono> returns accessions, <Mono>find_load</Mono> loads them.
+                Pass <Mono>level="gse"</Mono> in Python to get study accessions (its default is samples); R returns
+                studies by default. Keep <Mono>limit</Mono> small with <Mono>find_load</Mono>: every match is a full
+                study download.
               </p>
               <div className="grid md:grid-cols-2 gap-3">
                 <CodeBlock
                   label="python"
-                  code={`accs = singlet.find("microglia in the aging mouse brain")
-adata = singlet.find_load("human PBMC, COVID-19, 10x 5'")
-
-# The full catalog as a DataFrame — filter it yourself
-cat = singlet.catalog()
-cat[(cat.organism == "Mus musculus") & (cat.tissue == "brain")]`}
+                  code={`accs = singlet.find("microglia in the aging mouse brain", level="gse")
+adata = singlet.find_load("human PBMC, COVID-19, 10x 5'", level="gse", limit=2)`}
                 />
                 <CodeBlock
                   label="r"
-                  code={`accs <- find("microglia in the aging mouse brain")
-sce  <- find_load("human PBMC, COVID-19, 10x 5'")`}
+                  code={`accs <- singlet::find("microglia in the aging mouse brain")
+sce  <- singlet::find_load("human PBMC, COVID-19, 10x 5'", limit = 2)`}
                 />
               </div>
+              <p>
+                To filter the live catalog yourself, read a manifest (see{" "}
+                <a href="#bulk-manifests">Bulk downloads and manifests</a>) into a data frame:
+              </p>
+              <CodeBlock
+                label="python"
+                code={`import pandas as pd
+
+url = "https://singlet.bio/api/manifest?organism=Mus+musculus&tissue_group=Brain+%2F+CNS&format=tsv"
+studies = pd.read_csv(url, sep="\\t")`}
+              />
               <p>
                 Search on this website, in the packages and in the MCP server all call the same public endpoint,{" "}
                 <Mono>GET https://singlet.bio/api/nl-search?q=…</Mono>, which returns the matched accessions and the
@@ -256,7 +294,8 @@ sce  <- find_load("human PBMC, COVID-19, 10x 5'")`}
               <p>
                 A <Mono>.singlet</Mono> file is a ZIP64 archive. Inside are sparse count matrices stored as{" "}
                 <Mono>.1pz</Mono> blocks (zstd-compressed, readable without unpacking the whole archive) and a few JSON
-                metadata files. The loaders read only the members they need.
+                metadata files. The loaders read only the members they need. Per-sample members live under{" "}
+                <Mono>samples/&lt;GSM&gt;/</Mono>; every <Mono>.1pz</Mono> matrix is stored features × cells.
               </p>
               <table>
                 <thead>
@@ -268,11 +307,11 @@ sce  <- find_load("human PBMC, COVID-19, 10x 5'")`}
                 <tbody>
                   <tr>
                     <td><Mono>exon_counts.1pz</Mono></td>
-                    <td>Cells × features, reads assigned to exons. Summed per gene this is <Mono>adata.layers["spliced"]</Mono>.</td>
+                    <td>Features × cells, reads assigned to exons (per exon feature). Summed per gene this is <Mono>adata.layers["spliced"]</Mono>.</td>
                   </tr>
                   <tr>
                     <td><Mono>intron_counts.1pz</Mono></td>
-                    <td>Cells × features, intronic reads (for RNA velocity or nuclear fraction). Summed per gene this is <Mono>adata.layers["unspliced"]</Mono>.</td>
+                    <td>Features × cells, intronic reads (for RNA velocity or nuclear fraction). Summed per gene this is <Mono>adata.layers["unspliced"]</Mono>.</td>
                   </tr>
                   <tr>
                     <td><Mono>cell_calls.tsv</Mono></td>
@@ -280,7 +319,7 @@ sce  <- find_load("human PBMC, COVID-19, 10x 5'")`}
                   </tr>
                   <tr>
                     <td><Mono>sj_counts.1pz</Mono></td>
-                    <td>Cells × splice junctions.</td>
+                    <td>Splice junctions × cells.</td>
                   </tr>
                   <tr>
                     <td><Mono>splice_psi.1pz</Mono></td>
@@ -295,12 +334,12 @@ sce  <- find_load("human PBMC, COVID-19, 10x 5'")`}
                     <td>Called chrM variants: depth, allele counts, annotation.</td>
                   </tr>
                   <tr>
-                    <td><Mono>donor_assignments.tsv</Mono></td>
-                    <td>Genotype-free donor demultiplexing: barcode → donor, with doublet calls. Newer bundles only.</td>
+                    <td><Mono>donor/donor_assignments.tsv</Mono></td>
+                    <td>Genotype-free donor demultiplexing: barcode → donor, with doublet calls. Some bundles only.</td>
                   </tr>
                   <tr>
-                    <td><Mono>nonhost_em_abundance.tsv</Mono></td>
-                    <td>Microbial and viral abundance per taxon. Newer bundles only.</td>
+                    <td><Mono>nonhost/nonhost_em_abundance.tsv</Mono></td>
+                    <td>Microbial and viral abundance per taxon. Some bundles only.</td>
                   </tr>
                   <tr>
                     <td><Mono>vdj_gene_usage.1pz</Mono></td>
@@ -320,39 +359,44 @@ sce  <- find_load("human PBMC, COVID-19, 10x 5'")`}
                   </tr>
                   <tr>
                     <td><Mono>manifest.json</Mono></td>
-                    <td>Member list, sizes, checksums, pipeline version.</td>
+                    <td>Member list, sizes, checksums, pipeline version (<Mono>singlet_version</Mono>) and packing time (<Mono>created_at</Mono>).</td>
                   </tr>
                 </tbody>
               </table>
               <h3 id="modalities" className="scroll-mt-24">Reading anything other than gene counts</h3>
               <p>
                 <Mono>load()</Mono> returns the gene-level matrix. Everything else is addressable by name through the
-                bundle API, which never unpacks the whole archive. Which outputs a bundle has depends on when it was
-                processed — the splicing, heteroplasmy and V(D)J matrices are universal; the donor, non-host,
-                allele-specific and per-cell annotation outputs are in newer bundles only, so check rather than assume.
+                bundle API, which reads one member at a time from the downloaded file. The splicing, heteroplasmy and
+                V(D)J matrices are in bundles from every pipeline version; the donor, non-host, allele-specific and
+                per-cell annotation outputs are only in some bundles, so check rather than assume. The example below uses{" "}
+                <Link to={`/study/${MODALITY_GSE}`}>{MODALITY_GSE}</Link>, which has them.
               </p>
               <div className="grid md:grid-cols-2 gap-3">
                 <CodeBlock
                   label="python"
-                  code={`b = singlet.open_bundle("GSE178957")
-b.modalities()                       # what this bundle has
-b.has("donor_assignments")
+                  code={`b = singlet.open_bundle("${MODALITY_GSE}")
+gsm = "${MODALITY_GSM}"
+b.modalities(gsm)                    # what this sample has
 
-gsm = b.gsm_ids[0]
 b.raw_counts(gsm)                    # exon + intron, spliced/unspliced layers
 b.raw_counts(gsm, gene_level=False)  # native exon/intron feature axis
-b.mt_variants(gsm); b.donors(gsm); b.nonhost(gsm)`}
+b.mt_variants(gsm)                   # heteroplasmy, cells x chrM sites
+if b.has("donor_assignments", gsm):
+    donors = b.donors(gsm)
+if b.has("nonhost_species", gsm):
+    taxa = b.nonhost(gsm)`}
                 />
                 <CodeBlock
                   label="r"
-                  code={`path <- download("GSE178957")
-singlet_modalities(path)
-singlet_has(path, "donor_assignments")
+                  code={`path <- download("${MODALITY_GSE}")
+gsm  <- "${MODALITY_GSM}"
+singlet_modalities(path, gsm)
 
-gsm <- "GSM5399457"
 singlet_raw_counts(path, gsm)
 singlet_raw_counts(path, gsm, gene_level = FALSE)
-singlet_read(path, gsm, "mt_variants")`}
+singlet_read(path, gsm, "mt_variants")
+if (singlet_has(path, "donor_assignments", gsm))
+  donors <- singlet_read(path, gsm, "donor_assignments")`}
                 />
               </div>
               <p className="text-sm text-muted-foreground">
@@ -367,50 +411,61 @@ singlet_read(path, gsm, "mt_variants")`}
             <Section id="partial-download" title="Download just part of a study">
               <p>
                 A <Mono>.singlet</Mono> file is a ZIP64 archive, so you don't have to fetch the whole thing to see
-                what's inside or to pull out one sample. <Mono>GET /api/bundle/:gse/index</Mono> lists every member —
-                per-sample files, compressed and uncompressed size — without downloading anything:
+                what's inside or to pull out one sample. This is an HTTP API (and MCP) feature: the Python and R packages
+                always download the whole study file, including for <Mono>singlet.load("GSM…")</Mono>.
+              </p>
+              <p>
+                <Mono>GET /api/bundle/:gse/index</Mono> lists every member — per-sample files, compressed and
+                uncompressed size — without downloading anything:
               </p>
               <CodeBlock
                 label="bash"
-                code={`curl "https://singlet.bio/api/bundle/GSE178957/index"`}
+                code={`curl "https://singlet.bio/api/bundle/${GSE}/index"`}
               />
               <p>
-                Per-sample QC (mapping rate, cells called, median genes/UMIs, mitochondrial fraction) computed straight
-                from the file is at <Mono>GET /api/bundle/:gse/samples</Mono>:
+                Per-sample QC (mapping rate, cells called, median genes and UMIs, input reads) read straight from the file
+                is at <Mono>GET /api/bundle/:gse/samples</Mono>:
               </p>
               <CodeBlock
                 label="bash"
-                code={`curl "https://singlet.bio/api/bundle/GSE178957/samples"`}
+                code={`curl "https://singlet.bio/api/bundle/${GSE}/samples"`}
               />
               <p>
-                <Mono>GET /api/bundle/:gse/entry?path=…</Mono> returns one member. Small entries come back inflated
-                directly. Large entries (most count matrices) come back as a small JSON recipe — a byte range on{" "}
-                <Mono>data.singlet.bio</Mono> plus how to inflate it — instead of the file itself, so you only ever
+                <Mono>GET /api/bundle/:gse/entry?path=…</Mono> returns one member. Entries up to 4 MB come back
+                directly. Larger ones (most count matrices) come back as a small JSON recipe — a byte range on{" "}
+                <Mono>data.singlet.bio</Mono> plus a ready-to-run command — instead of the file itself, so you only ever
                 transfer the bytes you asked for:
               </p>
               <CodeBlock
+                label="bash"
+                code={`curl "https://singlet.bio/api/bundle/${GSE}/entry?path=samples/${GSM}/exon_counts.1pz"`}
+              />
+              <CodeBlock
+                className="mt-3"
                 label="json"
                 code={`{
-  "gse_id": "GSE178957",
-  "path": "samples/GSM5426415/exon_counts.1pz",
-  "url": "https://data.singlet.bio/data/GSE178957/GSE178957.singlet",
-  "range": "bytes=10485760-20971519",
-  "method": "deflate-raw",
-  "how": "curl -r 10485760-20971519 \"https://data.singlet.bio/data/GSE178957/GSE178957.singlet\" | python -c \"import sys,zlib; sys.stdout.buffer.write(zlib.decompress(sys.stdin.buffer.read(), -15))\" > exon_counts.1pz"
+  "gse_id": "${GSE}",
+  "path": "samples/${GSM}/exon_counts.1pz",
+  "url": "https://data.singlet.bio/data/${GSE}/${GSE}.singlet",
+  "range": "bytes=293772-10257905",
+  "method": "stored",
+  "bytes_compressed": 9964134,
+  "bytes_uncompressed": 9964134,
+  "how": "curl -r 293772-10257905 \\"https://data.singlet.bio/data/${GSE}/${GSE}.singlet\\" -o exon_counts.1pz"
 }`}
               />
-              <p>The <Mono>how</Mono> field is a ready-to-run command; the same pattern in one line:</p>
+              <p>The <Mono>how</Mono> field is the command to run — about 10 MB instead of the 193 MB study:</p>
               <CodeBlock
                 label="bash"
-                code={`curl -r 10485760-20971519 "https://data.singlet.bio/data/GSE178957/GSE178957.singlet" \
-  | python -c "import sys,zlib; sys.stdout.buffer.write(zlib.decompress(sys.stdin.buffer.read(), -15))" \
-  > exon_counts.1pz`}
+                code={`curl -r 293772-10257905 "https://data.singlet.bio/data/${GSE}/${GSE}.singlet" -o exon_counts.1pz`}
               />
               <p className="text-sm text-muted-foreground">
-                Entries stored without compression report <Mono>"method": "stored"</Mono>; in that case the ranged{" "}
-                <Mono>curl</Mono> line is already the finished file, no inflate step needed. This is the same mechanism{" "}
-                <Mono>singlet.load(gse, samples=[...])</Mono> will use under the hood; the HTTP endpoints above are the
-                same thing exposed directly, for use from any language.
+                <Mono>.1pz</Mono> matrices are added to the archive without ZIP compression (they are already
+                zstd-compressed), so they report <Mono>"method": "stored"</Mono> and the ranged download is the finished
+                file, features × cells. Read it with <Mono>singlet.read_1pz()</Mono> in Python or <Mono>read_1pz()</Mono>{" "}
+                in R. Only large JSON or TSV members can report <Mono>"method": "deflate-raw"</Mono>; for those the{" "}
+                <Mono>how</Mono> command pipes the range through a raw-inflate step. From an assistant,{" "}
+                <Mono>get_partial_download</Mono> returns the same recipe.
               </p>
             </Section>
 
@@ -444,7 +499,7 @@ singlet_read(path, gsm, "mt_variants")`}
                   </tr>
                   <tr>
                     <td><Mono>python</Mono> / <Mono>r</Mono></td>
-                    <td>A script that loads every matching study with <Mono>singlet.load()</Mono> / <Mono>load()</Mono>.</td>
+                    <td>A script that loads every matching study with <Mono>singlet.load()</Mono> / <Mono>singlet::load()</Mono>.</td>
                   </tr>
                 </tbody>
               </table>
@@ -476,13 +531,14 @@ python load_studies.py`}
               <ul>
                 <li><Mono>reference_build</Mono> — the genome build and annotation the sample was mapped to (see <Link to="/about#references">About the data</Link> for the exact builds per organism). Recorded per cell in <Mono>obs["reference_build"]</Mono> and in <Mono>feature_vocab.json</Mono> inside the bundle.</li>
                 <li><Mono>singlet_version</Mono> — the pipeline release that produced the bundle, in the file's <Mono>manifest.json</Mono>, the study page and <Mono>/api/gse/:id</Mono>.</li>
-                <li><Mono>packed_at</Mono> — when the <Mono>.singlet</Mono> file was published, also in the manifest and on the study page.</li>
+                <li><Mono>created_at</Mono> — when the <Mono>.singlet</Mono> file was packed, in the file's <Mono>manifest.json</Mono> (returned as <Mono>created_at</Mono> by <Mono>/api/bundle/:gse/index</Mono> and as <Mono>packed_at</Mono> by <Mono>/api/gse/:id</Mono>), and shown as "Packed" on the study page.</li>
               </ul>
               <p>
-                "Uniform reprocessing" means every sample of an organism — regardless of which lab produced it or which
-                GEO series it came from — goes through the same reference, the same pipeline version and the same QC
-                thresholds (see <Link to="/about#processing">What a study goes through</Link>). That is what makes a
-                gene count from one study comparable to a gene count from another. The atlas data is <Mono>CC0</Mono>{" "}
+                The pipeline version is not the same for every file. Published files record <Mono>2.0.0</Mono> (most),{" "}
+                <Mono>1.0.0</Mono>, or no version at all (a group of mouse files packed before the version was recorded),
+                and input was capped at 30,000,000 reads per sample (see{" "}
+                <Link to="/about#processing">What a study goes through</Link>). Before merging studies, check that they
+                share a reference build and pipeline version. The atlas data is <Mono>CC0</Mono>{" "}
                 (public domain, no attribution required); the pipeline and packages are <Mono>MIT</Mono> licensed.
                 Details on the <Link to="/data-license">license page</Link>.
               </p>
@@ -512,13 +568,13 @@ python load_studies.py`}
                   </tr>
                   <tr>
                     <td>Uniformity across studies</td>
-                    <td>Same reference build and pipeline version for every sample of an organism</td>
+                    <td>One reference build per organism; most files from pipeline 2.0.0, the rest from 1.0.0 or unrecorded — each file records which</td>
                     <td>None — each lab used its own protocol, reference and pipeline version</td>
                     <td>Uniform across studies you process yourself, with the version you chose</td>
                   </tr>
                   <tr>
                     <td>Time to first matrix</td>
-                    <td>Seconds to minutes — download or stream the published file</td>
+                    <td>Seconds to minutes — download the published file</td>
                     <td>Minutes to hours to fetch raw reads, then you still need to align and count them</td>
                     <td>Hours to days per study (alignment + counting), plus pipeline setup</td>
                   </tr>
@@ -552,24 +608,27 @@ python load_studies.py`}
             {/* ── R ── */}
             <Section id="r" title="R">
               <p>
-                <Mono>load()</Mono> returns a <Mono>SingleCellExperiment</Mono> by default. Pass{" "}
-                <Mono>as = "seurat"</Mono> for a Seurat object.
+                <Mono>singlet::load()</Mono> returns a <Mono>SingleCellExperiment</Mono> by default. Pass{" "}
+                <Mono>as = "seurat"</Mono> for a Seurat object. Use the <Mono>singlet::</Mono> prefix for{" "}
+                <Mono>load()</Mono> and <Mono>find()</Mono>: attaching the package masks <Mono>base::load</Mono> and{" "}
+                <Mono>utils::find</Mono>.
               </p>
               <CodeBlock
                 label="r"
                 code={`library(singlet)
 
-sce <- load("GSE178957")                 # SingleCellExperiment
-seu <- load("GSE178957", as = "seurat")  # Seurat
+sce <- singlet::load("${GSE}")                 # SingleCellExperiment
+seu <- singlet::load("${GSE}", as = "seurat")  # Seurat
 
-accs <- find("tumor-infiltrating T cells in melanoma")
-sce  <- find_load("zebrafish development")`}
+accs <- singlet::find("tumor-infiltrating T cells in melanoma")
+sce  <- singlet::find_load("mouse embryo development", limit = 2)`}
               />
               <h3>Required and optional packages</h3>
               <ul>
                 <li>
                   <Mono>SingleCellExperiment</Mono>, <Mono>SummarizedExperiment</Mono> and <Mono>S4Vectors</Mono> are
-                  needed for the default return type. Install them from Bioconductor:
+                  needed for the default return type. The install snippet under <a href="#install">Install</a> adds them
+                  from Bioconductor; on their own:
                 </li>
               </ul>
               <CodeBlock
@@ -579,29 +638,31 @@ BiocManager::install(c("SingleCellExperiment", "SummarizedExperiment", "S4Vector
               />
               <ul className="mt-4">
                 <li>
-                  <Mono>Seurat</Mono> is only needed when you call <Mono>load(…, as = "seurat")</Mono>.
+                  <Mono>Seurat</Mono> is only needed when you call <Mono>singlet::load(…, as = "seurat")</Mono>.
                 </li>
                 <li>
-                  The base package itself depends only on <Mono>Rcpp</Mono>, <Mono>Matrix</Mono> and <Mono>jsonlite</Mono>;
-                  the lower-level readers (<Mono>read_1pz()</Mono>, <Mono>read_singlet()</Mono>) work with sparse{" "}
-                  <Mono>Matrix</Mono> objects.
+                  The base package itself depends only on <Mono>Rcpp</Mono>, <Mono>Matrix</Mono> and <Mono>jsonlite</Mono>
+                  (plus a C++17 compiler and libzstd to build); the lower-level readers (<Mono>read_1pz()</Mono>,{" "}
+                  <Mono>read_singlet()</Mono>) work with sparse <Mono>Matrix</Mono> objects.
                 </li>
               </ul>
               <h3>Beyond gene counts</h3>
               <p>
-                <Mono>download()</Mono> fetches a bundle without reading it, and the <Mono>singlet_*</Mono> readers
-                reach every other per-sample output. Matrices come back features × cells, the Bioconductor orientation.
-                See <a href="#modalities" className="text-primary hover:underline">Modalities</a> for the full list.
+                <Mono>download()</Mono> fetches a study's bundle without reading it (pass a GSE accession), and the{" "}
+                <Mono>singlet_*</Mono> readers reach every other per-sample output. Matrices come back features × cells,
+                the Bioconductor orientation. See <a href="#modalities" className="text-primary hover:underline">Modalities</a>{" "}
+                for the full list.
               </p>
               <CodeBlock
                 label="r"
-                code={`path <- download("GSE178957")
-singlet_modalities(path)                      # what this bundle has
-singlet_has(path, "donor_assignments")
+                code={`path <- download("${MODALITY_GSE}")
+gsm  <- "${MODALITY_GSM}"
+singlet_modalities(path, gsm)                 # what this sample has
 
-sce <- singlet_raw_counts(path, "GSM5399457") # counts, spliced, unspliced
-singlet_read(path, "GSM5399457", "mt_heteroplasmy")
-singlet_read(path, "GSM5399457", "nonhost_species")`}
+sce <- singlet_raw_counts(path, gsm)          # counts, spliced, unspliced
+singlet_read(path, gsm, "mt_heteroplasmy")
+if (singlet_has(path, "nonhost_species", gsm))
+  taxa <- singlet_read(path, gsm, "nonhost_species")`}
               />
             </Section>
 
@@ -618,29 +679,22 @@ singlet_read(path, "GSM5399457", "nonhost_species")`}
                   <tr>
                     <td><Mono>singlet.load(acc_or_path, ...)</Mono></td>
                     <td>
-                      <Mono>AnnData</Mono>. Accepts a GSE accession, a local <Mono>.singlet</Mono> path, or a list of
-                      either (concatenated).
+                      <Mono>AnnData</Mono>. Accepts a GSE or GSM accession, a local <Mono>.singlet</Mono> path, or a list
+                      of these (concatenated with an outer join on genes). A GSM downloads the whole parent study, then
+                      keeps that sample's cells.
                     </td>
                   </tr>
                   <tr>
-                    <td><Mono>singlet.find(query)</Mono></td>
-                    <td>List of GSE accessions matching a plain-English or keyword query.</td>
+                    <td><Mono>singlet.find(query, level="gse")</Mono></td>
+                    <td>List of accessions matching a plain-English or keyword query. The default level is samples (GSM); pass <Mono>level="gse"</Mono> for studies.</td>
                   </tr>
                   <tr>
-                    <td><Mono>singlet.find_load(query)</Mono></td>
-                    <td><Mono>find</Mono> followed by <Mono>load</Mono>, as one <Mono>AnnData</Mono>.</td>
+                    <td><Mono>singlet.find_load(query, level="gse", limit=…)</Mono></td>
+                    <td><Mono>find</Mono> followed by <Mono>load</Mono>, as one <Mono>AnnData</Mono>. Each match is a full study download.</td>
                   </tr>
                   <tr>
-                    <td><Mono>singlet.catalog()</Mono></td>
-                    <td>The full sample catalog as a pandas <Mono>DataFrame</Mono> (one row per GSM).</td>
-                  </tr>
-                  <tr>
-                    <td><Mono>singlet.load_dir(path)</Mono></td>
-                    <td>Load a directory of pipeline output (your own data) as <Mono>AnnData</Mono>.</td>
-                  </tr>
-                  <tr>
-                    <td><Mono>singlet.summary()</Mono></td>
-                    <td>Atlas overview: counts of studies, samples and cells by organism and protocol.</td>
+                    <td><Mono>singlet.download(acc)</Mono></td>
+                    <td>Downloads a study's <Mono>.singlet</Mono> file to the cache and returns its path, without reading it.</td>
                   </tr>
                   <tr>
                     <td><Mono>singlet.open_bundle(acc_or_path)</Mono></td>
@@ -648,6 +702,10 @@ singlet_read(path, "GSM5399457", "nonhost_species")`}
                       A <Mono>SingletBundle</Mono> — the handle for everything that isn't gene counts. See{" "}
                       <a href="#modalities" className="text-primary hover:underline">Modalities</a>.
                     </td>
+                  </tr>
+                  <tr>
+                    <td><Mono>singlet.read_1pz(path)</Mono></td>
+                    <td>One <Mono>.1pz</Mono> matrix (for example from a <a href="#partial-download">partial download</a>) as <Mono>AnnData</Mono>, cells × features.</td>
                   </tr>
                 </tbody>
               </table>
@@ -662,16 +720,17 @@ singlet_read(path, "GSM5399457", "nonhost_species")`}
                 label="python"
                 code={`import singlet, scanpy as sc
 
-adata = singlet.load("GSE178957")
+adata = singlet.load("${GSE}")
 sc.pp.filter_cells(adata, min_genes=200)
 sc.pp.normalize_total(adata); sc.pp.log1p(adata)
 sc.pp.highly_variable_genes(adata, batch_key="gsm_id")`}
               />
               <h3>PyTorch</h3>
               <p>
-                The <Mono>[torch]</Mono> extra adds dataset helpers that stream cells from <Mono>.singlet</Mono> files
-                as sparse tensors, so a training loop never has to densify a whole study. See the package README for the
-                current API.
+                The <Mono>[torch]</Mono> extra adds <Mono>singlet.torch.SingletDataset</Mono> and a{" "}
+                <Mono>DataLoader</Mono> wrapper that yield sparse tensors. They load each whole study into memory first;
+                there is no streaming from disk, so size your machine for the studies you train on. See the package
+                README for the current API.
               </p>
             </Section>
 
@@ -696,9 +755,10 @@ sc.pp.highly_variable_genes(adata, batch_key="gsm_id")`}
               </ol>
               <p>
                 Send the key as <Mono>Authorization: Bearer {KEY_PLACEHOLDER}</Mono> or as an <Mono>X-API-Key</Mono> header.
-                It is accepted by <Mono>/api/nl-search</Mono>, <Mono>/api/search</Mono>, <Mono>/api/facets</Mono> and{" "}
-                <Mono>/api/gse/:id</Mono>; searches count against the owner's allowance and an invalid, expired or revoked
-                key is answered with <Mono>401</Mono>.
+                It is accepted by <Mono>/api/nl-search</Mono>, <Mono>/api/search</Mono>, <Mono>/api/facets</Mono>,{" "}
+                <Mono>/api/manifest</Mono>, <Mono>/api/stats</Mono> and <Mono>/api/gse/:id</Mono>; AI-interpreted searches
+                count against the owner's allowance and an invalid, expired or revoked key is answered with{" "}
+                <Mono>401</Mono>.
               </p>
               <CodeBlock
                 label="bash"
@@ -708,23 +768,24 @@ sc.pp.highly_variable_genes(adata, batch_key="gsm_id")`}
               <h3>In the packages</h3>
               <p className="text-sm text-muted-foreground">
                 <code className="code-inline">find()</code> works without a key at the 10/day anonymous client limit; a key raises the limit to your account allowance (200/day).
+                The key is only sent with searches; loading and downloading never use it.
               </p>
               <div className="grid md:grid-cols-2 gap-3 mt-3">
                 <CodeBlock
                   label="python"
                   code={`import singlet
 singlet.set_api_key("${KEY_PLACEHOLDER}")
-# or: export SINGLET_API_KEY=${KEY_PLACEHOLDER}
+# or set the SINGLET_API_KEY environment variable
 
-accs = singlet.find("microglia in the aging mouse brain")`}
+accs = singlet.find("microglia in the aging mouse brain", level="gse")`}
                 />
                 <CodeBlock
                   label="r"
-                  code={`set_api_key("${KEY_PLACEHOLDER}")
+                  code={`library(singlet)
+singlet::set_api_key("${KEY_PLACEHOLDER}")
 # or: Sys.setenv(SINGLET_API_KEY = "${KEY_PLACEHOLDER}")
 
-library(singlet)
-accs <- find("microglia in the aging mouse brain")`}
+accs <- singlet::find("microglia in the aging mouse brain")`}
                 />
               </div>
 
@@ -736,9 +797,10 @@ accs <- find("microglia in the aging mouse brain")`}
               <p>
                 <Mono>{MCP_URL}</Mono> is a hosted Model Context Protocol server (Streamable HTTP, stateless) that lets an
                 assistant — Claude Desktop, Claude Code, Cursor, VS Code — search the atlas, read a study's metadata and
-                hand back a download URL or a loader snippet. It works without a key — AI-interpreted search runs at the
-                10/day anonymous allowance, and only <Mono>assess_study</Mono> and <Mono>find_matched_controls</Mono>
-                need one. A key raises search to 200/day.
+                hand back a download URL or a loader snippet. It works without a key. Only <Mono>search_datasets</Mono>{" "}
+                calls a language model (to turn a plain-English question into filters), so only it is metered: 10 a day
+                anonymously, 200 with a key. <Mono>save_cohort</Mono> needs a key, and so does <Mono>get_cohort</Mono>{" "}
+                for a private cohort (a share-link token opens a link-shared one).
               </p>
               <div className="grid md:grid-cols-2 gap-3">
                 <CodeBlock
@@ -773,36 +835,14 @@ accs <- find("microglia in the aging mouse brain")`}
                 code={`claude mcp add --transport http singlet ${MCP_URL} \\
   --header "Authorization: Bearer ${KEY_PLACEHOLDER}"`}
               />
-              <table>
-                <thead>
-                  <tr>
-                    <th>Tool</th>
-                    <th>Does</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td><Mono>search_datasets</Mono></td>
-                    <td>
-                      Plain English, keywords or an accession → matching studies (or samples) with the interpreted filters, a
-                      one-line reason per study and its download URL. Optional extra filters: organism, tissue, disease,
-                      assay, min_cells.
-                    </td>
-                  </tr>
-                  <tr>
-                    <td><Mono>get_study</Mono></td>
-                    <td>Everything the study page shows for one GSE: title, abstract, organisms, tissues, design, samples, QC.</td>
-                  </tr>
-                  <tr>
-                    <td><Mono>get_download_url</Mono></td>
-                    <td>The <Mono>.singlet</Mono> URL for a GSE plus the Python and R one-liners to load it.</td>
-                  </tr>
-                  <tr>
-                    <td><Mono>get_atlas_stats</Mono></td>
-                    <td>Live corpus numbers: studies, samples processed, cells, species.</td>
-                  </tr>
-                </tbody>
-              </table>
+              <p>
+                The server has 14 tools: <Mono>search_datasets</Mono>, <Mono>get_study</Mono>,{" "}
+                <Mono>get_download_url</Mono>, <Mono>get_atlas_stats</Mono>, <Mono>get_sample_qc</Mono>,{" "}
+                <Mono>list_bundle_files</Mono>, <Mono>get_modalities</Mono>, <Mono>get_partial_download</Mono>,{" "}
+                <Mono>export_manifest</Mono>, <Mono>find_matched_controls</Mono>, <Mono>compare_studies</Mono>,{" "}
+                <Mono>assess_study</Mono>, <Mono>get_cohort</Mono> and <Mono>save_cohort</Mono>. Inputs, outputs and
+                key requirements for each are in the <Link to="/docs/mcp#tools">tool reference</Link>.
+              </p>
               <p>
                 Try it from a terminal (no key needed for this call):
               </p>
@@ -827,43 +867,28 @@ accs <- find("microglia in the aging mouse brain")`}
               <ul>
                 <li>Preview limits are enforced in code: 5 projects per account, 20 files per project, 2 GB per file, and 10 GB stored per account.</li>
                 <li>Uploaded files use resumable 50 MB parts. Registered URLs are read with HTTP ranges and do not use your storage allowance.</li>
-                <li>Private studies appear under <strong>Mine</strong> in Browse. Project read tokens let Python, R and API clients load a file without exposing your account session.</li>
-                <li>Select public studies in Browse and choose <strong>Save cohort</strong> to pin the selection to catalogue version <Mono>2026.09</Mono>. Cohorts can be private, shared by link, or attached to a workspace.</li>
-                <li>Workspaces support owner/member collaboration, invite links, comments and activity, up to 25 members and 3 workspaces per user.</li>
+                <li>Private studies appear under <strong>Mine</strong> in Browse. A project read token lets a script download a private file without your account session. The Python and R packages cannot open a private file by token directly: download it with the token first, then load the local path.</li>
+                <li>Select public studies in Browse and choose <strong>Save cohort</strong> to pin the selection to catalogue version <Mono>2026.09</Mono>. Cohorts can be private, shared by link, or attached to a workspace (up to 50 cohorts per account).</li>
+                <li>Workspaces support owner/member collaboration, invite links, comments and activity, up to 10 members per workspace and 3 workspaces per user.</li>
               </ul>
               <p className="text-sm text-muted-foreground">These features are included with a free account.</p>
             </Section>
 
             {/* ── BYOD / pipeline ── */}
-            <Section id="pipeline" title="Bring your own data (pipeline)">
+            <Section id="pipeline" title="Run the pipeline yourself (advanced)">
               <p>
-                The atlas is produced by the same open-source pipeline that ships in the package. Running it on your own
-                SRA run or FASTQ files gives you output in the same layout, mapped to the same references, so your data
-                can be loaded and compared alongside any public study.
+                <strong>Advanced.</strong> The atlas was produced with the open-source C++ pipeline in the{" "}
+                <a href={GITHUB_REPO} target="_blank" rel="noopener noreferrer">singlet repository</a> (STAR alignment,
+                then per-cell exon/intron pileup written as <Mono>.1pz</Mono> matrices). Running it on your own reads is
+                possible, but it is not part of the Python or R install: you build the pipeline from source and supply
+                the reference indexes yourself.
               </p>
-              <CodeBlock
-                label="bash"
-                code={`${PY_INSTALL}
-
-# From an SRA run accession
-singlet-process SRR11537951 --output-dir ./out --organism human --threads 8
-
-# From local FASTQ files
-singlet-process --reads reads_1.fastq.gz reads_2.fastq.gz --output-dir ./out --organism mouse`}
-              />
-              <CodeBlock
-                className="mt-3"
-                label="python"
-                code={`from singlet.pipeline import run
-
-result = run("SRR11537951", "./out", organism="human", threads=8)
-adata = singlet.load_dir(result.output_dir)`}
-              />
-              <ul className="mt-4">
-                <li>Supported organisms today: human (GRCh38) and mouse (GRCm39). See <Link to="/about#references">About the data</Link> for the exact builds.</li>
-                <li>Protocol (10x chemistry, Drop-seq, …) is detected from the reads and the run metadata.</li>
-                <li>The output directory contains the same matrices listed under <a href="#singlet-file">What's in a .singlet file</a>, plus the run log and per-cell QC table.</li>
-                <li>Source and the full CLI reference are on <a href={GITHUB_REPO} target="_blank" rel="noopener noreferrer">GitHub</a>; questions and bugs go to <a href={GITHUB_ISSUES} target="_blank" rel="noopener noreferrer">GitHub Issues</a>.</li>
+              <ul>
+                <li>Build the C++ pipeline with CMake from the repository, following its README. You need a C++17 toolchain, zstd, STAR, and a STAR index for the reference you map to (see <Link to="/about#references">About the data</Link> for the builds the atlas uses).</li>
+                <li>Plan for alignment-scale compute: tens of GB of RAM for a human or mouse STAR index, and hours per sample on a workstation.</li>
+                <li>The output directory holds the same per-sample matrices listed under <a href="#singlet-file">What's in a .singlet file</a>; <Mono>singlet.load_dir()</Mono> reads it as <Mono>AnnData</Mono>.</li>
+                <li>To keep private results next to the public catalogue, pack them into a <Mono>.singlet</Mono> file and add it under <a href="#private-projects">Private projects</a>.</li>
+                <li>Build steps, the CLI reference and known issues are on <a href={GITHUB_REPO} target="_blank" rel="noopener noreferrer">GitHub</a>; questions and bugs go to <a href={GITHUB_ISSUES} target="_blank" rel="noopener noreferrer">GitHub Issues</a>.</li>
               </ul>
             </Section>
           </article>

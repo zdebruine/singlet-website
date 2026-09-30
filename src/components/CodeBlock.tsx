@@ -46,7 +46,8 @@ export function CodeBlock({
       <pre
         className={cn(
           "m-0",
-          wrap ? "whitespace-pre-wrap break-all" : "overflow-x-auto whitespace-pre",
+          // break-words wraps at spaces first and only splits a token (a URL) when it must.
+          wrap ? "whitespace-pre-wrap break-words" : "overflow-x-auto whitespace-pre",
           compact ? "px-3 py-2.5" : "px-4 py-3.5"
         )}
       >

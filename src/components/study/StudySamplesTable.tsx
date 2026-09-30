@@ -48,7 +48,7 @@ function statusRank(s: GsmRow): number {
 /** Reads, with the pipeline's 30M subsampling cap marked. */
 function Reads({ n }: { n: number }) {
   if (n === 30_000_000)
-    return <span className="font-mono tabular" title="reads were subsampled to 30M for processing">30.0M (capped)</span>;
+    return <span className="font-mono tabular" title="Input hit the pipeline's 30,000,000-read cap; the sample was subsampled to 30M reads for processing">30.0M (capped)</span>;
   return <span className="font-mono tabular">{fmtInt(n)}</span>;
 }
 
@@ -204,11 +204,11 @@ function ExpandedRow({ s, gseId, studyTitle, colSpan, qc }: { s: GsmRow; gseId: 
                 <h4 className="text-[12px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5">Select this sample after loading {gseId}</h4>
                 <div className="space-y-1.5">
                   <div className="flex items-center gap-2 min-w-0">
-                    <code className="code-inline text-[12px] truncate">{py}</code>
+                    <code className="code-inline text-[12px] break-all">{py}</code>
                     <CopyButton text={py} label="Copy Python selection" />
                   </div>
                   <div className="flex items-center gap-2 min-w-0">
-                    <code className="code-inline text-[12px] truncate">{r}</code>
+                    <code className="code-inline text-[12px] break-all">{r}</code>
                     <CopyButton text={r} label="Copy R selection" />
                   </div>
                 </div>
@@ -252,7 +252,8 @@ export function StudySamplesTable({ gseId, studyTitle, samples, highlightGsm, co
   const hasQc = useMemo(() => samples.some((s) => s.mapping_rate != null || s.median_genes != null), [samples]);
   const hasReads = useMemo(() => !!qcByGsm && samples.some((s) => qcByGsm[s.gsm_id.toUpperCase()]?.n_input_reads != null), [samples, qcByGsm]);
   const hasCellsCalled = useMemo(() => !!qcByGsm && samples.some((s) => qcByGsm[s.gsm_id.toUpperCase()]?.n_cells_called != null), [samples, qcByGsm]);
-  const hasSaturation = useMemo(() => !!qcByGsm && samples.some((s) => qcByGsm[s.gsm_id.toUpperCase()]?.sequencing_saturation != null), [samples, qcByGsm]);
+  // Saturation was never computed by the pipeline (0/null everywhere); only show the column if a real value exists.
+  const hasSaturation = useMemo(() => !!qcByGsm && samples.some((s) => (qcByGsm[s.gsm_id.toUpperCase()]?.sequencing_saturation ?? 0) > 0), [samples, qcByGsm]);
 
   const nProcessed = useMemo(() => samples.filter((s) => isProcessed(s.status)).length, [samples]);
   const nFailed = useMemo(() => samples.filter((s) => isFailed(s.status)).length, [samples]);
