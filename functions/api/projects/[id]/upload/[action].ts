@@ -10,6 +10,11 @@
  * (private-indexer.ts) and stores the result in D1 (product.ts finishIndex).
  * A file that cannot be stored or indexed is marked failed and its bytes are
  * removed.
+ *
+ * Each part must be exactly the size the reservation implies (PART_BYTES,
+ * the last one the remainder), so stored parts never exceed the bytes counted
+ * against the storage caps. Reservations expire after 24 h; init retires a
+ * few expired ones (any owner) and aborts their R2 uploads.
  */
 import { httpBundleSource, r2BundleSource, type BundleByteSource } from "../../../../_shared/bundle-reader";
 import type { AppEnv, WaitUntil } from "../../../../_shared/env";
@@ -19,13 +24,15 @@ import {
   FILE_BYTES_CAP,
   MAX_PARTS,
   PART_BYTES,
+  abortUploads,
   json,
+  partLength,
   productContext,
   readBody,
   routeError,
   storageUnavailable,
 } from "../../../../_shared/private-project";
-import { beginFile, finishIndex, getMultipart, markFileFailed, setMultipart, type ProductCtx } from "../../../../_shared/product";
+import { beginFile, finishIndex, getMultipart, markFileFailed, setMultipart, takeStaleUploads, type ProductCtx } from "../../../../_shared/product";
 
 async function indexAndFinish(
   ctx: ProductCtx,
@@ -54,6 +61,11 @@ function uploadedParts(v: unknown): R2UploadedPart[] | null {
 
 const uploadGone = () => json({ error: "not_found", message: "That upload does not exist or expired." }, 404);
 
+/** Retire a few expired multipart reservations and abort their R2 uploads. Best effort. */
+async function sweepStaleUploads(ctx: ProductCtx, bucket: R2Bucket): Promise<void> {
+  await abortUploads(bucket, await takeStaleUploads(ctx));
+}
+
 export const onRequestPost: PagesFunction<AppEnv> = async ({ request, env, params, waitUntil }) => {
   const who = await requireUser(request, env, waitUntil);
   if (!who.ok) return who.response;
@@ -70,13 +82,16 @@ export const onRequestPost: PagesFunction<AppEnv> = async ({ request, env, param
       const bytes = Number(body.bytes);
       if (!Number.isInteger(bytes) || bytes <= 0 || bytes > FILE_BYTES_CAP) return json({ error: "invalid_size", message: "Choose a .singlet file up to 2 GB." }, 400);
       const begun = await beginFile(ctx, uid, { project_id: projectId, filename, bytes, kind: "upload" });
+      let upload: R2MultipartUpload | null = null;
       try {
         const objectKey = begun.object_key;
         if (!objectKey) throw new Error("The upload could not be reserved.");
-        const upload = await bucket.createMultipartUpload(objectKey);
+        upload = await bucket.createMultipartUpload(objectKey);
         await setMultipart(ctx, uid, { file_id: begun.file.id, upload_id: upload.uploadId, object_key: objectKey, expected_bytes: bytes });
+        waitUntil(sweepStaleUploads(ctx, bucket).catch(() => undefined));
         return json({ file_id: begun.file.id, part_bytes: PART_BYTES, parts: Math.ceil(bytes / PART_BYTES), expires_in: 86400 });
       } catch (e) {
+        if (upload) await upload.abort().catch(() => undefined);
         await markFileFailed(ctx, uid, { file_id: begun.file.id, error: String(e) }).catch(() => undefined);
         throw e;
       }
@@ -89,7 +104,9 @@ export const onRequestPost: PagesFunction<AppEnv> = async ({ request, env, param
       const { upload: state } = await getMultipart(ctx, uid, { file_id: body.file_id });
       if (state.user_files.project_id !== projectId) return uploadGone();
       const parts = uploadedParts(body.parts);
-      if (!parts) return json({ error: "invalid_parts", message: "Upload parts are missing or out of order." }, 400);
+      if (!parts || parts.length !== Math.ceil(Number(state.expected_bytes) / PART_BYTES)) {
+        return json({ error: "invalid_parts", message: "Upload parts are missing or out of order." }, 400);
+      }
       const upload = bucket.resumeMultipartUpload(state.object_key, state.r2_upload_id);
       const object = await upload.complete(parts);
       if (object.size !== Number(state.expected_bytes)) {
@@ -118,7 +135,7 @@ export const onRequestPost: PagesFunction<AppEnv> = async ({ request, env, param
       const begun = await beginFile(ctx, uid, { project_id: projectId, filename: url.pathname.split("/").pop() ?? "", bytes, kind: "url", source_url: url.toString() });
       try {
         const etag = head.headers.get("etag")?.slice(0, 500) ?? null;
-        const done = await indexAndFinish(ctx, uid, httpBundleSource(url.toString()), { id: begun.file.id, filename: begun.file.filename, etag }, waitUntil);
+        const done = await indexAndFinish(ctx, uid, httpBundleSource(url.toString(), { noRedirects: true }), { id: begun.file.id, filename: begun.file.filename, etag }, waitUntil);
         return json({ ok: true, file_id: begun.file.id, ...done });
       } catch (e) {
         await markFileFailed(ctx, uid, { file_id: begun.file.id, error: String(e) }).catch(() => undefined);
@@ -149,6 +166,11 @@ export const onRequestPut: PagesFunction<AppEnv> = async ({ request, env, params
     }
     const { upload: state } = await getMultipart(productContext(request, env), who.identity.userId, { file_id: fileId });
     if (state.user_files.project_id !== String(params.id ?? "")) return uploadGone();
+    // Parts are bounded by the reservation: no part numbers past the reserved
+    // size, and every part exactly PART_BYTES except the final remainder.
+    const want = partLength(Number(state.expected_bytes), partNumber);
+    if (!want) return json({ error: "invalid_part", message: "Part number is invalid." }, 400);
+    if (length !== want) return json({ error: "invalid_part_size", message: `Part ${partNumber} must be exactly ${want} bytes.` }, 400);
     const upload = bucket.resumeMultipartUpload(state.object_key, state.r2_upload_id);
     const part = await upload.uploadPart(partNumber, stream);
     return json({ partNumber: part.partNumber, etag: part.etag });

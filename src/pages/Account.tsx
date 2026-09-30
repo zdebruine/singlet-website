@@ -22,7 +22,7 @@ interface UsageState {
 }
 
 /** Today's counters from the server (the local copy can be stale on a new device). */
-function useUsageToday(enabled: boolean): UsageState {
+function useUsageToday(enabled: boolean, onUnauthorized: () => Promise<void>): UsageState {
   const [state, setState] = useState<UsageState>({ usage: null, failed: false });
   useEffect(() => {
     setState({ usage: null, failed: false });
@@ -33,11 +33,13 @@ function useUsageToday(enabled: boolean): UsageState {
       .then((usage) => {
         if (!ctrl.signal.aborted) setState({ usage, failed: false });
       })
-      .catch(() => {
-        if (!ctrl.signal.aborted) setState({ usage: null, failed: true });
+      .catch((e: unknown) => {
+        if (ctrl.signal.aborted) return;
+        setState({ usage: null, failed: true });
+        if (isApiError(e) && e.status === 401) void onUnauthorized();
       });
     return () => ctrl.abort();
-  }, [enabled]);
+  }, [enabled, onUnauthorized]);
   return state;
 }
 
@@ -119,19 +121,26 @@ function SignedOut({ openSignIn }: { openSignIn: () => void }) {
 
 const Account = () => {
   usePageMeta({ title: "Account", description: "Your singlet.bio account: today's AI usage and API keys for scripts and the MCP server.", noindex: true });
-  const { user, loading, openSignIn, signOut } = useAuth();
+  const { user, loading, openSignIn, signOut, refresh } = useAuth();
   const signedIn = !!user;
 
   // /account#api-keys (from the account menu): the section only exists once the session is known.
   const { hash } = useLocation();
   useEffect(() => {
     if (!signedIn || !hash) return;
-    const id = decodeURIComponent(hash.slice(1));
+    let id = hash.slice(1);
+    try {
+      id = decodeURIComponent(id);
+    } catch {
+      /* malformed escape (e.g. #50%off): look the raw fragment up */
+    }
     const t = window.setTimeout(() => document.getElementById(id)?.scrollIntoView({ block: "start" }), 40);
     return () => window.clearTimeout(t);
   }, [hash, signedIn]);
 
-  const { usage, failed: usageFailed } = useUsageToday(signedIn);
+  // A 401 means the session ended elsewhere (another tab, expiry): re-check it,
+  // so the page shows the signed-out view instead of errors under "Signed in as".
+  const { usage, failed: usageFailed } = useUsageToday(signedIn, refresh);
   const searchQuota = useAiQuota("search");
   const explainQuota = useAiQuota("explain");
   const searchLimit = usage?.searchLimit ?? (searchQuota?.kind === "user" ? searchQuota.limit : SEARCH_LIMIT);
@@ -149,6 +158,15 @@ const Account = () => {
   const [revealed, setRevealed] = useState<{ secret: string; key: ApiKeySummary } | null>(null);
   const [revoking, setRevoking] = useState<string | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [signingOut, setSigningOut] = useState(false);
+  const [signOutError, setSignOutError] = useState<string | null>(null);
+
+  const recheckOn401 = useCallback(
+    (e: unknown) => {
+      if (isApiError(e) && e.status === 401) void refresh();
+    },
+    [refresh],
+  );
 
   const load = useCallback(async () => {
     setKeysError(null);
@@ -157,8 +175,9 @@ const Account = () => {
     } catch (e) {
       setKeys([]);
       setKeysError(isApiError(e) ? e.message : "Could not load your API keys.");
+      recheckOn401(e);
     }
-  }, []);
+  }, [recheckOn401]);
 
   // Keyed on the id, not the user object, so a refreshed session doesn't refetch.
   const userId = user?.id ?? null;
@@ -185,6 +204,7 @@ const Account = () => {
       setKeys((prev) => [r.key, ...(prev ?? [])]);
     } catch (err) {
       setFormError(isApiError(err) ? err.message : "Could not create the key right now.");
+      recheckOn401(err);
     } finally {
       setCreating(false);
     }
@@ -199,10 +219,19 @@ const Account = () => {
       if (revealed?.key.id === id) setRevealed(null);
     } catch (err) {
       setKeysError(isApiError(err) ? err.message : "Could not revoke the key right now.");
+      recheckOn401(err);
     } finally {
       setRevoking(null);
       setConfirmId(null);
     }
+  };
+
+  const handleSignOut = async () => {
+    setSignOutError(null);
+    setSigningOut(true);
+    const ok = await signOut();
+    setSigningOut(false);
+    if (!ok) setSignOutError("Couldn't sign out. Check your connection and try again.");
   };
 
   const activeCount = useMemo(() => (keys ?? []).filter((k) => keyState(k) === "active").length, [keys]);
@@ -428,9 +457,17 @@ const Account = () => {
                   Privacy
                 </Link>
               </p>
-              <button type="button" className="btn-ghost btn-sm" onClick={() => void signOut()}>
-                Sign out
-              </button>
+              <div className="shrink-0 text-right">
+                <button type="button" className="btn-ghost btn-sm" onClick={() => void handleSignOut()} disabled={signingOut}>
+                  {signingOut && <Loader2 size={13} className="animate-spin" />}
+                  Sign out
+                </button>
+                {signOutError && (
+                  <p role="alert" className="mt-1 max-w-[220px] text-[12.5px] leading-snug text-destructive">
+                    {signOutError}
+                  </p>
+                )}
+              </div>
             </section>
           </div>
         )}

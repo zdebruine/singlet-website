@@ -757,9 +757,18 @@ export const apiClient = {
         providers: { github: p.github === true, google: p.google === true },
       };
     },
-    /** POST /api/auth/logout — ends this browser's session. */
-    async logout(): Promise<void> {
-      await fetch(buildApiUrl("/api/auth/logout"), { method: "POST", credentials: "same-origin" }).catch(() => undefined);
+    /**
+     * POST /api/auth/logout — ends this browser's session. False when the
+     * server didn't confirm it (offline, 403, 5xx): the session cookie is then
+     * still valid.
+     */
+    async logout(): Promise<boolean> {
+      try {
+        const res = await fetch(buildApiUrl("/api/auth/logout"), { method: "POST", credentials: "same-origin" });
+        return res.ok;
+      } catch {
+        return false;
+      }
     },
     /** GET /api/account/usage — today's AI counters (and the deployment's limits) for the signed-in user. */
     async usage(signal?: AbortSignal): Promise<{ search: number; explain: number; searchLimit: number | null; explainLimit: number | null }> {

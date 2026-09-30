@@ -50,8 +50,11 @@ function nowIso(): string {
 
 // ── HTTP range helpers ──────────────────────────────────────────────────────
 
-async function headSize(url: string): Promise<number> {
-  const res = await fetch(url, { method: "HEAD" });
+/** "follow" for our own public bundles; "manual" for a user-registered URL, where any 3xx is an error. */
+type RedirectMode = "follow" | "manual";
+
+async function headSize(url: string, redirect: RedirectMode = "follow"): Promise<number> {
+  const res = await fetch(url, { method: "HEAD", redirect });
   if (!res.ok) throw new Error(`HEAD ${res.status} for ${url}`);
   const len = Number(res.headers.get("content-length") ?? "0");
   if (!Number.isFinite(len) || len <= 0) throw new Error(`No content-length for ${url}`);
@@ -59,8 +62,8 @@ async function headSize(url: string): Promise<number> {
 }
 
 /** Inclusive byte range. */
-async function fetchRange(url: string, start: number, end: number): Promise<Uint8Array> {
-  const res = await fetch(url, { headers: { Range: `bytes=${start}-${end}` } });
+async function fetchRange(url: string, start: number, end: number, redirect: RedirectMode = "follow"): Promise<Uint8Array> {
+  const res = await fetch(url, { headers: { Range: `bytes=${start}-${end}` }, redirect });
   if (res.status !== 206 && res.status !== 200) throw new Error(`Range ${res.status} for ${url}`);
   return new Uint8Array(await res.arrayBuffer());
 }
@@ -70,8 +73,14 @@ export interface BundleByteSource {
   range(start: number, end: number): Promise<Uint8Array>;
 }
 
-export function httpBundleSource(url: string): BundleByteSource {
-  return { size: () => headSize(url), range: (start, end) => fetchRange(url, start, end) };
+/**
+ * Range reads over HTTPS. `noRedirects` is for a URL a user registered
+ * (private-indexer.ts assertPublicBundleUrl vetted only that exact host), so
+ * a redirect elsewhere fails the read instead of being followed.
+ */
+export function httpBundleSource(url: string, opts: { noRedirects?: boolean } = {}): BundleByteSource {
+  const redirect: RedirectMode = opts.noRedirects ? "manual" : "follow";
+  return { size: () => headSize(url, redirect), range: (start, end) => fetchRange(url, start, end, redirect) };
 }
 
 export function r2BundleSource(bucket: R2Bucket, key: string): BundleByteSource {

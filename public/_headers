@@ -1,0 +1,10 @@
+# Response headers for static assets (Cloudflare Pages). Pages Functions set
+# their own headers; these rules apply to every page and file served from
+# dist/, including the SPA's index.html for client routes.
+#
+# No framing by any site (clickjacking guard for the signed-in account and
+# project pages): X-Frame-Options for older browsers, frame-ancestors for the rest.
+
+/*
+  X-Frame-Options: DENY
+  Content-Security-Policy: frame-ancestors 'none'

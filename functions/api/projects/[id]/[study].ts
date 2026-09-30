@@ -3,11 +3,17 @@
  * private study's .singlet. Allowed for the owner, workspace members when the
  * project is shared with the workspace, or anyone holding the project's read
  * token — the loader token is the only anonymous way in.
+ *
+ * A file registered by URL is streamed from that URL. Its response headers
+ * are never copied (only an allowlist, see privateDownloadHeaders) and
+ * redirects are not followed: the remote host is untrusted and this response
+ * comes from singlet.bio.
  */
 import type { AppEnv } from "../../../_shared/env";
 import { isSignedIn, resolveIdentity, signInRequired } from "../../../_shared/identity";
+import { assertPublicBundleUrl } from "../../../_shared/private-indexer";
 import { authorizePrivateFile, logUsage } from "../../../_shared/product";
-import { json, productContext, routeError, storageUnavailable } from "../../../_shared/private-project";
+import { json, privateDownloadHeaders, productContext, routeError, storageUnavailable } from "../../../_shared/private-project";
 
 export const onRequestGet: PagesFunction<AppEnv> = async ({ request, env, params, waitUntil }) => {
   const url = new URL(request.url);
@@ -28,7 +34,7 @@ export const onRequestGet: PagesFunction<AppEnv> = async ({ request, env, params
       const parsed = range?.match(/^bytes=(\d+)-(\d*)$/);
       const object = await env.USER_DATA.get(file.object_key, parsed ? { range: { offset: Number(parsed[1]), ...(parsed[2] ? { length: Number(parsed[2]) - Number(parsed[1]) + 1 } : {}) } } : undefined);
       if (!object) return json({ error: "not_found", message: "The stored file could not be found." }, 404);
-      const headers = new Headers({ "Content-Type": "application/octet-stream", "Content-Disposition": `attachment; filename="${filename}"`, "Accept-Ranges": "bytes", "Cache-Control": "private, no-store", ETag: object.etag });
+      const headers = new Headers({ "Content-Type": "application/octet-stream", "Content-Disposition": `attachment; filename="${filename}"`, "Accept-Ranges": "bytes", "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff", ETag: object.etag });
       if (object.range) {
         const offset = "offset" in object.range && typeof object.range.offset === "number" ? object.range.offset : 0;
         const length = "length" in object.range && typeof object.range.length === "number" ? object.range.length : object.size;
@@ -37,11 +43,20 @@ export const onRequestGet: PagesFunction<AppEnv> = async ({ request, env, params
       } else headers.set("Content-Length", String(object.size));
       upstream = new Response(object.body, { status: object.range ? 206 : 200, headers });
     } else if (typeof file.source_url === "string") {
-      upstream = await fetch(file.source_url, { headers: range ? { Range: range } : {}, redirect: "follow" });
-      const headers = new Headers(upstream.headers);
-      headers.set("Cache-Control", "private, no-store");
-      headers.set("Content-Disposition", `attachment; filename="${filename}"`);
-      upstream = new Response(upstream.body, { status: upstream.status, headers });
+      const moved = () => json({ error: "not_found", message: "The registered URL no longer serves this file directly." }, 404);
+      // Re-checked on every download: URLs registered under an older, looser check stay covered.
+      try {
+        assertPublicBundleUrl(file.source_url);
+      } catch {
+        return moved();
+      }
+      const remote = await fetch(file.source_url, { headers: range ? { Range: range } : {}, redirect: "manual" });
+      if (remote.status >= 300 && remote.status < 400) {
+        await remote.body?.cancel().catch(() => undefined);
+        return moved();
+      }
+      const nullBody = remote.status === 204 || remote.status === 205;
+      upstream = new Response(nullBody ? null : remote.body, { status: remote.status, headers: privateDownloadHeaders(remote.headers, filename) });
     } else return json({ error: "not_found", message: "The file has no readable source." }, 404);
     // Token-only (anonymous) downloads have no account to log against.
     if (uid) {

@@ -8,13 +8,60 @@
  * so an anonymous request never causes work.
  */
 import type { AppEnv } from "./env";
-import { FILE_BYTES_CAP, ProductError, productJson, type ProductCtx } from "./product";
+import { FILE_BYTES_CAP, ProductError, productJson, type PendingUpload, type ProductCtx } from "./product";
 
 export { ACCOUNT_BYTES_CAP, FILE_BYTES_CAP, FILE_CAP, GLOBAL_BYTES_CAP, PROJECT_CAP } from "./product";
 
 /** R2 multipart part size for private uploads (a 2 GiB file is 41 parts). */
 export const PART_BYTES = 50 * 1024 ** 2;
 export const MAX_PARTS = Math.ceil(FILE_BYTES_CAP / PART_BYTES);
+
+/**
+ * The exact size of upload part `n` (1-based) of an `expected`-byte file cut
+ * into PART_BYTES pieces, or 0 when the file has no such part. Uploads stay
+ * within the bytes their reservation counted against the storage caps.
+ */
+export function partLength(expected: number, n: number): number {
+  if (!Number.isInteger(expected) || expected <= 0 || !Number.isInteger(n) || n < 1) return 0;
+  const start = (n - 1) * PART_BYTES;
+  return start < expected ? Math.min(PART_BYTES, expected - start) : 0;
+}
+
+/**
+ * Response headers for a private file streamed from a registered URL. Built
+ * from an allowlist: forwarding the remote host's own headers would let it set
+ * cookies (Set-Cookie, Clear-Site-Data, …) on this origin. Content-Length is
+ * kept only when the body is not re-encoded (fetch decodes Content-Encoding).
+ */
+export function privateDownloadHeaders(upstream: { get(name: string): string | null }, filename: string): Record<string, string> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/octet-stream",
+    "Content-Disposition": `attachment; filename="${filename.replace(/["\\\r\n]/g, "")}"`,
+    "Cache-Control": "private, no-store",
+    "X-Content-Type-Options": "nosniff",
+  };
+  for (const name of ["Content-Range", "Accept-Ranges", "ETag", "Last-Modified"]) {
+    const value = upstream.get(name);
+    if (value) headers[name] = value;
+  }
+  const length = upstream.get("Content-Length");
+  if (length && !upstream.get("Content-Encoding")) headers["Content-Length"] = length;
+  return headers;
+}
+
+/** Abort unfinished R2 multipart uploads so their parts stop using storage. Never fails the request. */
+export async function abortUploads(bucket: R2Bucket | undefined, uploads: PendingUpload[]): Promise<void> {
+  if (!bucket || !uploads.length) return;
+  const b: R2Bucket = bucket;
+  await Promise.all(
+    uploads.map((u) =>
+      b
+        .resumeMultipartUpload(u.object_key, u.r2_upload_id)
+        .abort()
+        .catch((e: unknown) => console.warn("[private-project] multipart abort failed:", String(e))),
+    ),
+  );
+}
 
 /** The private routes use the app env; USER_DATA must be bound for stored uploads. */
 export type PrivateEnv = AppEnv;

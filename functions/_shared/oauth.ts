@@ -459,9 +459,14 @@ async function googleProfile(token: string): Promise<Profile> {
 
 /**
  * The user behind this provider account: an existing identity wins; else a
- * user with the same verified email gets this identity attached; else a new
- * user is created. INSERT OR IGNORE + a re-read makes concurrent first
- * sign-ins (double clicks, two tabs) converge on one user.
+ * user with the same verified email gets this identity attached — unless that
+ * user already has a different account from the SAME provider (GitHub and
+ * Google let one address be verified on only one account at a time, so a
+ * second account presenting it means the address changed hands, e.g. a
+ * recycled work address); else a new user is created. A new user whose email
+ * is still held by another user starts without one (users.email is unique).
+ * INSERT OR IGNORE + a re-read makes concurrent first sign-ins (double
+ * clicks, two tabs) converge on one user.
  */
 async function findOrCreateUser(db: D1Database, provider: OAuthProvider, p: Profile): Promise<string> {
   const now = nowIso();
@@ -474,19 +479,27 @@ async function findOrCreateUser(db: D1Database, provider: OAuthProvider, p: Prof
   let found = await identity();
   for (let attempt = 0; !found && attempt < 2; attempt++) {
     const byEmail = await db
-      .prepare(`SELECT id FROM users WHERE lower(email) = ?1 AND email IS NOT NULL LIMIT 1`)
-      .bind(p.email)
-      .first<{ id: string }>();
-    const userId = byEmail?.id ?? crypto.randomUUID();
+      .prepare(
+        `SELECT u.id,
+                EXISTS (SELECT 1 FROM oauth_identities i WHERE i.user_id = u.id AND i.provider = ?2 AND i.provider_user_id <> ?3) AS same_provider
+           FROM users u WHERE lower(u.email) = ?1 AND u.email IS NOT NULL LIMIT 1`,
+      )
+      .bind(p.email, provider, p.id)
+      .first<{ id: string; same_provider: number }>();
+    const linkTo = byEmail && !Number(byEmail.same_provider) ? byEmail.id : null;
+    const userId = linkTo ?? crypto.randomUUID();
     const stmts: D1PreparedStatement[] = [];
-    if (!byEmail) {
+    if (!linkTo) {
+      // Skipped when a concurrent sign-in already attached this provider
+      // account, so a double click leaves no orphan user behind.
       stmts.push(
         db
           .prepare(
             `INSERT OR IGNORE INTO users (id, email, display_name, avatar_url, created_at, last_sign_in_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?5)`,
+             SELECT ?1, ?2, ?3, ?4, ?5, ?5
+              WHERE NOT EXISTS (SELECT 1 FROM oauth_identities WHERE provider = ?6 AND provider_user_id = ?7)`,
           )
-          .bind(userId, p.email, p.name, p.avatarUrl, now),
+          .bind(userId, byEmail ? null : p.email, p.name, p.avatarUrl, now, provider, p.id),
       );
     }
     stmts.push(

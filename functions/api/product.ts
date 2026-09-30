@@ -25,7 +25,7 @@ import type { AppEnv } from "../_shared/env";
 import { handleOptions } from "../_shared/cors";
 import { isSignedIn, requireUser, resolveIdentity } from "../_shared/identity";
 import { deleteFile, deleteProject, isProductAction, productErrorResponse, productJson, runProductAction } from "../_shared/product";
-import { productContext, removeObjects } from "../_shared/private-project";
+import { abortUploads, productContext, removeObjects } from "../_shared/private-project";
 
 export const onRequest: PagesFunction<AppEnv> = async ({ request, env, waitUntil }) => {
   const method = request.method.toUpperCase();
@@ -56,11 +56,13 @@ export const onRequest: PagesFunction<AppEnv> = async ({ request, env, waitUntil
     // Deletes also remove the stored objects, so they are routed here rather than in product.ts.
     if (action === "delete_file") {
       const result = await deleteFile(ctx, uid, body);
+      await abortUploads(env.USER_DATA, result.uploads);
       await removeObjects(env.USER_DATA, result.object_key ? [result.object_key] : []);
       return productJson({ ok: true });
     }
     if (action === "delete_project") {
       const result = await deleteProject(ctx, uid, body);
+      await abortUploads(env.USER_DATA, result.uploads);
       await removeObjects(env.USER_DATA, result.object_keys);
       return productJson({ ok: true });
     }

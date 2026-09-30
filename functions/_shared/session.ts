@@ -8,6 +8,8 @@
  *
  * Sessions last 30 days and slide: a request more than a day after the last
  * refresh pushes `expires_at` out again (at most once per day per session).
+ * The browser's copy slides too: GET /api/auth/me (which the SPA calls on
+ * load and on window focus) re-sends the same token with a fresh Max-Age.
  */
 import { sha256Hex } from "./hash";
 
@@ -43,13 +45,19 @@ export function randomToken(bytes = 32): string {
   return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
+/** A cookie's decoded value, or null. A malformed value (bad %-escape) counts as absent, never throws. */
 export function readCookie(request: Request, name: string): string | null {
   const header = request.headers.get("Cookie");
   if (!header) return null;
   for (const part of header.split(";")) {
     const i = part.indexOf("=");
     if (i < 0) continue;
-    if (part.slice(0, i).trim() === name) return decodeURIComponent(part.slice(i + 1).trim());
+    if (part.slice(0, i).trim() !== name) continue;
+    try {
+      return decodeURIComponent(part.slice(i + 1).trim());
+    } catch {
+      continue;
+    }
   }
   return null;
 }

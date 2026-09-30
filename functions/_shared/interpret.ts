@@ -22,7 +22,7 @@
  * parse: the parse's organism always wins (organism is a hard filter, so a
  * species is never taken from a model unless the query names it), and the
  * model may only add facets the parse missed, each grounded in a word of the
- * query.
+ * query (a year bound or min_cells only when the query writes a year or count).
  */
 import type { AppEnv, WaitUntil } from "./env";
 import type { Identity } from "./identity";
@@ -45,7 +45,7 @@ import {
 } from "./vocab";
 
 /** Bump whenever the parser policy, the prompt or its pinned examples change, so cached readings expire at once. */
-export const INTERPRET_RULES_VERSION = "12-cf1";
+export const INTERPRET_RULES_VERSION = "12-cf2";
 
 export type InterpretEnv = Pick<
   AppEnv,
@@ -160,6 +160,7 @@ const TISSUE_SKIP = new Set(["Tumor (site unspecified)", "Multiple / mixed", "Im
 /** Tissue patterns that name a disease — never evidence of a site, even for the model. */
 const TISSUE_DISEASE_PATTERNS = new Set([
   "glioma", "glioblastoma", "glioblatoma", "gbm", "medulloblastoma", "ependymoma", "schwannoma", "hnscc",
+  "melanoma", "carcinoma", "leukemia", "leukaemia", "lymphoma", "sarcoma", "myeloma",
   "wound", "blister", "biopsy", "ascites",
 ]);
 
@@ -195,7 +196,13 @@ const DISEASE_DENY = new Set([
   "wild type", "wildtype", "wild-type",
   "mm", "load", "psc", "ssc", "amd", "anca",
   "aged", "aging", "ageing", "old", "elderly", "recipient",
-  "knockout", "knock-out", "transgenic", "mutant", "mutation", "carrier", "deficiency",
+  "knockout", "knock-out", "transgenic", "mutant", "mutation", "carrier", "deficiency", "deficient", "ko",
+  // Perturbations, conditions and life stages: keywords (KNOWN_KEYWORDS), never a disease.
+  "stress", "stressed", "hypoxia", "hypoxic", "diet", "exercise", "fasting", "sleep", "circadian", "treatment",
+  "treated", "stimulation", "stimulated", "lps", "drug", "drugs", "vaccin", "vaccine", "vaccination", "development",
+  "developmental", "developing", "regeneration", "repair", "differentiation", "reprogramming", "perturbation",
+  "crispr", "screen", "young", "juvenile", "adult", "neonatal", "fetal", "embryonic", "postnatal", "sex", "male",
+  "female",
 ]);
 
 /** Disease groups precise enough that the matched word adds nothing as a keyword. */
@@ -399,12 +406,25 @@ function ruleMatches(r: VocabRule, span: Tok[], wholeWord: ReadonlySet<string>):
   return last.startsWith(plast);
 }
 
+/**
+ * What may follow a `contains` protocol pattern inside the n-gram: "seq",
+ * "er" or "ly" ("CITE-seq", "SMARTer", "spatially") and/or a version
+ * ("Smart-seq2", "10x v3", "10xv3.1"), and a chemistry mark only right after a
+ * number ("10x5'"). Anything else is another word ("droplet", "parsed",
+ * "multiome brain", "10xv3 hepatocytes") that the assay must not swallow.
+ */
+function protocolSuffixOk(pc: string, rest: string): boolean {
+  const m = /^(?:seq|er|ly)?(v?\d+(?:\.\d+)?)?('|p|prime)?$/.exec(rest);
+  if (!m) return false;
+  return !m[2] || Boolean(m[1]) || /\d$/.test(pc);
+}
+
 function protocolMatches(r: VocabRule, joined: string, compact: string): boolean {
   const p = r.pattern.trim();
   if (!p) return false;
   const pc = p.replace(/[\s_-]+/g, "");
   if (r.match_type === "exact" || pc.length < 4 || WHOLE_WORD_PROTOCOL.has(pc)) return joined === p || compact === pc;
-  return compact.startsWith(pc);
+  return compact.startsWith(pc) && protocolSuffixOk(pc, compact.slice(pc.length));
 }
 
 function pushUnique(list: string[], value: string): void {
@@ -422,6 +442,42 @@ function speciesFor(phrase: string): string | null {
   const sci = organismToScientific(phrase);
   // organismToScientific capitalises any "genus species"-looking pair; only known species count here.
   return sci && ORGANISM_COMMON[sci.toLowerCase()] ? sci : null;
+}
+
+/** The species an n-gram names ("mouse", "mice", "Danio rerio"), plural "-s" allowed on one word. */
+function spanSpecies(span: Tok[]): string | null {
+  const phrase = span.map((t) => t.key).join(" ");
+  const sci = speciesFor(phrase);
+  if (sci) return sci;
+  return span.length === 1 && phrase.length > 4 && phrase.endsWith("s") ? speciesFor(phrase.slice(0, -1)) : null;
+}
+
+/** vocab_rules disease patterns that are safe on typed text (see DISEASE_DENY / HEALTHY_OK). */
+function queryDiseaseRules(rules: VocabRule[]): VocabRule[] {
+  return rules.filter((r) => {
+    const p = r.pattern.trim();
+    if (r.field !== "disease" || !p || DISEASE_SKIP.has(r.grp)) return false;
+    if (r.grp === "Healthy / control") return HEALTHY_OK.has(p);
+    return !DISEASE_DENY.has(p);
+  });
+}
+
+/** The disease group an n-gram names, if any. */
+function diseaseFor(span: Tok[], diseaseRules: VocabRule[]): string | null {
+  const phrase = span.map((t) => t.key).join(" ");
+  const grp = canonicalGroup("disease_group", phrase) ?? diseaseRules.find((r) => ruleMatches(r, span, NO_WHOLE_WORD))?.grp ?? null;
+  return grp && !DISEASE_SKIP.has(grp) ? grp : null;
+}
+
+/**
+ * Consume a disease n-gram. Words before its head stay readable as anatomy
+ * ("pulmonary fibrosis" → Lung); a one-word disease never implies a site.
+ */
+function consumeDisease(span: Tok[]): void {
+  span.forEach((t, i) => {
+    t.used = true;
+    t.tissueOk = i < span.length - 1;
+  });
 }
 
 /** Catalog cell_type values that read as cell types, in `cellPhrase` form. */
@@ -610,9 +666,7 @@ export function parseQuery(query: string, vocab: ParseVocab, nowYear = new Date(
 
   // 2. Organism — explicit species words only.
   scan(toks, 3, free, (span) => {
-    const phrase = span.map((t) => t.key).join(" ");
-    let sci = speciesFor(phrase);
-    if (!sci && span.length === 1 && phrase.length > 4 && phrase.endsWith("s")) sci = speciesFor(phrase.slice(0, -1));
+    const sci = spanSpecies(span);
     if (!sci) return;
     pushUnique(res.organism, sci);
     consume(span);
@@ -661,23 +715,13 @@ export function parseQuery(query: string, vocab: ParseVocab, nowYear = new Date(
   // 5. Disease. Broad groups keep the specific word in q ("melanoma", "AML").
   //    Words before the head of a multi-word disease stay readable as anatomy
   //    ("pulmonary fibrosis" → Lung); a one-word disease never implies a site.
-  const diseaseRules = vocab.rules.filter((r) => {
-    const p = r.pattern.trim();
-    if (r.field !== "disease" || !p || DISEASE_SKIP.has(r.grp)) return false;
-    if (r.grp === "Healthy / control") return HEALTHY_OK.has(p);
-    return !DISEASE_DENY.has(p);
-  });
+  const diseaseRules = queryDiseaseRules(vocab.rules);
   scan(toks, 4, free, (span) => {
-    const phrase = span.map((t) => t.key).join(" ");
-    let grp = canonicalGroup("disease_group", phrase);
-    if (!grp) grp = diseaseRules.find((r) => ruleMatches(r, span, NO_WHOLE_WORD))?.grp ?? null;
-    if (!grp || DISEASE_SKIP.has(grp)) return;
+    const grp = diseaseFor(span, diseaseRules);
+    if (!grp) return;
     pushUnique(res.disease_group, grp);
     if (!EXACT_DISEASE.has(grp) && !(span.length === 1 && GENERIC_DISEASE_WORDS.has(span[0].key))) echo(span);
-    span.forEach((t, i) => {
-      t.used = true;
-      t.tissueOk = i < span.length - 1;
-    });
+    consumeDisease(span);
   });
 
   // 6. Tissue — explicit anatomical words only.
@@ -781,29 +825,56 @@ function userPrompt(query: string, cellTypes: readonly string[]): string {
   return `Vocabulary (allowed values per field, separated by " | "):\n\n${text}\n\nQuery: ${query.slice(0, MAX_QUERY_CHARS)}\n\nReturn the JSON now.`;
 }
 
-function escapeRe(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
 /** "Mouse (Mus musculus)", "mouse" or "Mus musculus" → "Mus musculus" (known species only). */
 function unwrapOrganism(v: string): string | null {
   const m = /\(([^)]+)\)\s*$/.exec(v);
   return speciesFor((m ? m[1] : v).trim().toLowerCase()) ?? speciesFor(v.replace(/\s*\(.*\)\s*$/, "").trim().toLowerCase());
 }
 
-/** A species the query itself names (scientific name, genus or common name). */
-function namesSpecies(sci: string, query: string): boolean {
-  const common = ORGANISM_COMMON[sci.toLowerCase()] ?? "";
-  const words = [sci, common, sci.split(" ")[0]].map((w) => w.toLowerCase()).filter((w) => w.length > 3);
-  return words.some((w) => new RegExp(`\\b${escapeRe(w)}`, "i").test(query));
+/** Species the parser's species words name anywhere in the query ("mice", "patients", "zebrafish"). */
+function speciesWords(toks: Tok[]): Set<string> {
+  const found = new Set<string>();
+  scan(toks, 3, () => true, (span) => {
+    const sci = spanSpecies(span);
+    if (sci) found.add(sci);
+  });
+  return found;
 }
 
-/** Tissue groups some query word points at — anatomy or a cell type, never a disease. */
+/**
+ * The query names `sci` by its scientific name, genus or common name, as whole
+ * words ("humanized", "homozygous" and "non-human" name no species).
+ */
+function namesSpecies(sci: string, toks: Tok[]): boolean {
+  const common = ORGANISM_COMMON[sci.toLowerCase()] ?? "";
+  const names = [sci, common, sci.split(" ")[0]]
+    .filter((w) => w.length > 3)
+    .map((w) => tokenize(w).map((t) => t.key))
+    .filter((words) => words.length > 0);
+  return names.some((words) =>
+    toks.some((_, i) =>
+      words.every((w, j) => {
+        const k = toks[i + j]?.key;
+        return k === w || (j === words.length - 1 && (k === `${w}s` || k === `${w}es`));
+      }),
+    ),
+  );
+}
+
+/**
+ * Tissue groups some query word points at — anatomy or a cell type, never a
+ * disease: words the parser reads as a disease ("melanoma", "lymphoma",
+ * "hepatitis") are not evidence, whatever tissue rule they would match.
+ */
 function tissueEvidence(query: string, rules: VocabRule[]): Set<string> {
   const toks = tokenize(prepare(query));
+  const diseaseRules = queryDiseaseRules(rules);
+  scan(toks, 4, free, (span) => {
+    if (diseaseFor(span, diseaseRules)) consumeDisease(span);
+  });
   const found = new Set<string>();
   const evidenceRules = rules.filter((r) => r.field === "tissue" && !TISSUE_SKIP.has(r.grp) && !TISSUE_DISEASE_PATTERNS.has(r.pattern.trim()));
-  scan(toks, 4, () => true, (span) => {
+  scan(toks, 4, (t) => !t.used || t.tissueOk, (span) => {
     const phrase = span.map((t) => t.key).join(" ");
     const grp = canonicalGroup("tissue_group", phrase) ?? evidenceRules.find((r) => ruleMatches(r, span, WHOLE_WORD_TISSUE))?.grp ?? null;
     if (grp && !TISSUE_SKIP.has(grp)) found.add(grp);
@@ -815,16 +886,31 @@ function canonicalOrSynonym(rules: VocabRule[], field: GroupField, value: string
   return canonicalGroup(field, value) ?? resolveGroup(rules, field, value);
 }
 
+/** A year written in the query, or a relative span ("past five years", "last decade"): the only support for a model's year bounds. */
+const YEAR_HINT_RE =
+  /\b(?:19|20)\d{2}\b|\b(?:last|past|previous)\s+(?:(?:\d{1,2}|two|three|four|five|six|seven|eight|nine|ten|few|couple(?:\s+of)?)\s+)?(?:years?|decades?)\b/i;
+
+/** A count written next to "cells" or "nuclei" ("50k cells", "1 million nuclei", "cells >= 20000"): the only support for a model's min_cells. */
+const CELL_COUNT_HINT_RE = new RegExp(
+  String.raw`\b${NUM}${UNIT}\s*\+?(?:\s+[a-z]+)?[\s-]*(?:cells?|nuclei)\b(?![\s-]*(?:types?|lines?|states?)\b)|\b(?:cells|nuclei)\s*(?:>=?|≥|:)\s*\d`,
+  "i",
+);
+
 /**
  * Keep only what the vocabulary recognises and the query supports. The model
  * is told the same rules; this makes them hold even when it ignores them.
+ * Numbers become hard filters, so a model's year bounds or min_cells are kept
+ * only when the query writes a year or a cell count.
  */
 export function validateModelReading(raw: unknown, query: string, rules: VocabRule[], nowYear = new Date().getUTCFullYear()): Interpreted {
   const c = coerceInterpreted(raw);
+  const text = prepare(query);
+  const toks = tokenize(text);
   const evidence = tissueEvidence(query, rules);
+  const species = speciesWords(toks);
 
   const organism = uniqCi(
-    c.organism.map(unwrapOrganism).filter((s): s is string => s !== null && namesSpecies(s, query)),
+    c.organism.map(unwrapOrganism).filter((s): s is string => s !== null && (species.has(s) || namesSpecies(s, toks))),
   );
   const tissue_group = uniqCi(
     c.tissue_group
@@ -852,14 +938,16 @@ export function validateModelReading(raw: unknown, query: string, rules: VocabRu
     c.cell_type.map((v) => cellPhrase([v])).filter((v) => v.length > 1 && v.length <= 60 && !CELL_NOISE.has(v)),
   ).slice(0, 6);
 
-  const okYear = (y: number | null): number | null => (y != null && y >= 1990 && y <= nowYear + 1 ? y : null);
+  const yearStated = YEAR_HINT_RE.test(text);
+  const okYear = (y: number | null): number | null => (yearStated && y != null && y >= 1990 && y <= nowYear + 1 ? y : null);
   let year_min = okYear(c.year_min);
   let year_max = okYear(c.year_max);
   if (year_min != null && year_max != null && year_min > year_max) {
     year_min = null;
     year_max = null;
   }
-  const min_cells = c.min_cells != null && c.min_cells > 0 && c.min_cells <= 1e9 ? c.min_cells : null;
+  const min_cells =
+    c.min_cells != null && c.min_cells > 0 && c.min_cells <= 1e9 && CELL_COUNT_HINT_RE.test(text) ? c.min_cells : null;
 
   const q = uniqCi(
     c.q

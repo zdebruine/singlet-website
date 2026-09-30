@@ -162,6 +162,9 @@ export type MultipartState = {
 
 type MultipartRow = Omit<MultipartState, "user_files"> & { file_project_id: string; file_filename: string; file_owner_id: string };
 
+/** An R2 multipart upload that was started but never completed; the caller aborts it. */
+export type PendingUpload = { object_key: string; r2_upload_id: string };
+
 export type AuthorizedFile = {
   project: { id: string; name: string };
   study: { id: string; study_id: string; file_id: string };
@@ -571,11 +574,20 @@ export async function createProject(ctx: ProductCtx, uid: string, body: ProductB
   return { project: publicProject(project), read_token: readToken };
 }
 
+/**
+ * Summary rows for the Browse "Your private studies" list. manifest and
+ * study_meta (up to ~600k characters each) are left out, so 200 rows stay
+ * small; get_private_study returns the full row. The abstract is read only
+ * for the text filter and is not returned.
+ */
 export async function listPrivateStudies(ctx: ProductCtx, uid: string, body: ProductBody) {
   const q = text(body.query, 500).toLowerCase();
   const res = await ctx.db
     .prepare(
-      `SELECT s.*, p.name AS project_name, p.visibility AS project_visibility, p.workspace_id AS project_workspace_id
+      `SELECT s.id, s.project_id, s.file_id, s.owner_id, s.study_id, s.title, s.abstract, s.organism_primary, s.organisms,
+              s.tissue_groups, s.disease_groups, s.assay_families, s.cell_types_raw, s.n_samples, s.n_cells, s.bytes,
+              s.reference_build, s.singlet_version, s.year, s.indexed_at,
+              p.name AS project_name, p.visibility AS project_visibility, p.workspace_id AS project_workspace_id
          FROM user_studies s JOIN projects p ON p.id = s.project_id
         WHERE p.owner_id = ?1
            OR (p.visibility = 'workspace' AND p.workspace_id IN (SELECT workspace_id FROM workspace_members WHERE user_id = ?1))
@@ -587,7 +599,9 @@ export async function listPrivateStudies(ctx: ProductCtx, uid: string, body: Pro
   const studies = (res.results ?? [])
     .map((r): Record<string, unknown> => {
       const { project_name, project_visibility, project_workspace_id, ...row } = r;
-      return { ...studyOut(row), projects: { name: project_name, visibility: project_visibility, workspace_id: project_workspace_id } };
+      const out: Record<string, unknown> = { ...row };
+      for (const c of STUDY_ARRAY_COLUMNS) out[c] = parseJson(row[c], []);
+      return { ...out, projects: { name: project_name, visibility: project_visibility, workspace_id: project_workspace_id } };
     })
     .filter(
       (s) =>
@@ -596,7 +610,8 @@ export async function listPrivateStudies(ctx: ProductCtx, uid: string, body: Pro
           .join(" ")
           .toLowerCase()
           .includes(q),
-    );
+    )
+    .map(({ abstract: _abstract, ...s }) => s);
   return { studies };
 }
 
@@ -652,6 +667,30 @@ export async function getPrivateStudy(ctx: ProductCtx, uid: string, body: Produc
 
 const fileLimit = () => fail("file_limit", `A project can contain up to ${FILE_CAP} files.`, 409, { limit: FILE_CAP });
 
+/** Why storing `bytes` more for `uid` would break the account or the global cap, or null when it fits. */
+async function storageRefusal(db: D1Database, uid: string, bytes: number): Promise<ProductError | null> {
+  const [own, all] = await db.batch([
+    db.prepare(`SELECT COALESCE(SUM(bytes), 0) AS n FROM user_files WHERE owner_id = ?1 AND kind = 'upload' AND status IN ${LIVE_STATUSES}`).bind(uid),
+    db.prepare(`SELECT COALESCE(SUM(bytes), 0) AS n FROM user_files WHERE kind = 'upload' AND status IN ${LIVE_STATUSES}`),
+  ]);
+  const ownBytes = Number(rows<{ n: number }>(own)[0]?.n ?? 0);
+  const allBytes = Number(rows<{ n: number }>(all)[0]?.n ?? 0);
+  if (ownBytes + bytes > ACCOUNT_BYTES_CAP) {
+    return fail(
+      "storage_limit",
+      "This file would exceed the 10 GB account storage limit. Delete a stored file or register a public URL instead.",
+      409,
+      { used: ownBytes, limit: ACCOUNT_BYTES_CAP },
+    );
+  }
+  if (allBytes + bytes > GLOBAL_BYTES_CAP) {
+    return fail("storage_paused", "Private file storage is temporarily full. Register a public HTTPS URL instead; it uses no storage.", 503, {
+      limit: GLOBAL_BYTES_CAP,
+    });
+  }
+  return null;
+}
+
 /**
  * Reserve a file row (status 'uploading') before any bytes move. Storage caps
  * apply to stored uploads only: a registered public URL uses no storage.
@@ -672,39 +711,27 @@ export async function beginFile(ctx: ProductCtx, uid: string, body: ProductBody)
   if (kind === "url" && (!sourceUrl || !URL_RE.test(sourceUrl))) throw fail("invalid_url", "Register a public HTTPS URL ending in .singlet.");
   if ((await countOf(db, `SELECT COUNT(*) AS n FROM user_files WHERE project_id = ?1`, p.id)) >= FILE_CAP) throw fileLimit();
   if (kind === "upload") {
-    const [own, all] = await db.batch([
-      db.prepare(`SELECT COALESCE(SUM(bytes), 0) AS n FROM user_files WHERE owner_id = ?1 AND kind = 'upload' AND status IN ${LIVE_STATUSES}`).bind(uid),
-      db.prepare(`SELECT COALESCE(SUM(bytes), 0) AS n FROM user_files WHERE kind = 'upload' AND status IN ${LIVE_STATUSES}`),
-    ]);
-    const ownBytes = Number(rows<{ n: number }>(own)[0]?.n ?? 0);
-    const allBytes = Number(rows<{ n: number }>(all)[0]?.n ?? 0);
-    if (ownBytes + bytes > ACCOUNT_BYTES_CAP) {
-      throw fail(
-        "storage_limit",
-        "This file would exceed the 10 GB account storage limit. Delete a stored file or register a public URL instead.",
-        409,
-        { used: ownBytes, limit: ACCOUNT_BYTES_CAP },
-      );
-    }
-    if (allBytes + bytes > GLOBAL_BYTES_CAP) {
-      throw fail("storage_paused", "Private file storage is temporarily full. Register a public HTTPS URL instead; it uses no storage.", 503, {
-        limit: GLOBAL_BYTES_CAP,
-      });
-    }
+    const refused = await storageRefusal(db, uid, bytes);
+    if (refused) throw refused;
   }
   const fileId = crypto.randomUUID();
   const objectKey = kind === "upload" ? `users/${uid}/projects/${p.id}/${fileId}-${filename.replace(/[^A-Za-z0-9._-]/g, "_")}` : null;
   const now = nowIso();
+  // Every cap is re-checked inside the INSERT, so parallel requests cannot all
+  // pass the reads above and together overshoot the file count or byte caps.
   const file = await db
     .prepare(
       `INSERT INTO user_files (id, project_id, owner_id, kind, filename, object_key, source_url, bytes, status, created_at, updated_at)
        SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'uploading', ?9, ?9
         WHERE (SELECT COUNT(*) FROM user_files WHERE project_id = ?2) < ?10
+          AND (?4 <> 'upload' OR (
+                (SELECT COALESCE(SUM(bytes), 0) FROM user_files WHERE owner_id = ?3 AND kind = 'upload' AND status IN ${LIVE_STATUSES}) + ?8 <= ?11
+            AND (SELECT COALESCE(SUM(bytes), 0) FROM user_files WHERE kind = 'upload' AND status IN ${LIVE_STATUSES}) + ?8 <= ?12))
        RETURNING *`,
     )
-    .bind(fileId, p.id, uid, kind, filename, objectKey, kind === "url" ? (sourceUrl ?? null) : null, bytes, now, FILE_CAP)
+    .bind(fileId, p.id, uid, kind, filename, objectKey, kind === "url" ? (sourceUrl ?? null) : null, bytes, now, FILE_CAP, ACCOUNT_BYTES_CAP, GLOBAL_BYTES_CAP)
     .first<UserFileRow>();
-  if (!file) throw fileLimit();
+  if (!file) throw (kind === "upload" ? await storageRefusal(db, uid, bytes) : null) ?? fileLimit();
   return { file, object_key: objectKey };
 }
 
@@ -744,13 +771,39 @@ export async function getMultipart(ctx: ProductCtx, uid: string, body: ProductBo
     .prepare(
       `SELECT m.*, f.project_id AS file_project_id, f.filename AS file_filename, f.owner_id AS file_owner_id
          FROM multipart_uploads m JOIN user_files f ON f.id = m.file_id
-        WHERE m.file_id = ?1 AND m.owner_id = ?2`,
+        WHERE m.file_id = ?1 AND m.owner_id = ?2 AND m.expires_at > ?3`,
     )
-    .bind(id, uid)
+    .bind(id, uid, nowIso())
     .first<MultipartRow>();
   if (!row) throw fail("not_found", "That upload does not exist or expired.", 404);
   const { file_project_id, file_filename, file_owner_id, ...upload } = row;
   return { upload: { ...upload, user_files: { project_id: file_project_id, filename: file_filename, owner_id: file_owner_id } } };
+}
+
+/**
+ * Claim up to `limit` expired multipart reservations (any owner): their files
+ * are marked failed, which releases the storage they reserved, and their rows
+ * are removed. The caller aborts the returned uploads in R2 so their parts
+ * stop taking space. Run opportunistically; concurrent sweeps are harmless.
+ */
+export async function takeStaleUploads(ctx: ProductCtx, limit = 5): Promise<PendingUpload[]> {
+  const db = ctx.db;
+  const now = nowIso();
+  const res = await db
+    .prepare(`SELECT file_id, object_key, r2_upload_id FROM multipart_uploads WHERE expires_at <= ?1 ORDER BY expires_at LIMIT ?2`)
+    .bind(now, limit)
+    .all<PendingUpload & { file_id: string }>();
+  const stale = res.results ?? [];
+  if (!stale.length) return [];
+  await db.batch(
+    stale.flatMap((u) => [
+      db
+        .prepare(`UPDATE user_files SET status = 'failed', error = 'The upload expired before it was completed.', updated_at = ?2 WHERE id = ?1 AND status = 'uploading'`)
+        .bind(u.file_id, now),
+      db.prepare(`DELETE FROM multipart_uploads WHERE file_id = ?1 AND r2_upload_id = ?2`).bind(u.file_id, u.r2_upload_id),
+    ]),
+  );
+  return stale.map((u) => ({ object_key: u.object_key, r2_upload_id: u.r2_upload_id }));
 }
 
 export async function getFile(ctx: ProductCtx, uid: string, body: ProductBody) {
@@ -934,39 +987,66 @@ export async function markFileFailed(ctx: ProductCtx, uid: string, body: Product
   return { ok: true };
 }
 
-/** Delete one of the caller's files and everything indexed from it. The caller removes `object_key` from R2. */
-export async function deleteFile(ctx: ProductCtx, uid: string, body: ProductBody): Promise<{ ok: true; object_key: string | null }> {
+/**
+ * Delete one of the caller's files and everything indexed from it. The caller
+ * removes `object_key` from R2 and aborts `uploads` (an unfinished multipart
+ * upload whose parts would otherwise outlive the file).
+ */
+export async function deleteFile(
+  ctx: ProductCtx,
+  uid: string,
+  body: ProductBody,
+): Promise<{ ok: true; object_key: string | null; uploads: PendingUpload[] }> {
   const id = uuid(body.id);
   if (!id) throw fail("invalid_id", "Unknown item.");
   const db = ctx.db;
   const f = await db
-    .prepare(`SELECT id, object_key FROM user_files WHERE id = ?1 AND owner_id = ?2`)
+    .prepare(
+      `SELECT f.id, f.object_key, m.object_key AS upload_key, m.r2_upload_id
+         FROM user_files f LEFT JOIN multipart_uploads m ON m.file_id = f.id
+        WHERE f.id = ?1 AND f.owner_id = ?2`,
+    )
     .bind(id, uid)
-    .first<{ id: string; object_key: string | null }>();
+    .first<{ id: string; object_key: string | null; upload_key: string | null; r2_upload_id: string | null }>();
   if (!f) throw fail("not_found", "That file does not exist.", 404);
   await db.batch([
     ...deleteStudiesStatements(db, `SELECT id FROM user_studies WHERE file_id = ?1`, f.id),
     db.prepare(`DELETE FROM multipart_uploads WHERE file_id = ?1`).bind(f.id),
     db.prepare(`DELETE FROM user_files WHERE id = ?1 AND owner_id = ?2`).bind(f.id, uid),
   ]);
-  return { ok: true, object_key: f.object_key };
+  const uploads = f.upload_key && f.r2_upload_id ? [{ object_key: f.upload_key, r2_upload_id: f.r2_upload_id }] : [];
+  return { ok: true, object_key: f.object_key, uploads };
 }
 
-/** Delete one of the caller's projects with all its files and studies. The caller removes `object_keys` from R2. */
-export async function deleteProject(ctx: ProductCtx, uid: string, body: ProductBody): Promise<{ ok: true; object_keys: string[] }> {
+/**
+ * Delete one of the caller's projects with all its files and studies. The
+ * caller removes `object_keys` from R2 and aborts `uploads`.
+ */
+export async function deleteProject(
+  ctx: ProductCtx,
+  uid: string,
+  body: ProductBody,
+): Promise<{ ok: true; object_keys: string[]; uploads: PendingUpload[] }> {
   const id = uuid(body.id);
   if (!id) throw fail("invalid_id", "Unknown item.");
   const db = ctx.db;
   const p = await projectAccess(db, id, uid, true);
   if (!p) throw fail("not_found", "That project does not exist.", 404);
-  const files = await db.prepare(`SELECT object_key FROM user_files WHERE project_id = ?1`).bind(p.id).all<{ object_key: string | null }>();
+  const [files, pending] = await db.batch([
+    db.prepare(`SELECT object_key FROM user_files WHERE project_id = ?1`).bind(p.id),
+    db.prepare(`SELECT object_key, r2_upload_id FROM multipart_uploads WHERE file_id IN (SELECT id FROM user_files WHERE project_id = ?1)`).bind(p.id),
+  ]);
   await db.batch([
     ...deleteStudiesStatements(db, `SELECT id FROM user_studies WHERE project_id = ?1`, p.id),
     db.prepare(`DELETE FROM multipart_uploads WHERE file_id IN (SELECT id FROM user_files WHERE project_id = ?1)`).bind(p.id),
     db.prepare(`DELETE FROM user_files WHERE project_id = ?1`).bind(p.id),
     db.prepare(`DELETE FROM projects WHERE id = ?1 AND owner_id = ?2`).bind(p.id, uid),
   ]);
-  return { ok: true, object_keys: (files.results ?? []).map((f) => f.object_key).filter((k): k is string => !!k) };
+  return {
+    ok: true,
+    object_keys: rows<{ object_key: string | null }>(files).map((f) => f.object_key).filter((k): k is string => !!k),
+    uploads: rows<PendingUpload>(pending),
+  };
 }
 
 export async function createWorkspace(ctx: ProductCtx, uid: string, body: ProductBody) {
@@ -975,16 +1055,23 @@ export async function createWorkspace(ctx: ProductCtx, uid: string, body: Produc
   const slug = typeof rawSlug === "string" && SLUG_RE.test(rawSlug) ? rawSlug : null;
   if (name === null || slug === null) throw fail("invalid_workspace", "Use a name and a 3–50 character lowercase slug.");
   const db = ctx.db;
-  if ((await countOf(db, `SELECT COUNT(*) AS n FROM workspace_members WHERE user_id = ?1 AND role = 'owner'`, uid)) >= WORKSPACE_CAP) {
-    throw fail("workspace_limit", `You can create up to ${WORKSPACE_CAP} workspaces.`, 409, { limit: WORKSPACE_CAP });
-  }
+  const ownedSql = `SELECT COUNT(*) AS n FROM workspace_members WHERE user_id = ?1 AND role = 'owner'`;
+  const workspaceLimit = () => fail("workspace_limit", `You can create up to ${WORKSPACE_CAP} workspaces.`, 409, { limit: WORKSPACE_CAP });
+  if ((await countOf(db, ownedSql, uid)) >= WORKSPACE_CAP) throw workspaceLimit();
   const id = crypto.randomUUID();
   const now = nowIso();
-  // A taken slug inserts nothing (and so no owner row); the read below tells.
+  // A taken slug or a full quota (re-checked inside the INSERT, so parallel
+  // requests cannot all squeeze past it) inserts nothing, and so no owner row;
+  // the reads below tell which.
   await db.batch([
     db
-      .prepare(`INSERT INTO workspaces (id, owner_id, name, slug, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?5) ON CONFLICT (slug) DO NOTHING`)
-      .bind(id, uid, name, slug, now),
+      .prepare(
+        `INSERT INTO workspaces (id, owner_id, name, slug, created_at, updated_at)
+         SELECT ?1, ?2, ?3, ?4, ?5, ?5
+          WHERE (SELECT COUNT(*) FROM workspace_members WHERE user_id = ?2 AND role = 'owner') < ?6
+         ON CONFLICT (slug) DO NOTHING`,
+      )
+      .bind(id, uid, name, slug, now, WORKSPACE_CAP),
     db
       .prepare(
         `INSERT INTO workspace_members (workspace_id, user_id, role, joined_at)
@@ -993,7 +1080,10 @@ export async function createWorkspace(ctx: ProductCtx, uid: string, body: Produc
       .bind(id, uid, now),
   ]);
   const workspace = await db.prepare(`SELECT * FROM workspaces WHERE id = ?1`).bind(id).first<WorkspaceRow>();
-  if (!workspace) throw fail("slug_taken", "That workspace address is already in use.", 409);
+  if (!workspace) {
+    if ((await countOf(db, ownedSql, uid)) >= WORKSPACE_CAP) throw workspaceLimit();
+    throw fail("slug_taken", "That workspace address is already in use.", 409);
+  }
   return { workspace };
 }
 
@@ -1033,12 +1123,29 @@ export async function getWorkspace(ctx: ProductCtx, uid: string, body: ProductBo
           WHERE workspace_id = ?1 AND (visibility = 'workspace' OR owner_id = ?2) ORDER BY updated_at DESC, rowid DESC`,
       )
       .bind(w.id, uid),
+    // Only events about things this member can read: a private project or
+    // cohort filed under the workspace (and its files and comments) stays
+    // out of everyone else's feed, as it does from the lists above.
     db
       .prepare(
-        `SELECT id, workspace_id, actor_id, kind, subject_id, detail, created_at FROM activity_events
-          WHERE workspace_id = ?1 ORDER BY created_at DESC, id DESC LIMIT 30`,
+        `SELECT a.id, a.workspace_id, a.actor_id, a.kind, a.subject_id, a.detail, a.created_at FROM activity_events a
+          WHERE a.workspace_id = ?1
+            AND (a.kind = 'member_joined'
+              OR (a.kind = 'project_created' AND EXISTS (
+                    SELECT 1 FROM projects p WHERE p.id = a.subject_id
+                       AND (p.owner_id = ?2 OR (p.visibility = 'workspace' AND p.workspace_id = ?1))))
+              OR (a.kind IN ('file_uploaded', 'file_registered') AND EXISTS (
+                    SELECT 1 FROM user_files f JOIN projects p ON p.id = f.project_id WHERE f.id = a.subject_id
+                       AND (p.owner_id = ?2 OR (p.visibility = 'workspace' AND p.workspace_id = ?1))))
+              OR (a.kind = 'cohort_saved' AND EXISTS (
+                    SELECT 1 FROM cohorts c WHERE c.id = a.subject_id
+                       AND (c.owner_id = ?2 OR (c.visibility = 'workspace' AND c.workspace_id = ?1))))
+              OR (a.kind = 'comment_added' AND EXISTS (
+                    SELECT 1 FROM cohort_comments k JOIN cohorts c ON c.id = k.cohort_id WHERE k.id = a.subject_id
+                       AND (c.owner_id = ?2 OR (c.visibility = 'workspace' AND c.workspace_id = ?1)))))
+          ORDER BY a.created_at DESC, a.id DESC LIMIT 30`,
       )
-      .bind(w.id),
+      .bind(w.id, uid),
   ]);
   type MemberRow = {
     user_id: string;
@@ -1100,25 +1207,54 @@ export async function acceptInvite(ctx: ProductCtx, uid: string, body: ProductBo
     : null;
   if (!inv) throw fail("invalid_invite", "This invite is invalid, expired or already used.", 410);
   const me = await db.prepare(`SELECT email FROM users WHERE id = ?1`).bind(uid).first<{ email: string | null }>();
-  if (inv.email && me?.email && inv.email.toLowerCase() !== me.email.toLowerCase()) {
+  // An account without an email (see oauth.ts findOrCreateUser) cannot take an invite addressed to one.
+  if (inv.email && (!me?.email || inv.email.toLowerCase() !== me.email.toLowerCase())) {
     throw fail("wrong_account", `This invite was sent to ${inv.email}. Sign in with that email address.`, 403);
   }
+  const memberLimit = () => fail("member_limit", `This workspace already has ${MEMBER_CAP} members.`, 409);
   const already = await isMember(db, inv.workspace_id, uid);
   if (!already && (await countOf(db, `SELECT COUNT(*) AS n FROM workspace_members WHERE workspace_id = ?1`, inv.workspace_id)) >= MEMBER_CAP) {
-    throw fail("member_limit", `This workspace already has ${MEMBER_CAP} members.`, 409);
+    throw memberLimit();
   }
+  // One transaction: the invite is claimed first (single use, and only while
+  // the workspace has room or the caller is already in it); the membership
+  // and the activity event land only if this request made that claim.
   // DO NOTHING on an existing membership: an owner opening their own link keeps the owner role.
+  const claimedByMe = `EXISTS (SELECT 1 FROM workspace_invites WHERE id = ?4 AND accepted_by = ?2 AND accepted_at = ?3)`;
   const statements: D1PreparedStatement[] = [
     db
       .prepare(
-        `INSERT INTO workspace_members (workspace_id, user_id, role, joined_at) VALUES (?1, ?2, 'member', ?3)
+        `UPDATE workspace_invites SET accepted_at = ?2, accepted_by = ?3
+          WHERE id = ?1 AND accepted_at IS NULL AND expires_at > ?2
+            AND (EXISTS (SELECT 1 FROM workspace_members WHERE workspace_id = ?4 AND user_id = ?3)
+                 OR (SELECT COUNT(*) FROM workspace_members WHERE workspace_id = ?4) < ?5)`,
+      )
+      .bind(inv.id, now, uid, inv.workspace_id, MEMBER_CAP),
+    db
+      .prepare(
+        `INSERT INTO workspace_members (workspace_id, user_id, role, joined_at)
+         SELECT ?1, ?2, 'member', ?3 WHERE ${claimedByMe}
          ON CONFLICT (workspace_id, user_id) DO NOTHING`,
       )
-      .bind(inv.workspace_id, uid, now),
-    db.prepare(`UPDATE workspace_invites SET accepted_at = ?2, accepted_by = ?3 WHERE id = ?1 AND accepted_at IS NULL`).bind(inv.id, now, uid),
+      .bind(inv.workspace_id, uid, now, inv.id),
   ];
-  if (!already) statements.push(activityStatement(db, inv.workspace_id, uid, "member_joined", null, now));
-  await db.batch(statements);
+  if (!already) {
+    statements.push(
+      db
+        .prepare(
+          `INSERT INTO activity_events (workspace_id, actor_id, kind, subject_id, created_at)
+           SELECT ?1, ?2, 'member_joined', NULL, ?3 WHERE ${claimedByMe}`,
+        )
+        .bind(inv.workspace_id, uid, now, inv.id),
+    );
+  }
+  const [claim] = await db.batch(statements);
+  if (!(Number(claim?.meta.changes) || 0) && !(await isMember(db, inv.workspace_id, uid))) {
+    // Someone else used the invite first, or the workspace filled up meanwhile.
+    const open = await db.prepare(`SELECT 1 AS n FROM workspace_invites WHERE id = ?1 AND accepted_at IS NULL`).bind(inv.id).first();
+    if (open) throw memberLimit();
+    throw fail("invalid_invite", "This invite is invalid, expired or already used.", 410);
+  }
   const w = await db.prepare(`SELECT slug FROM workspaces WHERE id = ?1`).bind(inv.workspace_id).first<{ slug: string }>();
   return { ok: true, slug: w?.slug ?? null };
 }
