@@ -7,6 +7,7 @@
  * (HEALTHY | WARN | LOW_QUALITY) and is null until the QC backfill has run for
  * that sample.
  */
+import { referenceMismatch } from "./catalog-refresh";
 import { safeList } from "./json";
 import { parseCharacteristics, summarizeConditions, type ConditionSummary } from "./conditions";
 import { cellCountVerdict, type CellCountVerdict } from "./suspect-cells";
@@ -49,6 +50,15 @@ export interface StudySeries {
   /** Legacy names kept for the Python/R packages. */
   r2_bundle_key: string | null;
   r2_bundle_bytes: number | null;
+  /** Samples in the file with a non-empty matrix and ≥ 1 called cell (null = not yet assessed). */
+  usable_samples: number | null;
+  /** Samples in the file with per-sample QC recorded. */
+  assessed_samples: number | null;
+  /** GSMs in the file with no count data (empty matrix or 0 called cells). */
+  unusable_gsm_ids: string[];
+  /** Primary organism is not covered by the reference build the reads were aligned to. */
+  reference_mismatch: boolean;
+  reference_mismatch_note: string | null;
 }
 
 export interface StudyMeta {
@@ -97,6 +107,16 @@ export async function loadStudy(db: D1Database, rawId: string): Promise<StudyDet
   const id = rawId.trim().toUpperCase();
   if (!GSE_RE.test(id)) return null;
 
+  const usablePromise = db
+    .prepare(
+      `SELECT COUNT(*) AS n, SUM(CASE WHEN usable = 1 THEN 1 ELSE 0 END) AS ok,
+              SUM(CASE WHEN usable IS NULL THEN 1 ELSE 0 END) AS unknown,
+              group_concat(CASE WHEN usable = 0 THEN gsm_id END) AS bad
+         FROM sample_qc WHERE gse_id = ?`
+    )
+    .bind(id)
+    .first<{ n: number; ok: number | null; unknown: number | null; bad: string | null }>()
+    .catch(() => null);
   const [seriesRow, metaRow, samplesResult, pubsResult, manifestRow] = await Promise.all([
     db
       .prepare(
@@ -192,6 +212,11 @@ export async function loadStudy(db: D1Database, rawId: string): Promise<StudyDet
       ? manifestRow.reference_build
       : null;
 
+  const usableRow = await usablePromise;
+  const assessed = usableRow && Number(usableRow.n) > 0 && Number(usableRow.unknown ?? 0) === 0 ? Number(usableRow.n) : null;
+  const organismForRef = (metaRow?.organism_primary as string | null) ?? (seriesRow.organism as string | null);
+  const mismatch = referenceMismatch(organismForRef, referenceBuild);
+
   const series: StudySeries = {
     id,
     title: (seriesRow.title as string | null) ?? null,
@@ -219,6 +244,13 @@ export async function loadStudy(db: D1Database, rawId: string): Promise<StudyDet
     last_updated: (seriesRow.last_updated as string | null) ?? null,
     r2_bundle_key: bundleKey,
     r2_bundle_bytes: bundleBytes,
+    usable_samples: assessed != null ? Number(usableRow?.ok ?? 0) : null,
+    assessed_samples: assessed,
+    unusable_gsm_ids: assessed != null && usableRow?.bad ? usableRow.bad.split(",").sort() : [],
+    reference_mismatch: mismatch,
+    reference_mismatch_note: mismatch
+      ? `Reads from ${organismLabel} were aligned to ${referenceBuild}; gene-level counts are cross-species and not suitable for most analyses.`
+      : null,
   };
 
   const meta: StudyMeta | null = metaRow

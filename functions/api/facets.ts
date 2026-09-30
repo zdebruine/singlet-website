@@ -13,6 +13,7 @@
  * Cached at the edge for FACETS_CACHE_TTL seconds, keyed on the normalised
  * filter set. The unfiltered catalog is served from a daily `meta_cache` blob.
  */
+import { ensureCatalogColumns } from "../_shared/catalog-refresh";
 import { corsOk, corsErr, handleOptions } from "../_shared/cors";
 import { cachedJson, FACETS_CACHE_TTL } from "../_shared/cache";
 import { type CloudEnv } from "../_shared/cloud";
@@ -26,6 +27,7 @@ interface Env extends CloudEnv {
 }
 
 export const onRequestGet: PagesFunction<Env> = async ({ env, request, waitUntil }) => {
+  await ensureCatalogColumns(env.DB).catch(() => undefined);
   const id = await resolveIdentity(request, env, waitUntil);
   if (!id.ok) return id.response;
 

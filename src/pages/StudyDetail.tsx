@@ -132,6 +132,15 @@ const StudyDetail = () => {
     return map;
   }, [bundleSamples]);
 
+  // Usable = non-empty count matrix and ≥ 1 called cell (server-assessed; falls back to the file's own QC rows).
+  const { usableCount, assessedCount, unusableCount } = useMemo(() => {
+    const qcRows = bundleSamples?.samples ?? [];
+    const assessedRows = qcRows.filter((s) => s.usable != null);
+    const assessed = data?.series.assessed_samples ?? (assessedRows.length ? assessedRows.length : null);
+    const usable = data?.series.usable_samples ?? (assessedRows.length ? assessedRows.filter((s) => s.usable === 1).length : null);
+    return { usableCount: usable, assessedCount: assessed, unusableCount: assessed != null && usable != null ? assessed - usable : 0 };
+  }, [bundleSamples, data]);
+
   // Cells actually called in the published file (null when no file QC is known).
   const fileCells = useMemo(() => {
     const vals = (bundleSamples?.samples ?? []).map((s) => s.n_cells_called).filter((v): v is number => v != null);
@@ -397,6 +406,16 @@ const StudyDetail = () => {
       </nav>
 
       {/* Header */}
+      {series.bundle_url && usableCount === 0 && (
+        <div role="alert" className="mb-4 border border-destructive/40 bg-destructive/10 text-destructive px-4 py-3 text-[14px] font-medium" style={{ borderRadius: 3 }}>
+          This file currently contains no usable count data.
+        </div>
+      )}
+      {series.reference_mismatch_note && (
+        <div role="note" className="mb-4 border border-warning/40 bg-warning/10 text-warning px-4 py-3 text-[13px]" style={{ borderRadius: 3 }}>
+          {series.reference_mismatch_note}
+        </div>
+      )}
       <header className="mb-6">
         <div className="flex items-center gap-3 flex-wrap text-[13px]">
           <span className="font-mono text-[15px] font-semibold text-primary">{gseId}</span>
@@ -545,7 +564,7 @@ const StudyDetail = () => {
         <aside className="mt-2 lg:mt-0 lg:sticky lg:top-20 space-y-3" aria-labelledby="download-h">
           <h2 id="download-h" className="text-[18px] lg:sr-only">Load or download</h2>
           {processed.length > 0 ? (
-            <DownloadPanel accession={gseId} bundleUrl={series.bundle_url} bundleBytes={series.bundle_bytes} bundleNSamples={series.bundle_n_samples} processedSamples={processed.length} stacked />
+            <DownloadPanel accession={gseId} bundleUrl={series.bundle_url} bundleBytes={series.bundle_bytes} bundleNSamples={series.bundle_n_samples} processedSamples={processed.length} usableSamples={usableCount} assessedSamples={assessedCount} stacked />
           ) : (
             <div className="surface px-4 py-3 text-sm text-muted-foreground">
               No samples in this study completed processing, so there is no <code className="code-inline">.singlet</code> file.
@@ -583,6 +602,11 @@ const StudyDetail = () => {
 
       {/* Samples */}
       <section id="samples" className="mt-8 scroll-mt-20" aria-labelledby="samples-h">
+        {unusableCount > 0 && usableCount != null && usableCount > 0 && (
+          <div role="note" className="mb-3 border border-warning/40 bg-warning/10 text-warning px-3 py-2 text-[13px]" style={{ borderRadius: 3 }}>
+            {unusableCount} of {assessedCount} samples in this file have no count data (empty matrix or 0 called cells) and will load as empty.
+          </div>
+        )}
         <div className="flex items-baseline justify-between mb-3 gap-3 flex-wrap">
           <h2 id="samples-h" className="text-[18px]">Samples</h2>
           <span className="text-[12px] text-muted-foreground">

@@ -69,6 +69,8 @@ export interface StudyRow {
   bundle_n_samples: number | null;
   file_cells: number | null;
   reference_build: string | null;
+  usable_samples?: number | null;
+  reference_mismatch?: boolean;
   year: number | null;
   n_conditions: number;
   conditions: Condition[];
@@ -317,6 +319,15 @@ export interface GseRow {
   last_updated: string;
   /** Common name for the study's primary organism (e.g. "Human"). */
   organism_label?: string;
+  /** Samples in the file with a non-empty matrix and ≥ 1 called cell; null = not yet assessed. */
+  usable_samples?: number | null;
+  /** Samples in the file with per-sample QC recorded. */
+  assessed_samples?: number | null;
+  /** GSMs in the file with no count data. */
+  unusable_gsm_ids?: string[];
+  /** Primary organism is not covered by the reference build. */
+  reference_mismatch?: boolean;
+  reference_mismatch_note?: string | null;
 }
 
 export interface GsmRow {
@@ -571,6 +582,9 @@ export interface SampleQc {
   fraction_reads_in_cells: number | null;
   total_genes_detected: number | null;
   singlet_version: string | null;
+  matrix_bytes?: number | null;
+  /** 1 usable, 0 no count data, null not yet assessed. */
+  usable?: number | null;
 }
 
 export interface BundleSamplesResponse {

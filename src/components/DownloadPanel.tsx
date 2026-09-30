@@ -22,13 +22,18 @@ interface DownloadPanelProps {
   bundleNSamples?: number | null;
   /** Number of processed samples in the catalog (for "N of M" messaging). */
   processedSamples?: number | null;
+  /** Samples with usable count data, and samples assessed (null = unknown). */
+  usableSamples?: number | null;
+  assessedSamples?: number | null;
   /** Single-column layout for a narrow sidebar. */
   stacked?: boolean;
   className?: string;
 }
 
-export function DownloadPanel({ accession, bundleUrl, bundleBytes, bundleNSamples, processedSamples, stacked = false, className }: DownloadPanelProps) {
+export function DownloadPanel({ accession, bundleUrl, bundleBytes, bundleNSamples, processedSamples, usableSamples, assessedSamples, stacked = false, className }: DownloadPanelProps) {
   const downloadUrl = bundleUrl || null;
+  const hollow = !!downloadUrl && usableSamples === 0;
+  const partlyEmpty = !!downloadUrl && usableSamples != null && assessedSamples != null && usableSamples > 0 && usableSamples < assessedSamples;
   const showSampleCount = downloadUrl && bundleNSamples != null && processedSamples != null && bundleNSamples !== processedSamples;
   // In the narrow sidebar the trailing comments don't fit; drop them there.
   const py = stacked
@@ -62,14 +67,22 @@ export function DownloadPanel({ accession, bundleUrl, bundleBytes, bundleNSample
           <span className="flag self-start">File not built yet</span>
         )}
       </div>
-      <div className={cn("p-4 grid gap-3", stacked ? "grid-cols-1" : "md:grid-cols-2")}>
-        <CodeBlock code={py} label="python" compact />
-        <CodeBlock code={r} label="r" compact />
-        <CodeBlock code={curl} label="curl" compact wrap={stacked} className={cn(!stacked && "md:col-span-2")} />
-      </div>
-      {downloadUrl ? (
+      {hollow ? (
+        <p role="alert" className="m-4 border border-destructive/40 bg-destructive/10 text-destructive px-3 py-2 text-[13px] font-medium" style={{ borderRadius: 3 }}>
+          This file currently contains no usable count data.
+        </p>
+      ) : (
+        <div className={cn("p-4 grid gap-3", stacked ? "grid-cols-1" : "md:grid-cols-2")}>
+          <CodeBlock code={py} label="python" compact />
+          <CodeBlock code={r} label="r" compact />
+          <CodeBlock code={curl} label="curl" compact wrap={stacked} className={cn(!stacked && "md:col-span-2")} />
+        </div>
+      )}
+      {hollow ? null : downloadUrl ? (
         <p className="px-4 pb-3 text-xs text-muted-foreground leading-relaxed">
-          {showSampleCount ? `Contains ${bundleNSamples} of ${processedSamples} processed samples. ` : ""}
+          {partlyEmpty
+            ? `Contains ${usableSamples} usable of ${assessedSamples} samples. `
+            : showSampleCount ? `Contains ${bundleNSamples} of ${processedSamples} processed samples. ` : ""}
           One file holds every processed sample in the study; select samples with <code className="code-inline">gsm_id</code> after
           loading. <Link to="/docs#singlet-file" className="text-primary hover:underline">What's inside →</Link>
         </p>

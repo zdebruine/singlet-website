@@ -18,6 +18,20 @@
  * `{ indexed: [...], failed: [{gse_id, error}], remaining }`. Loop until
  * `remaining` is 0.
  *
+ * GET /api/ingest/refresh-next?n=50 — UNAUTHENTICATED freshness crank, locked
+ * the same way (`meta_cache` key `refresh-next:lock`) and idempotent. Each call:
+ * (a) fills gsm.organism_primary/tissue_group/disease_group/assay_family where
+ * organism_primary IS NULL (vocab.ts rules); (b) computes sample_qc.usable /
+ * matrix_bytes from bundle_index; (c) creates bundle_manifest rows for files in
+ * gse.r2_bundle_key that have none (reads manifest.json); (d) recomputes
+ * gse_meta for studies missing one or marked stale. Returns
+ * `{ done: {...}, remaining: {...}, remaining_total }`. New manifests are then
+ * picked up by index-next for sample_qc.
+ *
+ * ORCHESTRATOR CONTRACT: after every ingest batch into gse/gsm, loop
+ * refresh-next until remaining_total is 0, then index-next until remaining is
+ * 0, then refresh-next once more (so new sample_qc rows get usable flags).
+ *
  * Cache note: functions/_shared/cache.ts is TTL-only (Cache API + meta_cache),
  * with no per-key invalidation, so an ingested change becomes visible to
  * /api/gse/:id after its 300 s TTL expires. If per-key purge is added later,
@@ -27,6 +41,7 @@
 
 import { getBundleIndex, ensureSampleQcTable } from "../../_shared/bundle-reader";
 import { readSampleSummaries, upsertSampleQcStatement } from "../../_shared/bundle-core";
+import { applyUsable, ensureCatalogColumns, refreshNext, refreshRemaining } from "../../_shared/catalog-refresh";
 
 const DEFAULT_TOKEN_SHA256 = "b37e6cb5277791ff7d0de2550f0944ea39e580ec4f94e9f4c3b8dcd842a8aaab";
 
@@ -410,28 +425,30 @@ async function ensureFailureTable(db: D1Database): Promise<void> {
     .run();
 }
 
-async function readLockUntil(db: D1Database): Promise<number> {
+async function readLockUntil(db: D1Database, key = LOCK_KEY): Promise<number> {
   const row = await db
     .prepare(`SELECT value FROM meta_cache WHERE key = ?`)
-    .bind(LOCK_KEY)
+    .bind(key)
     .first<{ value: string }>()
     .catch(() => null);
   const until = Number(row?.value ?? 0);
   return Number.isFinite(until) ? until : 0;
 }
 
-async function writeLockUntil(db: D1Database, until: number): Promise<void> {
+async function writeLockUntil(db: D1Database, until: number, key = LOCK_KEY): Promise<void> {
   await db
     .prepare(`INSERT OR REPLACE INTO meta_cache (key, value, updated_at) VALUES (?, ?, ?)`)
-    .bind(LOCK_KEY, String(until), nowIso())
+    .bind(key, String(until), nowIso())
     .run()
     .catch(() => undefined);
 }
 
 export const onRequestGet: PagesFunction<Env> = async ({ request, env, params }) => {
   const origin = request.headers.get("Origin");
-  if (String(params.table ?? "") !== "index-next") {
-    return json({ error: "Unknown GET endpoint. Use /api/ingest/index-next?n=25" }, 404, origin);
+  const route = String(params.table ?? "");
+  if (route === "refresh-next") return refreshNextHandler(request, env, origin);
+  if (route !== "index-next") {
+    return json({ error: "Unknown GET endpoint. Use /api/ingest/index-next?n=25 or /api/ingest/refresh-next?n=50" }, 404, origin);
   }
   const started = Date.now();
   const url = new URL(request.url);
@@ -448,6 +465,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env, params })
   try {
     await ensureSampleQcTable(env.DB).catch(() => undefined);
     await ensureFailureTable(env.DB).catch(() => undefined);
+    await ensureCatalogColumns(env.DB);
     const pending = await env.DB.prepare(`SELECT m.gse_id ${PENDING_SQL} ORDER BY m.gse_id LIMIT ?`)
       .bind(n)
       .all<{ gse_id: string }>();
@@ -462,6 +480,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env, params })
           const st = nowIso();
           const statements = samples.map((s) => upsertSampleQcStatement(env.DB, s as unknown as Record<string, unknown>, st));
           for (let i = 0; i < statements.length; i += BATCH_SIZE) await env.DB.batch(statements.slice(i, i + BATCH_SIZE));
+          await applyUsable(env.DB, gse_id, index);
         }
         const expected = await env.DB.prepare(`SELECT n_gsms_in_bundle AS n FROM bundle_manifest WHERE gse_id = ?`)
           .bind(gse_id)
@@ -498,3 +517,26 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env, params })
     await writeLockUntil(env.DB, Date.now() + COOLDOWN_MS);
   }
 };
+
+const REFRESH_LOCK_KEY = "refresh-next:lock";
+
+async function refreshNextHandler(request: Request, env: Env, origin: string | null): Promise<Response> {
+  const started = Date.now();
+  const url = new URL(request.url);
+  const n = Math.min(200, Math.max(1, Number(url.searchParams.get("n") ?? "50") || 50));
+  const until = await readLockUntil(env.DB, REFRESH_LOCK_KEY);
+  if (Date.now() < until) {
+    return json({ error: "Busy — another refresh-next run is in flight or cooling down", retry_after_ms: until - Date.now() }, 429, origin);
+  }
+  await writeLockUntil(env.DB, Date.now() + LOCK_MS, REFRESH_LOCK_KEY);
+  try {
+    const { done, errors } = await refreshNext(env.DB, n);
+    const remaining = await refreshRemaining(env.DB);
+    const remaining_total = Object.values(remaining).reduce((a, b) => a + Math.max(0, b), 0);
+    return json({ ok: true, done, errors, remaining, remaining_total, ms: Date.now() - started }, 200, origin);
+  } catch (e) {
+    return json({ error: String(e) }, 500, origin);
+  } finally {
+    await writeLockUntil(env.DB, Date.now() + COOLDOWN_MS, REFRESH_LOCK_KEY);
+  }
+}

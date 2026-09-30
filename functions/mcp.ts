@@ -20,6 +20,7 @@
  * Protocol versions 2025-06-18 and 2025-03-26 (JSON-RPC batches accepted for
  * the latter). A missing MCP-Protocol-Version header means 2025-03-26.
  */
+import { ensureCatalogColumns } from "./_shared/catalog-refresh";
 import { CORS_HEADERS } from "./_shared/cors";
 import { apiKeyFromRequest, checkApiKey, keyMessage, type KeyCheck } from "./_shared/identity";
 import { nlSearch, type NlEnv, type NlSearchBody, type Quota } from "./_shared/nl-search-core";
@@ -507,6 +508,8 @@ function studySummary(r: StudyRow, why: string) {
     bundle_n_samples: r.bundle_n_samples,
     file_cells: r.file_cells,
     reference_build: r.reference_build,
+    usable_samples: r.usable_samples ?? null,
+    reference_mismatch: r.reference_mismatch ?? false,
     match: r.match,
     why,
     study_url: `${SITE}/study/${r.gse_id}`,
@@ -678,6 +681,10 @@ function studyText(d: StudyDetail): string {
   if (d.conditions_label) lines.push(`Conditions: ${d.conditions_label}`);
   if (m?.cell_types_raw.length) lines.push(`Cell types recorded: ${m.cell_types_raw.slice(0, 15).join(", ")}`);
   lines.push(s.bundle_url ? `File: ${s.bundle_url}${s.bundle_bytes ? ` (${fmtBytes(s.bundle_bytes)})` : ""}` : "File: not built yet");
+  if (s.bundle_url && s.usable_samples === 0) lines.push("⚠ This file currently contains no usable count data (empty matrices or 0 called cells).");
+  else if (s.usable_samples != null && s.assessed_samples != null && s.usable_samples < s.assessed_samples)
+    lines.push(`⚠ ${s.assessed_samples - s.usable_samples} of ${s.assessed_samples} samples in the file have no count data: ${s.unusable_gsm_ids.join(", ")}.`);
+  if (s.reference_mismatch_note) lines.push(`⚠ ${s.reference_mismatch_note}`);
   lines.push(`Load: singlet.load("${s.id}")  /  R: load("${s.id}")`);
   lines.push(`${SITE}/study/${s.id}`);
   if (s.abstract) {
@@ -727,6 +734,11 @@ async function getStudy(env: Env, args: Record<string, unknown>) {
     has_bundle: !!d.series.bundle_url,
     bundle_url: d.series.bundle_url,
     bundle_bytes: d.series.bundle_bytes,
+    usable_samples: d.series.usable_samples,
+    samples_in_file_assessed: d.series.assessed_samples,
+    unusable_samples: d.series.unusable_gsm_ids,
+    reference_mismatch: d.series.reference_mismatch,
+    reference_build: d.series.reference_build,
     samples,
     samples_truncated: d.samples.length > samples.length,
     publications: d.publications,
@@ -920,6 +932,7 @@ async function authFor(env: Env, request: Request, waitUntil: (p: Promise<unknow
 }
 
 export const onRequestPost: PagesFunction<Env> = async ({ env, request, waitUntil }) => {
+  await ensureCatalogColumns(env.DB).catch(() => undefined);
   const version = (request.headers.get("MCP-Protocol-Version") ?? "").trim();
   if (version && !(PROTOCOL_VERSIONS as readonly string[]).includes(version)) {
     return json({ jsonrpc: "2.0", id: null, error: { code: -32600, message: `Unsupported MCP-Protocol-Version: ${version}. Supported: ${PROTOCOL_VERSIONS.join(", ")}` } }, 400);

@@ -2,6 +2,7 @@
  * Shapes served by /api/bundle/* — the study's own `.singlet` file read over
  * HTTP Range requests, plus the D1 mirror of the per-sample QC summaries.
  */
+import { applyUsable, isUsable, matrixBytesByGsm } from "./catalog-refresh";
 import {
   getBundleIndex,
   readEntryText,
@@ -107,6 +108,19 @@ export interface SampleQc {
   singlet_version: string | null;
   git_sha?: string | null;
   wall_seconds?: number | null;
+  /** Compressed exon+intron matrix bytes (from the bundle index). */
+  matrix_bytes?: number | null;
+  /** 1 = non-empty matrix and ≥ 1 called cell; 0 = no count data; null = not yet assessed. */
+  usable?: number | null;
+}
+
+/** Read-side normalisation: 0 saturation / mito mean "not computed". */
+export function normalizeQc<T extends Partial<SampleQc>>(r: T): T {
+  return {
+    ...r,
+    sequencing_saturation: r.sequencing_saturation ? r.sequencing_saturation : null,
+    median_mito_fraction: r.median_mito_fraction ? r.median_mito_fraction : null,
+  };
 }
 
 const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
@@ -126,8 +140,9 @@ export function shapeSummary(gse: string, gsm: string, s: Record<string, unknown
     mapping_rate: num(s.mapping_rate),
     exonic_fraction: num(s.exonic_fraction),
     intronic_fraction: num(s.intronic_fraction),
-    sequencing_saturation: num(s.sequencing_saturation),
-    median_mito_fraction: num(s.median_mito_fraction),
+    // Never computed by the pipeline so far: a literal 0 means "not computed".
+    sequencing_saturation: num(s.sequencing_saturation) || null,
+    median_mito_fraction: num(s.median_mito_fraction) || null,
     fraction_reads_in_cells: num(s.fraction_reads_in_cells),
     total_genes_detected: num(s.total_genes_detected),
     singlet_version: str(s.singlet_version),
@@ -202,20 +217,28 @@ export async function loadSampleQc(
   await ensureSampleQcTable(db).catch(() => undefined);
   if (!opts.refresh) {
     const rows = await db
-      .prepare(`SELECT ${SAMPLE_QC_COLUMNS.join(", ")} FROM sample_qc WHERE gse_id = ? ORDER BY gsm_id`)
+      .prepare(`SELECT ${SAMPLE_QC_COLUMNS.join(", ")}, matrix_bytes, usable FROM sample_qc WHERE gse_id = ? ORDER BY gsm_id`)
       .bind(gse)
       .all<SampleQc>()
-      .catch(() => null);
-    if (rows?.results?.length) return { source: "d1", samples: rows.results };
+      .catch(() =>
+        db.prepare(`SELECT ${SAMPLE_QC_COLUMNS.join(", ")} FROM sample_qc WHERE gse_id = ? ORDER BY gsm_id`).bind(gse).all<SampleQc>().catch(() => null)
+      );
+    if (rows?.results?.length) return { source: "d1", samples: rows.results.map(normalizeQc) };
   }
 
   const index = await getBundleIndex(db, gse, { waitUntil: opts.waitUntil });
   const samples = await readSampleSummaries(gse, index);
+  const mb = matrixBytesByGsm(index);
+  for (const s of samples) {
+    s.matrix_bytes = mb.get(s.gsm_id) ?? 0;
+    s.usable = isUsable(s.matrix_bytes, s.n_cells_called) ? 1 : 0;
+  }
   if (samples.length) {
     const stamp = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
     const statements = samples.map((s) => upsertSampleQcStatement(db, s as unknown as Record<string, unknown>, stamp));
     const write = (async () => {
       for (let i = 0; i < statements.length; i += 100) await db.batch(statements.slice(i, i + 100));
+      await applyUsable(db, gse, index);
     })().catch(() => undefined);
     if (opts.waitUntil) opts.waitUntil(write);
     else await write;

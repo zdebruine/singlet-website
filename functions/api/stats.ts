@@ -13,6 +13,7 @@ import { cachedJson } from "../_shared/cache";
 import { type CloudEnv } from "../_shared/cloud";
 import { resolveIdentity } from "../_shared/identity";
 import { computeStats } from "../_shared/stats-core";
+import { ensureCatalogColumns } from "../_shared/catalog-refresh";
 
 interface Env extends CloudEnv {
   DB: D1Database;
@@ -24,6 +25,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request, waitUntil
 
   return cachedJson(request, waitUntil, async () => {
     try {
+      await ensureCatalogColumns(env.DB);
       const stats = await computeStats(env.DB);
       if (!stats) return corsErr("No stats available", 404);
       return corsOk(stats);
