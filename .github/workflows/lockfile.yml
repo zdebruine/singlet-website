@@ -1,0 +1,59 @@
+name: Regenerate package-lock.json
+
+# Fixes a branch whose package.json changed without a matching lockfile
+# (Cloudflare Pages and CI both run `npm ci`, which refuses a drifted
+# lockfile). Resolves the lockfile only — nothing is installed or built — and
+# commits it back to the same branch when it changed.
+#
+# Runs by hand for any branch (Actions → Regenerate package-lock.json → Run
+# workflow, or `gh workflow run lockfile.yml -f branch=<branch>`; manual runs
+# need this file on the default branch), and by itself when a push to a
+# branch other than main touches package.json.
+#
+# A push made with GITHUB_TOKEN does not start other workflows, so re-run CI
+# on the branch afterwards (Cloudflare Pages still builds the new commit).
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Branch to regenerate package-lock.json on"
+        required: true
+        type: string
+  push:
+    branches-ignore: [main]
+    paths: [package.json]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: lockfile-${{ inputs.branch || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  lockfile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      BRANCH: ${{ inputs.branch || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch || github.ref }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Resolve package-lock.json
+        run: npm install --package-lock-only --no-audit --no-fund
+      - name: Commit and push if it changed
+        run: |
+          if git diff --quiet -- package-lock.json; then
+            echo "package-lock.json is already in sync with package.json."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package-lock.json
+          git commit -m "chore: regenerate package-lock.json"
+          git push origin "HEAD:refs/heads/${BRANCH}"

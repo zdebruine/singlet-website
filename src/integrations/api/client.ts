@@ -761,11 +761,13 @@ export const apiClient = {
     async logout(): Promise<void> {
       await fetch(buildApiUrl("/api/auth/logout"), { method: "POST", credentials: "same-origin" }).catch(() => undefined);
     },
-    /** GET /api/account/usage — today's AI counters for the signed-in user. */
-    async usage(signal?: AbortSignal): Promise<{ search: number; explain: number }> {
+    /** GET /api/account/usage — today's AI counters (and the deployment's limits) for the signed-in user. */
+    async usage(signal?: AbortSignal): Promise<{ search: number; explain: number; searchLimit: number | null; explainLimit: number | null }> {
       const res = await fetch(buildApiUrl("/api/account/usage"), { signal, credentials: "same-origin", cache: "no-store" });
       const r = rec(await readJson(res));
-      return { search: num(rec(r.search).used), explain: num(rec(r.explain).used) };
+      const search = rec(r.search);
+      const explain = rec(r.explain);
+      return { search: num(search.used), explain: num(explain.used), searchLimit: numOrNull(search.limit), explainLimit: numOrNull(explain.limit) };
     },
     /** Where the browser goes to start a sign-in (full-page navigation). */
     startUrl(provider: "github" | "google", returnTo: string): string {
