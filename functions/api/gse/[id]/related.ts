@@ -1,14 +1,19 @@
 /**
  * GET /api/gse/:id/related — up to 8 related studies.
  *
- * Same publication first (a shared PubMed id), then studies with a published
- * file that share the organism plus a tissue group and disease group, biggest
- * first. Nothing is invented: a study only appears if the catalog says so.
+ * Same publication first (a shared PubMed id), then studies that share the
+ * organism plus a tissue group and disease group, biggest first. Both tiers
+ * only return downloadable studies, with the same predicate search uses
+ * (DOWNLOADABLE_SQL: a file, usable count data, reference matches species),
+ * and never match on placeholder groups ("Other", "Other / unspecified",
+ * "Unknown"), which say nothing about the study. Nothing is invented: a study
+ * only appears if the catalog says so.
  */
 import { corsOk, corsErr, handleOptions } from "../../../_shared/cors";
 import { cachedJson } from "../../../_shared/cache";
 import { GSE_RE } from "../../../_shared/study-core";
 import { safeList } from "../../../_shared/json";
+import { DOWNLOADABLE_SQL } from "../../../_shared/search-core";
 import { organismToCommon } from "../../../_shared/vocab";
 
 interface Env {
@@ -17,6 +22,14 @@ interface Env {
 
 const LIMIT = 8;
 const TTL = 3600;
+
+/** Fallback groups written when nothing better is known (catalog-refresh.ts). */
+const PLACEHOLDER_GROUPS = new Set(["", "other", "other / unspecified", "unspecified", "unknown"]);
+
+/** First group value that carries information, or null. */
+function firstReal(values: string[]): string | null {
+  return values.find((v) => !PLACEHOLDER_GROUPS.has(v.trim().toLowerCase())) ?? null;
+}
 
 export interface RelatedStudy {
   gse_id: string;
@@ -67,13 +80,13 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, params, request, w
         const seen = new Set<string>([id]);
         const out: RelatedStudy[] = [];
 
-        // 1. Same publication.
+        // 1. Same publication, downloadable.
         for (const pmid of pmids) {
           if (out.length >= LIMIT) break;
           const res = await env.DB.prepare(
             `SELECT g.id AS gse_id, g.title, m.organism_primary, m.tissue_groups, m.disease_groups, m.n_done, m.n_cells, m.year
-               FROM gse g LEFT JOIN gse_meta m ON m.gse_id = g.id
-              WHERE g.id != ? AND g.pubmed_ids LIKE ?
+               FROM gse g JOIN gse_meta m ON m.gse_id = g.id
+              WHERE g.id != ? AND g.pubmed_ids LIKE ? AND ${DOWNLOADABLE_SQL}
               ORDER BY m.n_cells DESC LIMIT ?`
           )
             .bind(id, `%"${pmid}"%`, LIMIT)
@@ -88,15 +101,16 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, params, request, w
           }
         }
 
-        // 2. Same organism + tissue group + disease group, with a file.
-        const organism = (self.organism_primary as string | null) ?? null;
-        const tissue = safeList(self.tissue_groups)[0] ?? null;
-        const disease = safeList(self.disease_groups)[0] ?? null;
+        // 2. Same organism + tissue group + disease group, downloadable.
+        const orgRaw = (self.organism_primary as string | null) ?? null;
+        const organism = orgRaw && !PLACEHOLDER_GROUPS.has(orgRaw.trim().toLowerCase()) ? orgRaw : null;
+        const tissue = firstReal(safeList(self.tissue_groups));
+        const disease = firstReal(safeList(self.disease_groups));
         if (out.length < LIMIT && organism && tissue) {
           const res = await env.DB.prepare(
             `SELECT m.gse_id, g.title, m.organism_primary, m.tissue_groups, m.disease_groups, m.n_done, m.n_cells, m.year
                FROM gse_meta m JOIN gse g ON g.id = m.gse_id
-              WHERE m.gse_id != ? AND m.organism_primary = ? AND m.has_bundle = 1
+              WHERE m.gse_id != ? AND m.organism_primary = ? AND ${DOWNLOADABLE_SQL}
                 AND EXISTS (SELECT 1 FROM json_each(m.tissue_groups) t WHERE t.value = ?)
                 ${disease ? `AND EXISTS (SELECT 1 FROM json_each(m.disease_groups) d WHERE d.value = ?)` : ""}
               ORDER BY m.n_cells DESC LIMIT ?`

@@ -23,7 +23,6 @@ let columnsEnsured = false;
 
 export async function ensureCatalogColumns(db: D1Database): Promise<void> {
   if (columnsEnsured) return;
-  columnsEnsured = true;
   await ensureSampleQcTable(db).catch(() => undefined);
   const alters = [
     "ALTER TABLE sample_qc ADD COLUMN matrix_bytes INTEGER",
@@ -33,7 +32,19 @@ export async function ensureCatalogColumns(db: D1Database): Promise<void> {
   ];
   // Each ALTER fails harmlessly with "duplicate column" once applied.
   for (const sql of alters) await db.prepare(sql).run().catch(() => undefined);
-  await db.prepare("CREATE INDEX IF NOT EXISTS idx_sample_qc_usable ON sample_qc(gse_id, usable)").run().catch(() => undefined);
+  // Remember success only once every column (and the index) is really there, so
+  // a transient D1 error on first use is retried by the next request instead of
+  // being cached for the life of the isolate. LIMIT 0 reads no rows.
+  try {
+    await db.prepare("CREATE INDEX IF NOT EXISTS idx_sample_qc_usable ON sample_qc(gse_id, usable)").run();
+    await db.batch([
+      db.prepare("SELECT matrix_bytes, usable FROM sample_qc LIMIT 0"),
+      db.prepare("SELECT n_usable_samples, reference_mismatch FROM gse_meta LIMIT 0"),
+    ]);
+    columnsEnsured = true;
+  } catch {
+    /* retried on the next call */
+  }
 }
 
 // ── usable samples ─────────────────────────────────────────────────────────
@@ -62,7 +73,9 @@ export async function applyUsable(db: D1Database, gse: string, index: Pick<Bundl
     .prepare(`SELECT gsm_id, n_cells_called FROM sample_qc WHERE gse_id = ?`)
     .bind(gse)
     .all<{ gsm_id: string; n_cells_called: number | null }>();
-  const stmts = (rows.results ?? []).map((r) => {
+  // No rows → nothing changes, so gse_meta is not marked stale either.
+  if (!rows.results?.length) return 0;
+  const stmts = rows.results.map((r) => {
     const b = bytes.get(r.gsm_id) ?? 0;
     return db
       .prepare(`UPDATE sample_qc SET matrix_bytes = ?, usable = ? WHERE gsm_id = ?`)
@@ -111,18 +124,38 @@ const MANIFEST_PENDING = `FROM gse g WHERE g.r2_bundle_key IS NOT NULL AND g.r2_
   AND NOT EXISTS (SELECT 1 FROM bundle_manifest m WHERE m.gse_id = g.id)
   AND NOT EXISTS (SELECT 1 FROM bundle_index_failure f WHERE f.gse_id = g.id)`;
 const USABLE_PENDING = `FROM bundle_index i WHERE EXISTS (SELECT 1 FROM sample_qc q WHERE q.gse_id = i.gse_id AND q.usable IS NULL)`;
-const META_PENDING = `FROM gse g LEFT JOIN gse_meta m ON m.gse_id = g.id
-  WHERE (m.gse_id IS NULL OR m.n_usable_samples IS NULL)
-    AND NOT EXISTS (SELECT 1 FROM gsm s WHERE s.gse_id = g.id AND s.organism_primary IS NULL)
-    AND NOT EXISTS (SELECT 1 FROM sample_qc q WHERE q.gse_id = g.id AND q.usable IS NULL)`;
+// Unassessed samples whose study has no bundle_index and never will from this
+// crank: there is no file, or the file is parked as unreadable. No readable
+// matrix means not usable, so these resolve to usable = 0 without a network
+// read. (A readable file with a manifest is indexed by index-next; one without
+// a manifest by phase (c) below — both then set the flags from the index.)
+// Without this, such a study kept usable IS NULL and gse_meta never recomputed.
+const USABLE_NO_FILE = `FROM gse g
+  WHERE EXISTS (SELECT 1 FROM sample_qc q WHERE q.gse_id = g.id AND q.usable IS NULL)
+    AND NOT EXISTS (SELECT 1 FROM bundle_index i WHERE i.gse_id = g.id)
+    AND (g.r2_bundle_key IS NULL OR g.r2_bundle_key = ''
+         OR EXISTS (SELECT 1 FROM bundle_index_failure f WHERE f.gse_id = g.id))`;
+// The inner SELECT narrows to missing/stale gse_meta first; its `LIMIT -1`
+// (no limit) stops SQLite flattening it, which otherwise runs the correlated
+// probes below for every gse row (~135k rows read per count instead of ~22k).
+// The last clause waits for index-next: a study with a manifest but no
+// sample_qc rows yet (and not parked) would otherwise be recomputed with
+// n_usable_samples = 0 and drop out of search until the next pass.
+const META_PENDING = `FROM (SELECT g.id FROM gse g LEFT JOIN gse_meta m ON m.gse_id = g.id
+          WHERE m.gse_id IS NULL OR m.n_usable_samples IS NULL LIMIT -1) g
+  WHERE NOT EXISTS (SELECT 1 FROM gsm s WHERE s.gse_id = g.id AND s.organism_primary IS NULL)
+    AND NOT EXISTS (SELECT 1 FROM sample_qc q WHERE q.gse_id = g.id AND q.usable IS NULL)
+    AND NOT (EXISTS (SELECT 1 FROM bundle_manifest b WHERE b.gse_id = g.id)
+             AND NOT EXISTS (SELECT 1 FROM sample_qc q WHERE q.gse_id = g.id)
+             AND NOT EXISTS (SELECT 1 FROM bundle_index_failure f WHERE f.gse_id = g.id))`;
 
 export async function refreshRemaining(db: D1Database): Promise<Record<string, number>> {
-  const [a, b, c, d] = await Promise.all(
-    [GSM_PENDING, USABLE_PENDING, MANIFEST_PENDING, META_PENDING].map((w) =>
+  const [a, b, e, c, d] = await Promise.all(
+    [GSM_PENDING, USABLE_PENDING, USABLE_NO_FILE, MANIFEST_PENDING, META_PENDING].map((w) =>
       db.prepare(`SELECT COUNT(*) AS c ${w}`).first<{ c: number }>().then((r) => Number(r?.c ?? 0)).catch(() => -1)
     )
   );
-  return { gsm_normalize: a, sample_usable: b, bundle_manifest: c, gse_meta: d };
+  return { gsm_normalize: a, sample_usable: b, sample_usable_no_file: e, bundle_manifest: c, gse_meta: d };
 }
 
 const normOrganism = (raw: string | null): string => {
@@ -167,6 +200,15 @@ export async function refreshNext(db: D1Database, n: number): Promise<{ done: Re
     try {
       const idx = await getBundleIndex(db, gse_id);
       done.samples_usable += await applyUsable(db, gse_id, idx);
+    } catch (e) {
+      errors.push(`${gse_id} usable: ${String(e).slice(0, 200)}`);
+    }
+  }
+  // …and usable = 0 where there is no readable file to index (D1 only).
+  const noFileIds = await db.prepare(`SELECT g.id AS gse_id ${USABLE_NO_FILE} LIMIT ?`).bind(n).all<{ gse_id: string }>();
+  for (const { gse_id } of noFileIds.results ?? []) {
+    try {
+      done.samples_usable += await applyUsable(db, gse_id, { entries: [] });
     } catch (e) {
       errors.push(`${gse_id} usable: ${String(e).slice(0, 200)}`);
     }

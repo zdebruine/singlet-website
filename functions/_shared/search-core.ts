@@ -275,6 +275,15 @@ const KEYWORD_SYNONYMS: Record<string, string[]> = {
   metastatic: ["metastasis", "metastases", "metastatic"],
 };
 
+/**
+ * `map[key]` only when it is the map's own entry. A query word such as
+ * "constructor" must not resolve to an Object.prototype member, which is not
+ * iterable and would throw (HTTP 500) when spread or looped over.
+ */
+function ownList(map: Record<string, string[]>, key: string): string[] {
+  return Object.prototype.hasOwnProperty.call(map, key) ? map[key] : [];
+}
+
 const GSM_FIELD_LABEL: Record<string, string> = {
   characteristics: "their GEO characteristics",
   source: "their source field",
@@ -538,7 +547,7 @@ export function termVariants(term: string): string[] {
     else if (value.length > 3) variants.add(`${value}s`);
   };
   addInflection(base);
-  for (const synonym of KEYWORD_SYNONYMS[base] ?? []) {
+  for (const synonym of ownList(KEYWORD_SYNONYMS, base)) {
     const normalized = synonym.replace(/-/g, " ").replace(/\s+/g, " ").trim();
     variants.add(normalized);
     variants.add(normalized.replace(/ /g, "-"));
@@ -1012,7 +1021,7 @@ function facetTextTerms(value: string): string[] {
     .split(/[/,]| and /)
     .map((s) => s.trim())
     .filter((s) => s.length > 3);
-  return [...new Set([base, ...extra, ...(FACET_TEXT_TERMS[value] ?? [])])].filter(Boolean);
+  return [...new Set([base, ...extra, ...ownList(FACET_TEXT_TERMS, value)])].filter(Boolean);
 }
 
 /** Where a facet value is mentioned in free text, if it is annotated nowhere. */

@@ -6,7 +6,9 @@
  * Auth: header `X-Ingest-Token`. Only the SHA-256 hex digest of the token is
  * ever known to this repo — the plaintext token is NEVER stored here. Setting
  * `INGEST_TOKEN_SHA256` as a Cloudflare Pages environment variable overrides
- * the baked-in digest below and therefore rotates the token.
+ * the baked-in digest below. It may hold several comma-separated digests, so a
+ * token is rotated without downtime: add the new digest next to the old one,
+ * switch the HPC orchestrator to the new token, then drop the old digest.
  *
  * GET /api/ingest/index-next?n=25 — UNAUTHENTICATED backfill crank. It only
  * reads public `.singlet` files and fills the cache tables `bundle_index` and
@@ -14,19 +16,23 @@
  * D1 row (`meta_cache` key `index-next:lock`): one run in flight at a time and
  * at least one second between runs globally — otherwise 429. Each call picks
  * the next `n` studies from `bundle_manifest` that have no `bundle_index` row
- * or no `sample_qc` rows and returns
- * `{ indexed: [...], failed: [{gse_id, error}], remaining }`. Loop until
- * `remaining` is 0.
+ * or no `sample_qc` rows (and are not parked in `bundle_index_failure`) and
+ * returns `{ indexed: [...], failed: [{gse_id, error}], warnings: [{gse_id,
+ * note}], remaining }`. A study is in exactly one of indexed (sample_qc
+ * written; warnings adds notes such as partial summaries) or failed (unreadable
+ * or no summary.json; parked so it is not retried). Loop until `remaining` is 0.
  *
  * GET /api/ingest/refresh-next?n=50 — UNAUTHENTICATED freshness crank, locked
  * the same way (`meta_cache` key `refresh-next:lock`) and idempotent. Each call:
  * (a) fills gsm.organism_primary/tissue_group/disease_group/assay_family where
  * organism_primary IS NULL (vocab.ts rules); (b) computes sample_qc.usable /
- * matrix_bytes from bundle_index; (c) creates bundle_manifest rows for files in
- * gse.r2_bundle_key that have none (reads manifest.json); (d) recomputes
- * gse_meta for studies missing one or marked stale. Returns
- * `{ done: {...}, remaining: {...}, remaining_total }`. New manifests are then
- * picked up by index-next for sample_qc.
+ * matrix_bytes from bundle_index (usable = 0 where the study has no readable
+ * file); (c) creates bundle_manifest rows for files in gse.r2_bundle_key that
+ * have none (reads manifest.json, which also stores bundle_index); (d)
+ * recomputes gse_meta for studies missing one or marked stale, except those
+ * still waiting for index-next. Returns `{ done: {...}, remaining: {...},
+ * remaining_total }`. New manifests are then picked up by index-next for
+ * sample_qc.
  *
  * ORCHESTRATOR CONTRACT: after every ingest batch into gse/gsm, loop
  * refresh-next until remaining_total is 0, then index-next until remaining is
@@ -43,7 +49,13 @@ import { getBundleIndex, ensureSampleQcTable } from "../../_shared/bundle-reader
 import { readSampleSummaries, upsertSampleQcStatement } from "../../_shared/bundle-core";
 import { applyUsable, ensureCatalogColumns, refreshNext, refreshRemaining } from "../../_shared/catalog-refresh";
 
+// Fallback used ONLY while INGEST_TOKEN_SHA256 is unset or blank, to keep the
+// HPC orchestrator's current token working. TODO(rotation): delete this
+// constant (and the fallback in acceptedDigests) once INGEST_TOKEN_SHA256 is
+// set in the Pages project and the orchestrator has moved to the new token.
 const DEFAULT_TOKEN_SHA256 = "b37e6cb5277791ff7d0de2550f0944ea39e580ec4f94e9f4c3b8dcd842a8aaab";
+
+const SHA256_HEX_RE = /^[0-9a-f]{64}$/;
 
 const MAX_ROWS = 2000;
 const MAX_BODY_BYTES = 4 * 1024 * 1024;
@@ -188,6 +200,29 @@ function timingSafeEqual(a: string, b: string): boolean {
   return diff === 0;
 }
 
+/**
+ * Token digests currently accepted: the comma-separated INGEST_TOKEN_SHA256
+ * list, or the baked-in default when that variable is unset. Malformed entries
+ * are ignored, so a variable holding no valid digest rejects every token
+ * rather than silently falling back to the default.
+ */
+function acceptedDigests(env: Env): string[] {
+  const configured = (env.INGEST_TOKEN_SHA256 ?? "").trim();
+  const raw = configured || DEFAULT_TOKEN_SHA256;
+  return raw
+    .split(",")
+    .map((d) => d.trim().toLowerCase())
+    .filter((d) => SHA256_HEX_RE.test(d));
+}
+
+/** True when the token's digest is in the accepted list (every entry is compared). */
+async function tokenAccepted(env: Env, token: string): Promise<boolean> {
+  const got = await sha256Hex(token);
+  let ok = false;
+  for (const digest of acceptedDigests(env)) ok = timingSafeEqual(got, digest) || ok;
+  return ok;
+}
+
 function nowIso(): string {
   return new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
 }
@@ -202,8 +237,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, params }
   // ── Auth ──────────────────────────────────────────────────────────────────
   const token = request.headers.get("X-Ingest-Token") ?? "";
   if (!token) return json({ error: "Missing X-Ingest-Token" }, 401, origin);
-  const expected = (env.INGEST_TOKEN_SHA256 || DEFAULT_TOKEN_SHA256).trim().toLowerCase();
-  if (!timingSafeEqual(await sha256Hex(token), expected)) {
+  if (!(await tokenAccepted(env, token))) {
     return json({ error: "Invalid ingest token" }, 401, origin);
   }
 
@@ -409,11 +443,35 @@ const LOCK_MS = 120_000;
 /** Minimum spacing between runs once one finishes. */
 const COOLDOWN_MS = 1_000;
 
-// Studies that cannot be read (missing/corrupt file) are parked here so the
-// backfill loop can reach remaining = 0 instead of retrying them forever.
+// Pending = a manifest but no central-directory index, OR no sample_qc row at
+// all: refresh-next phase (c) stores bundle_index for new files without reading
+// their summaries, so "has an index" alone does not mean done. Both probes are
+// index lookups (bundle_index PK, sample_qc(gse_id, …)) and never touch the
+// large `entries` blobs, so counting stays cheap.
+// Studies that cannot be read (missing/corrupt file) are parked in
+// bundle_index_failure so the backfill loop can reach remaining = 0 instead of
+// retrying them forever.
 const PENDING_SQL = `FROM bundle_manifest m
-  WHERE NOT EXISTS (SELECT 1 FROM bundle_index i WHERE i.gse_id = m.gse_id)
+  WHERE (NOT EXISTS (SELECT 1 FROM bundle_index i WHERE i.gse_id = m.gse_id)
+         OR NOT EXISTS (SELECT 1 FROM sample_qc q WHERE q.gse_id = m.gse_id))
     AND NOT EXISTS (SELECT 1 FROM bundle_index_failure f WHERE f.gse_id = m.gse_id)`;
+
+const SUMMARY_RE = /^samples\/GSM\d+\/summary\.json$/;
+
+/** Per-sample summary.json entries listed in a central directory. */
+function summaryCount(index: { entries: { p: string }[] }): number {
+  let n = 0;
+  for (const e of index.entries) if (SUMMARY_RE.test(e.p)) n++;
+  return n;
+}
+
+async function parkStudy(db: D1Database, gse: string, reason: string): Promise<void> {
+  await db
+    .prepare(`INSERT OR REPLACE INTO bundle_index_failure (gse_id, error, updated_at) VALUES (?, ?, ?)`)
+    .bind(gse, reason, nowIso())
+    .run()
+    .catch(() => undefined);
+}
 
 async function ensureFailureTable(db: D1Database): Promise<void> {
   await db
@@ -462,57 +520,92 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env, params })
 
   const indexed: string[] = [];
   const failed: { gse_id: string; error: string }[] = [];
+  const warnings: { gse_id: string; note: string }[] = [];
   try {
     await ensureSampleQcTable(env.DB).catch(() => undefined);
     await ensureFailureTable(env.DB).catch(() => undefined);
     await ensureCatalogColumns(env.DB);
-    const pending = await env.DB.prepare(`SELECT m.gse_id ${PENDING_SQL} ORDER BY m.gse_id LIMIT ?`)
+    const pending = await env.DB.prepare(
+      `SELECT m.gse_id, EXISTS (SELECT 1 FROM bundle_index i WHERE i.gse_id = m.gse_id) AS has_index
+       ${PENDING_SQL} ORDER BY m.gse_id LIMIT ?`
+    )
       .bind(n)
-      .all<{ gse_id: string }>();
+      .all<{ gse_id: string; has_index: number }>();
 
-    for (const { gse_id } of pending.results ?? []) {
+    for (const { gse_id, has_index } of pending.results ?? []) {
+      const cached = Number(has_index) === 1;
       let parked: string | null = null;
       try {
-        const index = await getBundleIndex(env.DB, gse_id, { refresh: true });
-        const samples = await readSampleSummaries(gse_id, index);
+        // Reuse a stored index (refresh-next phase (c) has just written one for
+        // every new file) instead of re-reading the zip. If some summaries in it
+        // cannot be read, re-read the central directory once — the cached
+        // offsets may predate a re-pack — and re-read the summaries only when
+        // the file actually changed.
+        let index = await getBundleIndex(env.DB, gse_id, { refresh: !cached });
+        let samples = await readSampleSummaries(gse_id, index);
+        if (cached && samples.length < summaryCount(index)) {
+          const fresh = await getBundleIndex(env.DB, gse_id, { refresh: true });
+          const changed = fresh.bytes !== index.bytes || fresh.entries.length !== index.entries.length;
+          index = fresh;
+          if (changed) samples = await readSampleSummaries(gse_id, index);
+        }
         // Keep every row we did parse — never delete existing sample_qc rows.
         if (samples.length > 0) {
           const st = nowIso();
           const statements = samples.map((s) => upsertSampleQcStatement(env.DB, s as unknown as Record<string, unknown>, st));
           for (let i = 0; i < statements.length; i += BATCH_SIZE) await env.DB.batch(statements.slice(i, i + BATCH_SIZE));
-          await applyUsable(env.DB, gse_id, index);
         }
-        const expected = await env.DB.prepare(`SELECT n_gsms_in_bundle AS n FROM bundle_manifest WHERE gse_id = ?`)
-          .bind(gse_id)
-          .first<{ n: number }>()
-          .catch(() => null);
-        const want = Number(expected?.n ?? 0);
-        if (samples.length === 0) parked = "no summary.json";
-        else if (want > 0 && samples.length < want) parked = `partial summaries: ${samples.length}/${want} samples`;
-        indexed.push(gse_id);
+        // Flags for every sample_qc row of the study, including rows posted by
+        // the HPC job without a summary in the file.
+        await applyUsable(env.DB, gse_id, index);
+        if (samples.length === 0) {
+          parked = "no summary.json";
+        } else {
+          indexed.push(gse_id);
+          const expected = await env.DB.prepare(`SELECT n_gsms_in_bundle AS n FROM bundle_manifest WHERE gse_id = ?`)
+            .bind(gse_id)
+            .first<{ n: number }>()
+            .catch(() => null);
+          const want = Number(expected?.n ?? 0);
+          // Not parked: it now has sample_qc rows, so it is no longer pending.
+          if (want > 0 && samples.length < want) {
+            warnings.push({ gse_id, note: `partial summaries: ${samples.length}/${want} samples` });
+          }
+          if (!cached) {
+            // getBundleIndex swallows a failed cache write (e.g. an index over
+            // D1's 2 MB value limit); without a row the study would stay pending
+            // and be re-read on every call, so park it.
+            const stored = await env.DB.prepare(`SELECT 1 AS ok FROM bundle_index WHERE gse_id = ?`)
+              .bind(gse_id)
+              .first<{ ok: number }>()
+              .catch(() => ({ ok: 1 }));
+            if (!stored) {
+              const note = "sample_qc written but bundle_index could not be stored";
+              warnings.push({ gse_id, note });
+              await parkStudy(env.DB, gse_id, note);
+            }
+          }
+        }
       } catch (e) {
         parked = String(e).slice(0, 500);
       }
       if (parked) {
         failed.push({ gse_id, error: parked });
-        await env.DB.prepare(
-          `INSERT OR REPLACE INTO bundle_index_failure (gse_id, error, updated_at) VALUES (?, ?, ?)`
-        )
-          .bind(gse_id, parked, nowIso())
-          .run()
-          .catch(() => undefined);
+        await parkStudy(env.DB, gse_id, parked);
       }
     }
 
-
-    const rest = await env.DB.prepare(`SELECT COUNT(*) AS c ${PENDING_SQL}`).first<{ c: number }>();
+    // Nothing was pending → nothing is (skips a second scan on idle calls).
+    const rest = (pending.results ?? []).length
+      ? await env.DB.prepare(`SELECT COUNT(*) AS c ${PENDING_SQL}`).first<{ c: number }>()
+      : { c: 0 };
     return json(
-      { ok: true, indexed, failed, remaining: Number(rest?.c ?? 0), ms: Date.now() - started },
+      { ok: true, indexed, failed, warnings, remaining: Number(rest?.c ?? 0), ms: Date.now() - started },
       200,
       origin
     );
   } catch (e) {
-    return json({ error: String(e), indexed, failed }, 500, origin);
+    return json({ error: String(e), indexed, failed, warnings }, 500, origin);
   } finally {
     await writeLockUntil(env.DB, Date.now() + COOLDOWN_MS);
   }
@@ -530,8 +623,16 @@ async function refreshNextHandler(request: Request, env: Env, origin: string | n
   }
   await writeLockUntil(env.DB, Date.now() + LOCK_MS, REFRESH_LOCK_KEY);
   try {
-    const { done, errors } = await refreshNext(env.DB, n);
-    const remaining = await refreshRemaining(env.DB);
+    // Every phase selects exactly what one of these counts measures, so when
+    // all of them are 0 the phase scans are skipped: an idle call (the hourly
+    // GitHub Actions crank, most of the time) costs one round of counts.
+    // A failed count (-1) is never treated as idle.
+    const before = await refreshRemaining(env.DB);
+    const idle = Object.values(before).every((v) => v === 0);
+    const { done, errors } = idle
+      ? { done: { gsm_normalized: 0, samples_usable: 0, manifests_created: 0, meta_recomputed: 0 }, errors: [] as string[] }
+      : await refreshNext(env.DB, n);
+    const remaining = idle ? before : await refreshRemaining(env.DB);
     const remaining_total = Object.values(remaining).reduce((a, b) => a + Math.max(0, b), 0);
     return json({ ok: true, done, errors, remaining, remaining_total, ms: Date.now() - started }, 200, origin);
   } catch (e) {
