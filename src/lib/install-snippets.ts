@@ -2,11 +2,11 @@
  * The install commands, in one place.
  *
  * Both packages install from GitHub until wheels / a CRAN release are
- * published under a name we control. Never print a bare PyPI install line:
- * the `singlet` name on PyPI currently belongs to an unrelated package.
+ * published. The Python distribution is "singlet-bio" (import name `singlet`);
+ * never print `pip install singlet` — that PyPI name belongs to an unrelated package.
  * Both builds compile a small C++17 extension against libzstd.
  */
-export const PY_INSTALL = 'pip install "singlet @ git+https://github.com/Singlet-Bio/singlet"';
+export const PY_INSTALL = 'pip install "singlet-bio @ git+https://github.com/Singlet-Bio/singlet"';
 export const R_INSTALL = 'remotes::install_github("Singlet-Bio/singlet", subdir = "r")';
 
 /** System packages the source build needs (a C++17 compiler and the zstd headers). */
@@ -14,7 +14,7 @@ export const BUILD_DEPS = "# Linux: sudo apt install build-essential libzstd-dev
 
 /** Python install with an extra, e.g. `pyInstallExtra("torch")`. */
 export function pyInstallExtra(extra: string): string {
-  return `pip install "singlet[${extra}] @ git+https://github.com/Singlet-Bio/singlet"`;
+  return `pip install "singlet-bio[${extra}] @ git+https://github.com/Singlet-Bio/singlet"`;
 }
 
 /** Bioconductor packages behind the default SingleCellExperiment return type. */
