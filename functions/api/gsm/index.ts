@@ -2,12 +2,17 @@
  * GET /api/gsm
  * List samples with filters:
  *   organism, protocol, tissue, cell_type, disease, sex, status, qc_flag,
- *   failure_category, min_cells, max_cells, q (FTS)
+ *   failure_category, min_cells, max_cells,
+ *   q (FTS; words only — operators and punctuation are ignored)
  * Pagination: page (0-based), page_size (default 50, max 500)
  * Sorting: sort (column), asc (1=asc)
+ *
+ * Cached at the edge for CATALOG_CACHE_TTL seconds, keyed on the full URL.
  */
 import { corsOk, corsErr, handleOptions, intParam, clampPageSize } from "../../_shared/cors";
+import { cachedJson, CATALOG_CACHE_TTL } from "../../_shared/cache";
 import { safeList } from "../../_shared/json";
+import { tokenizeQuery } from "../../_shared/search-core";
 
 interface Env {
   DB: D1Database;
@@ -19,7 +24,12 @@ const ALLOWED_SORT_COLS = new Set([
   "status", "qc_flag", "pipeline_date", "pz_size_bytes", "last_updated"
 ]);
 
-export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
+// Edge-cached: an uncached full COUNT over `gsm` on every pageview is what
+// exhausted the D1 read quota on 2026-09-03 (see ../../_shared/cache).
+export const onRequestGet: PagesFunction<Env> = async ({ env, request, waitUntil }) =>
+  cachedJson(request, waitUntil, () => listSamples(env, request), CATALOG_CACHE_TTL);
+
+async function listSamples(env: Env, request: Request): Promise<Response> {
   try {
     const url = new URL(request.url);
 
@@ -56,9 +66,13 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
     const conditions: string[] = [];
     const bindParams: (string | number)[] = [];
 
-    if (q) {
+    // Never bind raw input into MATCH (`x*`, `foo"`, `a OR` are FTS5 syntax
+    // errors → 500): tokenizeQuery quotes every word as an FTS5 string and ANDs
+    // them, as /api/search does. Nothing searchable left → no text filter.
+    const match = q ? tokenizeQuery(q).and : null;
+    if (match) {
       conditions.push("gsm_id IN (SELECT gsm_id FROM fts_gsm WHERE fts_gsm MATCH ?)");
-      bindParams.push(q + "*");
+      bindParams.push(match);
     }
     if (organism)         { conditions.push("organism = ?");          bindParams.push(organism); }
     if (protocol)         { conditions.push("protocol = ?");          bindParams.push(protocol); }
@@ -97,6 +111,6 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
   } catch (e) {
     return corsErr(String(e));
   }
-};
+}
 
 export const onRequestOptions: PagesFunction<Env> = async () => handleOptions();

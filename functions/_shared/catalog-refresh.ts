@@ -23,7 +23,6 @@ let columnsEnsured = false;
 
 export async function ensureCatalogColumns(db: D1Database): Promise<void> {
   if (columnsEnsured) return;
-  columnsEnsured = true;
   await ensureSampleQcTable(db).catch(() => undefined);
   const alters = [
     "ALTER TABLE sample_qc ADD COLUMN matrix_bytes INTEGER",
@@ -33,7 +32,19 @@ export async function ensureCatalogColumns(db: D1Database): Promise<void> {
   ];
   // Each ALTER fails harmlessly with "duplicate column" once applied.
   for (const sql of alters) await db.prepare(sql).run().catch(() => undefined);
-  await db.prepare("CREATE INDEX IF NOT EXISTS idx_sample_qc_usable ON sample_qc(gse_id, usable)").run().catch(() => undefined);
+  // Remember success only once every column (and the index) is really there, so
+  // a transient D1 error on first use is retried by the next request instead of
+  // being cached for the life of the isolate. LIMIT 0 reads no rows.
+  try {
+    await db.prepare("CREATE INDEX IF NOT EXISTS idx_sample_qc_usable ON sample_qc(gse_id, usable)").run();
+    await db.batch([
+      db.prepare("SELECT matrix_bytes, usable FROM sample_qc LIMIT 0"),
+      db.prepare("SELECT n_usable_samples, reference_mismatch FROM gse_meta LIMIT 0"),
+    ]);
+    columnsEnsured = true;
+  } catch {
+    /* retried on the next call */
+  }
 }
 
 // ── usable samples ─────────────────────────────────────────────────────────
@@ -62,7 +73,9 @@ export async function applyUsable(db: D1Database, gse: string, index: Pick<Bundl
     .prepare(`SELECT gsm_id, n_cells_called FROM sample_qc WHERE gse_id = ?`)
     .bind(gse)
     .all<{ gsm_id: string; n_cells_called: number | null }>();
-  const stmts = (rows.results ?? []).map((r) => {
+  // No rows → nothing changes, so gse_meta is not marked stale either.
+  if (!rows.results?.length) return 0;
+  const stmts = rows.results.map((r) => {
     const b = bytes.get(r.gsm_id) ?? 0;
     return db
       .prepare(`UPDATE sample_qc SET matrix_bytes = ?, usable = ? WHERE gsm_id = ?`)
@@ -104,6 +117,56 @@ export function referenceMismatch(organism: string | null | undefined, build: st
   return !species.some((s) => s.toLowerCase() === sci.toLowerCase());
 }
 
+// ── crank bookkeeping ──────────────────────────────────────────────────────
+
+let crankTablesEnsured = false;
+
+/**
+ * Tables the index-next / refresh-next cranks keep for themselves, created on
+ * first use: bundle_index_failure (parked studies) and summaries_indexed
+ * (studies whose summary.json files index-next or index-bundle has read, so a
+ * study is not re-read forever when another study with the same GSMs takes
+ * over its sample_qc rows — sample_qc is keyed on gsm_id alone).
+ */
+export async function ensureCrankTables(db: D1Database): Promise<void> {
+  if (crankTablesEnsured) return;
+  await db.prepare(`CREATE TABLE IF NOT EXISTS bundle_index_failure (gse_id TEXT PRIMARY KEY, error TEXT, updated_at TEXT)`).run();
+  await db.prepare(`CREATE TABLE IF NOT EXISTS summaries_indexed (gse_id TEXT PRIMARY KEY, n_samples INTEGER, indexed_at TEXT)`).run();
+  crankTablesEnsured = true;
+}
+
+/** Record that a study's summaries were read and written to sample_qc. */
+export async function markSummariesIndexed(db: D1Database, gse: string, nSamples: number, stamp: string): Promise<void> {
+  await db
+    .prepare(`INSERT OR REPLACE INTO summaries_indexed (gse_id, n_samples, indexed_at) VALUES (?, ?, ?)`)
+    .bind(gse, nSamples, stamp)
+    .run();
+}
+
+/**
+ * Park reasons (bundle_index_failure.error) that prove the file itself cannot
+ * be read: its zip structure is broken (bundle-reader parseZipSource). Every
+ * other park — a 5xx or timeout from data.singlet.bio, a HEAD 404 while a file
+ * is still propagating, the Workers subrequest budget, a D1 error, an index
+ * too large to store, no summary.json — says nothing about the matrices, so
+ * such a study is never resolved to usable = 0 without a read.
+ */
+export const UNREADABLE_FILE_ERRORS = [
+  "End of central directory not found",
+  "zip64 locator not found",
+  "zip64 EOCD record not found",
+] as const;
+
+/** True when a stored park reason proves the study's file is unreadable. */
+export function isUnreadableFileError(error: string | null | undefined): boolean {
+  const e = error ?? "";
+  return UNREADABLE_FILE_ERRORS.some((s) => e.includes(s));
+}
+
+// SQL twin of isUnreadableFileError over `bundle_index_failure f` (instr is
+// case-sensitive like includes; the messages hold no quote characters).
+const UNREADABLE_PARK = `(${UNREADABLE_FILE_ERRORS.map((s) => `instr(f.error, '${s}') > 0`).join(" OR ")})`;
+
 // ── refresh-next ───────────────────────────────────────────────────────────
 
 const GSM_PENDING = `FROM gsm WHERE organism_primary IS NULL`;
@@ -111,18 +174,43 @@ const MANIFEST_PENDING = `FROM gse g WHERE g.r2_bundle_key IS NOT NULL AND g.r2_
   AND NOT EXISTS (SELECT 1 FROM bundle_manifest m WHERE m.gse_id = g.id)
   AND NOT EXISTS (SELECT 1 FROM bundle_index_failure f WHERE f.gse_id = g.id)`;
 const USABLE_PENDING = `FROM bundle_index i WHERE EXISTS (SELECT 1 FROM sample_qc q WHERE q.gse_id = i.gse_id AND q.usable IS NULL)`;
-const META_PENDING = `FROM gse g LEFT JOIN gse_meta m ON m.gse_id = g.id
-  WHERE (m.gse_id IS NULL OR m.n_usable_samples IS NULL)
-    AND NOT EXISTS (SELECT 1 FROM gsm s WHERE s.gse_id = g.id AND s.organism_primary IS NULL)
-    AND NOT EXISTS (SELECT 1 FROM sample_qc q WHERE q.gse_id = g.id AND q.usable IS NULL)`;
+// Unassessed samples whose study has no bundle_index and never will from this
+// crank: there is no file, or the file is parked because its zip structure is
+// broken (UNREADABLE_PARK). No readable matrix means not usable, so these
+// resolve to usable = 0 without a network read. (A readable file with a
+// manifest is indexed by index-next; one without a manifest by phase (c)
+// below — both then set the flags from the index.) A study parked for any
+// other reason (network, subrequest budget, D1, index too large to store)
+// keeps usable IS NULL, and so its current gse_meta, rather than being zeroed
+// and dropped from downloadable search on the strength of a failed read.
+const USABLE_NO_FILE = `FROM gse g
+  WHERE EXISTS (SELECT 1 FROM sample_qc q WHERE q.gse_id = g.id AND q.usable IS NULL)
+    AND NOT EXISTS (SELECT 1 FROM bundle_index i WHERE i.gse_id = g.id)
+    AND (g.r2_bundle_key IS NULL OR g.r2_bundle_key = ''
+         OR EXISTS (SELECT 1 FROM bundle_index_failure f WHERE f.gse_id = g.id AND ${UNREADABLE_PARK}))`;
+// The inner SELECT narrows to missing/stale gse_meta first; its `LIMIT -1`
+// (no limit) stops SQLite flattening it, which otherwise runs the correlated
+// probes below for every gse row (~135k rows read per count instead of ~22k).
+// The last clause waits for index-next: a study with a manifest but no
+// sample_qc rows yet (summaries never read, not parked — index-next's own
+// pending test) would otherwise be recomputed with n_usable_samples = 0 and
+// drop out of search until the next pass.
+const META_PENDING = `FROM (SELECT g.id FROM gse g LEFT JOIN gse_meta m ON m.gse_id = g.id
+          WHERE m.gse_id IS NULL OR m.n_usable_samples IS NULL LIMIT -1) g
+  WHERE NOT EXISTS (SELECT 1 FROM gsm s WHERE s.gse_id = g.id AND s.organism_primary IS NULL)
+    AND NOT EXISTS (SELECT 1 FROM sample_qc q WHERE q.gse_id = g.id AND q.usable IS NULL)
+    AND NOT (EXISTS (SELECT 1 FROM bundle_manifest b WHERE b.gse_id = g.id)
+             AND NOT EXISTS (SELECT 1 FROM sample_qc q WHERE q.gse_id = g.id)
+             AND NOT EXISTS (SELECT 1 FROM summaries_indexed s WHERE s.gse_id = g.id)
+             AND NOT EXISTS (SELECT 1 FROM bundle_index_failure f WHERE f.gse_id = g.id))`;
 
 export async function refreshRemaining(db: D1Database): Promise<Record<string, number>> {
-  const [a, b, c, d] = await Promise.all(
-    [GSM_PENDING, USABLE_PENDING, MANIFEST_PENDING, META_PENDING].map((w) =>
+  const [a, b, e, c, d] = await Promise.all(
+    [GSM_PENDING, USABLE_PENDING, USABLE_NO_FILE, MANIFEST_PENDING, META_PENDING].map((w) =>
       db.prepare(`SELECT COUNT(*) AS c ${w}`).first<{ c: number }>().then((r) => Number(r?.c ?? 0)).catch(() => -1)
     )
   );
-  return { gsm_normalize: a, sample_usable: b, bundle_manifest: c, gse_meta: d };
+  return { gsm_normalize: a, sample_usable: b, sample_usable_no_file: e, bundle_manifest: c, gse_meta: d };
 }
 
 const normOrganism = (raw: string | null): string => {
@@ -133,7 +221,7 @@ const normOrganism = (raw: string | null): string => {
 /** One bounded refresh step. `n` = studies (and 20 × n gsm rows) per phase. */
 export async function refreshNext(db: D1Database, n: number): Promise<{ done: Record<string, number>; errors: string[] }> {
   await ensureCatalogColumns(db);
-  await db.prepare(`CREATE TABLE IF NOT EXISTS bundle_index_failure (gse_id TEXT PRIMARY KEY, error TEXT, updated_at TEXT)`).run().catch(() => undefined);
+  await ensureCrankTables(db).catch(() => undefined);
   const done = { gsm_normalized: 0, samples_usable: 0, manifests_created: 0, meta_recomputed: 0 };
   const errors: string[] = [];
   const stamp = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
@@ -167,6 +255,15 @@ export async function refreshNext(db: D1Database, n: number): Promise<{ done: Re
     try {
       const idx = await getBundleIndex(db, gse_id);
       done.samples_usable += await applyUsable(db, gse_id, idx);
+    } catch (e) {
+      errors.push(`${gse_id} usable: ${String(e).slice(0, 200)}`);
+    }
+  }
+  // …and usable = 0 where there is no readable file to index (D1 only).
+  const noFileIds = await db.prepare(`SELECT g.id AS gse_id ${USABLE_NO_FILE} LIMIT ?`).bind(n).all<{ gse_id: string }>();
+  for (const { gse_id } of noFileIds.results ?? []) {
+    try {
+      done.samples_usable += await applyUsable(db, gse_id, { entries: [] });
     } catch (e) {
       errors.push(`${gse_id} usable: ${String(e).slice(0, 200)}`);
     }

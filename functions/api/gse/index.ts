@@ -2,8 +2,11 @@
  * GET /api/gse
  * Flat listing of series straight off the `gse` table.
  *
- * Supported: q (FTS), organism, has_bundle, has_pubmed, min_cells, max_cells,
+ * Supported: q (FTS; words only — operators and punctuation are ignored),
+ *            organism, has_bundle, has_pubmed, min_cells, max_cells,
  *            min_samples, min_done, page, page_size, sort, asc
+ *
+ * Cached at the edge for CATALOG_CACHE_TTL seconds, keyed on the full URL.
  *
  * Anything this endpoint cannot honour is rejected with 400 rather than
  * silently ignored. Sample-derived facets (tissue_group, disease_group,
@@ -11,7 +14,9 @@
  * `gse_meta` join and live on /api/search.
  */
 import { corsOk, corsErr, handleOptions, intParam, clampPageSize } from "../../_shared/cors";
+import { cachedJson, CATALOG_CACHE_TTL } from "../../_shared/cache";
 import { safeList } from "../../_shared/json";
+import { tokenizeQuery } from "../../_shared/search-core";
 
 interface Env {
   DB: D1Database;
@@ -46,7 +51,12 @@ function boolParam(url: URL, key: string): boolean | null | undefined {
   return null;
 }
 
-export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
+// Edge-cached: an uncached full COUNT on every pageview is what exhausted the
+// D1 read quota on 2026-09-03 (see ../../_shared/cache). Only 200s are stored.
+export const onRequestGet: PagesFunction<Env> = async ({ env, request, waitUntil }) =>
+  cachedJson(request, waitUntil, () => listSeries(env, request), CATALOG_CACHE_TTL);
+
+async function listSeries(env: Env, request: Request): Promise<Response> {
   try {
     const url = new URL(request.url);
 
@@ -108,10 +118,13 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
     const conditions: string[] = [];
     const params: (string | number)[] = [];
 
-    if (q) {
-      // Use FTS if available, otherwise LIKE
+    // Never bind raw input into MATCH (`x*`, `foo"`, `a OR` are FTS5 syntax
+    // errors → 500): tokenizeQuery quotes every word as an FTS5 string and ANDs
+    // them, as /api/search does. Nothing searchable left → no text filter.
+    const match = q ? tokenizeQuery(q).and : null;
+    if (match) {
       conditions.push("id IN (SELECT id FROM fts_gse WHERE fts_gse MATCH ?)");
-      params.push(q + "*");
+      params.push(match);
     }
     if (organism) {
       conditions.push("organism = ?");
@@ -174,6 +187,6 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
   } catch (e) {
     return corsErr(String(e));
   }
-};
+}
 
 export const onRequestOptions: PagesFunction<Env> = async () => handleOptions();

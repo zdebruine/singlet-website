@@ -1,0 +1,121 @@
+name: Catalog crank
+
+# Hourly freshness pass over the production catalog (D1 singlet-catalog),
+# following the ORCHESTRATOR CONTRACT in functions/api/ingest/[table].ts:
+#   1. GET /api/ingest/refresh-next until every `remaining` count is 0
+#      (gsm normalisation, usable flags, missing manifests, stale gse_meta;
+#      a count the server could not take is -1, meaning unknown, not done);
+#   2. GET /api/ingest/index-next until `remaining` is 0
+#      (bundle_index + sample_qc for studies that have a file but no QC rows);
+#   3. one more refresh-next, so the new sample_qc rows get usable flags and
+#      their gse_meta is recomputed (skipped when steps 1-2 found nothing).
+# Both endpoints are public, idempotent and bounded per call. Each holds a D1
+# lock while it runs and answers HTTP 429 while another run holds it.
+# A single bad response never fails the job; it fails only if every call did.
+
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: catalog-crank
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  crank:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    env:
+      BASE: https://singlet.bio/api/ingest
+    steps:
+      - name: refresh-next → index-next → refresh-next
+        shell: bash
+        run: |
+          set -uo pipefail
+          CALLS=0
+          ERRORS=0
+          BODY=""
+
+          # call <endpoint?query> — one logical call. Retries while the lock is
+          # held (429), prints the JSON summary, leaves the body in $BODY.
+          # Returns 0 on HTTP 200 with a JSON body, 1 otherwise.
+          call() {
+            local url="$BASE/$1" code attempt
+            BODY=""
+            for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
+              rm -f body.json
+              code=$(curl -sS -o body.json -w '%{http_code}' --max-time 150 "$url") || code="000"
+              if [ "$code" = "429" ]; then
+                echo "  $1: 429 (lock held), retrying in 5 s"
+                sleep 5
+                continue
+              fi
+              break
+            done
+            CALLS=$((CALLS + 1))
+            if [ "$code" = "200" ] && jq -e . body.json >/dev/null 2>&1; then
+              BODY=$(cat body.json)
+              echo "  $1: $(jq -c . body.json)"
+              return 0
+            fi
+            ERRORS=$((ERRORS + 1))
+            echo "::warning::$1 → HTTP $code: $(head -c 500 body.json 2>/dev/null || true)"
+            return 1
+          }
+
+          # Done only when every count in .remaining is exactly 0. A failed
+          # count is -1, which an older deploy clamps into remaining_total as
+          # 0, so remaining_total alone can claim "done" with backlog left.
+          ALL_ZERO='if (.remaining | type) == "object" then ([.remaining[]] | length > 0 and all(. == 0)) else false end'
+          ANY_UNKNOWN='if (.remaining | type) == "object" then any(.remaining[]; type != "number" or . < 0) else true end'
+
+          echo "::group::1. refresh-next until every remaining count = 0"
+          REFRESH_DONE=0
+          for i in $(seq 1 40); do
+            if call "refresh-next?n=200"; then
+              if jq -e "$ALL_ZERO" <<<"$BODY" >/dev/null 2>&1; then
+                REFRESH_DONE=1; echo "  done after $i call(s)"; break
+              fi
+              if jq -e "$ANY_UNKNOWN" <<<"$BODY" >/dev/null 2>&1; then
+                echo "::warning::refresh-next could not count some backlogs (-1 = unknown): $(jq -c '.remaining' <<<"$BODY")"
+              fi
+            fi
+            sleep 2
+          done
+          echo "::endgroup::"
+
+          echo "::group::2. index-next until remaining = 0"
+          INDEX_WORK=0
+          for i in $(seq 1 60); do
+            if call "index-next?n=25"; then
+              work=$(jq -r '((.indexed // []) | length) + ((.failed // []) | length)' <<<"$BODY")
+              [[ "$work" =~ ^[0-9]+$ ]] || work=0
+              INDEX_WORK=$((INDEX_WORK + work))
+              left=$(jq -r '.remaining // empty' <<<"$BODY")
+              if [ "$left" = "0" ]; then echo "  done after $i call(s)"; break; fi
+            fi
+            sleep 2
+          done
+          echo "::endgroup::"
+
+          # The final pass only has something to do when index-next wrote or
+          # parked studies, or step 1 stopped early. Skipping it otherwise keeps
+          # an idle hourly run to two calls (D1 rows read are metered).
+          echo "::group::3. final refresh-next"
+          if [ "$INDEX_WORK" -gt 0 ] || [ "$REFRESH_DONE" -eq 0 ]; then
+            sleep 2
+            call "refresh-next?n=200" || true
+          else
+            echo "  skipped: index-next had nothing to do and refresh-next was already at 0"
+          fi
+          echo "::endgroup::"
+
+          echo "calls=$CALLS errors=$ERRORS"
+          if [ "$CALLS" -gt 0 ] && [ "$ERRORS" -ge "$CALLS" ]; then
+            echo "::error::every call to the crank endpoints failed"
+            exit 1
+          fi
