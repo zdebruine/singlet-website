@@ -20,6 +20,7 @@
  * `accessions` (flat GSE / GSM id list) is a stable contract consumed by the
  * Python and R packages.
  */
+import { ensureCatalogColumns } from "../_shared/catalog-refresh";
 import { CORS_HEADERS, corsOk, corsErr, handleOptions } from "../_shared/cors";
 import { cachedJson, CATALOG_CACHE_TTL } from "../_shared/cache";
 import { resolveIdentity } from "../_shared/identity";
@@ -42,6 +43,7 @@ async function respond(env: NlEnv, request: Request, waitUntil: (p: Promise<unkn
 }
 
 export const onRequestGet: PagesFunction<NlEnv> = async ({ env, request, waitUntil }) => {
+  await ensureCatalogColumns(env.DB).catch(() => undefined);
   const id = await resolveIdentity(request, env, waitUntil);
   if (!id.ok) return id.response;
   const url = new URL(request.url);
@@ -50,6 +52,7 @@ export const onRequestGet: PagesFunction<NlEnv> = async ({ env, request, waitUnt
 };
 
 export const onRequestPost: PagesFunction<NlEnv> = async ({ env, request, waitUntil }) => {
+  await ensureCatalogColumns(env.DB).catch(() => undefined);
   const id = await resolveIdentity(request, env, waitUntil);
   if (!id.ok) return id.response;
   try {

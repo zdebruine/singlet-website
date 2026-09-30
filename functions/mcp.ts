@@ -20,6 +20,7 @@
  * Protocol versions 2025-06-18 and 2025-03-26 (JSON-RPC batches accepted for
  * the latter). A missing MCP-Protocol-Version header means 2025-03-26.
  */
+import { ensureCatalogColumns } from "./_shared/catalog-refresh";
 import { CORS_HEADERS } from "./_shared/cors";
 import { apiKeyFromRequest, checkApiKey, keyMessage, type KeyCheck } from "./_shared/identity";
 import { nlSearch, type NlEnv, type NlSearchBody, type Quota } from "./_shared/nl-search-core";
@@ -931,6 +932,7 @@ async function authFor(env: Env, request: Request, waitUntil: (p: Promise<unknow
 }
 
 export const onRequestPost: PagesFunction<Env> = async ({ env, request, waitUntil }) => {
+  await ensureCatalogColumns(env.DB).catch(() => undefined);
   const version = (request.headers.get("MCP-Protocol-Version") ?? "").trim();
   if (version && !(PROTOCOL_VERSIONS as readonly string[]).includes(version)) {
     return json({ jsonrpc: "2.0", id: null, error: { code: -32600, message: `Unsupported MCP-Protocol-Version: ${version}. Supported: ${PROTOCOL_VERSIONS.join(", ")}` } }, 400);
