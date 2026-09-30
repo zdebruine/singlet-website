@@ -53,7 +53,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
     // ── Validate params up front; never silently drop a filter ──────────────
     const unknown: string[] = [];
     const searchOnly: string[] = [];
-    for (const key of new Set(url.searchParams.keys())) {
+    const paramKeys = new Set<string>(); url.searchParams.forEach((_v, k) => paramKeys.add(k)); for (const key of paramKeys) {
       if (KNOWN_PARAMS.has(key)) continue;
       (SEARCH_ONLY_PARAMS.has(key) ? searchOnly : unknown).push(key);
     }
@@ -149,34 +149,6 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
     }
 
     const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
-
-    // Count
-    const countRow = await env.DB.prepare(
-      `SELECT COUNT(*) as n FROM gse ${where}`
-    ).bind(...params).first<{ n: number }>();
-    const total = countRow?.n ?? 0;
-
-    // Data
-    const rows = await env.DB.prepare(
-      `SELECT id, title, organism, n_gsm_total, n_gsm_done, n_gsm_failed, n_cells,
-              pubmed_ids, r2_bundle_key, r2_bundle_bytes, submitted_date, last_updated
-       FROM gse ${where}
-       ORDER BY ${orderBy}
-       LIMIT ? OFFSET ?`
-    ).bind(...params, pageSize, offset).all<Record<string, unknown>>();
-
-    const data = rows.results.map(r => ({
-      ...r,
-      pubmed_ids: safeList(r.pubmed_ids),
-    }));
-
-    return corsOk({ total, page, page_size: pageSize, data });
-  } catch (e) {
-    return corsErr(String(e));
-  }
-};
-
-export const onRequestOptions: PagesFunction<Env> = async () => handleOptions();
 
     // Count
     const countRow = await env.DB.prepare(
