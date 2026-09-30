@@ -35,6 +35,8 @@ interface FileStatsRow {
   studies_with_files: number;
   samples_in_files: number;
   cells_in_files: number | null;
+  samples_unusable?: number | null;
+  studies_unusable?: number | null;
 }
 
 interface CoverageRow {
@@ -69,8 +71,14 @@ export interface CorpusStats {
   coverage_rate: number | null;
   failure_categories: { value: string; count: number }[];
   studies_with_files: number;
+  /** Usable samples only: non-empty count matrix AND ≥ 1 called cell. */
   samples_in_files: number;
+  /** Called cells in usable samples only. */
   cells_in_files: number;
+  /** Samples in files whose matrix is empty or that called 0 cells. */
+  samples_unusable: number;
+  /** Studies with a file but 0 usable samples. */
+  studies_unusable: number;
 }
 
 export async function computeStats(db: D1Database): Promise<CorpusStats | null> {
@@ -113,8 +121,12 @@ export async function computeStats(db: D1Database): Promise<CorpusStats | null> 
       .prepare(
         `SELECT
            (SELECT COUNT(*) FROM bundle_manifest) AS studies_with_files,
-           (SELECT COUNT(*) FROM sample_qc) AS samples_in_files,
-           (SELECT SUM(COALESCE(n_cells_called, 0)) FROM sample_qc) AS cells_in_files`
+           (SELECT COUNT(*) FROM sample_qc WHERE usable = 1) AS samples_in_files,
+           (SELECT SUM(COALESCE(n_cells_called, 0)) FROM sample_qc WHERE usable = 1) AS cells_in_files,
+           (SELECT COUNT(*) FROM sample_qc WHERE usable = 0) AS samples_unusable,
+           (SELECT COUNT(*) FROM bundle_manifest m
+             WHERE EXISTS (SELECT 1 FROM sample_qc q WHERE q.gse_id = m.gse_id)
+               AND NOT EXISTS (SELECT 1 FROM sample_qc q WHERE q.gse_id = m.gse_id AND q.usable = 1)) AS studies_unusable`
       )
       .first<FileStatsRow>()
       .catch(() => null),
@@ -157,5 +169,7 @@ export async function computeStats(db: D1Database): Promise<CorpusStats | null> 
     studies_with_files: fileStats?.studies_with_files ?? 0,
     samples_in_files: fileStats?.samples_in_files ?? 0,
     cells_in_files: fileStats?.cells_in_files ?? 0,
+    samples_unusable: fileStats?.samples_unusable ?? 0,
+    studies_unusable: fileStats?.studies_unusable ?? 0,
   };
 }
