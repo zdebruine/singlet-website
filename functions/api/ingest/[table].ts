@@ -16,7 +16,8 @@
  * D1 row (`meta_cache` key `index-next:lock`): one run in flight at a time and
  * at least one second between runs globally — otherwise 429. Each call picks
  * the next `n` studies from `bundle_manifest` that have no `bundle_index` row
- * or no `sample_qc` rows (and are not parked in `bundle_index_failure`) and
+ * or whose summaries were never read (no `sample_qc` rows and no
+ * `summaries_indexed` row), and are not parked in `bundle_index_failure`, and
  * returns `{ indexed: [...], failed: [{gse_id, error}], warnings: [{gse_id,
  * note}], remaining }`. A study is in exactly one of indexed (sample_qc
  * written; warnings adds notes such as partial summaries) or failed (unreadable
@@ -26,13 +27,14 @@
  * the same way (`meta_cache` key `refresh-next:lock`) and idempotent. Each call:
  * (a) fills gsm.organism_primary/tissue_group/disease_group/assay_family where
  * organism_primary IS NULL (vocab.ts rules); (b) computes sample_qc.usable /
- * matrix_bytes from bundle_index (usable = 0 where the study has no readable
- * file); (c) creates bundle_manifest rows for files in gse.r2_bundle_key that
- * have none (reads manifest.json, which also stores bundle_index); (d)
- * recomputes gse_meta for studies missing one or marked stale, except those
- * still waiting for index-next. Returns `{ done: {...}, remaining: {...},
- * remaining_total }`. New manifests are then picked up by index-next for
- * sample_qc.
+ * matrix_bytes from bundle_index (usable = 0 where the study has no file or a
+ * file parked as a broken zip); (c) creates bundle_manifest rows for files in
+ * gse.r2_bundle_key that have none (reads manifest.json, which also stores
+ * bundle_index); (d) recomputes gse_meta for studies missing one or marked
+ * stale, except those still waiting for index-next. Returns `{ done: {...},
+ * remaining: {...}, remaining_total }`; a count that failed is -1 in
+ * `remaining` and makes `remaining_total` -1 (unknown, not done). New
+ * manifests are then picked up by index-next for sample_qc.
  *
  * ORCHESTRATOR CONTRACT: after every ingest batch into gse/gsm, loop
  * refresh-next until remaining_total is 0, then index-next until remaining is
@@ -47,7 +49,14 @@
 
 import { getBundleIndex, ensureSampleQcTable } from "../../_shared/bundle-reader";
 import { readSampleSummaries, upsertSampleQcStatement } from "../../_shared/bundle-core";
-import { applyUsable, ensureCatalogColumns, refreshNext, refreshRemaining } from "../../_shared/catalog-refresh";
+import {
+  applyUsable,
+  ensureCatalogColumns,
+  ensureCrankTables,
+  markSummariesIndexed,
+  refreshNext,
+  refreshRemaining,
+} from "../../_shared/catalog-refresh";
 
 // Fallback used ONLY while INGEST_TOKEN_SHA256 is unset or blank, to keep the
 // HPC orchestrator's current token working. TODO(rotation): delete this
@@ -255,7 +264,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, params }
       return json({ error: `Too many studies (max ${MAX_INDEX_PER_CALL} per call)` }, 400, origin);
     }
     await ensureSampleQcTable(env.DB).catch(() => undefined);
-    await ensureFailureTable(env.DB).catch(() => undefined);
+    await ensureCrankTables(env.DB).catch(() => undefined);
     const results: Record<string, unknown>[] = [];
     for (const gse of wanted) {
       if (!GSE_RE.test(gse)) {
@@ -268,6 +277,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, params }
         const st = nowIso();
         const statements = samples.map((s) => upsertSampleQcStatement(env.DB, s as unknown as Record<string, unknown>, st));
         for (let i = 0; i < statements.length; i += BATCH_SIZE) await env.DB.batch(statements.slice(i, i + BATCH_SIZE));
+        if (samples.length) await markSummariesIndexed(env.DB, gse, samples.length, st).catch(() => undefined);
         results.push({ gse_id: gse, ok: true, bytes: index.bytes, entries: index.entries.length, samples_qc: samples.length });
       } catch (e) {
         results.push({ gse_id: gse, ok: false, error: String(e) });
@@ -443,17 +453,22 @@ const LOCK_MS = 120_000;
 /** Minimum spacing between runs once one finishes. */
 const COOLDOWN_MS = 1_000;
 
-// Pending = a manifest but no central-directory index, OR no sample_qc row at
-// all: refresh-next phase (c) stores bundle_index for new files without reading
-// their summaries, so "has an index" alone does not mean done. Both probes are
-// index lookups (bundle_index PK, sample_qc(gse_id, …)) and never touch the
+// Pending = a manifest but no central-directory index, OR summaries never
+// read: refresh-next phase (c) stores bundle_index for new files without
+// reading their summaries, so "has an index" alone does not mean done. "Never
+// read" is no sample_qc row for the study AND no summaries_indexed row: owning
+// sample_qc rows alone is not enough, because sample_qc is keyed on gsm_id and
+// two bundles with the same GSMs (a SuperSeries and its SubSeries) would take
+// the rows from each other and turn each other pending again forever. All
+// probes are index lookups (PKs, sample_qc(gse_id, …)) and never touch the
 // large `entries` blobs, so counting stays cheap.
 // Studies that cannot be read (missing/corrupt file) are parked in
 // bundle_index_failure so the backfill loop can reach remaining = 0 instead of
 // retrying them forever.
 const PENDING_SQL = `FROM bundle_manifest m
   WHERE (NOT EXISTS (SELECT 1 FROM bundle_index i WHERE i.gse_id = m.gse_id)
-         OR NOT EXISTS (SELECT 1 FROM sample_qc q WHERE q.gse_id = m.gse_id))
+         OR (NOT EXISTS (SELECT 1 FROM sample_qc q WHERE q.gse_id = m.gse_id)
+             AND NOT EXISTS (SELECT 1 FROM summaries_indexed s WHERE s.gse_id = m.gse_id)))
     AND NOT EXISTS (SELECT 1 FROM bundle_index_failure f WHERE f.gse_id = m.gse_id)`;
 
 const SUMMARY_RE = /^samples\/GSM\d+\/summary\.json$/;
@@ -471,16 +486,6 @@ async function parkStudy(db: D1Database, gse: string, reason: string): Promise<v
     .bind(gse, reason, nowIso())
     .run()
     .catch(() => undefined);
-}
-
-async function ensureFailureTable(db: D1Database): Promise<void> {
-  await db
-    .prepare(
-      `CREATE TABLE IF NOT EXISTS bundle_index_failure (
-         gse_id TEXT PRIMARY KEY, error TEXT, updated_at TEXT
-       )`
-    )
-    .run();
 }
 
 async function readLockUntil(db: D1Database, key = LOCK_KEY): Promise<number> {
@@ -523,7 +528,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env, params })
   const warnings: { gse_id: string; note: string }[] = [];
   try {
     await ensureSampleQcTable(env.DB).catch(() => undefined);
-    await ensureFailureTable(env.DB).catch(() => undefined);
+    await ensureCrankTables(env.DB).catch(() => undefined);
     await ensureCatalogColumns(env.DB);
     const pending = await env.DB.prepare(
       `SELECT m.gse_id, EXISTS (SELECT 1 FROM bundle_index i WHERE i.gse_id = m.gse_id) AS has_index
@@ -544,16 +549,27 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env, params })
         let index = await getBundleIndex(env.DB, gse_id, { refresh: !cached });
         let samples = await readSampleSummaries(gse_id, index);
         if (cached && samples.length < summaryCount(index)) {
-          const fresh = await getBundleIndex(env.DB, gse_id, { refresh: true });
-          const changed = fresh.bytes !== index.bytes || fresh.entries.length !== index.entries.length;
-          index = fresh;
-          if (changed) samples = await readSampleSummaries(gse_id, index);
+          // The re-read is only a check. If it fails itself (5xx, timeout,
+          // subrequest budget), keep the stored index and the summaries
+          // already read, with a warning, instead of parking the study and
+          // dropping them. (getBundleIndex stores nothing when the read fails.)
+          try {
+            const fresh = await getBundleIndex(env.DB, gse_id, { refresh: true });
+            const changed = fresh.bytes !== index.bytes || fresh.entries.length !== index.entries.length;
+            index = fresh;
+            if (changed) samples = await readSampleSummaries(gse_id, index);
+          } catch (e) {
+            warnings.push({ gse_id, note: `central directory re-read failed, kept the stored index: ${String(e).slice(0, 200)}` });
+          }
         }
         // Keep every row we did parse — never delete existing sample_qc rows.
         if (samples.length > 0) {
           const st = nowIso();
           const statements = samples.map((s) => upsertSampleQcStatement(env.DB, s as unknown as Record<string, unknown>, st));
           for (let i = 0; i < statements.length; i += BATCH_SIZE) await env.DB.batch(statements.slice(i, i + BATCH_SIZE));
+          // Not pending again even if another bundle with the same GSMs later
+          // takes these rows over (see PENDING_SQL).
+          await markSummariesIndexed(env.DB, gse_id, samples.length, st).catch(() => undefined);
         }
         // Flags for every sample_qc row of the study, including rows posted by
         // the HPC job without a summary in the file.
@@ -623,6 +639,8 @@ async function refreshNextHandler(request: Request, env: Env, origin: string | n
   }
   await writeLockUntil(env.DB, Date.now() + LOCK_MS, REFRESH_LOCK_KEY);
   try {
+    // META_PENDING reads summaries_indexed, so it must exist before counting.
+    await ensureCrankTables(env.DB).catch(() => undefined);
     // Every phase selects exactly what one of these counts measures, so when
     // all of them are 0 the phase scans are skipped: an idle call (the hourly
     // GitHub Actions crank, most of the time) costs one round of counts.
@@ -633,7 +651,10 @@ async function refreshNextHandler(request: Request, env: Env, origin: string | n
       ? { done: { gsm_normalized: 0, samples_usable: 0, manifests_created: 0, meta_recomputed: 0 }, errors: [] as string[] }
       : await refreshNext(env.DB, n);
     const remaining = idle ? before : await refreshRemaining(env.DB);
-    const remaining_total = Object.values(remaining).reduce((a, b) => a + Math.max(0, b), 0);
+    // A failed count (-1) makes the total unknown (-1), never a false 0 that
+    // would tell a caller looping "until remaining_total is 0" to stop.
+    const counts = Object.values(remaining);
+    const remaining_total = counts.some((v) => v < 0) ? -1 : counts.reduce((a, b) => a + b, 0);
     return json({ ok: true, done, errors, remaining, remaining_total, ms: Date.now() - started }, 200, origin);
   } catch (e) {
     return json({ error: String(e) }, 500, origin);

@@ -8,6 +8,9 @@
  * and never match on placeholder groups ("Other", "Other / unspecified",
  * "Unknown"), which say nothing about the study. Nothing is invented: a study
  * only appears if the catalog says so.
+ *
+ * A failed query is a 500, never an empty list: cachedJson stores only 200s,
+ * so a D1 hiccup must not leave the panel empty for the whole TTL.
  */
 import { corsOk, corsErr, handleOptions } from "../../../_shared/cors";
 import { cachedJson } from "../../../_shared/cache";
@@ -15,6 +18,7 @@ import { GSE_RE } from "../../../_shared/study-core";
 import { safeList } from "../../../_shared/json";
 import { DOWNLOADABLE_SQL } from "../../../_shared/search-core";
 import { organismToCommon } from "../../../_shared/vocab";
+import { ensureCatalogColumns } from "../../../_shared/catalog-refresh";
 
 interface Env {
   DB: D1Database;
@@ -68,6 +72,9 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, params, request, w
     waitUntil,
     async () => {
       try {
+        // DOWNLOADABLE_SQL reads gse_meta.n_usable_samples / reference_mismatch,
+        // which are created on demand (a fresh or preview D1 lacks them).
+        await ensureCatalogColumns(env.DB).catch(() => undefined);
         const self = await env.DB.prepare(
           `SELECT g.pubmed_ids, m.organism_primary, m.tissue_groups, m.disease_groups
              FROM gse g LEFT JOIN gse_meta m ON m.gse_id = g.id WHERE g.id = ?`
@@ -90,8 +97,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, params, request, w
               ORDER BY m.n_cells DESC LIMIT ?`
           )
             .bind(id, `%"${pmid}"%`, LIMIT)
-            .all<Record<string, unknown>>()
-            .catch(() => ({ results: [] as Record<string, unknown>[] }));
+            .all<Record<string, unknown>>();
           for (const r of res.results) {
             const gid = String(r.gse_id);
             if (seen.has(gid)) continue;
@@ -116,8 +122,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, params, request, w
               ORDER BY m.n_cells DESC LIMIT ?`
           )
             .bind(...(disease ? [id, organism, tissue, disease, LIMIT * 2] : [id, organism, tissue, LIMIT * 2]))
-            .all<Record<string, unknown>>()
-            .catch(() => ({ results: [] as Record<string, unknown>[] }));
+            .all<Record<string, unknown>>();
           const why = disease ? `same tissue & disease (${tissue}, ${disease})` : `same tissue (${tissue})`;
           for (const r of res.results) {
             const gid = String(r.gse_id);

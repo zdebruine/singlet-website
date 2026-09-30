@@ -2,8 +2,9 @@ name: Catalog crank
 
 # Hourly freshness pass over the production catalog (D1 singlet-catalog),
 # following the ORCHESTRATOR CONTRACT in functions/api/ingest/[table].ts:
-#   1. GET /api/ingest/refresh-next until `remaining_total` is 0
-#      (gsm normalisation, usable flags, missing manifests, stale gse_meta);
+#   1. GET /api/ingest/refresh-next until every `remaining` count is 0
+#      (gsm normalisation, usable flags, missing manifests, stale gse_meta;
+#      a count the server could not take is -1, meaning unknown, not done);
 #   2. GET /api/ingest/index-next until `remaining` is 0
 #      (bundle_index + sample_qc for studies that have a file but no QC rows);
 #   3. one more refresh-next, so the new sample_qc rows get usable flags and
@@ -66,12 +67,22 @@ jobs:
             return 1
           }
 
-          echo "::group::1. refresh-next until remaining_total = 0"
+          # Done only when every count in .remaining is exactly 0. A failed
+          # count is -1, which an older deploy clamps into remaining_total as
+          # 0, so remaining_total alone can claim "done" with backlog left.
+          ALL_ZERO='if (.remaining | type) == "object" then ([.remaining[]] | length > 0 and all(. == 0)) else false end'
+          ANY_UNKNOWN='if (.remaining | type) == "object" then any(.remaining[]; type != "number" or . < 0) else true end'
+
+          echo "::group::1. refresh-next until every remaining count = 0"
           REFRESH_DONE=0
           for i in $(seq 1 40); do
             if call "refresh-next?n=200"; then
-              left=$(jq -r '.remaining_total // empty' <<<"$BODY")
-              if [ "$left" = "0" ]; then REFRESH_DONE=1; echo "  done after $i call(s)"; break; fi
+              if jq -e "$ALL_ZERO" <<<"$BODY" >/dev/null 2>&1; then
+                REFRESH_DONE=1; echo "  done after $i call(s)"; break
+              fi
+              if jq -e "$ANY_UNKNOWN" <<<"$BODY" >/dev/null 2>&1; then
+                echo "::warning::refresh-next could not count some backlogs (-1 = unknown): $(jq -c '.remaining' <<<"$BODY")"
+              fi
             fi
             sleep 2
           done
