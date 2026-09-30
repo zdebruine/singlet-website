@@ -1,5 +1,6 @@
--- Accounts, sessions, API keys and AI budgets on D1 (replaces Lovable Cloud /
--- Supabase auth, api_keys, ai_search_usage and explanations).
+-- Accounts, sessions, API keys, AI budgets and AI caches on D1 (GitHub /
+-- Google sign-in, personal API keys, daily AI counters, cached query
+-- interpretations and result explanations).
 --
 -- Applied to the production catalog (singlet-catalog) once; every statement is
 -- idempotent so re-running is harmless. Timestamps are ISO-8601 UTC text.

@@ -98,7 +98,7 @@ const App = () => (
               <Route path="/series/:gseId" element={<SeriesRedirect />} />
               <Route path="/sample/:gsmId" element={<SampleRedirect />} />
 
-              {/* Sign-in round-trip (email link / Google / GitHub) + account page */}
+              {/* Sign-in round-trip (Google / GitHub) + account page */}
               <Route path="/auth/callback" element={<AuthCallback />} />
               <Route path="/auth" element={<Navigate to="/auth/callback" replace />} />
               <Route path="/account" element={<Account />} />

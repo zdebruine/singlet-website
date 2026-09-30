@@ -5,11 +5,15 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { cn } from "@/lib/utils";
 import { fmtInt } from "@/lib/catalog-display";
 import { useAiQuota } from "@/lib/ai-quota";
+import { apiClient } from "@/integrations/api/client";
 import { useAuth } from "./AuthProvider";
 
 export interface UsageToday {
   search: number;
   explain: number;
+  /** This deployment's daily limits, when the server reported them. */
+  searchLimit?: number | null;
+  explainLimit?: number | null;
 }
 
 /** Today's counters straight from the database (the local copy can be stale on a new device). */
@@ -20,24 +24,16 @@ export function useUsageToday(enabled: boolean): UsageToday | null {
       setUsage(null);
       return;
     }
-    let cancelled = false;
-    import("@/integrations/supabase/client")
-      .then(({ supabase }) => supabase.rpc("my_ai_usage_today"))
-      .then(({ data }) => {
-        if (cancelled) return;
-        const out: UsageToday = { search: 0, explain: 0 };
-        for (const row of (data ?? []) as { kind: string; used: number }[]) {
-          if (row.kind === "search") out.search = row.used;
-          if (row.kind === "explain") out.explain = row.used;
-        }
-        setUsage(out);
+    const controller = new AbortController();
+    apiClient.auth
+      .usage(controller.signal)
+      .then((u) => {
+        if (!controller.signal.aborted) setUsage(u);
       })
       .catch(() => {
-        if (!cancelled) setUsage({ search: 0, explain: 0 });
+        if (!controller.signal.aborted) setUsage({ search: 0, explain: 0 });
       });
-    return () => {
-      cancelled = true;
-    };
+    return () => controller.abort();
   }, [enabled]);
   return usage;
 }
@@ -68,8 +64,8 @@ export function AccountMenu({ className, variant = "nav" }: { className?: string
 
   const email = user.email ?? user.displayName ?? "Signed in";
   const initial = (user.displayName?.[0] ?? user.email?.[0] ?? "?").toUpperCase();
-  const searchLimit = searchQuota?.kind === "user" ? searchQuota.limit : 200;
-  const explainLimit = explainQuota?.kind === "user" ? explainQuota.limit : 100;
+  const searchLimit = usage?.searchLimit ?? (searchQuota?.kind === "user" ? searchQuota.limit : 200);
+  const explainLimit = usage?.explainLimit ?? (explainQuota?.kind === "user" ? explainQuota.limit : 100);
   const searchUsed = usage?.search ?? (searchQuota?.kind === "user" ? searchQuota.used : null);
   const explainUsed = usage?.explain ?? (explainQuota?.kind === "user" ? explainQuota.used : null);
 
