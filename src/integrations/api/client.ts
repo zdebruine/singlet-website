@@ -562,6 +562,8 @@ function normalizeStats(raw: unknown): CorpusStats {
     studies_with_files: num(r.studies_with_files),
     samples_in_files: num(r.samples_in_files),
     cells_in_files: num(r.cells_in_files),
+    samples_unusable: num(r.samples_unusable),
+    studies_unusable: num(r.studies_unusable),
   };
 }
 

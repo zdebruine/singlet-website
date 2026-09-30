@@ -113,8 +113,8 @@ const About = () => {
             </ol>
             <h3>Pipeline versions</h3>
             <p className="text-[14.5px]">
-              Files were not all made by the same release. As of September 2026, 4,096 published files record pipeline
-              2.0.0, 347 record 1.0.0, and 3,398 (all mouse) did not record a version. The version is in each file's{" "}
+              Files were not all made by the same release. As of 30 September 2026, 4,096 published files record pipeline
+              2.0.0, 429 record 1.0.0, and 3,675 (almost all mouse) did not record a version. The version is in each file's{" "}
               <Mono>manifest.json</Mono> and on its study page. Check it, and the reference build, before merging studies.
             </p>
           </section>
@@ -185,13 +185,18 @@ const About = () => {
 
             <h3>Available to download now</h3>
             <p className="text-[14.5px]">
-              These are the same numbers shown on the home page: studies that have a published{" "}
-              <Mono>.singlet</Mono> file you can download right now.
+              These are the same numbers shown on the home page and returned by <Mono>/api/stats</Mono> as{" "}
+              <Mono>studies_with_files</Mono>, <Mono>samples_in_files</Mono> and <Mono>cells_in_files</Mono>: studies
+              that have a published <Mono>.singlet</Mono> file you can download right now, the usable samples in those
+              files, and the cells called in them. A sample is usable when its count matrix is non-empty and it called at
+              least one cell
+              {stats && stats.samples_unusable > 0 ? `; the ${fmtInt(stats.samples_unusable)} samples in files that fail that test are not counted` : ""}
+              .
             </p>
             <dl className="grid grid-cols-2 md:grid-cols-3 gap-3 my-5">
               {[
                 { label: "studies with files", value: stats ? fmtInt(stats.studies_with_files) : null },
-                { label: "samples in files", value: stats ? fmtInt(stats.samples_in_files) : null },
+                { label: "usable samples in files", value: stats ? fmtInt(stats.samples_in_files) : null },
                 { label: "cells called in files", value: stats ? fmtCompact(stats.cells_in_files) : null },
               ].map((s) => (
                 <div key={s.label} className="surface px-4 py-3">
@@ -203,18 +208,20 @@ const About = () => {
               ))}
             </dl>
 
-            <h3>Processed so far</h3>
+            <h3>Catalog metadata: processed so far</h3>
             <p className="text-[14.5px]">
-              Samples the pipeline has already finished. Packing and publishing runs behind processing, so these numbers
-              are larger than the download numbers above — the difference is the queue of finished samples whose study
-              bundle has not been published yet.
+              What the processing database records, not what is in the published files. Packing and publishing run behind
+              processing, and a processed sample can still turn out unusable in its file, so these numbers are larger than
+              the download numbers above. Catalog cell counts can also differ from a file's own QC; where they disagree,
+              the file is the source of truth. In <Mono>/api/stats</Mono> these are <Mono>series_count</Mono>,{" "}
+              <Mono>success_samples</Mono>, <Mono>total_cells</Mono> and <Mono>success_rate</Mono>.
             </p>
             <dl className="grid grid-cols-2 md:grid-cols-4 gap-3 my-5">
               {[
                 { label: "studies in catalog", value: stats ? fmtInt(stats.series_count) : null },
-                { label: "samples processed", value: stats ? fmtInt(stats.success_samples) : null },
-                { label: "cells called", value: stats ? fmtCompact(stats.total_cells) : null },
-                { label: "success rate", value: stats ? fmtPct(stats.success_rate) : null },
+                { label: "samples processed (catalog)", value: stats ? fmtInt(stats.success_samples) : null },
+                { label: "cells called (catalog)", value: stats ? fmtCompact(stats.total_cells) : null },
+                { label: "success rate (catalog)", value: stats ? fmtPct(stats.success_rate) : null },
               ].map((s) => (
                 <div key={s.label} className="surface px-4 py-3">
                   <dd className="font-display font-bold text-[24px] leading-none tabular text-foreground">
@@ -226,8 +233,8 @@ const About = () => {
             </dl>
             {stats && (
               <p className="text-[13.5px] text-muted-foreground">
-                Mean mapping rate {fmtPct(stats.avg_mapping_rate)}; mean median genes per cell{" "}
-                {fmtInt(stats.avg_median_genes)}. Cell counts for a small number of plate-based samples are withheld while
+                Catalog means over processed samples: mapping rate {fmtPct(stats.avg_mapping_rate)}; median genes per
+                cell {fmtInt(stats.avg_median_genes)}. Cell counts for a small number of plate-based samples are withheld while
                 a known counting bug is corrected upstream.
               </p>
             )}

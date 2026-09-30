@@ -4,6 +4,7 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { CodeBlock } from "@/components/CodeBlock";
 import { usePageMeta } from "@/hooks/usePageMeta";
+import { GITHUB_ISSUES } from "@/lib/install-snippets";
 import {
   MCP_URL,
   claudeCodeConfig,
@@ -66,10 +67,10 @@ const EXAMPLES: { ask: string; tools: string; gets: string }[] = [
 ];
 
 const TOOLS: { name: string; input: string; returns: string; key: string }[] = [
-  { name: "search_datasets", input: "query, level?, limit?, page?, organism?, tissue?, disease?, assay?, min_cells?, include_unbuilt?", returns: "Matching studies or samples with a reason for each match. The only tool that calls a language model (to read the question); metered", key: "No — 10 a day without, 200 with" },
-  { name: "get_study", input: "gse_id", returns: "Title, abstract, groups, conditions, samples, file URL", key: "No" },
+  { name: "search_datasets", input: "query, level?, limit?, page?, organism?, tissue?, disease?, assay?, min_cells?, include_unbuilt?", returns: "Matching studies or samples with a reason for each match. The only tool that can call a language model, and only when the built-in vocabulary cannot read the question; only those fresh AI readings are metered", key: "No — 10 AI readings a day without, 200 with" },
+  { name: "get_study", input: "gse_id", returns: "Title, abstract, groups, conditions, samples (first 60), file URL", key: "No" },
   { name: "get_download_url", input: "gse_id", returns: "The .singlet URL, size and loader lines", key: "No" },
-  { name: "get_atlas_stats", input: "—", returns: "Live studies, samples, cells, species", key: "No" },
+  { name: "get_atlas_stats", input: "—", returns: "Studies, usable samples and cells in published files (the site's headline numbers), plus catalog metadata: samples processed, cells recorded, species, failure reasons", key: "No" },
   { name: "get_sample_qc", input: "gse_id, gsm_ids?", returns: "Per-sample QC from the file itself, totals and warnings", key: "No" },
   { name: "list_bundle_files", input: "gse_id, gsm_id?", returns: "Everything inside the file, with sizes", key: "No" },
   { name: "get_modalities", input: "gse_id, gsm_id?", returns: "Which modalities the file carries, with Python and R readers for each", key: "No" },
@@ -78,7 +79,7 @@ const TOOLS: { name: string; input: string; returns: string; key: string }[] = [
   { name: "find_matched_controls", input: "gse_id, min_samples?, same_assay?", returns: "Candidate control studies with reasons and caveats", key: "No" },
   { name: "compare_studies", input: "gse_ids (2–8)", returns: "Side-by-side fields and their differences", key: "No" },
   { name: "assess_study", input: "gse_id, purpose?", returns: "Deterministic usability report and fit checks", key: "No" },
-  { name: "get_cohort", input: "id, token?", returns: "A saved, version-pinned cohort and its studies", key: "Yes for a private cohort; a share-link token opens a link cohort" },
+  { name: "get_cohort", input: "id, token?", returns: "A saved, version-pinned cohort and its studies", key: "Yes for private and workspace cohorts; a share-link token (sco_…) alone opens a link cohort" },
   { name: "save_cohort", input: "name, gse_ids, notes?, visibility?, workspace_id?", returns: "Saves up to 2,000 studies as a cohort pinned to the current catalogue", key: "Yes" },
 ];
 
@@ -119,6 +120,13 @@ export default function DocsMcp() {
             file itself, picks matched controls and hands you a download command — for a whole study, or for the single
             sample you actually need.
           </p>
+          <p className="text-sm text-muted-foreground">
+            <strong className="text-foreground">Contact:</strong>{" "}
+            <a href={GITHUB_ISSUES} target="_blank" rel="noopener noreferrer">
+              GitHub Issues
+            </a>{" "}
+            for support, bugs and questions about the connector · <Link to="/privacy">Privacy policy</Link>
+          </p>
 
           <Section id="ask" title="What you can ask">
             <table>
@@ -152,7 +160,8 @@ export default function DocsMcp() {
             <p>
               The server is hosted at <code className="code-inline">{MCP_URL}</code> — nothing to install and nothing to
               run locally. <strong>Start without a key:</strong> every tool except the two cohort tools works straight
-              away, and AI-interpreted search runs at 10 questions a day. A free key from{" "}
+              away. Searches the built-in vocabulary can read, and repeats of any question, are free; questions that
+              need a fresh AI reading are limited to 10 a day. A free key from{" "}
               <Link to="/account">your account</Link> raises search to 200 a day and lets you save cohorts and open
               private ones (<code className="code-inline">save_cohort</code>, <code className="code-inline">get_cohort</code>).
             </p>
@@ -236,14 +245,16 @@ export default function DocsMcp() {
           <Section id="limits" title="Limits, and being honest about them">
             <ul>
               <li>
-                AI-interpreted search: 10 a day without a key, 200 a day with one. The remaining budget comes back with
-                every answer. When it runs out you still get a plain keyword search, clearly labelled.
+                AI-interpreted search: 10 fresh AI readings a day without a key, 200 a day with one; vocabulary-only and
+                repeated questions do not count. The remaining budget comes back with every answer (in{" "}
+                <code className="code-inline">_meta.quota</code>). When it runs out the question is still answered, read
+                with the built-in vocabulary only, and the answer says so.
               </li>
               <li>
                 Only <code className="code-inline">search_datasets</code> calls a language model, to turn your question
-                into filters; that call is what the daily budget meters. Every number, every match reason and every
-                caveat is computed from the catalog or read out of the study's own file — quote them, don't paraphrase
-                them.
+                into filters when the built-in vocabulary cannot; that call is what the daily budget meters. Every
+                number, every match reason and every caveat is computed from the catalog or read out of the study's own
+                file — quote them, don't paraphrase them.
               </li>
               <li>
                 Cell counts in the catalog come from the processing database; the counts in the file's QC come from the
@@ -265,17 +276,19 @@ export default function DocsMcp() {
           <Section id="troubleshooting" title="If something goes wrong">
             <ul>
               <li>
-                <strong>401 / "invalid key"</strong> — the key was typed wrong, expired or revoked. Remove the header to
+                <strong>"Unknown API key", or a key that "was revoked" or "has expired"</strong> — every tool call fails
+                with that message while a bad key is sent; it is never quietly treated as anonymous. Remove the header to
                 fall back to anonymous access, or create a new key in <Link to="/account">your account</Link>.
               </li>
               <li>
-                <strong>"needs a signed-in session or personal API key"</strong> — you called{" "}
-                <code className="code-inline">save_cohort</code>, or <code className="code-inline">get_cohort</code> on a
-                private cohort, without one. Everything else works anonymously.
+                <strong>"needs a personal singlet.bio API key"</strong> — you called{" "}
+                <code className="code-inline">save_cohort</code>, or <code className="code-inline">get_cohort</code>{" "}
+                without a key or a share-link token. Everything else works anonymously.
               </li>
               <li>
-                <strong>429, or "today's budget is used up"</strong> — the daily search allowance. Wait for the reset time
-                in the answer, add a key, or ask for a keyword search.
+                <strong>"Today's AI-search budget is used up"</strong> — the daily allowance of fresh AI readings. The
+                search still answers, read with the built-in vocabulary only. Wait for the reset time in{" "}
+                <code className="code-inline">_meta.quota</code>, or add a key.
               </li>
               <li>
                 <strong>A first call on a very large study is slow</strong> — the file's directory is read over the
@@ -287,7 +300,21 @@ export default function DocsMcp() {
               </li>
             </ul>
             <p>
-              Still stuck? Open an issue on GitHub, or read the rest of the <Link to="/docs">documentation</Link>.
+              Still stuck? Open an issue on GitHub (see <a href="#support">Support</a> below), or read the rest of the{" "}
+              <Link to="/docs">documentation</Link>.
+            </p>
+          </Section>
+
+          <Section id="support" title="Support">
+            <p>
+              <strong>Contact:</strong>{" "}
+              <a href={GITHUB_ISSUES} target="_blank" rel="noopener noreferrer">
+                GitHub Issues
+              </a>{" "}
+              (<code className="code-inline">{GITHUB_ISSUES.replace(/^https:\/\//, "")}</code>). Use it for connector
+              problems, wrong answers from a tool, a study that looks wrong, or feature requests; include the tool name
+              and its arguments if you can. The connector is maintained by Singlet Bio, and what it stores is described in
+              the <Link to="/privacy">privacy policy</Link>.
             </p>
           </Section>
         </article>

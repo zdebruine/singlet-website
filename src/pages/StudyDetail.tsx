@@ -200,7 +200,6 @@ const StudyDetail = () => {
     const assays = meta?.assay_families?.length ? meta.assay_families : uniq((s) => s.assay_family ?? s.protocol);
     const tissuesRaw = meta?.tissues_raw?.length ? meta.tissues_raw : uniq((s) => s.tissue);
     const cellTypesRaw = meta?.cell_types_raw?.length ? meta.cell_types_raw : uniq((s) => s.cell_type);
-    const versions = uniq((s) => s.singlet_version);
     const dates = samples.map((s) => s.pipeline_date).filter(Boolean).sort() as string[];
     const nRuns = samples.reduce((a, s) => a + (s.srr_ids?.length ?? 0), 0);
     const nWithCharacteristics = samples.filter((s) => s.characteristics && Object.keys(s.characteristics).length > 0).length;
@@ -219,7 +218,6 @@ const StudyDetail = () => {
       assays,
       tissuesRaw,
       cellTypesRaw,
-      versions,
       dateMin: dates[0] ?? null,
       dateMax: dates[dates.length - 1] ?? null,
       nRuns,
@@ -317,7 +315,6 @@ const StudyDetail = () => {
     assays,
     tissuesRaw,
     cellTypesRaw,
-    versions,
     dateMin,
     dateMax,
     nRuns,
@@ -577,15 +574,14 @@ const StudyDetail = () => {
           )}
           <dl className="surface px-4 py-3 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-1.5 text-[12.5px]">
             {[
-              // The file's manifest version is the one that matters for merging; the
-              // per-sample catalog field uses a different (internal) numbering.
+              // The file's manifest version is the one that matters for merging. The
+              // per-sample catalog field (gsm.singlet_version) is the catalog schema
+              // number ("v0.9.0"), not a pipeline release, so it is never a fallback.
               series.singlet_version && series.singlet_version !== "unknown"
                 ? { label: "Pipeline", value: <span className="font-mono">{series.singlet_version}</span> }
-                : series.bundle_url && series.singlet_version === "unknown"
-                  ? { label: "Pipeline", value: <span className="text-muted-foreground">not recorded in the file</span> }
-                  : versions.length
-                    ? { label: "Pipeline", value: <span className="font-mono">{versions.join(", ")}</span> }
-                    : null,
+                : series.bundle_url
+                  ? { label: "Pipeline", value: <span className="text-muted-foreground">{series.singlet_version === "unknown" ? "not recorded in the file" : "not recorded"}</span> }
+                  : null,
               dateMin ? { label: "Processed", value: <span className="tabular">{dateMin === dateMax || !dateMax ? dateMin : `${dateMin} \u2013 ${dateMax}`}</span> } : null,
               nRuns > 0 ? { label: "Raw reads", value: <span className="tabular">{`${fmtInt(nRuns)} SRA run${nRuns === 1 ? "" : "s"}`}</span> } : null,
               series.last_updated ? { label: "Catalog updated", value: <span className="tabular">{series.last_updated.slice(0, 10)}</span> } : null,

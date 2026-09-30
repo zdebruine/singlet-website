@@ -152,7 +152,7 @@ const TOOLS = [
   {
     name: "get_atlas_stats",
     title: "Atlas size",
-    description: "Live corpus numbers: studies, samples processed, cells, species, mapping rate and the most common failure reasons.",
+    description: "Live atlas size. Headline: studies with a published file, usable samples in those files and cells called in them (studies_with_files, samples_in_files, cells_in_files — the numbers singlet.bio shows). Also catalog metadata, labelled as such: studies tracked, samples processed, cells recorded, species, mean mapping rate and the most common failure reasons.",
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
     annotations: { title: "Atlas size", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   },
@@ -405,7 +405,7 @@ const RESOURCES = [
     uri: "singlet://stats",
     name: "atlas_stats",
     title: "Atlas statistics",
-    description: "Live corpus numbers: studies, samples, cells, species, mapping rate.",
+    description: "Live atlas size: studies, usable samples and cells in published files (the headline), plus catalog metadata (samples processed, cells recorded, species, mapping rate).",
     mimeType: "application/json",
   },
   {
@@ -791,9 +791,13 @@ async function getDownloadUrl(env: Env, args: Record<string, unknown>) {
 async function getAtlasStats(env: Env) {
   const s = await computeStats(env.DB);
   if (!s) return toolError("Stats are unavailable right now.");
+  // Headline = the site-wide definition (home page, /about, /api/stats): what
+  // is in the published files, usable samples only. Catalog numbers follow,
+  // labelled as such.
   const text = [
-    `${fmt(s.series_count)} studies · ${fmt(s.success_samples)} samples processed (of ${fmt(s.total_samples)}) · ${fmt(s.total_cells)} cells · ${fmt(s.species_count)} species`,
-    s.avg_mapping_rate != null ? `Mean mapping rate ${(s.avg_mapping_rate * 100).toFixed(1)}% · median genes per cell ${fmt(s.avg_median_genes)}` : null,
+    `In published files: ${fmt(s.studies_with_files)} studies · ${fmt(s.samples_in_files)} usable samples · ${fmt(s.cells_in_files)} cells called`,
+    `Catalog metadata: ${fmt(s.series_count)} studies · ${fmt(s.success_samples)} samples processed (of ${fmt(s.total_samples)} ingested) · ${fmt(s.total_cells)} cells recorded · ${fmt(s.species_count)} species`,
+    s.avg_mapping_rate != null ? `Catalog means: mapping rate ${(s.avg_mapping_rate * 100).toFixed(1)}% · median genes per cell ${fmt(s.avg_median_genes)}` : null,
     s.failure_categories.length ? `Most common failure reasons: ${s.failure_categories.slice(0, 5).map((f) => `${f.value} (${fmt(f.count)})`).join(", ")}` : null,
   ]
     .filter(Boolean)

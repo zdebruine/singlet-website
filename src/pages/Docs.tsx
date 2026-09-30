@@ -536,8 +536,8 @@ python load_studies.py`}
                 <li><Mono>created_at</Mono> — when the <Mono>.singlet</Mono> file was packed, in the file's <Mono>manifest.json</Mono> (returned as <Mono>created_at</Mono> by <Mono>/api/bundle/:gse/index</Mono> and as <Mono>packed_at</Mono> by <Mono>/api/gse/:id</Mono>), and shown as "Packed" on the study page.</li>
               </ul>
               <p>
-                The pipeline version is not the same for every file. Published files record <Mono>2.0.0</Mono> (most),{" "}
-                <Mono>1.0.0</Mono>, or no version at all (a group of mouse files packed before the version was recorded),
+                The pipeline version is not the same for every file. Published files record <Mono>2.0.0</Mono> (about
+                half), <Mono>1.0.0</Mono>, or no version at all (mostly mouse files, packed by a build that did not record it),
                 and input was capped at 30,000,000 reads per sample (see{" "}
                 <Link to="/about#processing">What a study goes through</Link>). Before merging studies, check that they
                 share a reference build and pipeline version. The atlas data is <Mono>CC0</Mono>{" "}
@@ -800,8 +800,9 @@ accs <- singlet::find("microglia in the aging mouse brain")`}
                 <Mono>{MCP_URL}</Mono> is a hosted Model Context Protocol server (Streamable HTTP, stateless) that lets an
                 assistant — Claude Desktop, Claude Code, Cursor, VS Code — search the atlas, read a study's metadata and
                 hand back a download URL or a loader snippet. It works without a key. Only <Mono>search_datasets</Mono>{" "}
-                calls a language model (to turn a plain-English question into filters), so only it is metered: 10 a day
-                anonymously, 200 with a key. <Mono>save_cohort</Mono> needs a key, and so does <Mono>get_cohort</Mono>{" "}
+                calls a language model (to turn a plain-English question into filters the built-in vocabulary cannot
+                read), so only those fresh AI readings are metered: 10 a day anonymously, 200 with a key.{" "}
+                <Mono>save_cohort</Mono> needs a key, and so does <Mono>get_cohort</Mono>{" "}
                 for a private cohort (a share-link token opens a link-shared one).
               </p>
               <div className="grid md:grid-cols-2 gap-3">

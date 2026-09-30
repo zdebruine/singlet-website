@@ -113,6 +113,11 @@ function ExpandedRow({ s, gseId, studyTitle, colSpan, qc }: { s: GsmRow; gseId: 
   const hasQc = s.mapping_rate != null || s.median_genes != null || s.median_umis != null || s.mt_pct != null;
   const py = `adata[adata.obs["gsm_id"] == "${s.gsm_id}"]`;
   const r = `sce[, sce$gsm_id == "${s.gsm_id}"]`;
+  // No per-sample "pipeline" version here. The catalog's gsm.singlet_version is
+  // the catalog schema number ("v0.9.0" on every row), and the file's
+  // summary.json version is the aligner binary's self-report ("0.3.0"); neither
+  // is the release that packed the file. That one (the manifest's
+  // singlet_version) is shown once for the whole study, next to the download.
 
   return (
     <tr className="bg-background/70" id={`${s.gsm_id}-details`}>
@@ -166,10 +171,9 @@ function ExpandedRow({ s, gseId, studyTitle, colSpan, qc }: { s: GsmRow; gseId: 
               ) : (
                 <p className="text-[13px] text-muted-foreground">No QC metrics recorded for this sample.</p>
               )}
-              {(s.singlet_version || s.pipeline_date || s.pz_size_bytes != null) && (
+              {(s.pipeline_date || s.pz_size_bytes != null) && (
                 <p className="mt-2 text-[12px] text-muted-foreground">
                   {[
-                    s.singlet_version ? `pipeline ${s.singlet_version}` : null,
                     s.pipeline_date ? `run ${s.pipeline_date}` : null,
                     s.pz_size_bytes != null ? `${fmtBytes(s.pz_size_bytes)} in file` : null,
                   ]
