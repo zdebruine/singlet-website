@@ -1,5 +1,12 @@
+/**
+ * Reads a private .singlet (from R2 or a registered public URL) into the
+ * study / samples / QC rows that product.ts finishIndex stores in D1. Only the
+ * zip directory, manifest.json, study_meta.json and each sample's
+ * summary.json are fetched (HTTP range reads); matrices are never downloaded.
+ */
 import { parseZipSource, readEntryFromSource, sampleOf, type BundleByteSource, type ZipEntry } from "./bundle-reader";
 import { shapeSummary } from "./bundle-core";
+import { MAX_INDEX_SAMPLES } from "./product";
 import { loadRules, toGroup } from "./vocab";
 
 const decoder = new TextDecoder();
@@ -47,6 +54,9 @@ export async function indexPrivateBundle(db: D1Database, source: BundleByteSourc
   const gsmMeta = object(studyMeta.gsm_meta);
   const sampleIds = [...new Set(index.entries.map((e) => sampleOf(e.p)).filter((v): v is string => !!v))].sort();
   if (!sampleIds.length) throw new Error("The .singlet file contains no sample directories.");
+  if (sampleIds.length > MAX_INDEX_SAMPLES) {
+    throw new Error(`The .singlet file has ${sampleIds.length} samples; private projects index up to ${MAX_INDEX_SAMPLES} per file.`);
+  }
   const rules = await loadRules(db, waitUntil);
   const samples: Record<string, unknown>[] = [];
   const qc: Record<string, unknown>[] = [];
