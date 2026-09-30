@@ -678,6 +678,10 @@ function studyText(d: StudyDetail): string {
   if (d.conditions_label) lines.push(`Conditions: ${d.conditions_label}`);
   if (m?.cell_types_raw.length) lines.push(`Cell types recorded: ${m.cell_types_raw.slice(0, 15).join(", ")}`);
   lines.push(s.bundle_url ? `File: ${s.bundle_url}${s.bundle_bytes ? ` (${fmtBytes(s.bundle_bytes)})` : ""}` : "File: not built yet");
+  if (s.bundle_url && s.usable_samples === 0) lines.push("⚠ This file currently contains no usable count data (empty matrices or 0 called cells).");
+  else if (s.usable_samples != null && s.assessed_samples != null && s.usable_samples < s.assessed_samples)
+    lines.push(`⚠ ${s.assessed_samples - s.usable_samples} of ${s.assessed_samples} samples in the file have no count data: ${s.unusable_gsm_ids.join(", ")}.`);
+  if (s.reference_mismatch_note) lines.push(`⚠ ${s.reference_mismatch_note}`);
   lines.push(`Load: singlet.load("${s.id}")  /  R: load("${s.id}")`);
   lines.push(`${SITE}/study/${s.id}`);
   if (s.abstract) {
@@ -727,6 +731,11 @@ async function getStudy(env: Env, args: Record<string, unknown>) {
     has_bundle: !!d.series.bundle_url,
     bundle_url: d.series.bundle_url,
     bundle_bytes: d.series.bundle_bytes,
+    usable_samples: d.series.usable_samples,
+    samples_in_file_assessed: d.series.assessed_samples,
+    unusable_samples: d.series.unusable_gsm_ids,
+    reference_mismatch: d.series.reference_mismatch,
+    reference_build: d.series.reference_build,
     samples,
     samples_truncated: d.samples.length > samples.length,
     publications: d.publications,
