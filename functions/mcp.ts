@@ -7,13 +7,17 @@
  *   initialize                → capabilities + serverInfo + instructions
  *   notifications/initialized → 202
  *   ping                      → {}
- *   tools/list                → the eleven tools below
- *   tools/call                → works WITHOUT a key: AI-interpreted search is
- *                               metered at the anonymous allowance (10/day per
- *                               visitor), everything deterministic is free. A
- *                               personal key (Authorization: Bearer sk_live_…
- *                               or X-API-Key) raises search to 200/day and
- *                               unlocks the two heavy tools.
+ *   tools/list                → the fourteen tools below
+ *   tools/call                → works WITHOUT a key (the connector directory
+ *                               needs an authless server). Every tool except
+ *                               save_cohort answers anonymously. Only a search
+ *                               that needs the AI reading of the question is
+ *                               metered (10/day per visitor by default, by a
+ *                               salted IP hash); vocabulary-only and cached
+ *                               readings and everything deterministic are free.
+ *                               A personal key (Authorization: Bearer sk_live_…
+ *                               or X-API-Key) raises that to 200/day and is
+ *                               required to save cohorts.
  *   prompts/list, prompts/get → three guided workflows
  *   resources/list, /read     → singlet://stats, singlet://vocab
  *
@@ -22,14 +26,16 @@
  */
 import { ensureCatalogColumns } from "./_shared/catalog-refresh";
 import { CORS_HEADERS } from "./_shared/cors";
-import { apiKeyFromRequest, checkApiKey, keyMessage, type KeyCheck } from "./_shared/identity";
-import { nlSearch, type NlEnv, type NlSearchBody, type Quota } from "./_shared/nl-search-core";
+import type { AppEnv } from "./_shared/env";
+import { anonSubjectFromIp, apiKeyFromRequest, checkApiKey, clientIp, keyMessage, type Identity, type KeyCheck } from "./_shared/identity";
+import { nlSearch, type NlSearchBody } from "./_shared/nl-search-core";
+import { limitFor, type Quota } from "./_shared/quota";
 import { loadStudy, bundleUrl, GSE_RE, type StudyDetail } from "./_shared/study-core";
 import { computeStats } from "./_shared/stats-core";
 import { TISSUE_GROUPS, DISEASE_GROUPS, ASSAY_FAMILIES } from "./_shared/vocab";
 import { MANIFEST_FORMATS } from "./_shared/manifest-core";
 import type { StudyRow, SampleRow } from "./_shared/search-core";
-import { productCall } from "./_shared/private-project";
+import { getCohort, saveCohort, ProductError, type ProductCtx } from "./_shared/product";
 import {
   ACCOUNT_URL,
   LOADERS,
@@ -49,14 +55,15 @@ import {
   type ToolResult,
 } from "./_shared/mcp-tools";
 
-type Env = NlEnv;
+type Env = AppEnv;
 
 const SERVER_INFO = { name: "singlet-bio", title: "singlet.bio atlas", version: "2.0.0" };
 const PROTOCOL_VERSIONS = ["2025-06-18", "2025-03-26"] as const;
 const LATEST_PROTOCOL = PROTOCOL_VERSIONS[0];
 const MAX_SAMPLES_IN_STUDY = 60;
-const ANON_SEARCH_LIMIT = 10;
-const KEY_SEARCH_LIMIT = 200;
+/** Default daily AI-reading allowances, for static text (live values: limitFor(env, …)). */
+const ANON_SEARCH_LIMIT = limitFor({}, "search", "anon");
+const KEY_SEARCH_LIMIT = limitFor({}, "search", "user");
 
 const INSTRUCTIONS = `singlet.bio is an open atlas of public single-cell RNA-seq studies from GEO, all reprocessed the same way. One CC0 .singlet file per study (zip64) holding per-sample count matrices and per-sample QC.
 
@@ -64,7 +71,7 @@ Recommended order: search_datasets → assess_study or get_study → get_sample_
 
 A .singlet file is not just gene counts: it can also carry splice junctions and PSI, mitochondrial heteroplasmy and chrM variants, genotype-free donor demultiplexing, non-host (microbial/viral) abundance, V(D)J usage and per-cell doublet/cell-cycle/ambient annotations. Older bundles have fewer of these — call get_modalities before telling a user a modality is available.
 
-Every number and every "why" string is computed, not generated — quote them, don't paraphrase. Catalog cell counts can differ from the file's own QC; the file is the truth. Downloads never need a key. AI-interpreted search is 10/day anonymously; a free key from ${ACCOUNT_URL} raises it to ${KEY_SEARCH_LIMIT}/day and unlocks assess_study and find_matched_controls.`;
+Every number and every "why" string is computed, not generated — quote them, don't paraphrase. Catalog cell counts can differ from the file's own QC; the file is the truth. Downloads never need a key, and every tool except save_cohort works without one. Searches the built-in vocabulary can read are free; only questions that need the AI reading count: ${ANON_SEARCH_LIMIT}/day anonymously, ${KEY_SEARCH_LIMIT}/day with a free key from ${ACCOUNT_URL}.`;
 
 
 // ── JSON-RPC plumbing ───────────────────────────────────────────────────────
@@ -96,7 +103,7 @@ const TOOLS = [
     name: "search_datasets",
     title: "Search single-cell studies",
     description:
-      "Find public scRNA-seq studies (or individual samples) in the singlet.bio atlas from a plain-English question, e.g. \"microglia in the aging mouse brain\" or \"human PBMC covid-19 10x\". GEO accessions (GSE…, GSM…) are looked up directly. The question is turned into structured filters (organism, tissue, disease, assay, cell type) which are ANDed and never relaxed silently; when nothing matches, `suggestions` says what dropping one filter would return. Each result carries a deterministic `why` explaining the match, the download URL and one-line Python/R loaders. Works without an API key at the anonymous allowance (10 AI-interpreted searches per day per visitor); a free key from https://singlet.bio/account raises it to 200/day. Remaining budget is in `_meta.quota`.",
+      "Find public scRNA-seq studies (or individual samples) in the singlet.bio atlas from a plain-English question, e.g. \"microglia in the aging mouse brain\" or \"human PBMC covid-19 10x\". GEO accessions (GSE…, GSM…) are looked up directly. The question is turned into structured filters (organism, tissue, disease, assay, cell type) which are ANDed and never relaxed silently; when nothing matches, `suggestions` says what dropping one filter would return. Each result carries a deterministic `why` explaining the match, the download URL and one-line Python/R loaders. Works without an API key. Questions the built-in vocabulary can read (and repeats of any question) are free; only a question that needs a fresh AI reading counts against the allowance of 10 per day per visitor, or 200/day with a free key from https://singlet.bio/account. Remaining budget is in `_meta.quota`.",
     inputSchema: {
       type: "object",
       properties: {
@@ -250,7 +257,7 @@ const TOOLS = [
     name: "find_matched_controls",
     title: "Find matched control studies",
     description:
-      "Candidate control studies for a given study: same organism and tissue group, no disease label (or a healthy/control one), preferring the same assay family and reference build, ordered by samples in the file then year. Each candidate carries a deterministic `why` and its loader line, plus honest `caveats` about study-level labels and batch effects. Needs an API key.",
+      "Candidate control studies for a given study: same organism and tissue group, no disease label (or a healthy/control one), preferring the same assay family and reference build, ordered by samples in the file then year. Each candidate carries a deterministic `why` and its loader line, plus honest `caveats` about study-level labels and batch effects. Deterministic (no model call), no key needed, not metered.",
     inputSchema: {
       type: "object",
       properties: {
@@ -282,7 +289,7 @@ const TOOLS = [
     name: "assess_study",
     title: "Is this study usable?",
     description:
-      "A deterministic usability report for one study (no model call): what the file contains, samples in the file vs on GEO, the per-condition breakdown, QC summary with low-cell and low-mapping samples, reference build, a read-cap note, and what metadata is missing (age, sex, donor, annotations, PubMed). Given `purpose`, it adds concrete fit checks — e.g. \"velocity\" checks for intron-aware layers, \"aging\" checks that an age characteristic exists. Needs an API key.",
+      "A deterministic usability report for one study (no model call): what the file contains, samples in the file vs on GEO, the per-condition breakdown, QC summary with low-cell and low-mapping samples, reference build, a read-cap note, and what metadata is missing (age, sex, donor, annotations, PubMed). Given `purpose`, it adds concrete fit checks — e.g. \"velocity\" checks for intron-aware layers, \"aging\" checks that an age characteristic exists. No key needed, not metered.",
     inputSchema: {
       type: "object",
       properties: {
@@ -297,21 +304,21 @@ const TOOLS = [
   {
     name: "get_cohort",
     title: "Get a saved cohort",
-    description: "Return a version-pinned cohort and its public/private study identifiers. A session or personal API key is required for private cohorts; a shared-link token can open link cohorts.",
+    description: "Return a version-pinned cohort and its public/private study identifiers. A personal API key is required for your private and workspace cohorts; a shared-link token (sco_…) alone opens a link cohort.",
     inputSchema: { type: "object", properties: { id: { type: "string", format: "uuid" }, token: { type: "string", description: "Optional sco_… shared-link token." } }, required: ["id"], additionalProperties: false },
     annotations: { title: "Get a saved cohort", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   },
   {
     name: "save_cohort",
     title: "Save a cohort",
-    description: "Save up to 2,000 public GSE accessions as a private, link-shared or workspace cohort pinned to the current catalogue. Requires a session or personal API key.",
+    description: "Save up to 2,000 public GSE accessions as a private, link-shared or workspace cohort pinned to the current catalogue. Requires a personal API key.",
     inputSchema: { type: "object", properties: { name: { type: "string", minLength: 1, maxLength: 120 }, notes: { type: "string", maxLength: 20000 }, gse_ids: { type: "array", items: { type: "string", pattern: "^GSE\\d+$" }, minItems: 1, maxItems: 2000 }, visibility: { type: "string", enum: ["private", "link", "workspace"], default: "private" }, workspace_id: { type: "string", format: "uuid" } }, required: ["name", "gse_ids"], additionalProperties: false },
     annotations: { title: "Save a cohort", readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
   },
 ];
 
 /** Tools that need a personal API key; everything else answers anonymously. */
-const KEY_ONLY_TOOLS = new Set(["find_matched_controls", "assess_study"]);
+const KEY_ONLY_TOOLS = new Set(["save_cohort"]);
 /** Only AI-interpreted search spends the daily budget. */
 const METERED_TOOLS = new Set(["search_datasets"]);
 
@@ -450,7 +457,9 @@ async function readResource(env: Env, uri: string) {
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
 /** `_meta.quota` goes on every tool result, metered or not. */
-function quotaMeta(hasKey: boolean, quota?: Quota) {
+function quotaMeta(env: Env, hasKey: boolean, quota?: Quota) {
+  const anonLimit = limitFor(env, "search", "anon");
+  const keyLimit = limitFor(env, "search", "user");
   if (quota) {
     return {
       quota: {
@@ -469,8 +478,8 @@ function quotaMeta(hasKey: boolean, quota?: Quota) {
     quota: {
       metered: false,
       kind: hasKey ? "user" : "anon",
-      ai_search_limit_per_day: hasKey ? KEY_SEARCH_LIMIT : ANON_SEARCH_LIMIT,
-      note: `This tool is not metered. Only AI-interpreted search counts: ${ANON_SEARCH_LIMIT}/day without a key, ${KEY_SEARCH_LIMIT}/day with a free key from ${ACCOUNT_URL}.`,
+      ai_search_limit_per_day: hasKey ? keyLimit : anonLimit,
+      note: `This call was not metered. Only a search that needs a fresh AI reading counts: ${anonLimit}/day without a key, ${keyLimit}/day with a free key from ${ACCOUNT_URL}.`,
     },
   };
 }
@@ -558,7 +567,7 @@ function describeApplied(applied: NlSearchBody["applied"]): string {
 
 async function searchDatasets(
   env: Env,
-  request: Request,
+  identity: Identity,
   waitUntil: (p: Promise<unknown>) => void,
   args: Record<string, unknown>,
   hasKey: boolean
@@ -580,14 +589,14 @@ async function searchDatasets(
   if (args.min_cells != null && Number.isFinite(Number(args.min_cells))) url.searchParams.set("min_cells", String(Math.max(0, Math.floor(Number(args.min_cells)))));
   if (args.include_unbuilt === true) url.searchParams.set("has_bundle", "0");
 
-  const r = await nlSearch(env, request, waitUntil, url);
+  const r = await nlSearch(env, identity, waitUntil, url);
   if (!r.ok) return toolError(r.message, { error: r.error });
   const b = r.body;
   const quota = r.quota ?? b.quota;
-  const meta = quotaMeta(hasKey, quota);
-  // The budget is spent: nlSearch already fell back to a plain keyword search,
-  // so the caller still gets results — flagged as an error so the assistant
-  // relays the sign-in advice rather than pretending the AI reading happened.
+  const meta = quotaMeta(env, hasKey, quota);
+  // The budget is spent: nlSearch already fell back to the vocabulary-only
+  // reading, so the caller still gets results — flagged as an error so the
+  // assistant relays the sign-in advice rather than pretending the AI reading happened.
   const exhausted = !!b.quota_exceeded;
 
   if (b.level === "gse") {
@@ -597,7 +606,7 @@ async function searchDatasets(
     lines.push(`Read as: ${describeApplied(b.applied)}.`);
     if (b.dropped.length) lines.push(`Not recognised: ${b.dropped.map((d) => `${d.field} "${d.value}"`).join(", ")}.`);
     if (b.note) lines.push(b.note);
-    if (b.quota_exceeded) lines.push("Today's AI-search budget is used up; this was a keyword search.");
+    if (b.quota_exceeded) lines.push("Today's AI-search budget is used up; the question was read with the built-in vocabulary only.");
     lines.push("");
     const fullCount = Math.min(rows.length, b.groups?.full ?? rows.length);
     for (const [index, s] of rows.entries()) {
@@ -799,6 +808,20 @@ interface CallContext {
   request: Request;
   waitUntil: (p: Promise<unknown>) => void;
   auth: KeyCheck | { ok: false; reason: "missing"; message: string };
+  /** Who metered search is charged to: the key's owner, or the anonymous IP subject. */
+  identity: Identity;
+}
+
+/** Product actions run in-process; failures come back as tool errors, not JSON-RPC errors. */
+async function productTool(ctx: CallContext, meta: Record<string, unknown>, run: (p: ProductCtx) => Promise<unknown>): Promise<ToolResult> {
+  const p: ProductCtx = { db: ctx.env.DB, origin: new URL(ctx.request.url).origin };
+  try {
+    const out = await run(p);
+    return withQuota(toolResult(JSON.stringify(out), out), meta);
+  } catch (e) {
+    if (e instanceof ProductError) return toolError(e.message, { ...meta, error: e.code });
+    throw e;
+  }
 }
 
 async function callTool(ctx: CallContext, params: Record<string, unknown>) {
@@ -812,21 +835,21 @@ async function callTool(ctx: CallContext, params: Record<string, unknown>) {
   if (!ctx.auth.ok && ctx.auth.reason !== "missing") {
     return { result: toolError(ctx.auth.message, { auth: ctx.auth.reason, account_url: ACCOUNT_URL }) };
   }
-  if (!hasKey && KEY_ONLY_TOOLS.has(name)) {
-    return {
-      result: toolError(
-        `${name} needs a personal singlet.bio API key. Sign in at ${ACCOUNT_URL} (free), create a key under "API keys", then send it as \`Authorization: Bearer sk_live_…\` (or \`X-API-Key\`) with requests to ${SITE}/mcp. Everything else here — search, study details, QC, downloads — works without one.`,
-        { auth: "key_required", tool: name, account_url: ACCOUNT_URL, ...quotaMeta(false) }
-      ),
-    };
-  }
+  const keyRequired = (tool: string) => ({
+    result: toolError(
+      `${tool} needs a personal singlet.bio API key. Sign in at ${ACCOUNT_URL} (free), create a key under "API keys", then send it as \`Authorization: Bearer sk_live_…\` (or \`X-API-Key\`) with requests to ${SITE}/mcp. Everything else here — search, study details, QC, assessments, controls, downloads — works without one.`,
+      { auth: "key_required", tool, account_url: ACCOUNT_URL, ...quotaMeta(ctx.env, false) }
+    ),
+  });
+  if (!hasKey && KEY_ONLY_TOOLS.has(name)) return keyRequired(name);
 
-  const meta = quotaMeta(hasKey);
+  const meta = quotaMeta(ctx.env, hasKey);
   const db = { db: ctx.env.DB, waitUntil: ctx.waitUntil };
+  const uid = ctx.auth.ok ? ctx.auth.userId : null;
   try {
     switch (name) {
       case "search_datasets":
-        return { result: await searchDatasets(ctx.env, ctx.request, ctx.waitUntil, args, hasKey) };
+        return { result: await searchDatasets(ctx.env, ctx.identity, ctx.waitUntil, args, hasKey) };
       case "get_study":
         return { result: withQuota(await getStudy(ctx.env, args), meta) };
       case "get_download_url":
@@ -850,13 +873,14 @@ async function callTool(ctx: CallContext, params: Record<string, unknown>) {
       case "assess_study":
         return { result: withQuota(await assessStudy(db, args), meta) };
       case "get_cohort": {
-        const cohort = await productCall<Record<string, unknown>>(ctx.request, ctx.env, "get_cohort", { id: args.id, token: args.token });
-        return { result: withQuota(toolResult(JSON.stringify(cohort), cohort), meta) };
+        // A link cohort opens with its share token alone; anything else needs the owner's (or a member's) key.
+        if (uid === null && typeof args.token !== "string") return keyRequired(name);
+        return { result: await productTool(ctx, meta, (p) => getCohort(p, uid, { id: args.id, token: args.token })) };
       }
       case "save_cohort": {
-        if (!hasKey && !ctx.request.headers.get("Authorization")) return { result: toolError(`save_cohort needs a signed-in session or personal API key from ${ACCOUNT_URL}.`, { ...meta, auth: "required" }) };
-        const saved = await productCall<Record<string, unknown>>(ctx.request, ctx.env, "save_cohort", { name: args.name, notes: args.notes ?? "", visibility: args.visibility ?? "private", workspace_id: args.workspace_id ?? null, public_gse_ids: args.gse_ids });
-        return { result: withQuota(toolResult(JSON.stringify(saved), saved), meta) };
+        if (uid === null) return keyRequired(name);
+        const body = { name: args.name, notes: args.notes ?? "", visibility: args.visibility ?? "private", workspace_id: args.workspace_id ?? null, public_gse_ids: args.gse_ids };
+        return { result: await productTool(ctx, meta, (p) => saveCohort(p, uid, body)) };
       }
       default:
         return { error: rpcError(null, -32602, `Unknown tool: ${name}`) };
@@ -945,7 +969,11 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request, waitUnti
     return json(rpcError(null, -32700, "Parse error: body must be JSON"), 400);
   }
 
-  const ctx: CallContext = { env, request, waitUntil, auth: await authFor(env, request, waitUntil) };
+  const auth = await authFor(env, request, waitUntil);
+  const identity: Identity = auth.ok
+    ? { kind: "api_key", subject: `user:${auth.userId}`, userId: auth.userId, keyId: auth.keyId }
+    : { kind: "anonymous", subject: await anonSubjectFromIp(clientIp(request)) };
+  const ctx: CallContext = { env, request, waitUntil, auth, identity };
   const messages = Array.isArray(payload) ? (payload as JsonRpcRequest[]) : [payload as JsonRpcRequest];
   if (!messages.length) return json(rpcError(null, -32600, "Empty batch"), 400);
 
