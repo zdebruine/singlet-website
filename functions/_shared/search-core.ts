@@ -655,7 +655,7 @@ export function buildStudyWhere(f: SearchFilters, opts: StudyWhereOpts = {}): Bu
     clauses.push("m.n_cells >= ?");
     params.push(f.min_cells);
   }
-  if (f.has_bundle === true) clauses.push("m.has_bundle = 1");
+  if (f.has_bundle === true) clauses.push(DOWNLOADABLE_SQL);
   if (f.year_min != null && ex !== "year") {
     clauses.push("m.year >= ?");
     params.push(f.year_min);
@@ -734,7 +734,7 @@ export function buildSampleWhere(f: SearchFilters, opts: StudyWhereOpts = {}): B
     clauses.push("s.n_cells >= ?");
     params.push(f.min_cells);
   }
-  if (f.has_bundle === true) clauses.push("m.has_bundle = 1");
+  if (f.has_bundle === true) clauses.push(DOWNLOADABLE_SQL);
   if (f.year_min != null && ex !== "year") {
     clauses.push("m.year >= ?");
     params.push(f.year_min);
@@ -805,6 +805,8 @@ interface StudyDbRow {
   bundle_n_samples: number | null;
   file_cells: number | null;
   reference_build: string | null;
+  n_usable_samples?: number | null;
+  reference_mismatch?: number | null;
   n_gsm_failed: number | null;
   s_gse: number | null;
   s_gsm: number | null;
@@ -815,13 +817,17 @@ interface StudyDbRow {
   _cells: number | null;
 }
 
+/** "Downloadable": a file exists, it holds usable count data, and the reference matches the species. */
+export const DOWNLOADABLE_SQL = "(m.has_bundle = 1 AND COALESCE(m.n_usable_samples, 1) > 0 AND COALESCE(m.reference_mismatch, 0) = 0)";
+
 const STUDY_SELECT = `
   m.gse_id, m.organism_primary, m.organisms, m.tissue_groups, m.disease_groups, m.assay_families,
   m.tissues_raw, m.cell_types_raw, m.n_conditions, m.n_done, m.n_total, m.n_cells, m.has_bundle, m.year,
+  m.n_usable_samples, m.reference_mismatch,
   g.title, g.abstract, g.r2_bundle_bytes, g.r2_bundle_key, g.n_gsm_failed,
   (SELECT b.n_gsms_in_bundle FROM bundle_manifest b WHERE b.gse_id = m.gse_id) AS bundle_n_samples,
   (SELECT b.reference_build FROM bundle_manifest b WHERE b.gse_id = m.gse_id) AS reference_build,
-  (SELECT SUM(q.n_cells_called) FROM sample_qc q WHERE q.gse_id = m.gse_id) AS file_cells`;
+  (SELECT SUM(q.n_cells_called) FROM sample_qc q WHERE q.gse_id = m.gse_id AND COALESCE(q.usable, 1) = 1) AS file_cells`;
 
 function studyOrder(sort: Sort, hasQ: boolean): string {
   switch (sort) {
@@ -951,6 +957,8 @@ function shapeStudy(r: StudyDbRow): StudyRow {
     bundle_n_samples: r.bundle_n_samples != null ? Number(r.bundle_n_samples) : null,
     file_cells: r.file_cells != null ? Number(r.file_cells) : null,
     reference_build: r.reference_build,
+    usable_samples: r.n_usable_samples != null ? Number(r.n_usable_samples) : null,
+    reference_mismatch: Number(r.reference_mismatch ?? 0) === 1,
     year: r.year != null ? Number(r.year) : null,
     n_conditions: Number(r.n_conditions ?? 0),
     conditions: [],

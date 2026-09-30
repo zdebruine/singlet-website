@@ -507,6 +507,8 @@ function studySummary(r: StudyRow, why: string) {
     bundle_n_samples: r.bundle_n_samples,
     file_cells: r.file_cells,
     reference_build: r.reference_build,
+    usable_samples: r.usable_samples ?? null,
+    reference_mismatch: r.reference_mismatch ?? false,
     match: r.match,
     why,
     study_url: `${SITE}/study/${r.gse_id}`,
