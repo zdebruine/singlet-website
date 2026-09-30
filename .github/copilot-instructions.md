@@ -1,28 +1,30 @@
 # Copilot Instructions
 
-## Repository overview
+## Repository Overview
 
-The website and API for [singlet.bio](https://singlet.bio): a catalog of public GEO single-cell RNA-seq studies, reprocessed from raw reads, one `.singlet` file per study. Deployed on Cloudflare Pages; `main` auto-deploys.
+`singlet-website` is the website, API and MCP server behind [singlet.bio](https://singlet.bio), a catalog of re-processed public GEO single-cell RNA-seq studies. It runs entirely on Cloudflare: Pages (static SPA), Pages Functions (API + MCP), D1 (catalog, accounts, private projects), R2 (data files) and Workers AI.
 
-## Stack
+## Large File Creation
 
-- **Frontend:** React 18 + TypeScript + Vite + Tailwind CSS + shadcn/ui in `src/` (pages in `src/pages/`, shared components in `src/components/`, API client in `src/integrations/api/`).
-- **API and MCP server:** Cloudflare Pages Functions in `functions/` (`functions/api/*`, `functions/mcp.ts`, shared logic in `functions/_shared/`).
-- **Data:** Cloudflare D1 (binding `DB`, the catalog) and R2 (`.singlet` files served from `data.singlet.bio`; private user files on the `USER_DATA` binding).
-- Do not add Supabase or Lovable dependencies; the target is Cloudflare only.
+When creating files larger than ~200 lines, break into phases of ≤200 lines each.
 
-## Build and checks
+## Project Structure
 
-- `npm run build` runs `prebuild` first: vitest, a strict typecheck of `functions/` (`tsconfig.functions.json`), and a `wrangler pages functions build`. A type error in `functions/` fails the production deploy even though Pages reports the static assets as deployed.
-- `npm run dev` serves the SPA; `scripts/dev-api/` runs the Functions locally against a seeded SQLite catalog.
+- **Website:** React 18 + TypeScript + Vite + Tailwind CSS + shadcn/ui
+  - `src/pages/` — page components
+  - `src/components/` — shared components (Navbar, Footer, auth/, browse/, study/, ui/)
+  - `src/integrations/api/` — typed client for the Pages Functions API (`client.ts`, `types.ts`)
+  - `src/lib/`, `src/hooks/` — helpers and hooks
+- **API:** `functions/` — Cloudflare Pages Functions (strict TypeScript, `tsconfig.functions.json`)
+  - `functions/api/` — catalog, search, accounts, API keys, private projects
+  - `functions/auth/` — GitHub / Google OAuth sign-in
+  - `functions/mcp.ts` — MCP server; `functions/_shared/` — shared modules
+- **Database:** `schema/` — D1 schema files, applied with `wrangler d1 execute singlet-catalog --remote --file=…`
 
-## Conventions
+## Website Patterns
 
-- Copy is short and factual; no claims the data can't support (pipeline versions differ between files, input is capped at 30M reads per sample).
-- Install commands come from `src/lib/install-snippets.ts`; never print a bare PyPI install line.
-- In R snippets use `singlet::load()` / `singlet::find()` (the package masks `base::load` and `utils::find`).
-- Keep shell commands and Python in separate code blocks.
-
-## Related repositories
-
-- [Singlet-Bio/singlet](https://github.com/Singlet-Bio/singlet) — the C++ pipeline and the Python and R clients.
+- Pages use shadcn/ui components, Lucide icons, Tailwind CSS
+- Math rendering: use KaTeX
+- Expandable sections: use Collapsible from shadcn/ui or accordion
+- Code blocks: copy-to-clipboard, Python/R highlighting
+- No Supabase or Lovable dependencies: every backend feature is a Pages Function on D1/R2

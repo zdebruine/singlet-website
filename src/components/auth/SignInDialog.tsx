@@ -1,15 +1,15 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { Github, Loader2, Mail } from "lucide-react";
+import { Github, Loader2 } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Logo } from "@/components/Logo";
-import type { OAuthProviderName, SignInResult } from "./AuthProvider";
+import type { AuthProviders, OAuthProviderName, SignInResult } from "./AuthProvider";
 
 interface Props {
   open: boolean;
   reason?: string;
   onOpenChange: (open: boolean) => void;
-  signInWithEmail: (email: string) => Promise<SignInResult>;
+  providers: AuthProviders;
   signInWithOAuth: (provider: OAuthProviderName) => Promise<SignInResult>;
 }
 
@@ -24,45 +24,44 @@ function GoogleMark() {
   );
 }
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+const PROVIDERS: { id: OAuthProviderName; label: string; icon: ReactNode }[] = [
+  { id: "google", label: "Google", icon: <GoogleMark /> },
+  { id: "github", label: "GitHub", icon: <Github size={16} aria-hidden="true" /> },
+];
 
-export function SignInDialog({ open, reason, onOpenChange, signInWithEmail, signInWithOAuth }: Props) {
-  const [email, setEmail] = useState("");
-  const [busy, setBusy] = useState<"email" | OAuthProviderName | null>(null);
-  const [sentTo, setSentTo] = useState<string | null>(null);
+export function SignInDialog({ open, reason, onOpenChange, providers, signInWithOAuth }: Props) {
+  const [busy, setBusy] = useState<OAuthProviderName | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) {
       setBusy(null);
       setError(null);
-      setSentTo(null);
     }
   }, [open]);
 
-  const submitEmail = async (e: FormEvent) => {
-    e.preventDefault();
-    const addr = email.trim();
-    if (!EMAIL_RE.test(addr)) {
-      setError("Enter the email address you want the sign-in link sent to.");
-      return;
-    }
-    setError(null);
-    setBusy("email");
-    const r = await signInWithEmail(addr);
-    setBusy(null);
-    if (r.error) setError(r.error);
-    else setSentTo(addr);
-  };
+  // Coming back with the browser's Back button restores this page from cache
+  // with the spinner still running; reset it.
+  useEffect(() => {
+    const onShow = (e: PageTransitionEvent) => {
+      if (e.persisted) setBusy(null);
+    };
+    window.addEventListener("pageshow", onShow);
+    return () => window.removeEventListener("pageshow", onShow);
+  }, []);
 
   const oauth = async (provider: OAuthProviderName) => {
     setError(null);
     setBusy(provider);
     const r = await signInWithOAuth(provider);
     // On success the page navigates away; only failures come back here.
-    setBusy(null);
-    if (r.error) setError(r.error);
+    if (r.error) {
+      setBusy(null);
+      setError(r.error);
+    }
   };
+
+  const noneAvailable = !providers.google && !providers.github;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -76,69 +75,35 @@ export function SignInDialog({ open, reason, onOpenChange, signInWithEmail, sign
           </DialogDescription>
         </DialogHeader>
 
-        {sentTo ? (
-          <div className="mt-5" aria-live="polite">
-            <div className="surface p-4 flex gap-3">
-              <Mail size={18} className="text-primary shrink-0 mt-0.5" />
-              <div className="min-w-0">
-                <p className="text-[14px] font-medium text-foreground">Check your inbox</p>
-                <p className="mt-1 text-[13px] text-muted-foreground leading-relaxed">
-                  We sent a sign-in link to <span className="font-medium text-foreground break-all">{sentTo}</span>. It works once and expires in an hour. No password needed.
-                </p>
+        <div className="mt-5 space-y-2">
+          {PROVIDERS.map(({ id, label, icon }) => {
+            const available = providers[id];
+            return (
+              <div key={id}>
+                <button
+                  type="button"
+                  onClick={() => oauth(id)}
+                  disabled={busy !== null || !available}
+                  aria-describedby={available ? undefined : `signin-${id}-note`}
+                  className="btn-secondary w-full h-10"
+                >
+                  {busy === id ? <Loader2 size={15} className="animate-spin" /> : icon}
+                  Continue with {label}
+                </button>
+                {!available && (
+                  <p id={`signin-${id}-note`} className="mt-1 text-[11.5px] text-muted-foreground">
+                    {label} sign-in isn't available yet.
+                  </p>
+                )}
               </div>
-            </div>
-            <button
-              type="button"
-              className="mt-3 text-[12.5px] text-muted-foreground hover:text-foreground underline underline-offset-2"
-              onClick={() => {
-                setSentTo(null);
-                setError(null);
-              }}
-            >
-              Use a different email
-            </button>
-          </div>
-        ) : (
-          <div className="mt-5 space-y-4">
-            <div className="space-y-2">
-              <button type="button" onClick={() => oauth("google")} disabled={busy !== null} className="btn-secondary w-full h-10">
-                {busy === "google" ? <Loader2 size={15} className="animate-spin" /> : <GoogleMark />}
-                Continue with Google
-              </button>
-              <button type="button" onClick={() => oauth("github")} disabled={busy !== null} className="btn-secondary w-full h-10">
-                {busy === "github" ? <Loader2 size={15} className="animate-spin" /> : <Github size={16} aria-hidden="true" />}
-                Continue with GitHub
-              </button>
-            </div>
+            );
+          })}
+        </div>
 
-            <div className="flex items-center gap-3 text-[11px] uppercase tracking-wide text-muted-foreground" aria-hidden="true">
-              <span className="h-px flex-1 bg-border" />
-              or
-              <span className="h-px flex-1 bg-border" />
-            </div>
-
-            <form onSubmit={submitEmail} className="space-y-2" noValidate>
-              <label htmlFor="signin-email" className="block text-[12.5px] font-medium text-foreground">
-                Email
-              </label>
-              <input
-                id="signin-email"
-                type="email"
-                inputMode="email"
-                autoComplete="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@university.edu"
-                className="input"
-                disabled={busy !== null}
-              />
-              <button type="submit" disabled={busy !== null} className="btn-primary w-full h-10">
-                {busy === "email" && <Loader2 size={15} className="animate-spin" />}
-                Email me a sign-in link
-              </button>
-            </form>
-          </div>
+        {noneAvailable && (
+          <p className="mt-3 text-[12.5px] leading-snug text-muted-foreground">
+            Accounts are being set up on this site. Everything else works without one in the meantime.
+          </p>
         )}
 
         {error && (
@@ -148,7 +113,8 @@ export function SignInDialog({ open, reason, onOpenChange, signInWithEmail, sign
         )}
 
         <p className="mt-5 text-[11.5px] leading-relaxed text-muted-foreground">
-          We store your email, a daily count of AI requests and the API keys you create, nothing else. See the{" "}
+          We store your email, name and avatar from the account you choose, a sign-in session per browser, a daily count of AI requests and
+          whatever you create (API keys, private projects), nothing else. See the{" "}
           <Link to="/privacy" className="underline underline-offset-2 hover:text-foreground" onClick={() => onOpenChange(false)}>
             privacy policy
           </Link>{" "}

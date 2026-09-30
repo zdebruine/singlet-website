@@ -1,18 +1,31 @@
-import { hasPrivateIdentity, productCall, unauthorized, type PrivateEnv } from "../../_shared/private-project";
+/**
+ * GET    /api/projects/:id — one private project (same body as the get_project action).
+ * DELETE /api/projects/:id — the project, its files, indexed studies, stored objects and unfinished uploads (owner only).
+ */
+import type { AppEnv } from "../../_shared/env";
+import { requireUser } from "../../_shared/identity";
+import { deleteProject, getProject } from "../../_shared/product";
+import { abortUploads, json, productContext, removeObjects, routeError } from "../../_shared/private-project";
 
-const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
-
-export const onRequestGet: PagesFunction<PrivateEnv> = async ({ request, env, params }) => {
-  if (!hasPrivateIdentity(request, env)) return unauthorized();
-  try { return json(await productCall(request, env, "get_project", { id: String(params.id ?? "") })); }
-  catch (e) { return json({ error: "request_failed", message: e instanceof Error ? e.message : "Project not found." }, Number((e as { status?: number })?.status) || 400); }
+export const onRequestGet: PagesFunction<AppEnv> = async ({ request, env, params, waitUntil }) => {
+  const who = await requireUser(request, env, waitUntil);
+  if (!who.ok) return who.response;
+  try {
+    return json(await getProject(productContext(request, env), who.identity.userId, { id: String(params.id ?? "") }));
+  } catch (e) {
+    return routeError(e, "Project not found.");
+  }
 };
 
-export const onRequestDelete: PagesFunction<PrivateEnv> = async ({ request, env, params }) => {
-  if (!hasPrivateIdentity(request, env)) return unauthorized();
+export const onRequestDelete: PagesFunction<AppEnv> = async ({ request, env, params, waitUntil }) => {
+  const who = await requireUser(request, env, waitUntil);
+  if (!who.ok) return who.response;
   try {
-    const result = await productCall<{ object_keys?: string[] }>(request, env, "delete_project", { id: String(params.id ?? "") });
-    if (result.object_keys?.length) await env.USER_DATA.delete(result.object_keys);
+    const result = await deleteProject(productContext(request, env), who.identity.userId, { id: String(params.id ?? "") });
+    await abortUploads(env.USER_DATA, result.uploads);
+    await removeObjects(env.USER_DATA, result.object_keys);
     return json({ ok: true });
-  } catch (e) { return json({ error: "request_failed", message: e instanceof Error ? e.message : "Could not delete project." }, Number((e as { status?: number })?.status) || 400); }
+  } catch (e) {
+    return routeError(e, "Could not delete project.");
+  }
 };

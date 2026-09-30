@@ -1,33 +1,36 @@
 /**
  * Natural-language search core, shared by /api/nl-search and the MCP server.
  *
- *   1. The query is interpreted by the Lovable Cloud function
- *      `interpret-search-query` (Gemini via the Lovable AI Gateway), grounded on
- *      the CANONICAL vocabulary — organism common names, tissue/disease/assay
- *      groups and the top raw cell types. Anything it returns as raw text is
- *      mapped through the same synonym rules that built the normalised columns.
+ *   1. The query is read by ./interpret: a deterministic parse against the
+ *      CANONICAL vocabulary (organism aliases, the D1 vocab_rules for tissue /
+ *      disease / assay, cell types, cell-count and year phrases) always runs;
+ *      a model (Anthropic or Workers AI, see ./ai) is asked only when the parse
+ *      leaves several words it could not place, and its validated reading is
+ *      cached in D1 so each distinct question is paid for once.
  *   2. The resulting filters run through the shared search core with AND
- *      semantics. A zero result is NEVER broadened silently: instead
- *      `suggestions` lists what dropping each single filter would yield.
+ *      semantics. Only the interpreted organism is a hard filter; interpreted
+ *      tissue / disease / assay / cell type are ranking signals. A zero result
+ *      is NEVER broadened silently: instead `suggestions` lists what dropping
+ *      each single filter would yield.
  *   3. `why` holds a deterministic one-line explanation per study, built from
  *      the structured `match` data — no second model call.
  *
  * Explicit filters (organism=…, tissue_group=…, …) are merged (union per
  * field) with the interpreted ones.
  *
- * Budgets: each *fresh* interpretation (not served from the 1 h interpretation
- * cache or the response cache) spends one unit of the caller's daily AI
- * budget — 10/day anonymous (salted IP hash), 200/day signed in or with a
- * personal API key (charged to the key's owner). The remaining budget comes
- * back in the `X-Singlet-Quota` header (never cached). When the budget is
- * spent the request still succeeds as a plain keyword search with
+ * Budgets: only a *fresh* model reading spends a unit of the caller's daily
+ * AI budget — 10/day anonymous (salted IP hash), 200/day signed in or with a
+ * personal API key (charged to the key's owner). Vocabulary-only readings and
+ * cached model readings are free. The remaining budget comes back in the
+ * `X-Singlet-Quota` header (never cached). When the budget is spent the
+ * request still succeeds on the vocabulary reading, with
  * `quota_exceeded: true`, `quota` and a human `note`.
  */
-import { cloudAnonKey, cloudBase, type CloudEnv } from "./cloud";
 import { NO_CACHE_HEADER } from "./cache";
-import { identityHeaders, QUOTA_HEADER } from "./identity";
-import { loadRules, organismVocabForModel, TISSUE_GROUPS, DISEASE_GROUPS, ASSAY_FAMILIES, type VocabRule } from "./vocab";
-import { cellTypeVocab } from "./facets-core";
+import { QUOTA_HEADER, type Identity } from "./identity";
+import { quotaHeaderValue, type Quota } from "./quota";
+import { interpretQuery, isEmptyInterpretation, type InterpretEnv, type Interpreted } from "./interpret";
+import { loadRules, type VocabRule } from "./vocab";
 import {
   canonicalQuery,
   countStudies,
@@ -48,28 +51,13 @@ import {
   type StudyRow,
 } from "./search-core";
 
-export interface NlEnv extends CloudEnv {
-  DB: D1Database;
-}
-const INTERPRET_FN = "interpret-search-query";
-const INTERPRET_TIMEOUT_MS = 9000;
-const INTERPRET_CACHE_TTL = 3600;
-const INTERPRET_CACHE_URL = "https://singlet.bio/__internal/interpret";
-/** Bump whenever the interpreter prompt or its pinned examples change, so cached readings expire at once. */
-const INTERPRET_RULES_VERSION = "11f-1";
-const MAX_SUGGESTIONS = 5;
+export type { Interpreted } from "./interpret";
+export type { Quota } from "./quota";
 
-export interface Interpreted {
-  organism: string[];
-  tissue_group: string[];
-  disease_group: string[];
-  assay_family: string[];
-  cell_type: string[];
-  min_cells: number | null;
-  year_min: number | null;
-  year_max: number | null;
-  q: string[];
-}
+/** Bindings and vars nlSearch needs (a subset of AppEnv). */
+export type NlEnv = InterpretEnv;
+
+const MAX_SUGGESTIONS = 5;
 
 interface Suggestion {
   /** Remove this one filter (or `all_filters` = keep only the free text). */
@@ -79,150 +67,6 @@ interface Suggestion {
   total: number;
   /** Canonical query-string fragment the UI can apply. */
   params: string;
-}
-
-const emptyInterpreted = (): Interpreted => ({
-  organism: [],
-  tissue_group: [],
-  disease_group: [],
-  assay_family: [],
-  cell_type: [],
-  min_cells: null,
-  year_min: null,
-  year_max: null,
-  q: [],
-});
-
-function coerceInterpreted(raw: unknown): Interpreted {
-  const obj = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
-  const arr = (v: unknown): string[] =>
-    Array.isArray(v)
-      ? v.map((x) => String(x).trim()).filter(Boolean)
-      : typeof v === "string" && v.trim()
-        ? [v.trim()]
-        : [];
-  const int = (v: unknown): number | null => {
-    if (typeof v === "number" && Number.isFinite(v)) return Math.floor(v);
-    if (typeof v === "string" && v.trim()) {
-      const n = parseInt(v.replace(/[,_\s]/g, ""), 10);
-      return Number.isFinite(n) ? n : null;
-    }
-    return null;
-  };
-  return {
-    organism: arr(obj.organism),
-    tissue_group: arr(obj.tissue_group ?? obj.tissue),
-    disease_group: arr(obj.disease_group ?? obj.disease),
-    assay_family: arr(obj.assay_family ?? obj.protocol),
-    cell_type: arr(obj.cell_type),
-    min_cells: int(obj.min_cells),
-    year_min: int(obj.year_min),
-    year_max: int(obj.year_max),
-    q: arr(obj.q),
-  };
-}
-
-/** Remaining AI budget for the requesting visitor, as reported by the edge function. */
-export interface Quota {
-  kind: "anon" | "user";
-  used: number;
-  limit: number;
-  resets_at: string;
-  exceeded: boolean;
-}
-
-type InterpretOutcome =
-  | { ok: true; interpreted: Interpreted; model?: string; quota?: Quota; cached: boolean }
-  | { ok: false; reason: "quota"; quota: Quota; message: string }
-  | { ok: false; reason: "invalid_key"; message: string }
-  | { ok: false; reason: "busy" | "unavailable" };
-
-const isQuota = (v: unknown): v is Quota =>
-  !!v && typeof v === "object" && typeof (v as Quota).used === "number" && typeof (v as Quota).limit === "number";
-
-/**
- * Call the edge function on the visitor's behalf. Interpretations are cached
- * 1 h per normalised query — a cache hit costs nobody any budget.
- */
-async function interpret(env: NlEnv, ctx: Ctx, request: Request, query: string): Promise<InterpretOutcome> {
-  const normQ = query.toLowerCase().replace(/\s+/g, " ").trim();
-  const cacheKey = `${INTERPRET_CACHE_URL}?v=${INTERPRET_RULES_VERSION}&q=${encodeURIComponent(normQ)}`;
-  let cache: Cache | null = null;
-  try {
-    cache = (caches as unknown as { default?: Cache }).default ?? null;
-    const hit = cache ? await cache.match(cacheKey) : null;
-    if (hit) {
-      const c = (await hit.json()) as { interpreted: Interpreted; model?: string };
-      return { ok: true, interpreted: c.interpreted, model: c.model, cached: true };
-    }
-  } catch {
-    /* ignore cache errors */
-  }
-
-  const base = cloudBase(env);
-  const anon = cloudAnonKey(env);
-  const [cellTypes, identity] = await Promise.all([
-    cellTypeVocab(ctx, 200).catch(() => [] as string[]),
-    identityHeaders(request, anon),
-  ]);
-
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), INTERPRET_TIMEOUT_MS);
-  try {
-    const res = await fetch(`${base}/functions/v1/${INTERPRET_FN}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...identity },
-      body: JSON.stringify({
-        version: 2,
-        q: query,
-        vocab: {
-          organism: organismVocabForModel(),
-          tissue_group: TISSUE_GROUPS,
-          disease_group: DISEASE_GROUPS,
-          assay_family: ASSAY_FAMILIES,
-          cell_type: cellTypes,
-        },
-      }),
-      signal: controller.signal,
-    });
-    if (res.status === 429) {
-      const body = (await res.json().catch(() => ({}))) as { quota?: unknown; message?: string };
-      if (isQuota(body.quota)) {
-        return { ok: false, reason: "quota", quota: body.quota, message: body.message ?? "Today's free AI searches are used up." };
-      }
-      return { ok: false, reason: "busy" };
-    }
-    if (res.status === 401) {
-      // Only an API key can be rejected here (sessions degrade to anonymous).
-      const body = (await res.json().catch(() => ({}))) as { error?: string; message?: string };
-      if (body.error === "invalid_api_key") {
-        return { ok: false, reason: "invalid_key", message: body.message ?? "This API key is not valid." };
-      }
-      return { ok: false, reason: "unavailable" };
-    }
-    if (res.status === 503) return { ok: false, reason: "busy" };
-    if (!res.ok) return { ok: false, reason: "unavailable" };
-    const data = (await res.json()) as { interpreted?: unknown; model?: string; quota?: unknown };
-    if (data.interpreted == null) return { ok: false, reason: "unavailable" };
-    const stored = { interpreted: coerceInterpreted(data.interpreted), model: data.model };
-    if (cache) {
-      ctx.waitUntil(
-        cache
-          .put(
-            cacheKey,
-            new Response(JSON.stringify(stored), {
-              headers: { "Content-Type": "application/json", "Cache-Control": `public, max-age=${INTERPRET_CACHE_TTL}` },
-            })
-          )
-          .catch(() => undefined)
-      );
-    }
-    return { ok: true, ...stored, quota: isQuota(data.quota) ? data.quota : undefined, cached: false };
-  } catch {
-    return { ok: false, reason: "unavailable" };
-  } finally {
-    clearTimeout(timer);
-  }
 }
 
 /** Keep rail filters hard; only interpreted organism is hard. Other interpreted facets are ranking signals. */
@@ -369,6 +213,7 @@ async function suggestions(ctx: Ctx, f: SearchParams): Promise<Suggestion[]> {
 }
 
 export interface NlSearchBody {
+  /** Always true now: the vocabulary reader needs no external service. Kept for older clients. */
   configured: boolean;
   interpreted: Interpreted | null;
   applied: ReturnType<typeof pickFilters>;
@@ -382,6 +227,7 @@ export interface NlSearchBody {
   accessions: string[];
   suggestions: Suggestion[];
   why: Record<string, string>;
+  /** Model label, present only when a model reading (fresh or cached) was used. */
   model?: string;
   any_word?: boolean;
   note?: string;
@@ -400,12 +246,12 @@ export type NlSearchOutcome =
 
 /**
  * Run a natural-language search. `url` carries the same parameters as
- * /api/search plus `q`; `request` supplies the caller's identity (session,
- * API key or anonymous) for budgeting.
+ * /api/search plus `q`; `identity` (resolved by the caller: session, API key
+ * or anonymous) is who a fresh model reading is charged to.
  */
 export async function nlSearch(
   env: NlEnv,
-  request: Request,
+  identity: Identity,
   waitUntil: (p: Promise<unknown>) => void,
   url: URL
 ): Promise<NlSearchOutcome> {
@@ -416,56 +262,48 @@ export async function nlSearch(
   const rules = await loadRules(env.DB, waitUntil);
   const ctx: Ctx = { db: env.DB, rules, waitUntil };
 
-  // Accessions are an exact ask — no model needed. `interpret=0` is how the
-  // site re-runs a search after the visitor edited the interpretation: the
-  // filters are theirs now and `q` is plain keywords.
+  // Accessions are an exact ask — nothing to interpret. `interpret=0` is how
+  // the site re-runs a search after the visitor edited the interpretation:
+  // the filters are theirs now and `q` is plain keywords.
   const acc = extractAccessions(q);
   const isAccession = acc.gse.length > 0 || acc.gsm.length > 0;
-  const skipModel = isAccession || url.searchParams.get("interpret") === "0";
+  const skipInterpret = isAccession || url.searchParams.get("interpret") === "0";
 
   let interpreted: Interpreted | null = null;
   let model: string | undefined;
-  let configured = true;
   let note: string | undefined;
   let quota: Quota | undefined;
   let quotaExceeded = false;
-  // Degraded answers (interpreter down, budget spent) are visitor-specific
+  // Degraded answers (model failed, budget spent) are visitor-specific
   // moments, not facts about the catalog — never let them into the edge cache.
   let cacheable = true;
 
-  if (!skipModel) {
-    const r = await interpret(env, ctx, request, q);
-    if (r.ok) {
-      interpreted = r.interpreted;
-      model = r.model;
-      quota = r.quota;
-    } else if (r.reason === "quota") {
-      quota = r.quota;
+  if (!skipInterpret) {
+    const r = await interpretQuery(env, ctx, identity, q);
+    interpreted = r.interpreted;
+    model = r.model;
+    quota = r.quota;
+    if (r.quotaExceeded) {
+      quota = r.quotaExceeded.quota;
       quotaExceeded = true;
       cacheable = false;
-      note = `${r.message} Meanwhile this is a plain keyword search.`;
-    } else if (r.reason === "invalid_key") {
-      return { ok: false, status: 401, error: "invalid_api_key", message: r.message };
-    } else {
-      configured = false;
-      cacheable = false;
-      note =
-        r.reason === "busy"
-          ? "AI search is busy right now, so this is a plain keyword search — try again in a minute."
-          : "The query interpreter was unavailable, so this is a plain keyword search.";
+      note = `${r.quotaExceeded.message} Meanwhile this search was read with the built-in vocabulary only.`;
     }
+    if (r.degraded) cacheable = false;
   }
 
   const merged = interpreted ? mergeFilters(explicit, interpreted, rules) : null;
   const normalized = merged ?? normalizeFilters(explicit, rules);
   const filters = normalized.filters;
   const dropped = normalized.dropped;
-  // When the model returned nothing usable, fall back to the raw text.
+  // When the reading produced nothing usable, fall back to the raw text.
   if (interpreted && !hasAnyFilter(filters) && !filters.q) filters.q = q;
+  // Nothing at all was read (no facet, no keyword): behave like a plain keyword search.
+  const plainKeywords = !interpreted || isEmptyInterpretation(interpreted);
 
   const result =
     filters.level === "gse"
-      ? await runStudySearch(ctx, filters, { orFallback: !interpreted, soft: merged?.soft })
+      ? await runStudySearch(ctx, filters, { orFallback: plainKeywords, soft: merged?.soft })
       : await runSampleSearch(ctx, filters);
 
   const why: Record<string, string> = {};
@@ -485,11 +323,11 @@ export async function nlSearch(
   }
 
   const headers: Record<string, string> = {};
-  if (quota && !quotaExceeded) headers[QUOTA_HEADER] = JSON.stringify(quota);
+  if (quota && !quotaExceeded) headers[QUOTA_HEADER] = quotaHeaderValue(quota);
   if (!cacheable) headers[NO_CACHE_HEADER] = "1";
 
   const body: NlSearchBody = {
-    configured,
+    configured: true,
     interpreted,
     applied: pickFilters(merged?.display ?? filters),
     hard_applied: pickFilters(filters),

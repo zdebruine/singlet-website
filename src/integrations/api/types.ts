@@ -211,7 +211,7 @@ export interface NlSearchResponse<T = StudyRow | SampleRow> extends SearchRespon
   /** gse_id → deterministic one-line explanation (study level only). */
   why: Record<string, string>;
   model?: string;
-  /** True when today's AI-search budget is spent; the answer is a plain keyword search. */
+  /** True when today's AI-search budget is spent; the answer uses the built-in vocabulary reading only. */
   quota_exceeded?: boolean;
   quota?: QuotaInfo;
 }
@@ -440,7 +440,7 @@ export interface SearchQuery {
   limit?: number;
 }
 
-// ── API keys (account page; managed by the Lovable Cloud `api-keys` function) ─
+// ── API keys (account page; managed by POST /api/keys) ──────────────────────
 
 export interface ApiKeySummary {
   id: string;
@@ -610,4 +610,11 @@ export interface RelatedResponse {
   gse_id: string;
   total: number;
   related: RelatedStudy[];
+}
+
+/** GET /api/auth/me */
+export interface AuthMe {
+  user: { id: string; email: string | null; displayName: string | null; avatarUrl: string | null } | null;
+  /** Which sign-in providers are configured on this deployment. */
+  providers: { github: boolean; google: boolean };
 }

@@ -1,78 +1,106 @@
-import { cloudAnonKey, cloudBase, type CloudEnv } from "./cloud";
-import { apiKeyFromRequest, checkApiKey, sha256Hex, userBearer } from "./identity";
-
-export const PROJECT_CAP = 5;
-export const FILE_CAP = 20;
-export const ACCOUNT_BYTES_CAP = 10 * 1024 ** 3;
-export const GLOBAL_BYTES_CAP = 2 * 1024 ** 4;
-export const FILE_BYTES_CAP = 2 * 1024 ** 3;
-export const PART_BYTES = 50 * 1024 ** 2;
-
-export interface PrivateEnv extends CloudEnv {
-  DB: D1Database;
-  USER_DATA: R2Bucket;
-  PRIVATE_URL_SECRET?: string;
-}
-
-export async function productCall<T>(request: Request, env: CloudEnv, action: string, body: Record<string, unknown> = {}): Promise<T> {
-  const anon = cloudAnonKey(env);
-  const bearer = request.headers.get("Authorization") ?? `Bearer ${anon}`;
-  const res = await fetch(`${cloudBase(env)}/functions/v1/product-data`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", apikey: anon, Authorization: bearer, ...(apiKeyFromRequest(request) ? { "X-API-Key": apiKeyFromRequest(request) ?? "" } : {}) },
-    body: JSON.stringify({ action, ...body }),
-  });
-  const data = await res.json().catch(() => ({})) as T & { message?: string };
-  if (!res.ok) throw Object.assign(new Error(data.message ?? `Request failed (${res.status})`), { status: res.status, data });
-  return data;
-}
-
-export async function requirePrivateIdentity(request: Request, env: CloudEnv, waitUntil: (p: Promise<unknown>) => void): Promise<string | null> {
-  const token = userBearer(request, cloudAnonKey(env));
-  if (token) return token;
-  const key = apiKeyFromRequest(request);
-  if (!key) return null;
-  const result = await checkApiKey(env, key, waitUntil);
-  return result.ok ? key : null;
-}
-
-function bytesToHex(bytes: Uint8Array): string {
-  return [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
-}
-
-export function randomToken(prefix: string): string {
-  return `${prefix}_${bytesToHex(crypto.getRandomValues(new Uint8Array(24)))}`;
-}
-
-export async function signedFileToken(env: PrivateEnv, fileId: string, expires: number): Promise<string> {
-  const secret = env.PRIVATE_URL_SECRET;
-  if (!secret) throw new Error("Private download signing is not configured");
-  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-  return bytesToHex(new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(`${fileId}:${expires}`))));
-}
-
-export async function validSignedFileToken(env: PrivateEnv, fileId: string, expires: number, token: string): Promise<boolean> {
-  if (!Number.isInteger(expires) || expires < Math.floor(Date.now() / 1000) || expires > Math.floor(Date.now() / 1000) + 3700) return false;
-  const expected = await signedFileToken(env, fileId, expires);
-  if (expected.length !== token.length) return false;
-  let diff = 0;
-  for (let i = 0; i < expected.length; i++) diff |= expected.charCodeAt(i) ^ token.charCodeAt(i);
-  return diff === 0;
-}
-
-export { sha256Hex };
 /**
- * Cheap presence check for a caller identity (session bearer or API key).
- * Every private endpoint calls this *before* reading a body, fetching a URL
- * or touching the database, so an anonymous request can never cause work.
+ * Shared plumbing for the private-file routes under /api/projects/* (R2
+ * multipart uploads, URL registration, authorized downloads, deletes).
+ *
+ * All data access goes straight to D1 through product.ts. Every route
+ * resolves the caller once (identity.ts requireUser, or resolveIdentity for
+ * read-token downloads) before it reads a body, fetches a URL or touches R2,
+ * so an anonymous request never causes work.
  */
-export function hasPrivateIdentity(request: Request, env: CloudEnv): boolean {
-  return Boolean(userBearer(request, cloudAnonKey(env)) || apiKeyFromRequest(request));
+import type { AppEnv } from "./env";
+import { FILE_BYTES_CAP, ProductError, productJson, type PendingUpload, type ProductCtx } from "./product";
+
+export { ACCOUNT_BYTES_CAP, FILE_BYTES_CAP, FILE_CAP, GLOBAL_BYTES_CAP, PROJECT_CAP } from "./product";
+
+/** R2 multipart part size for private uploads (a 2 GiB file is 41 parts). */
+export const PART_BYTES = 50 * 1024 ** 2;
+export const MAX_PARTS = Math.ceil(FILE_BYTES_CAP / PART_BYTES);
+
+/**
+ * The exact size of upload part `n` (1-based) of an `expected`-byte file cut
+ * into PART_BYTES pieces, or 0 when the file has no such part. Uploads stay
+ * within the bytes their reservation counted against the storage caps.
+ */
+export function partLength(expected: number, n: number): number {
+  if (!Number.isInteger(expected) || expected <= 0 || !Number.isInteger(n) || n < 1) return 0;
+  const start = (n - 1) * PART_BYTES;
+  return start < expected ? Math.min(PART_BYTES, expected - start) : 0;
 }
 
-export function unauthorized(): Response {
-  return new Response(
-    JSON.stringify({ error: "sign_in_required", message: "Sign in to use private projects, cohorts and workspaces." }),
-    { status: 401, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } },
+/**
+ * Response headers for a private file streamed from a registered URL. Built
+ * from an allowlist: forwarding the remote host's own headers would let it set
+ * cookies (Set-Cookie, Clear-Site-Data, …) on this origin. Content-Length is
+ * kept only when the body is not re-encoded (fetch decodes Content-Encoding).
+ */
+export function privateDownloadHeaders(upstream: { get(name: string): string | null }, filename: string): Record<string, string> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/octet-stream",
+    "Content-Disposition": `attachment; filename="${filename.replace(/["\\\r\n]/g, "")}"`,
+    "Cache-Control": "private, no-store",
+    "X-Content-Type-Options": "nosniff",
+  };
+  for (const name of ["Content-Range", "Accept-Ranges", "ETag", "Last-Modified"]) {
+    const value = upstream.get(name);
+    if (value) headers[name] = value;
+  }
+  const length = upstream.get("Content-Length");
+  if (length && !upstream.get("Content-Encoding")) headers["Content-Length"] = length;
+  return headers;
+}
+
+/** Abort unfinished R2 multipart uploads so their parts stop using storage. Never fails the request. */
+export async function abortUploads(bucket: R2Bucket | undefined, uploads: PendingUpload[]): Promise<void> {
+  if (!bucket || !uploads.length) return;
+  const b: R2Bucket = bucket;
+  await Promise.all(
+    uploads.map((u) =>
+      b
+        .resumeMultipartUpload(u.object_key, u.r2_upload_id)
+        .abort()
+        .catch((e: unknown) => console.warn("[private-project] multipart abort failed:", String(e))),
+    ),
   );
+}
+
+/** The private routes use the app env; USER_DATA must be bound for stored uploads. */
+export type PrivateEnv = AppEnv;
+
+export function productContext(request: Request, env: { DB: D1Database }): ProductCtx {
+  return { db: env.DB, origin: new URL(request.url).origin };
+}
+
+/** JSON, no-store — the same shape as /api/product. */
+export const json = productJson;
+
+/** The request body as an object ({} when it is missing or not a JSON object). */
+export async function readBody(request: Request): Promise<Record<string, unknown>> {
+  const raw: unknown = await request.json().catch(() => null);
+  return raw !== null && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
+}
+
+/**
+ * Error → Response for the /api/projects routes. A ProductError keeps its
+ * code and status. Other errors (indexer, URL checks, R2) are reported with
+ * their message and `status` — except database errors, which are logged and
+ * hidden behind a generic 500.
+ */
+export function routeError(e: unknown, fallback: string, status = 400, code = "request_failed"): Response {
+  if (e instanceof ProductError) return productJson({ error: e.code, message: e.message, ...e.extra }, e.status);
+  const message = e instanceof Error && e.message ? e.message : fallback;
+  if (/D1_|SQLITE/i.test(message)) {
+    console.error("[private-project]", message);
+    return productJson({ error: "server_error", message: "Could not complete that request right now." }, 500);
+  }
+  return productJson({ error: code, message }, status);
+}
+
+export function storageUnavailable(): Response {
+  return productJson({ error: "storage_unavailable", message: "Private file storage is not available right now." }, 503);
+}
+
+/** Remove stored objects. Never fails the request: a leftover object only wastes bytes. */
+export async function removeObjects(bucket: R2Bucket | undefined, keys: string[]): Promise<void> {
+  if (!bucket || !keys.length) return;
+  await bucket.delete(keys).catch((e: unknown) => console.warn("[private-project] R2 delete failed:", String(e)));
 }

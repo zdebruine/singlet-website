@@ -4,18 +4,15 @@
  * API keys for scripts and the MCP server. Browsing, searching and
  * downloading never need it.
  *
- * Providers: Google (Lovable Cloud's managed Google app — no client id/secret
- * of ours; the broker is used on Lovable hosts, the hosted auth endpoint
- * elsewhere), GitHub (own OAuth app driven by the `github-oauth`
- * Cloud function) and an emailed sign-in link.
- *
- * The auth client is loaded lazily so anonymous page views never pay for it.
- * The provider is the single writer of the module-level `authToken`, which the
- * API client attaches to AI requests.
+ * Providers: GitHub and Google, both OAuth apps of our own driven by Pages
+ * Functions (functions/_shared/oauth.ts). Signing in is a full-page redirect
+ * to /auth/<provider>/start; the session then lives in an HttpOnly cookie the
+ * page never sees. This provider only asks /api/auth/me who is signed in (on
+ * mount, on window focus at most every 5 minutes, and when a request comes
+ * back 401) and which providers the deployment offers.
  */
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import type { Session, SupabaseClient } from "@supabase/supabase-js";
-import { authToken } from "@/lib/auth-token";
+import { apiClient } from "@/integrations/api/client";
 import { aiQuotaStore } from "@/lib/ai-quota";
 import { SignInDialog } from "./SignInDialog";
 
@@ -32,254 +29,181 @@ export interface SignInResult {
 
 export type OAuthProviderName = "google" | "github";
 
+/** Which sign-in providers this deployment has configured. */
+export type AuthProviders = Record<OAuthProviderName, boolean>;
+
 interface AuthContextValue {
   user: AuthUser | null;
-  /** True until the stored session (if any) has been read once. */
+  /** True until the session has been checked once. */
   loading: boolean;
-  signInWithEmail: (email: string) => Promise<SignInResult>;
+  /** Configured providers. Optimistically all true until /api/auth/me answers. */
+  providers: AuthProviders;
+  /** Full-page redirect to the provider; resolves only with an error. */
   signInWithOAuth: (provider: OAuthProviderName) => Promise<SignInResult>;
-  /** Second half of "Continue with GitHub", run by /auth/callback. */
-  finishGitHubSignIn: (code: string, state: string) => Promise<SignInResult>;
-  signOut: () => Promise<void>;
-  /** Open the sign-in dialog from anywhere (quota cards, nav). */
+  /** Ends the session. False, and still signed in, when the server didn't confirm it (offline, 5xx). */
+  signOut: () => Promise<boolean>;
+  /**
+   * Open the sign-in dialog from anywhere (quota cards, nav). Called while we
+   * think someone is signed in (after a 401), it first treats the session as
+   * gone and re-checks it with the server.
+   */
   openSignIn: (opts?: { reason?: string }) => void;
+  /** Ask the server again who is signed in. */
+  refresh: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 const RETURN_KEY = "singlet:auth:return";
-const GITHUB_NONCE_KEY = "singlet:auth:github-nonce";
+/** Who the stored AI quota belongs to: a user id, or "" for anonymous. */
+const QUOTA_SUBJECT_KEY = "singlet:ai-quota:subject";
+const DEFAULT_RETURN = "/browse";
+const RECHECK_MS = 5 * 60_000;
 const PROVIDER_LABEL: Record<OAuthProviderName, string> = { google: "Google", github: "GitHub" };
+const ALL_PROVIDERS: AuthProviders = { github: true, google: true };
 
-function unavailable(provider: OAuthProviderName): string {
-  return `${PROVIDER_LABEL[provider]} sign-in isn't available on this site yet — use your email instead.`;
+function isReturnPath(v: string | null | undefined): v is string {
+  return !!v && v.length <= 512 && v.startsWith("/") && !v.startsWith("//") && !/[\\\s]/.test(v) && !/^\/auth(?:[/?#]|$)/.test(v);
 }
 
-/** Where to land after the email link / OAuth round-trip. */
-export function rememberReturnPath() {
+/** The return path saved when the last sign-in started in this tab (or /browse). */
+export function peekReturnPath(): string {
   try {
-    const { pathname, search, hash } = window.location;
-    if (pathname.startsWith("/auth/")) return;
-    window.localStorage.setItem(RETURN_KEY, pathname + search + hash);
+    const v = window.sessionStorage.getItem(RETURN_KEY);
+    if (isReturnPath(v)) return v;
   } catch {
-    /* ignore */
+    /* private mode */
   }
+  return DEFAULT_RETURN;
 }
 
+/** Like peekReturnPath, but forgets it. */
 export function takeReturnPath(): string {
+  const v = peekReturnPath();
   try {
-    const v = window.localStorage.getItem(RETURN_KEY);
-    window.localStorage.removeItem(RETURN_KEY);
-    if (v && v.startsWith("/") && !v.startsWith("//") && !v.startsWith("/auth/")) return v;
+    window.sessionStorage.removeItem(RETURN_KEY);
   } catch {
     /* ignore */
   }
-  return "/browse";
+  return v;
 }
 
-function toUser(session: Session | null): AuthUser | null {
-  if (!session?.user) return null;
-  const meta = (session.user.user_metadata ?? {}) as Record<string, unknown>;
-  const str = (k: string) => (typeof meta[k] === "string" && meta[k] ? (meta[k] as string) : null);
-  return {
-    id: session.user.id,
-    email: session.user.email ?? null,
-    displayName: str("full_name") ?? str("name") ?? str("user_name"),
-    avatarUrl: str("avatar_url") ?? str("picture"),
-  };
+/** Where to land after the round-trip: this page, unless we are on an auth page already. */
+function currentReturnPath(): string {
+  const { pathname, search, hash } = window.location;
+  const here = pathname + search + hash;
+  return isReturnPath(here) ? here : peekReturnPath();
 }
 
 /**
- * First sign-in with any provider (Google, GitHub, email link) creates the
- * profile row; later sign-ins refresh the name/avatar. Done from the client
- * rather than an auth trigger, and failures are ignored — a profile is
- * cosmetic, never a gate on signing in.
+ * Record `id` (null = anonymous) as the subject of the stored AI quota and say
+ * whether it differs from the last subject seen in this browser. The previous
+ * subject comes from localStorage, because every sign-in ends in a full page
+ * load; `fallback` (what this page last saw) is used when storage is
+ * unavailable. An unknown previous subject counts as a change.
  */
-async function ensureProfile(sb: SupabaseClient, u: AuthUser): Promise<void> {
+export function noteQuotaSubject(id: string | null, fallback?: string | null): boolean {
+  let prev: string | null | undefined = fallback;
   try {
-    await sb.from("profiles").upsert(
-      { id: u.id, email: u.email, display_name: u.displayName, avatar_url: u.avatarUrl, updated_at: new Date().toISOString() },
-      { onConflict: "id" },
-    );
+    const stored = window.localStorage.getItem(QUOTA_SUBJECT_KEY);
+    if (stored !== null) prev = stored === "" ? null : stored;
+    window.localStorage.setItem(QUOTA_SUBJECT_KEY, id ?? "");
   } catch {
-    /* ignore */
+    /* private mode: fall back to what this page saw */
   }
+  return prev !== id;
 }
 
-function humanAuthError(message: string, provider?: OAuthProviderName): string {
-  const m = message.toLowerCase();
-  if (m.includes("rate limit") || m.includes("too many")) return "Too many sign-in emails were requested just now — please try again in a few minutes.";
-  if (m.includes("invalid") && m.includes("email")) return "That doesn't look like a valid email address.";
-  if (m.includes("signups not allowed") || m.includes("signup")) return "New accounts are closed at the moment.";
-  if (m.includes("unsupported provider") || m.includes("oauth secret") || m.includes("provider is not enabled")) {
-    return unavailable(provider ?? "google");
-  }
-  return message;
+function sameUser(a: AuthUser | null, b: AuthUser | null): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  return a.id === b.id && a.email === b.email && a.displayName === b.displayName && a.avatarUrl === b.avatarUrl;
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [providers, setProviders] = useState<AuthProviders>(ALL_PROVIDERS);
   const [dialog, setDialog] = useState<{ open: boolean; reason?: string }>({ open: false });
-  const clientRef = useRef<Promise<SupabaseClient> | null>(null);
   const lastUserId = useRef<string | null | undefined>(undefined);
+  const lastCheck = useRef(0);
 
-  const client = useCallback((): Promise<SupabaseClient> => {
-    if (!clientRef.current) {
-      clientRef.current = import("@/integrations/supabase/client").then((m) => m.supabase as unknown as SupabaseClient);
+  const refresh = useCallback(async () => {
+    lastCheck.current = Date.now();
+    try {
+      const me = await apiClient.auth.me();
+      const u = me.user;
+      const id = u?.id ?? null;
+      // A different subject means a different budget — drop the stale counter.
+      // Compared across page loads too: signing in always ends in a reload.
+      if (noteQuotaSubject(id, lastUserId.current)) aiQuotaStore.clear();
+      lastUserId.current = id;
+      // Keep object identity when nothing changed, so consumers' effects don't re-run.
+      setUser((prev) => (sameUser(prev, u) ? prev : u));
+      setProviders((prev) => (prev.github === me.providers.github && prev.google === me.providers.google ? prev : me.providers));
+    } catch {
+      /* offline or the API is down: keep what we had */
+    } finally {
+      setLoading(false);
     }
-    return clientRef.current;
   }, []);
 
   useEffect(() => {
-    let unsubscribe: (() => void) | undefined;
-    let cancelled = false;
-
-    const apply = (session: Session | null) => {
-      if (cancelled) return;
-      const u = toUser(session);
-      authToken.set(session?.access_token ?? null);
-      setUser(u);
-      // A different subject means a different budget — drop the stale counter.
-      if (lastUserId.current !== undefined && lastUserId.current !== (u?.id ?? null)) aiQuotaStore.clear();
-      const changed = lastUserId.current !== (u?.id ?? null);
-      lastUserId.current = u?.id ?? null;
-      if (u && session && changed) void client().then((sb) => ensureProfile(sb, u));
+    void refresh();
+    const onFocus = () => {
+      if (Date.now() - lastCheck.current >= RECHECK_MS) void refresh();
     };
-
-    client()
-      .then((sb) => {
-        const { data } = sb.auth.onAuthStateChange((_event, session) => apply(session));
-        unsubscribe = () => data.subscription.unsubscribe();
-        return sb.auth.getSession();
-      })
-      .then(({ data }) => {
-        apply(data.session);
-        if (!cancelled) setLoading(false);
-      })
-      .catch(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-      unsubscribe?.();
-    };
-  }, [client]);
-
-  const signInWithEmail = useCallback(
-    async (email: string): Promise<SignInResult> => {
-      const sb = await client();
-      rememberReturnPath();
-      const { error } = await sb.auth.signInWithOtp({
-        email: email.trim(),
-        options: { emailRedirectTo: `${window.location.origin}/auth/callback`, shouldCreateUser: true },
-      });
-      return error ? { error: humanAuthError(error.message) } : {};
-    },
-    [client],
-  );
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [refresh]);
 
   const signInWithOAuth = useCallback(
     async (provider: OAuthProviderName): Promise<SignInResult> => {
-      rememberReturnPath();
-      const redirect = `${window.location.origin}/auth/callback`;
-
-      // GitHub: the hosted auth settings can't hold a GitHub app, so a Cloud
-      // function runs the OAuth exchange. The callback lands on
-      // /auth/callback?provider=github&code=…&state=… (see finishGitHubSignIn).
-      if (provider === "github") {
-        try {
-          const { apiClient } = await import("@/integrations/api/client");
-          const { pathname, search, hash } = window.location;
-          const { url, nonce } = await apiClient.githubOAuth.start(window.location.origin, pathname.startsWith("/auth/") ? "/browse" : pathname + search + hash);
-          try {
-            window.sessionStorage.setItem(GITHUB_NONCE_KEY, nonce);
-          } catch {
-            /* private mode — the exchange still verifies the signed state */
-          }
-          window.location.assign(url);
-          return {};
-        } catch (e) {
-          const status = (e as { status?: number }).status;
-          if (status === 503) return { error: unavailable("github") };
-          return { error: humanAuthError(e instanceof Error ? e.message : String(e), provider) };
-        }
-      }
-
-      // Google: Lovable Cloud's managed Google app, reached through the
-      // hosted broker. Same-origin `/~oauth/initiate` is intercepted on
-      // Lovable hosts and proxied by functions/~oauth/initiate.ts on
-      // singlet.bio, so one code path covers every host.
+      if (!providers[provider]) return { error: `${PROVIDER_LABEL[provider]} sign-in isn't available on this site yet.` };
+      const returnTo = currentReturnPath();
       try {
-        const { lovable } = await import("@/integrations/lovable");
-        const r = await lovable.auth.signInWithOAuth("google", { redirect_uri: redirect });
-        if ("error" in r && r.error) return { error: humanAuthError(r.error.message, provider) };
-        return {};
-      } catch (e) {
-        return { error: humanAuthError(e instanceof Error ? e.message : String(e), provider) };
-      }
-    },
-    [],
-  );
-
-  const finishGitHubSignIn = useCallback(
-    async (code: string, state: string): Promise<SignInResult> => {
-      let expectedNonce: string | null = null;
-      try {
-        expectedNonce = window.sessionStorage.getItem(GITHUB_NONCE_KEY);
-        window.sessionStorage.removeItem(GITHUB_NONCE_KEY);
+        window.sessionStorage.setItem(RETURN_KEY, returnTo);
       } catch {
-        /* ignore */
+        /* the server carries return_to anyway */
       }
-      try {
-        const { apiClient } = await import("@/integrations/api/client");
-        const { tokenHash, returnTo, nonce } = await apiClient.githubOAuth.exchange(code, state);
-        // A callback this browser never started (login CSRF) is refused.
-        if (expectedNonce && nonce && expectedNonce !== nonce) {
-          return { error: "This sign-in was started in a different browser tab or window. Please try again from here." };
-        }
-        const sb = await client();
-        const { error } = await sb.auth.verifyOtp({ token_hash: tokenHash, type: "magiclink" });
-        if (error) return { error: humanAuthError(error.message, "github") };
-        try {
-          window.localStorage.setItem(RETURN_KEY, returnTo);
-        } catch {
-          /* ignore */
-        }
-        return {};
-      } catch (e) {
-        const status = (e as { status?: number }).status;
-        if (status === 503) return { error: unavailable("github") };
-        // The address belongs to a Google account — send them straight there
-        // so everyone keeps one account instead of two.
-        if (status === 409 && (e as { body?: { error?: string } }).body?.error === "use_google") {
-          const r = await signInWithOAuth("google");
-          if (r.error) return { error: "This address belongs to a Google account. Please continue with Google." };
-          return {};
-        }
-        return { error: humanAuthError(e instanceof Error ? e.message : String(e), "github") };
-      }
+      window.location.assign(apiClient.auth.startUrl(provider, returnTo));
+      return {};
     },
-    [client, signInWithOAuth],
+    [providers],
   );
 
-  const signOut = useCallback(async () => {
-    const sb = await client();
-    await sb.auth.signOut();
-    authToken.set(null);
+  const signOut = useCallback(async (): Promise<boolean> => {
+    // Only forget the user once the server has ended the session: until then
+    // the cookie is still valid and the next page load would sign them back in.
+    if (!(await apiClient.auth.logout())) return false;
+    noteQuotaSubject(null, lastUserId.current);
+    lastUserId.current = null;
     setUser(null);
     aiQuotaStore.clear();
-  }, [client]);
+    return true;
+  }, []);
 
-  const openSignIn = useCallback((opts?: { reason?: string }) => setDialog({ open: true, reason: opts?.reason }), []);
-
-  const value = useMemo<AuthContextValue>(
-    () => ({ user, loading, signInWithEmail, signInWithOAuth, finishGitHubSignIn, signOut, openSignIn }),
-    [user, loading, signInWithEmail, signInWithOAuth, finishGitHubSignIn, signOut, openSignIn],
+  const openSignIn = useCallback(
+    (opts?: { reason?: string }) => {
+      setDialog({ open: true, reason: opts?.reason });
+      // Callers only ask someone we think is signed in to sign in after a 401:
+      // the session ended elsewhere (another tab, expiry). Show them signed
+      // out, so the effect below doesn't close the dialog again, and let the
+      // server confirm; if it still knows them, the dialog closes.
+      if (user) {
+        setUser(null);
+        void refresh();
+      }
+    },
+    [user, refresh],
   );
 
-  // Signing in while the dialog is open (e.g. OAuth popup) closes it.
+  const value = useMemo<AuthContextValue>(
+    () => ({ user, loading, providers, signInWithOAuth, signOut, openSignIn, refresh }),
+    [user, loading, providers, signInWithOAuth, signOut, openSignIn, refresh],
+  );
+
+  // Signing in while the dialog is open (e.g. in another tab, noticed on focus) closes it.
   useEffect(() => {
     if (user && dialog.open) setDialog({ open: false });
   }, [user, dialog.open]);
@@ -291,7 +215,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         open={dialog.open}
         reason={dialog.reason}
         onOpenChange={(open) => setDialog((d) => ({ ...d, open }))}
-        signInWithEmail={signInWithEmail}
+        providers={providers}
         signInWithOAuth={signInWithOAuth}
       />
     </AuthContext.Provider>

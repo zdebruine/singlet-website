@@ -12,24 +12,25 @@ const Privacy = () => {
         <h1 className="font-display text-3xl md:text-4xl font-bold text-foreground tracking-tightest mb-8">
           Privacy Policy
         </h1>
-        <p className="text-xs text-muted-foreground mb-8 font-mono">Last updated: June 19, 2026</p>
+        <p className="text-xs text-muted-foreground mb-8 font-mono">Last updated: September 30, 2026</p>
 
         <div className="prose prose-sm max-w-none space-y-8 text-muted-foreground">
           <section>
             <h2 className="font-display text-lg font-bold text-foreground mb-3">1. No Account Required</h2>
             <p className="text-sm leading-relaxed">
               You do not need an account to browse this website, to search it, or to download the atlas. Data downloads
-              are public and free, served from our CDN. An account is optional and exists only to raise the daily limit on
-              AI-assisted searches and to issue API keys.
+              are public and free, served from our CDN. An account is optional: it raises the daily limit on AI-assisted
+              searches, issues API keys, and holds any private projects, cohorts and workspaces you create.
             </p>
           </section>
 
           <section>
             <h2 className="font-display text-lg font-bold text-foreground mb-3">2. Your Data Stays on Your Machine</h2>
             <p className="text-sm leading-relaxed">
-              The <span className="font-mono">singlet</span> software and pipeline run locally on your own computer.
-              We do not host an upload service for your data, and your data is never sent to us. We do not use any data
-              to train models.
+              The <span className="font-mono">singlet</span> software and pipeline run locally on your own computer, and
+              your data is never sent to us unless you choose to add a .singlet file to a private project. Such a file is
+              stored privately and can be read only by you, by members of a workspace you share the project with, or by
+              someone you give the project's read link. We do not use any data to train models.
             </p>
           </section>
 
@@ -56,8 +57,9 @@ const Privacy = () => {
                 itself is not stored and the hash cannot be reversed.
               </li>
               <li>
-                With an account: your email address (or the address your Google or GitHub account provides) and a daily
-                count of AI requests. Nothing else about your account is stored.
+                With an account: the email address, name and profile picture your Google or GitHub account shares, that
+                account's id (so we recognise you next time), a sign-in session record for each browser you use (with
+                its browser type), and a daily count of AI requests.
               </li>
               <li>
                 API keys you create: a name, the first characters of the key, a one-way hash of the key, and when it was
@@ -65,8 +67,9 @@ const Privacy = () => {
               </li>
             </ul>
             <p className="text-sm leading-relaxed mt-2">
-              The text of a plain-English search is sent to a language model to turn it into catalog filters. The
-              interpretation is cached for a short time by question text alone; it is not linked to you or your account.
+              When the built-in vocabulary cannot read a plain-English search, its text is sent to a language model to
+              turn it into catalog filters. The interpretation is cached by question text alone; it is not linked to you
+              or your account.
             </p>
           </section>
 
@@ -91,7 +94,8 @@ const Privacy = () => {
             <h2 className="font-display text-lg font-bold text-foreground mb-3">6. Cookies and Tracking</h2>
             <p className="text-sm leading-relaxed">
               We do not use third-party advertising or cross-site tracking cookies. Any cookies used are limited to
-              what is necessary for the website to function.
+              what is necessary for the website to function: signing in sets one first-party cookie that keeps you
+              signed in (and a short-lived one while the sign-in completes).
             </p>
           </section>
 

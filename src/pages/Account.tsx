@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { Check, Copy, KeyRound, Loader2, Trash2 } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { CodeBlock } from "@/components/CodeBlock";
 import { useAuth } from "@/components/auth/AuthProvider";
-import { useUsageToday } from "@/components/auth/AccountMenu";
 import { apiClient, isApiError } from "@/integrations/api/client";
 import type { ApiKeySummary } from "@/integrations/api/types";
 import { usePageMeta } from "@/hooks/usePageMeta";
@@ -13,8 +12,42 @@ import { useAiQuota } from "@/lib/ai-quota";
 import { fmtInt } from "@/lib/catalog-display";
 import { cn } from "@/lib/utils";
 
+/** Signed-in defaults (functions/_shared/quota.ts); a fresher limit from the API wins when we have one. */
 const SEARCH_LIMIT = 200;
 const EXPLAIN_LIMIT = 100;
+
+interface UsageState {
+  usage: { search: number; explain: number; searchLimit: number | null; explainLimit: number | null } | null;
+  failed: boolean;
+}
+
+/** Today's counters from the server (the local copy can be stale on a new device). */
+function useUsageToday(enabled: boolean, onUnauthorized: () => Promise<void>): UsageState {
+  const [state, setState] = useState<UsageState>({ usage: null, failed: false });
+  useEffect(() => {
+    setState({ usage: null, failed: false });
+    if (!enabled) return;
+    const ctrl = new AbortController();
+    apiClient.auth
+      .usage(ctrl.signal)
+      .then((usage) => {
+        if (!ctrl.signal.aborted) setState({ usage, failed: false });
+      })
+      .catch((e: unknown) => {
+        if (ctrl.signal.aborted) return;
+        setState({ usage: null, failed: true });
+        if (isApiError(e) && e.status === 401) void onUnauthorized();
+      });
+    return () => ctrl.abort();
+  }, [enabled, onUnauthorized]);
+  return state;
+}
+
+function UsageValue({ used, limit, failed }: { used: number | null; limit: number; failed: boolean }) {
+  if (used != null) return <>{`${fmtInt(used)} / ${fmtInt(limit)}`}</>;
+  if (failed) return <span className="text-muted-foreground">— / {fmtInt(limit)}</span>;
+  return <span className="inline-block h-4 w-14 rounded bg-secondary animate-pulse" />;
+}
 
 const EXPIRY_OPTIONS: { label: string; days: number | null }[] = [
   { label: "Never", days: null },
@@ -76,8 +109,8 @@ function SignedOut({ openSignIn }: { openSignIn: () => void }) {
     <div className="surface p-6 max-w-[560px]">
       <h1 className="font-display text-[24px] font-semibold tracking-tight text-foreground">Your account</h1>
       <p className="mt-2 text-[14px] leading-relaxed text-muted-foreground">
-        Sign in to see today's AI usage and to create API keys for scripts and the MCP server. Accounts are free, and browsing and
-        downloading never need one.
+        Sign in with GitHub or Google to see today's AI usage and to create API keys for scripts and the MCP server. Accounts are
+        free, and browsing and downloading never need one.
       </p>
       <button type="button" className="btn-primary mt-4" onClick={openSignIn}>
         Sign in
@@ -88,11 +121,30 @@ function SignedOut({ openSignIn }: { openSignIn: () => void }) {
 
 const Account = () => {
   usePageMeta({ title: "Account", description: "Your singlet.bio account: today's AI usage and API keys for scripts and the MCP server.", noindex: true });
-  const { user, loading, openSignIn, signOut } = useAuth();
+  const { user, loading, openSignIn, signOut, refresh } = useAuth();
+  const signedIn = !!user;
 
-  const usage = useUsageToday(!!user);
+  // /account#api-keys (from the account menu): the section only exists once the session is known.
+  const { hash } = useLocation();
+  useEffect(() => {
+    if (!signedIn || !hash) return;
+    let id = hash.slice(1);
+    try {
+      id = decodeURIComponent(id);
+    } catch {
+      /* malformed escape (e.g. #50%off): look the raw fragment up */
+    }
+    const t = window.setTimeout(() => document.getElementById(id)?.scrollIntoView({ block: "start" }), 40);
+    return () => window.clearTimeout(t);
+  }, [hash, signedIn]);
+
+  // A 401 means the session ended elsewhere (another tab, expiry): re-check it,
+  // so the page shows the signed-out view instead of errors under "Signed in as".
+  const { usage, failed: usageFailed } = useUsageToday(signedIn, refresh);
   const searchQuota = useAiQuota("search");
   const explainQuota = useAiQuota("explain");
+  const searchLimit = usage?.searchLimit ?? (searchQuota?.kind === "user" ? searchQuota.limit : SEARCH_LIMIT);
+  const explainLimit = usage?.explainLimit ?? (explainQuota?.kind === "user" ? explainQuota.limit : EXPLAIN_LIMIT);
   const searchUsed = usage?.search ?? (searchQuota?.kind === "user" ? searchQuota.used : null);
   const explainUsed = usage?.explain ?? (explainQuota?.kind === "user" ? explainQuota.used : null);
 
@@ -106,6 +158,15 @@ const Account = () => {
   const [revealed, setRevealed] = useState<{ secret: string; key: ApiKeySummary } | null>(null);
   const [revoking, setRevoking] = useState<string | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [signingOut, setSigningOut] = useState(false);
+  const [signOutError, setSignOutError] = useState<string | null>(null);
+
+  const recheckOn401 = useCallback(
+    (e: unknown) => {
+      if (isApiError(e) && e.status === 401) void refresh();
+    },
+    [refresh],
+  );
 
   const load = useCallback(async () => {
     setKeysError(null);
@@ -114,16 +175,18 @@ const Account = () => {
     } catch (e) {
       setKeys([]);
       setKeysError(isApiError(e) ? e.message : "Could not load your API keys.");
+      recheckOn401(e);
     }
-  }, []);
+  }, [recheckOn401]);
 
+  // Keyed on the id, not the user object, so a refreshed session doesn't refetch.
+  const userId = user?.id ?? null;
   useEffect(() => {
-    if (user) void load();
-    else {
-      setKeys(null);
-      setRevealed(null);
-    }
-  }, [user, load]);
+    setRevealed(null);
+    setConfirmId(null);
+    if (userId) void load();
+    else setKeys(null);
+  }, [userId, load]);
 
   const create = async (e: FormEvent) => {
     e.preventDefault();
@@ -141,6 +204,7 @@ const Account = () => {
       setKeys((prev) => [r.key, ...(prev ?? [])]);
     } catch (err) {
       setFormError(isApiError(err) ? err.message : "Could not create the key right now.");
+      recheckOn401(err);
     } finally {
       setCreating(false);
     }
@@ -155,10 +219,19 @@ const Account = () => {
       if (revealed?.key.id === id) setRevealed(null);
     } catch (err) {
       setKeysError(isApiError(err) ? err.message : "Could not revoke the key right now.");
+      recheckOn401(err);
     } finally {
       setRevoking(null);
       setConfirmId(null);
     }
+  };
+
+  const handleSignOut = async () => {
+    setSignOutError(null);
+    setSigningOut(true);
+    const ok = await signOut();
+    setSigningOut(false);
+    if (!ok) setSignOutError("Couldn't sign out. Check your connection and try again.");
   };
 
   const activeCount = useMemo(() => (keys ?? []).filter((k) => keyState(k) === "active").length, [keys]);
@@ -180,7 +253,8 @@ const Account = () => {
             <header>
               <h1 className="font-display text-[26px] md:text-[30px] font-semibold tracking-tight text-foreground">Account</h1>
               <p className="mt-1 text-[14px] text-muted-foreground">
-                Signed in as <span className="font-medium text-foreground break-all">{user.email ?? user.id}</span>
+                Signed in as <span className="font-medium text-foreground break-all">{user.displayName ?? user.email ?? user.id}</span>
+                {user.displayName && user.email && <span className="break-all"> ({user.email})</span>}
               </p>
             </header>
 
@@ -194,14 +268,14 @@ const Account = () => {
                 <div>
                   <dt className="text-muted-foreground">AI searches</dt>
                   <dd className="mt-0.5 font-medium tabular text-foreground">
-                    {searchUsed == null ? <span className="inline-block h-4 w-14 rounded bg-secondary animate-pulse" /> : `${fmtInt(searchUsed)} / ${SEARCH_LIMIT}`}
+                    <UsageValue used={searchUsed} limit={searchLimit} failed={usageFailed} />
                   </dd>
                   <dd className="text-[12px] text-muted-foreground">Website and API keys share this budget.</dd>
                 </div>
                 <div>
                   <dt className="text-muted-foreground">AI explanations</dt>
                   <dd className="mt-0.5 font-medium tabular text-foreground">
-                    {explainUsed == null ? <span className="inline-block h-4 w-14 rounded bg-secondary animate-pulse" /> : `${fmtInt(explainUsed)} / ${EXPLAIN_LIMIT}`}
+                    <UsageValue used={explainUsed} limit={explainLimit} failed={usageFailed} />
                   </dd>
                   <dd className="text-[12px] text-muted-foreground">Resets at 00:00 UTC.</dd>
                 </div>
@@ -209,7 +283,7 @@ const Account = () => {
             </section>
 
             {/* ── API keys ── */}
-            <section className="surface p-5" aria-labelledby="keys-h">
+            <section id="api-keys" className="surface p-5 scroll-mt-24" aria-labelledby="keys-h">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <h2 id="keys-h" className="text-[15px] font-semibold text-foreground inline-flex items-center gap-2">
@@ -377,14 +451,23 @@ const Account = () => {
 
             <section className="flex items-center justify-between gap-4 text-[13px] text-muted-foreground">
               <p>
-                We store your email, a daily count of AI requests and the keys above, nothing else.{" "}
+                We keep the email, name and picture GitHub or Google shares when you sign in, a daily count of AI requests and the keys
+                above, nothing else.{" "}
                 <Link to="/privacy" className="text-primary hover:underline">
                   Privacy
                 </Link>
               </p>
-              <button type="button" className="btn-ghost btn-sm" onClick={() => void signOut()}>
-                Sign out
-              </button>
+              <div className="shrink-0 text-right">
+                <button type="button" className="btn-ghost btn-sm" onClick={() => void handleSignOut()} disabled={signingOut}>
+                  {signingOut && <Loader2 size={13} className="animate-spin" />}
+                  Sign out
+                </button>
+                {signOutError && (
+                  <p role="alert" className="mt-1 max-w-[220px] text-[12.5px] leading-snug text-destructive">
+                    {signOutError}
+                  </p>
+                )}
+              </div>
             </section>
           </div>
         )}

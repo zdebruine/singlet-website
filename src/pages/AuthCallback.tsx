@@ -1,96 +1,131 @@
 /**
- * /auth/callback — where every sign-in round-trip lands.
+ * /auth/callback — where a sign-in lands when it could not finish.
  *
- *  - Email link and Google: the auth client reads the tokens out of the URL
- *    on load; this page waits for the session and sends the visitor back.
- *  - GitHub: arrives as ?provider=github&code=…&state=… (relayed by
- *    singlet.bio/auth/github/callback); the code is exchanged for a one-time
- *    token here, then the same wait-for-session path applies.
+ * A successful GitHub or Google round-trip never shows this page: the
+ * Pages Function sets the session cookie and redirects straight back to
+ * where the visitor started. Failures arrive as
+ * ?error=<code>&provider=<github|google> (see functions/_shared/oauth.ts);
+ * this page explains them and offers a retry. Reached without an error, it
+ * waits for the session and sends the visitor on to the saved return path.
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { usePageMeta } from "@/hooks/usePageMeta";
-import { takeReturnPath, useAuth } from "@/components/auth/AuthProvider";
+import { peekReturnPath, takeReturnPath, useAuth, type OAuthProviderName } from "@/components/auth/AuthProvider";
 
-const WAIT_MS = 10_000;
+const WAIT_MS = 8_000;
+const LABEL: Record<OAuthProviderName, string> = { github: "GitHub", google: "Google" };
 
-interface GitHubLeg {
+interface Failure {
   code: string;
-  state: string;
+  provider: OAuthProviderName | null;
 }
 
-function readUrl(): { error: string | null; github: GitHubLeg | null } {
-  if (typeof window === "undefined") return { error: null, github: null };
+function readUrl(): Failure | null {
+  if (typeof window === "undefined") return null;
   const query = new URLSearchParams(window.location.search);
-  const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
-  const provider = query.get("provider");
+  const code = query.get("error");
+  if (!code) return null;
+  const p = query.get("provider");
+  return { code, provider: p === "github" || p === "google" ? p : null };
+}
 
-  const code = query.get("code");
-  const state = query.get("state");
-  const github = provider === "github" && code && state ? { code, state } : null;
-
-  const raw = hashParams.get("error_description") ?? query.get("error_description") ?? hashParams.get("error") ?? query.get("error");
-  if (!raw) return { error: null, github };
-  const d = raw.replace(/\+/g, " ");
-  if (provider === "github") {
-    if (d === "access_denied") return { error: "GitHub sign-in was cancelled. You can try again or use your email instead.", github: null };
-    if (d === "invalid_state" || d === "missing_code") return { error: "That GitHub sign-in attempt expired or was incomplete. Please try again.", github: null };
-    return { error: d, github: null };
+function explain({ code, provider }: Failure): string {
+  const name = provider ? LABEL[provider] : "The provider";
+  const other = provider === "github" ? "Google" : provider === "google" ? "GitHub" : null;
+  switch (code) {
+    case "not_configured":
+      return `${provider ? LABEL[provider] : "This"} sign-in isn't set up on this site yet.${other ? ` You can continue with ${other} instead.` : ""}`;
+    case "access_denied":
+      return `${provider ? LABEL[provider] : "The"} sign-in was cancelled, so nothing was shared with singlet.bio.`;
+    case "state_expired":
+    case "invalid_state":
+      return "That sign-in attempt expired or was already used (each one is good for 10 minutes). Please start again.";
+    case "browser_mismatch":
+      return "This sign-in was finished in a different browser from the one that started it, or cookies are blocked for singlet.bio. Please start again here.";
+    case "missing_code":
+    case "provider_error":
+      return `${name} didn't complete the sign-in. Please try again.`;
+    case "exchange_failed":
+    case "profile_failed":
+      return `We couldn't confirm your account with ${provider ? LABEL[provider] : "the provider"}. Please try again in a moment.`;
+    case "no_verified_email":
+      return provider === "github"
+        ? "Your GitHub account has no verified email address. Verify one at github.com/settings/emails, or continue with Google."
+        : `${name} didn't confirm an email address for this account, and singlet.bio accounts need one.${other ? ` Try ${other} instead.` : ""}`;
+    case "account_failed":
+    case "unavailable":
+      return "Something went wrong on our side while signing you in. Please try again in a moment.";
+    default:
+      return "Sign-in didn't complete. Please try again.";
   }
-  if (/expired|invalid/i.test(d)) return { error: "That sign-in link has expired or was already used. Request a new one below.", github: null };
-  return { error: d, github: null };
 }
 
 const AuthCallback = () => {
   usePageMeta({ title: "Signing in", path: "/auth/callback", noindex: true });
   const navigate = useNavigate();
-  const { user, loading, openSignIn, finishGitHubSignIn } = useAuth();
-  const initial = useMemo(readUrl, []);
-  const [error, setError] = useState<string | null>(initial.error);
+  const { user, loading, openSignIn, signInWithOAuth } = useAuth();
+  const failure = useMemo(readUrl, []);
   const [timedOut, setTimedOut] = useState(false);
-  const githubStarted = useRef(false);
+  const [retryError, setRetryError] = useState<string | null>(null);
+  const backTo = useMemo(peekReturnPath, []);
 
-  // GitHub leg: exchange the code once, then let the session listener take over.
+  // No error: the session should already be there — move on once it is.
   useEffect(() => {
-    if (!initial.github || githubStarted.current) return;
-    githubStarted.current = true;
-    // Drop the one-time code from the address bar before doing anything else.
-    window.history.replaceState(null, "", "/auth/callback");
-    finishGitHubSignIn(initial.github.code, initial.github.state).then((r) => {
-      if (r.error) setError(r.error);
-    });
-  }, [initial.github, finishGitHubSignIn]);
-
-  useEffect(() => {
+    if (failure) return;
     if (user) {
       navigate(takeReturnPath(), { replace: true });
       return;
     }
-    if (error) return;
-    const t = window.setTimeout(() => setTimedOut(true), initial.github ? WAIT_MS * 2 : WAIT_MS);
+    const t = window.setTimeout(() => setTimedOut(true), WAIT_MS);
     return () => window.clearTimeout(t);
-  }, [user, error, initial.github, navigate]);
+  }, [failure, user, navigate]);
 
-  const failed =
-    error ?? (timedOut && !loading && !user ? "We couldn't finish signing you in. The link may have been opened in a different browser than the one it was requested from." : null);
+  const message = failure
+    ? explain(failure)
+    : timedOut && !loading && !user
+      ? "We couldn't find a signed-in session in this browser. Cookies may be blocked for singlet.bio, or the sign-in was started in a different browser."
+      : null;
+
+  // Retrying the same provider makes sense unless it isn't configured at all.
+  const retryProvider = failure?.provider && failure.code !== "not_configured" ? failure.provider : null;
+  const retry = async () => {
+    setRetryError(null);
+    if (!retryProvider) {
+      openSignIn();
+      return;
+    }
+    const r = await signInWithOAuth(retryProvider);
+    if (r.error) setRetryError(r.error);
+  };
 
   return (
     <main className="min-h-screen flex flex-col items-center justify-center bg-background px-5 text-center">
       <Logo height={22} />
-      {failed ? (
+      {message ? (
         <div className="mt-6 max-w-[380px]">
           <h1 className="text-[17px] font-semibold text-foreground">Sign-in didn't complete</h1>
-          <p className="mt-2 text-[13.5px] leading-relaxed text-muted-foreground">{failed}</p>
-          <div className="mt-5 flex items-center justify-center gap-3">
-            <button type="button" className="btn-primary btn-sm" onClick={() => openSignIn()}>
-              Try again
+          <p className="mt-2 text-[13.5px] leading-relaxed text-muted-foreground">{message}</p>
+          <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
+            <button type="button" className="btn-primary btn-sm" onClick={() => void retry()}>
+              {retryProvider ? `Try ${LABEL[retryProvider]} again` : "Try again"}
             </button>
-            <Link to="/" className="btn-secondary btn-sm">
-              Back to search
+            {retryProvider && (
+              <button type="button" className="btn-secondary btn-sm" onClick={() => openSignIn()}>
+                Other options
+              </button>
+            )}
+            <Link to={backTo} className="btn-secondary btn-sm">
+              Go back
             </Link>
           </div>
+          {retryError && (
+            <p role="alert" className="mt-3 text-[13px] leading-snug text-destructive">
+              {retryError}
+            </p>
+          )}
         </div>
       ) : (
         <p className="mt-6 inline-flex items-center gap-2 text-[14px] text-muted-foreground" aria-live="polite">

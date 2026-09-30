@@ -41,8 +41,7 @@
 ### D. Sign-in providers
 - [x] SignInDialog: Google, GitHub, divider, email
 - [x] AuthProvider: Google (managed broker on Lovable hosts, native elsewhere) + GitHub via `github-oauth` edge function + `/auth/github/callback` relay; human errors when a provider is not configured
-- [ ] Operator: create the GitHub OAuth app and add `GITHUB_OAUTH_CLIENT_ID` / `GITHUB_OAUTH_CLIENT_SECRET` as backend secrets; Google client id/secret in Lovable Cloud auth settings (details in the Stage 5 report)
-- [ ] Operator: add `https://*.singlet-4gc.pages.dev/**` to the auth redirect allow-list so email links and Google land on previews (GitHub already works there)
+- [x] Superseded by Stage 13b: sign-in now runs on Pages Functions + D1 (operator steps in README → Deployment)
 ### E. API keys
 - [x] Migration: `api_keys` + `resolve_api_key` / `touch_api_key` RPCs, owner-read RLS
 - [x] Edge function `api-keys` (list / create / revoke, service role, hash logic in one place, 20 active keys max)
@@ -92,9 +91,7 @@
 ## Backlog / discovered
 - [x] `public/notebooks/*.html` (stale June exports) deleted; `/notebooks/*` redirects to the GitHub notebooks.
 - A revoked key keeps working for up to 60 s on an edge isolate that cached it (documented on /account). Add a "revoked" push (KV) if that window ever matters.
-- `explanations` table has RLS on with no policies (service role only) — intended; add a comment/policy if a client read is ever needed.
-- Sync hazard: the HPC bot commits to GitHub `main` every 15 min and races Lovable's push. Move the bot to its own branch (or a data-only repo).
-- Direct callers of `interpret-search-query` bypass the per-visitor budget (they are metered per IP instead). Add a shared secret between the Pages Function and the edge function once a Cloudflare env var can be set.
+- Sync hazard: the HPC bot commits `public/data/hpc/*` to GitHub `main` every few hours, so every push must rebase first. Move the bot output to R2 (`singlet-hpc-dashboard`) or its own branch.
 - Cell-type filter uses FTS on `{cell_type characteristics}` (prefix match); revisit if recall is a problem
 - `gse_meta.year` is null for most studies; year facet is sparse until the ETL backfills it
 - `meta_cache` rows refreshed lazily after 24h; an ETL hook could refresh them eagerly
@@ -147,3 +144,5 @@
 - [x] Brand polish: vertically center the unchanged logo mark and wordmark; add a rich-black navbar ribbon with white navigation controls.
 - OAuth: GitHub sign-in confirms new accounts before magic-link verify; Google addresses and Google-first accounts are routed to Google sign-in.
 - [x] Stage 13a: unblocked Functions build (gse/index.ts duplicate), lockfile registry URLs, prebuild tsc+wrangler; refresh-next freshness crank; usable/hollow sample flags; uncomputed QC as null; 30M cap label; reference mismatch flag
+- [x] Stage 13b: Cloudflare-only. GitHub/Google OAuth, D1 sessions, API keys, AI budgets, private projects/cohorts/workspaces and AI search/explanations (Workers AI via AI Gateway) moved to Pages Functions + D1 (`schema/010_accounts.sql`, `schema/011_product.sql`); the Supabase / Lovable code and dependencies were removed.
+- [ ] Stage 13b operator: apply `schema/011_product.sql`, set `GITHUB_CLIENT_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` (Production + Preview), regenerate `package-lock.json` (Regenerate package-lock.json workflow), then verify sign-in, API keys, AI search and a private upload on production.

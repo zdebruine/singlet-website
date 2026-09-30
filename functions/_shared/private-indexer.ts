@@ -1,5 +1,12 @@
+/**
+ * Reads a private .singlet (from R2 or a registered public URL) into the
+ * study / samples / QC rows that product.ts finishIndex stores in D1. Only the
+ * zip directory, manifest.json, study_meta.json and each sample's
+ * summary.json are fetched (HTTP range reads); matrices are never downloaded.
+ */
 import { parseZipSource, readEntryFromSource, sampleOf, type BundleByteSource, type ZipEntry } from "./bundle-reader";
 import { shapeSummary } from "./bundle-core";
+import { MAX_INDEX_SAMPLES } from "./product";
 import { loadRules, toGroup } from "./vocab";
 
 const decoder = new TextDecoder();
@@ -47,6 +54,9 @@ export async function indexPrivateBundle(db: D1Database, source: BundleByteSourc
   const gsmMeta = object(studyMeta.gsm_meta);
   const sampleIds = [...new Set(index.entries.map((e) => sampleOf(e.p)).filter((v): v is string => !!v))].sort();
   if (!sampleIds.length) throw new Error("The .singlet file contains no sample directories.");
+  if (sampleIds.length > MAX_INDEX_SAMPLES) {
+    throw new Error(`The .singlet file has ${sampleIds.length} samples; private projects index up to ${MAX_INDEX_SAMPLES} per file.`);
+  }
   const rules = await loadRules(db, waitUntil);
   const samples: Record<string, unknown>[] = [];
   const qc: Record<string, unknown>[] = [];
@@ -89,22 +99,44 @@ export async function indexPrivateBundle(db: D1Database, source: BundleByteSourc
   };
 }
 
+/** Non-public IPv4 ranges (dotted quad, as the URL parser normalises every IPv4 spelling). */
+const PRIVATE_V4 =
+  /^(0\.|10\.|127\.|169\.254\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.|192\.0\.[02]\.|198\.1[89]\.|198\.51\.100\.|203\.0\.113\.|22[4-9]\.|2[3-5]\d\.)/;
+
 /**
- * Only public http(s) hosts may be registered. Private, loopback, link-local,
- * carrier-grade-NAT and cloud metadata addresses are refused, and the caller
- * must reject redirects so a public host cannot bounce us into one.
+ * IPv6 literals (compressed, lower-case, as the URL parser prints them) are
+ * public only inside global unicast 2000::/3, i.e. a four-digit first group
+ * starting with 2 or 3. That refuses unspecified, loopback, IPv4-compatible
+ * and IPv4-mapped ::ffff:0:0/96 ([::ffff:127.0.0.1] parses to
+ * ::ffff:7f00:1), NAT64 64:ff9b::/96, unique-local, link-local and
+ * multicast. Inside 2000::/3, documentation 2001:db8::/32 and the
+ * IPv4-embedding Teredo 2001::/32 and 6to4 2002::/16 are refused too.
+ */
+const GLOBAL_V6 = /^[23][0-9a-f]{3}:/;
+const RESERVED_V6 = /^(2001:db8:|2001:0?:|2002:)/;
+
+/**
+ * Only public https hosts may be registered. Private, loopback, link-local,
+ * carrier-grade-NAT, reserved and cloud metadata addresses are refused (IP
+ * literals by range, names by suffix). Every fetch of a registered URL must
+ * also refuse redirects (redirect: "manual", 3xx = error) so a public host
+ * cannot bounce us into one. Names that merely resolve to a private address
+ * cannot be checked here; Workers have no private-network egress.
  */
 export function assertPublicBundleUrl(value: string): URL {
   const url = new URL(value);
   if (!["https:", "http:"].includes(url.protocol) || url.username || url.password) throw new Error("Register a public HTTPS URL ending in .singlet.");
   if (url.protocol !== "https:") throw new Error("Register a public HTTPS URL ending in .singlet.");
   if (!url.pathname.toLowerCase().endsWith(".singlet")) throw new Error("Register a public HTTPS URL ending in .singlet.");
-  const h = url.hostname.toLowerCase().replace(/^\[|\]$/g, "");
-  const blocked =
-    h === "localhost" || h.endsWith(".local") || h.endsWith(".internal") || h === "metadata.google.internal" ||
-    h === "0.0.0.0" || h === "::1" || h === "::" ||
-    /^(10\.|127\.|169\.254\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.)/.test(h) ||
-    /^(fc|fd|fe8|fe9|fea|feb)/.test(h);
+  const h = url.hostname.toLowerCase().replace(/^\[|\]$/g, "").replace(/\.$/, "");
+  let blocked: boolean;
+  if (h.includes(":")) blocked = !GLOBAL_V6.test(h) || RESERVED_V6.test(h);
+  else if (/^\d+\.\d+\.\d+\.\d+$/.test(h)) blocked = PRIVATE_V4.test(h);
+  else {
+    blocked =
+      !h || !h.includes(".") || h === "localhost" || h.endsWith(".localhost") || h.endsWith(".local") || h.endsWith(".internal") ||
+      h.endsWith(".home.arpa") || h === "metadata.google.internal";
+  }
   if (blocked) throw new Error("That address is not public.");
   return url;
 }

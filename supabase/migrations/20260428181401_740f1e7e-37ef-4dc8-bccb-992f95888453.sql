@@ -1,1 +1,0 @@
-REVOKE EXECUTE ON FUNCTION public.refresh_corpus_stats() FROM PUBLIC, anon, authenticated;

@@ -16,13 +16,12 @@
 import { ensureCatalogColumns } from "../_shared/catalog-refresh";
 import { corsOk, corsErr, handleOptions } from "../_shared/cors";
 import { cachedJson, FACETS_CACHE_TTL } from "../_shared/cache";
-import { type CloudEnv } from "../_shared/cloud";
 import { resolveIdentity } from "../_shared/identity";
 import { loadRules } from "../_shared/vocab";
 import { canonicalQuery, normalizeFilters, parseSearchParams, pickFilters } from "../_shared/search-core";
 import { computeFacets } from "../_shared/facets-core";
 
-interface Env extends CloudEnv {
+interface Env {
   DB: D1Database;
 }
 

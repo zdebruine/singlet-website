@@ -31,3 +31,21 @@ bucket_name = "singlet-user-data"
 # VITE_R2_PUBLIC_URL as a Cloudflare Pages *build* environment variable.
 [vars]
 ENVIRONMENT = "production"
+
+# Public client id of the GitHub OAuth app (not secret). The matching
+# GITHUB_CLIENT_SECRET — and GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET — are set
+# as encrypted secrets in the dashboard (Settings → Variables and Secrets).
+GITHUB_CLIENT_ID = "Ov23liHa1tQnWNBZjrSZ"
+
+# AI search: query interpretation and result explanations. Workers AI model ids
+# start with "@cf/"; a third-party id such as "anthropic/claude-haiku-4-5"
+# routes through AI Gateway unified billing (needs gateway credits, no key).
+AI_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast"
+# AI Gateway id for logs, caching and rate limits ("default" is auto-created).
+AI_GATEWAY_ID = "default"
+
+# ── Workers AI ────────────────────────────────────────────────────────────────
+# Binding "AI" is consumed by functions/_shared/ai.ts as `env.AI`. No API key:
+# usage is billed to this Cloudflare account.
+[ai]
+binding = "AI"

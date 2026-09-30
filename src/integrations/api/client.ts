@@ -3,13 +3,12 @@
  *
  * Base URL resolution:
  *   1. VITE_API_BASE when set.
- *   2. "" (same origin) everywhere the app is served by Cloudflare Pages —
- *      singlet.bio, every *.pages.dev preview — and during local dev, where the
- *      Vite proxy forwards /api to the live catalog.
- *   3. https://singlet.bio ONLY on hosts that have no Pages Functions at all
- *      (the Lovable editor previews). A wrong guess here is what made the
- *      preview render production's old response shapes, so the fallback list
- *      is deliberately narrow.
+ *   2. "" (same origin) everywhere else — singlet.bio, every *.pages.dev
+ *      preview, and local dev, where the Vite proxy forwards /api to the live
+ *      catalog.
+ *
+ * Signed-in requests carry the HttpOnly session cookie automatically (every
+ * call is same-origin), so nothing here ever handles a token.
  *
  * Every response goes through a normaliser that fills in defaults for
  * missing fields (arrays → [], counts → 0), so a partial or older-shaped
@@ -17,6 +16,7 @@
  */
 import type {
   ApiKeyCreated,
+  AuthMe,
   ApiKeySummary,
   CellVerdict,
   Condition,
@@ -40,33 +40,17 @@ import type {
   ProductDashboard,
   ShareVisibility,
 } from "./types";
-import { authToken } from "@/lib/auth-token";
 import { aiQuotaStore, parseQuota } from "@/lib/ai-quota";
 
 const PUBLIC_API = "https://singlet.bio";
 
-/** Hosts that serve the static bundle without the Pages Functions. */
-const NO_FUNCTIONS_HOSTS = [/(^|\.)lovable\.app$/, /(^|\.)lovableproject\.com$/, /(^|\.)lovable\.dev$/];
-
-export function resolveBase(hostname?: string): string {
+export function resolveBase(_hostname?: string): string {
   const env = import.meta.env.VITE_API_BASE as string | undefined;
   if (env !== undefined && env !== "") return env.replace(/\/$/, "");
-  const host = hostname ?? (typeof window !== "undefined" ? window.location.hostname : "");
-  if (!host) return PUBLIC_API;
-  return NO_FUNCTIONS_HOSTS.some((re) => re.test(host)) ? PUBLIC_API : "";
+  return typeof window === "undefined" ? PUBLIC_API : "";
 }
 
 export const API_BASE = resolveBase();
-
-/**
- * Lovable Cloud functions called directly from the browser (signed-in AI
- * features). The publishable key is client-safe by design; the values below
- * match the generated .env and are only a fallback for builds without it.
- */
-const CLOUD_URL = ((import.meta.env.VITE_SUPABASE_URL as string | undefined) || "https://vbswbitfyallghbgxkuw.supabase.co").replace(/\/$/, "");
-const CLOUD_KEY =
-  (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined) ||
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZic3diaXRmeWFsbGdoYmd4a3V3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ2MjkzNDksImV4cCI6MjA5MDIwNTM0OX0.GtX_3p0L78p0KqmgNY71ENagf-lugz5FhvhYrtKqLhs";
 
 /** Header the catalog API uses to return the visitor's remaining AI-search budget. */
 const QUOTA_HEADER = "X-Singlet-Quota";
@@ -135,15 +119,12 @@ async function readJson(res: Response): Promise<unknown> {
 
 interface GetOptions {
   signal?: AbortSignal;
-  /** Send the signed-in visitor's token (only the AI endpoints care). */
+  /** Kept for call-site compatibility: the session cookie rides on every same-origin request. */
   withAuth?: boolean;
 }
 
 async function getWithHeaders<T>(path: string, params?: Record<string, ParamValue>, opts: GetOptions = {}): Promise<{ json: T; headers: Headers }> {
-  const headers: Record<string, string> = {};
-  const token = opts.withAuth ? authToken.get() : null;
-  if (token) headers.Authorization = `Bearer ${token}`;
-  const res = await fetch(buildApiUrl(path, params), { signal: opts.signal, headers });
+  const res = await fetch(buildApiUrl(path, params), { signal: opts.signal, credentials: "same-origin" });
   return { json: (await readJson(res)) as T, headers: res.headers };
 }
 
@@ -539,29 +520,24 @@ function normalizeApiKey(raw: unknown): ApiKeySummary | null {
   };
 }
 
-/** POST a JSON body to a Lovable Cloud function as the signed-in visitor. */
-async function cloudPost(fn: string, body: unknown, signal?: AbortSignal): Promise<unknown> {
-  const token = authToken.get();
-  if (!token) throw new ApiError(401, "Sign in to manage API keys.");
-  const res = await fetch(`${CLOUD_URL}/functions/v1/${fn}`, {
+/**
+ * POST a JSON body to one of the account endpoints (Pages Functions):
+ *   /api/product — private projects, cohorts, workspaces (action router)
+ *   /api/keys    — API keys (action router)
+ * The session cookie identifies the visitor; anonymous calls get 401.
+ */
+async function accountPost(path: string, body: unknown, signal?: AbortSignal): Promise<unknown> {
+  const res = await fetch(buildApiUrl(path), {
     method: "POST",
     signal,
-    headers: { "Content-Type": "application/json", apikey: CLOUD_KEY, Authorization: `Bearer ${token}` },
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
   return readJson(res);
 }
 
-/** POST a JSON body to a Lovable Cloud function anonymously (public key only). */
-async function cloudPostAnon(fn: string, body: unknown, signal?: AbortSignal): Promise<unknown> {
-  const res = await fetch(`${CLOUD_URL}/functions/v1/${fn}`, {
-    method: "POST",
-    signal,
-    headers: { "Content-Type": "application/json", apikey: CLOUD_KEY },
-    body: JSON.stringify(body),
-  });
-  return readJson(res);
-}
+const productPost = (body: Record<string, unknown>) => accountPost("/api/product", body);
 
 function normalizeStats(raw: unknown): CorpusStats {
   const r = rec(raw);
@@ -622,55 +598,48 @@ function searchParams(q: SearchQuery): Record<string, ParamValue> {
 export const apiClient = {
   product: {
     async dashboard(): Promise<ProductDashboard> {
-      return (await cloudPost("product-data", { action: "dashboard" })) as ProductDashboard;
+      return (await productPost({ action: "dashboard" })) as ProductDashboard;
     },
     async createProject(input: { name: string; description: string; visibility: ShareVisibility; workspace_id?: string | null }) {
-      return cloudPost("product-data", { action: "create_project", ...input }) as Promise<Record<string, unknown>>;
+      return productPost({ action: "create_project", ...input }) as Promise<Record<string, unknown>>;
     },
-    async project(id: string) { return cloudPost("product-data", { action: "get_project", id }) as Promise<Record<string, unknown>>; },
-    async privateStudies(query = "") { return cloudPost("product-data", { action: "list_private_studies", query }) as Promise<Record<string, unknown>>; },
-    async privateStudy(projectId: string, studyId: string) { return cloudPost("product-data", { action: "get_private_study", project_id: projectId, study_id: studyId }) as Promise<Record<string, unknown>>; },
+    async project(id: string) { return productPost({ action: "get_project", id }) as Promise<Record<string, unknown>>; },
+    async privateStudies(query = "") { return productPost({ action: "list_private_studies", query }) as Promise<Record<string, unknown>>; },
+    async privateStudy(projectId: string, studyId: string) { return productPost({ action: "get_private_study", project_id: projectId, study_id: studyId }) as Promise<Record<string, unknown>>; },
     async registerUrl(projectId: string, url: string) {
-      const token = authToken.get();
-      if (!token) throw new ApiError(401, "Sign in to add files.");
-      const res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/upload/register`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ url }) });
+      const res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/upload/register`, { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url }) });
       return readJson(res);
     },
     async upload(projectId: string, file: File, onProgress?: (pct: number) => void) {
-      const token = authToken.get();
-      if (!token) throw new ApiError(401, "Sign in to upload files.");
-      const auth = { Authorization: `Bearer ${token}` };
-      let res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/upload/init`, { method: "POST", headers: { ...auth, "Content-Type": "application/json" }, body: JSON.stringify({ filename: file.name, bytes: file.size }) });
+      let res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/upload/init`, { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ filename: file.name, bytes: file.size }) });
       const init = rec(await readJson(res));
       const partBytes = num(init.part_bytes, 50 * 1024 * 1024);
       const parts: { partNumber: number; etag: string }[] = [];
       for (let offset = 0, n = 1; offset < file.size; offset += partBytes, n++) {
-        res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/upload/part?file_id=${encodeURIComponent(str(init.file_id))}&n=${n}`, { method: "PUT", headers: { ...auth, "Content-Type": "application/octet-stream" }, body: file.slice(offset, offset + partBytes) });
+        res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/upload/part?file_id=${encodeURIComponent(str(init.file_id))}&n=${n}`, { method: "PUT", credentials: "same-origin", headers: { "Content-Type": "application/octet-stream" }, body: file.slice(offset, offset + partBytes) });
         const part = rec(await readJson(res));
         parts.push({ partNumber: num(part.partNumber), etag: str(part.etag) });
         onProgress?.(Math.round(Math.min(file.size, offset + partBytes) / file.size * 100));
       }
-      res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/upload/complete`, { method: "POST", headers: { ...auth, "Content-Type": "application/json" }, body: JSON.stringify({ file_id: init.file_id, parts }) });
+      res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/upload/complete`, { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ file_id: init.file_id, parts }) });
       return readJson(res);
     },
     async deleteProject(id: string) {
-      const token = authToken.get();
-      const res = await fetch(`/api/projects/${encodeURIComponent(id)}`, { method: "DELETE", headers: token ? { Authorization: `Bearer ${token}` } : {} });
+      const res = await fetch(`/api/projects/${encodeURIComponent(id)}`, { method: "DELETE", credentials: "same-origin" });
       return readJson(res);
     },
     async deleteFile(id: string) {
-      const token = authToken.get();
-      const res = await fetch(`/api/projects/files/${encodeURIComponent(id)}`, { method: "DELETE", headers: token ? { Authorization: `Bearer ${token}` } : {} });
+      const res = await fetch(`/api/projects/files/${encodeURIComponent(id)}`, { method: "DELETE", credentials: "same-origin" });
       return readJson(res);
     },
-    async createWorkspace(name: string, slug: string) { return cloudPost("product-data", { action: "create_workspace", name, slug }) as Promise<Record<string, unknown>>; },
-    async workspace(slug: string) { return cloudPost("product-data", { action: "get_workspace", slug }) as Promise<Record<string, unknown>>; },
-    async inviteWorkspace(workspaceId: string, email?: string) { return cloudPost("product-data", { action: "invite_workspace", workspace_id: workspaceId, ...(email ? { email } : {}) }) as Promise<Record<string, unknown>>; },
-    async acceptInvite(token: string) { return cloudPost("product-data", { action: "accept_invite", token }) as Promise<Record<string, unknown>>; },
-    async saveCohort(input: Record<string, unknown>) { return cloudPost("product-data", { action: "save_cohort", ...input }) as Promise<Record<string, unknown>>; },
-    async cohort(id: string, token?: string) { return (token ? cloudPostAnon : cloudPost)("product-data", { action: "get_cohort", id, token }) as Promise<Record<string, unknown>>; },
-    async comment(cohortId: string, body: string) { return cloudPost("product-data", { action: "comment_cohort", cohort_id: cohortId, body }) as Promise<Record<string, unknown>>; },
-    async setWeeklySummary(enabled: boolean) { return cloudPost("product-data", { action: "set_weekly_summary", enabled }); },
+    async createWorkspace(name: string, slug: string) { return productPost({ action: "create_workspace", name, slug }) as Promise<Record<string, unknown>>; },
+    async workspace(slug: string) { return productPost({ action: "get_workspace", slug }) as Promise<Record<string, unknown>>; },
+    async inviteWorkspace(workspaceId: string, email?: string) { return productPost({ action: "invite_workspace", workspace_id: workspaceId, ...(email ? { email } : {}) }) as Promise<Record<string, unknown>>; },
+    async acceptInvite(token: string) { return productPost({ action: "accept_invite", token }) as Promise<Record<string, unknown>>; },
+    async saveCohort(input: Record<string, unknown>) { return productPost({ action: "save_cohort", ...input }) as Promise<Record<string, unknown>>; },
+    async cohort(id: string, token?: string) { return productPost({ action: "get_cohort", id, token }) as Promise<Record<string, unknown>>; },
+    async comment(cohortId: string, body: string) { return productPost({ action: "comment_cohort", cohort_id: cohortId, body }) as Promise<Record<string, unknown>>; },
+    async setWeeklySummary(enabled: boolean) { return productPost({ action: "set_weekly_summary", enabled }); },
   },
   /** GET /api/stats — corpus-wide statistics (edge-cached). */
   async stats(): Promise<CorpusStats> {
@@ -705,17 +674,16 @@ export const apiClient = {
   },
 
   /**
-   * POST explain-results (Lovable Cloud) — signed-in only. One sentence per
-   * study on why it does or doesn't answer `q`, grounded in the metadata sent.
-   * ≤ 10 studies per call; already-explained pairs come back from cache free.
+   * POST /api/explain — signed-in only. One sentence per study on why it does
+   * or doesn't answer `q`, grounded in the metadata sent. ≤ 10 studies per
+   * call; already-explained pairs come back from cache free.
    */
   async explain(q: string, studies: StudyRow[], signal?: AbortSignal): Promise<ExplainResponse> {
-    const token = authToken.get();
-    if (!token) throw new ApiError(401, "Sign in (free) to get AI explanations.");
-    const res = await fetch(`${CLOUD_URL}/functions/v1/explain-results`, {
+    const res = await fetch(buildApiUrl("/api/explain"), {
       method: "POST",
       signal,
-      headers: { "Content-Type": "application/json", apikey: CLOUD_KEY, Authorization: `Bearer ${token}` },
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         q,
         studies: studies.slice(0, 10).map((s) => ({
@@ -754,38 +722,65 @@ export const apiClient = {
     };
   },
 
-  /** API keys for scripts and the MCP server — signed-in only; writes happen in one Cloud function. */
+  /** API keys for scripts and the MCP server — signed-in only (POST /api/keys action router). */
   apiKeys: {
     async list(): Promise<ApiKeySummary[]> {
-      const r = rec(await cloudPost("api-keys", { action: "list" }));
+      const r = rec(await accountPost("/api/keys", { action: "list" }));
       return arr<unknown>(r.items).map(normalizeApiKey).filter((k): k is ApiKeySummary => k !== null);
     },
     async create(name: string, expiresInDays?: number | null): Promise<ApiKeyCreated> {
-      const r = rec(await cloudPost("api-keys", { action: "create", name, expires_in_days: expiresInDays ?? null }));
+      const r = rec(await accountPost("/api/keys", { action: "create", name, expires_in_days: expiresInDays ?? null }));
       const key = normalizeApiKey(r.item);
       if (!key || typeof r.key !== "string") throw new ApiError(502, "The key was created but could not be read back. Refresh the page.");
       return { key, secret: r.key };
     },
     async revoke(id: string): Promise<void> {
-      await cloudPost("api-keys", { action: "revoke", id });
+      await accountPost("/api/keys", { action: "revoke", id });
     },
   },
 
   /**
-   * "Continue with GitHub". The hosted auth settings can't hold a GitHub app,
-   * so one Cloud function runs the OAuth exchange and mints a one-time sign-in
-   * token; the browser finishes with auth.verifyOtp(token_hash).
+   * Accounts (Pages Functions + D1). Sign-in itself is a full-page redirect to
+   * /auth/<provider>/start?return_to=…; these calls read and end the session.
    */
-  githubOAuth: {
-    async start(origin: string, returnTo: string): Promise<{ url: string; nonce: string }> {
-      const r = rec(await cloudPostAnon("github-oauth", { action: "start", origin, return_to: returnTo }));
-      if (typeof r.url !== "string" || typeof r.nonce !== "string") throw new ApiError(502, "GitHub sign-in could not start.");
-      return { url: r.url, nonce: r.nonce };
+  auth: {
+    /** GET /api/auth/me — the signed-in user (or null) and which providers are configured. */
+    async me(signal?: AbortSignal): Promise<AuthMe> {
+      const res = await fetch(buildApiUrl("/api/auth/me"), { signal, credentials: "same-origin", cache: "no-store" });
+      const r = rec(await readJson(res));
+      const u = r.user === null || r.user === undefined ? null : rec(r.user);
+      const p = rec(r.providers);
+      return {
+        user: u && typeof u.id === "string"
+          ? { id: u.id, email: strOrNull(u.email), displayName: strOrNull(u.display_name), avatarUrl: strOrNull(u.avatar_url) }
+          : null,
+        providers: { github: p.github === true, google: p.google === true },
+      };
     },
-    async exchange(code: string, state: string): Promise<{ tokenHash: string; returnTo: string; nonce: string }> {
-      const r = rec(await cloudPostAnon("github-oauth", { action: "exchange", code, state }));
-      if (typeof r.token_hash !== "string") throw new ApiError(502, "GitHub sign-in could not be completed.");
-      return { tokenHash: r.token_hash, returnTo: typeof r.return_to === "string" ? r.return_to : "/browse", nonce: typeof r.nonce === "string" ? r.nonce : "" };
+    /**
+     * POST /api/auth/logout — ends this browser's session. False when the
+     * server didn't confirm it (offline, 403, 5xx): the session cookie is then
+     * still valid.
+     */
+    async logout(): Promise<boolean> {
+      try {
+        const res = await fetch(buildApiUrl("/api/auth/logout"), { method: "POST", credentials: "same-origin" });
+        return res.ok;
+      } catch {
+        return false;
+      }
+    },
+    /** GET /api/account/usage — today's AI counters (and the deployment's limits) for the signed-in user. */
+    async usage(signal?: AbortSignal): Promise<{ search: number; explain: number; searchLimit: number | null; explainLimit: number | null }> {
+      const res = await fetch(buildApiUrl("/api/account/usage"), { signal, credentials: "same-origin", cache: "no-store" });
+      const r = rec(await readJson(res));
+      const search = rec(r.search);
+      const explain = rec(r.explain);
+      return { search: num(search.used), explain: num(explain.used), searchLimit: numOrNull(search.limit), explainLimit: numOrNull(explain.limit) };
+    },
+    /** Where the browser goes to start a sign-in (full-page navigation). */
+    startUrl(provider: "github" | "google", returnTo: string): string {
+      return `/auth/${provider}/start?return_to=${encodeURIComponent(returnTo)}`;
     },
   },
 

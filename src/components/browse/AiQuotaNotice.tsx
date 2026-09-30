@@ -32,7 +32,7 @@ export function AiQuotaBadge({ className }: { className?: string }) {
 
 /**
  * Shown verbatim above the results when today's AI budget is spent. The
- * results underneath are a plain keyword search for the same words.
+ * results underneath come from the built-in vocabulary reading of the same words.
  */
 export function AiQuotaExceeded({ quota, message }: { quota: AiQuota; message: string }) {
   const { user, openSignIn } = useAuth();
