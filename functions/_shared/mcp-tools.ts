@@ -108,9 +108,12 @@ export async function getSampleQc(ctx: SampleQcArgs, args: Record<string, unknow
     ...s,
     uniquely_mapped_pct: pct(s.uniquely_mapped_pct),
     mapping_rate_pct: pct(s.mapping_rate),
-    median_mito_pct: pct(s.median_mito_fraction),
+    median_mito_pct: pct(s.median_mito_fraction || null),
     fraction_reads_in_cells_pct: pct(s.fraction_reads_in_cells),
-    sequencing_saturation_pct: pct(s.sequencing_saturation),
+    sequencing_saturation_pct: pct(s.sequencing_saturation || null),
+    median_mito_fraction: s.median_mito_fraction || null,
+    sequencing_saturation: s.sequencing_saturation || null,
+    input_reads_capped: s.n_input_reads === 30_000_000,
   }));
   if (!rows.length) return toolError(`None of those GSM ids are in ${gse}'s file. Samples present: ${samples.map((s) => s.gsm_id).join(", ")}.`);
 
@@ -531,6 +534,8 @@ export async function findMatchedControls(ctx: SampleQcArgs, args: Record<string
         WHERE m.gse_id != ?
           AND m.organism_primary = ?
           AND m.has_bundle = 1
+          AND COALESCE(m.n_usable_samples, 1) > 0
+          AND COALESCE(m.reference_mismatch, 0) = 0
           AND m.tissue_groups LIKE ?
         ORDER BY m.n_done DESC
         LIMIT 400`
@@ -642,11 +647,11 @@ export async function findMatchedControls(ctx: SampleQcArgs, args: Record<string
 async function sampleQcFromD1(db: D1Database, gse: string): Promise<SampleQc[]> {
   await ensureSampleQcTable(db).catch(() => undefined);
   const rows = await db
-    .prepare(`SELECT ${SAMPLE_QC_COLUMNS.join(", ")} FROM sample_qc WHERE gse_id = ? ORDER BY gsm_id`)
+    .prepare(`SELECT ${SAMPLE_QC_COLUMNS.join(", ")}, matrix_bytes, usable FROM sample_qc WHERE gse_id = ? ORDER BY gsm_id`)
     .bind(gse)
     .all<SampleQc>()
     .catch(() => null);
-  return rows?.results ?? [];
+  return (rows?.results ?? []).map(normalizeQc);
 }
 
 interface ComparisonRow {
@@ -904,10 +909,23 @@ export async function assessStudy(ctx: SampleQcArgs, args: Record<string, unknow
       .join(", ")}`;
   });
 
+  const unusable = qc.filter((s) => s.usable === 0).map((s) => s.gsm_id);
+  const usableCount = d.series.usable_samples ?? (qc.some((s) => s.usable != null) ? qc.filter((s) => s.usable === 1).length : null);
+  const integrity: string[] = [];
+  if (d.series.bundle_url && usableCount === 0)
+    integrity.push("HOLLOW FILE: this file currently contains no usable count data (every sample has an empty matrix or 0 called cells). Do not use it.");
+  else if (unusable.length)
+    integrity.push(`${unusable.length} of ${qc.length} samples have no count data (empty matrix or 0 called cells) and load as empty: ${unusable.join(", ")}.`);
+  if (d.series.reference_mismatch_note) integrity.push(`REFERENCE MISMATCH: ${d.series.reference_mismatch_note}`);
+
   const structured = {
     gse_id: gse,
     title: d.series.title,
     purpose: purpose || null,
+    usable_samples: usableCount,
+    unusable_samples: unusable,
+    reference_mismatch: d.series.reference_mismatch,
+    integrity_flags: integrity,
     file: {
       available: !!d.series.bundle_url,
       url: d.series.bundle_url,
@@ -948,6 +966,7 @@ export async function assessStudy(ctx: SampleQcArgs, args: Record<string, unknow
 
   const lines: string[] = [];
   lines.push(`${gse} — ${d.series.title ?? "(untitled)"}`);
+  for (const f of integrity) lines.push(`⚠ ${f}`);
   lines.push(
     `${[d.series.organism_label, d.meta?.tissue_groups.join("/"), d.meta?.disease_groups.join("/"), d.meta?.assay_families.join("/"), d.meta?.year].filter(Boolean).join(" · ")}`
   );
