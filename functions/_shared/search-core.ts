@@ -114,6 +114,10 @@ export interface StudyRow {
   bundle_n_samples: number | null;
   file_cells: number | null;
   reference_build: string | null;
+  /** Samples in the file with usable count data; null = not yet assessed. */
+  usable_samples?: number | null;
+  /** Species not covered by the reference build. */
+  reference_mismatch?: boolean;
   year: number | null;
   n_conditions: number;
   conditions: ConditionSummary["conditions"];
