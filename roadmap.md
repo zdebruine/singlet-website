@@ -146,3 +146,4 @@
 - Stage 11f: index-next predicate + failure parking, interpreter cache version, value-first partial chips, removed stale docs workflow.
 - [x] Brand polish: vertically center the unchanged logo mark and wordmark; add a rich-black navbar ribbon with white navigation controls.
 - OAuth: GitHub sign-in confirms new accounts before magic-link verify; Google addresses and Google-first accounts are routed to Google sign-in.
+- [x] Stage 13a: unblocked Functions build (gse/index.ts duplicate), lockfile registry URLs, prebuild tsc+wrangler; refresh-next freshness crank; usable/hollow sample flags; uncomputed QC as null; 30M cap label; reference mismatch flag
