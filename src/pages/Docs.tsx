@@ -275,14 +275,16 @@ studies = pd.read_csv(url, sep="\\t")`}
               <p>
                 Search on this website, in the packages and in the MCP server all call the same public endpoint,{" "}
                 <Mono>GET https://singlet.bio/api/nl-search?q=…</Mono>, which returns the matched accessions and the
-                filters it interpreted. Results are catalog metadata. Interpretations are cached for an hour per
-                question text and are not tied to you; the only thing kept per visitor is a daily count of AI requests.
+                filters it interpreted. Results are catalog metadata. Most questions are read by the built-in vocabulary
+                (organisms, tissues, diseases, assays, cell types, cell counts, years) at no cost. Model readings are cached
+                per question text and are not tied to you; the only thing kept per visitor is a daily count of AI requests.
               </p>
               <p>
-                Interpreting plain English costs a model call, so it is rate-limited: <strong>10 AI searches a day</strong>{" "}
-                without an account (per network address) and <strong>200 a day</strong> signed in (free — Google, GitHub or
-                an email link). Repeated questions come from cache and don't count. When the budget is spent the endpoint
-                still answers with a plain keyword search and sets <Mono>quota_exceeded: true</Mono>; accessions, filters
+                A question the vocabulary can't place costs a model call, so those are rate-limited:{" "}
+                <strong>10 AI searches a day</strong> without an account (per network address) and{" "}
+                <strong>200 a day</strong> signed in (free — Google or GitHub). Repeated questions come from cache and don't
+                count. When the budget is spent the endpoint still answers, reading the question with the built-in vocabulary
+                only, and sets <Mono>quota_exceeded: true</Mono>; accessions, filters
                 in the rail and the catalog itself are never limited. Signed-in users can also ask for a one-sentence,
                 metadata-grounded explanation of why each study matched (100 a day). From a script or an assistant, use
                 an <a href="#api-keys">API key</a> to search under your own allowance.
@@ -744,7 +746,7 @@ sc.pp.highly_variable_genes(adata, batch_key="gsm_id")`}
               <h3>Create a key</h3>
               <ol>
                 <li>
-                  <Link to="/account">Sign in</Link> (free — Google, GitHub or an email link) and open{" "}
+                  <Link to="/account">Sign in</Link> (free — Google or GitHub) and open{" "}
                   <Link to="/account#api-keys">Account → API keys</Link>.
                 </li>
                 <li>Give the key a name (and an expiry if you like) and click <strong>Create key</strong>.</li>
