@@ -121,6 +121,7 @@ export function normalizeQc<T extends Partial<SampleQc>>(r: T): T {
     sequencing_saturation: r.sequencing_saturation ? r.sequencing_saturation : null,
     median_mito_fraction: r.median_mito_fraction ? r.median_mito_fraction : null,
   };
+}
 
 const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
 const str = (v: unknown): string | null => (typeof v === "string" && v ? v : null);
