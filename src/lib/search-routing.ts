@@ -17,5 +17,5 @@ export const EXAMPLE_QUERIES = [
   "microglia in the aging mouse brain",
   "human PBMC, COVID-19, 10x 5'",
   "tumor-infiltrating T cells in melanoma",
-  "zebrafish development",
+  "mouse embryo development",
 ] as const;

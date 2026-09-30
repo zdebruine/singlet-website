@@ -19,15 +19,15 @@ const STEPS = [
   },
   {
     title: "Protocol detection",
-    body: "The library type (10x 3' v2/v3, 10x 5', Drop-seq, CITE-seq, BD Rhapsody, Smart-seq, …) is detected from the reads and the GEO/SRA metadata so the right barcode and UMI layout is applied. Samples where no chemistry can be confirmed are labelled \"10x (protocol unconfirmed)\" in the catalog.",
+    body: "The library type (10x 3' v2/v3, 10x 5', Drop-seq, CITE-seq, BD Rhapsody, Smart-seq, …) is detected from the reads and the GEO/SRA metadata so the right barcode and UMI layout is applied. 10x samples whose chemistry version comes only from GEO text, not from the reads, are labelled \"10x (version unconfirmed)\" in the catalog.",
   },
   {
     title: "Alignment and counting",
-    body: "Reads are mapped to a single reference per organism (see below) and counted per cell barcode and gene, separately for exonic and intronic reads, plus splice junctions. Every sample in the atlas is processed with the same pipeline version and parameters.",
+    body: "Input is capped at 30,000,000 reads per sample; about 80% of samples reached the cap and were subsampled to it. Reads are mapped to one reference per organism (see below) and counted per cell barcode and feature, separately for exonic and intronic reads, plus splice junctions.",
   },
   {
     title: "Per-sample QC",
-    body: "Cells are called, and each sample gets mapping rate, cells called, median genes and UMIs per cell and mitochondrial fraction. A sample that falls under the minimum thresholds is kept in the catalog and marked failed with the reason.",
+    body: "Cells are called, and each sample gets mapping rate, cells called, and median genes and UMIs per cell. Sequencing saturation and median mitochondrial fraction were not computed, and show as \"—\". A sample that falls under the minimum thresholds is kept in the catalog and marked failed with the reason.",
   },
   {
     title: "One .singlet bundle per study",
@@ -66,8 +66,9 @@ const About = () => {
             <Logo variant="mark" height={28} link={false} className="docs-brand-mark mb-4" />
               <h1 className="text-[36px] md:text-[42px] mb-3">About the data</h1>
             <p className="text-[17px] text-muted-foreground">
-              The atlas is every public single-cell RNA-seq study on GEO that the pipeline can process, reprocessed from
-              raw reads the same way, so numbers from different labs are directly comparable.
+              The atlas is public single-cell RNA-seq studies from GEO, reprocessed from raw reads with one open-source
+              pipeline. Not every GEO study is in it yet, and not every catalogued study has a downloadable file; the live
+              counts are under <a href="#status">Processing status</a>.
             </p>
           </header>
 
@@ -110,12 +111,18 @@ const About = () => {
                 </li>
               ))}
             </ol>
+            <h3>Pipeline versions</h3>
+            <p className="text-[14.5px]">
+              Files were not all made by the same release. As of September 2026, 4,096 published files record pipeline
+              2.0.0, 347 record 1.0.0, and 3,398 (all mouse) did not record a version. The version is in each file's{" "}
+              <Mono>manifest.json</Mono> and on its study page. Check it, and the reference build, before merging studies.
+            </p>
           </section>
 
           {/* ── References ── */}
           <section id="references" className="pb-12 mb-12 border-b border-border scroll-mt-20">
             <h2>References</h2>
-            <p>One reference build per organism, used for every sample of that organism:</p>
+            <p>Five reference builds appear in the published files:</p>
             <table>
               <thead>
                 <tr>
@@ -141,17 +148,21 @@ const About = () => {
                   <td>Ensembl 110</td>
                 </tr>
                 <tr>
-                  <td>All other organisms</td>
-                  <td>Latest Ensembl or NCBI RefSeq assembly for the species</td>
-                  <td>Ensembl 115, Ensembl Rapid Release, or NCBI RefSeq</td>
+                  <td>Rhesus macaque</td>
+                  <td><Mono>Mmul_10</Mono></td>
+                  <td>Ensembl</td>
+                </tr>
+                <tr>
+                  <td>Human + mouse mixtures</td>
+                  <td><Mono>GRCh38-GRCm39</Mono> barnyard build</td>
+                  <td>Both of the above</td>
                 </tr>
               </tbody>
             </table>
             <p>
-              GENCODE only publishes human and mouse annotation, so every other organism is built from Ensembl (release
-              115 for the main vertebrate set, Rapid Release for species that are not yet in the main Ensembl release) or
-              from NCBI RefSeq for plants, fungi, protists and bacteria. There are currently 65 organism builds, plus a
-              combined human + mouse <Mono>GRCh38-GRCm39</Mono> barnyard build used for species-mixing experiments.
+              There are no files built against any other genome yet. Some studies of other organisms (zebrafish, for
+              example) were aligned to the human or mouse reference; their counts are not meaningful for that species, so
+              they are flagged on the study page and left out of the default Browse view.
             </p>
             <p>
               For the human 2024-A build the genome FASTA is taken from Ensembl 109 (GRCh38.p13) rather than 110, because
@@ -241,7 +252,7 @@ const About = () => {
             </p>
             <CodeBlock
               label="text"
-              code={`<Original authors>. <Title>. GEO accession GSE178957 (<year>).
+              code={`<Original authors>. <Title>. GEO accession GSE138867 (<year>).
 Singlet Bio. singlet atlas, release <singlet_version>. https://singlet.bio (accessed ${year}).`}
             />
           </section>

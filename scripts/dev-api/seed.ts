@@ -220,8 +220,8 @@ async function main() {
     if (!res.data.length || samples.length >= res.total) break;
     process.stdout.write(`  samples: ${samples.length}\r`);
   }
-  // Make sure the acceptance-check study is present in full.
-  const must = ["GSE178957"];
+  // Make sure the studies the docs use as examples are present in full.
+  const must = ["GSE138867", "GSE128639"];
   for (const id of must) {
     const d = await getJson<{ series: ApiGse & { abstract: string | null }; samples: ApiGsm[] }>(`/api/gse/${id}`);
     for (const s of d.samples) if (!samples.some((x) => x.gsm_id === s.gsm_id)) samples.push(s);

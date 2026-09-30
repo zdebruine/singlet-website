@@ -16,7 +16,7 @@ export const UNVERIFIED_CELLS_LABEL = "unverified";
 
 /** Friendly label for protocol values whose stored form is opaque. */
 const PROTOCOL_LABELS: Record<string, string> = {
-  "10x_suspect": "10x (protocol unconfirmed)",
+  "10x_suspect": "10x (version unconfirmed)",
   "10xv2": "10x 3' v2",
   "10xv3": "10x 3' v3",
   "10x-3p-v2": "10x 3' v2",

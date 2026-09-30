@@ -147,6 +147,11 @@ const StudyDetail = () => {
     return vals.length ? vals.reduce((a, v) => a + v, 0) : null;
   }, [bundleSamples]);
 
+  // Samples whose input hit the pipeline's 30,000,000-read cap (they were subsampled).
+  const { cappedCount, readsKnown } = useMemo(() => {
+    const reads = (bundleSamples?.samples ?? []).map((s) => s.n_input_reads).filter((v): v is number => v != null);
+    return { cappedCount: reads.filter((v) => v === 30_000_000).length, readsKnown: reads.length };
+  }, [bundleSamples]);
 
   const [abstractOpen, setAbstractOpen] = useState(false);
   const [condition, setCondition] = useState<ConditionFilter | null>(null);
@@ -572,7 +577,15 @@ const StudyDetail = () => {
           )}
           <dl className="surface px-4 py-3 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-1.5 text-[12.5px]">
             {[
-              versions.length ? { label: "Pipeline", value: <span className="font-mono">{versions.join(", ")}</span> } : null,
+              // The file's manifest version is the one that matters for merging; the
+              // per-sample catalog field uses a different (internal) numbering.
+              series.singlet_version && series.singlet_version !== "unknown"
+                ? { label: "Pipeline", value: <span className="font-mono">{series.singlet_version}</span> }
+                : series.bundle_url && series.singlet_version === "unknown"
+                  ? { label: "Pipeline", value: <span className="text-muted-foreground">not recorded in the file</span> }
+                  : versions.length
+                    ? { label: "Pipeline", value: <span className="font-mono">{versions.join(", ")}</span> }
+                    : null,
               dateMin ? { label: "Processed", value: <span className="tabular">{dateMin === dateMax || !dateMax ? dateMin : `${dateMin} \u2013 ${dateMax}`}</span> } : null,
               nRuns > 0 ? { label: "Raw reads", value: <span className="tabular">{`${fmtInt(nRuns)} SRA run${nRuns === 1 ? "" : "s"}`}</span> } : null,
               series.last_updated ? { label: "Catalog updated", value: <span className="tabular">{series.last_updated.slice(0, 10)}</span> } : null,
@@ -580,7 +593,7 @@ const StudyDetail = () => {
                 label: "License",
                 value: (
                   <Link to="/data-license" className="text-primary hover:underline">
-                    CC0 data \u00b7 MIT code
+                    CC0 data · MIT code
                   </Link>
                 ),
               },
@@ -594,8 +607,9 @@ const StudyDetail = () => {
               ))}
           </dl>
           <p className="text-[12px] text-muted-foreground leading-relaxed px-0.5">
-            Every study is run through the same pipeline from raw reads, so this file compares directly with any other on the site.{" "}
-            <Link to="/about#pipeline" className="text-primary hover:underline">How processing works →</Link>
+            Reprocessed from raw reads. Files were made by more than one pipeline release, so compare the reference build and
+            pipeline version before merging this study with another.{" "}
+            <Link to="/about#processing" className="text-primary hover:underline">How processing works →</Link>
           </p>
         </aside>
       </div>
@@ -612,6 +626,11 @@ const StudyDetail = () => {
           <span className="text-[12px] text-muted-foreground">
             Click a row for its GEO characteristics, QC and raw-read records.
             {geoTotal > samples.length ? ` ${fmtInt(samples.length)} of ${fmtInt(geoTotal)} GEO samples are catalogued.` : ""}
+            {cappedCount > 0 && (
+              <span title="The pipeline processes at most 30,000,000 reads per sample; deeper samples were subsampled to that cap.">
+                {` ${fmtInt(cappedCount)} of ${fmtInt(readsKnown)} samples hit the 30M input-read cap (marked "capped").`}
+              </span>
+            )}
           </span>
         </div>
         <StudySamplesTable

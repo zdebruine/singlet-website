@@ -49,9 +49,11 @@ export function fmtBytes(n: number | null | undefined): string {
   return `${Math.max(1, Math.round(n / 1e3))} KB`;
 }
 
+// R uses singlet::load — attaching the package masks base::load, so a bare
+// load() in a user's script is ambiguous.
 export const LOADERS = (gse: string) => ({
   python: `import singlet\nadata = singlet.load("${gse}")   # AnnData`,
-  r: `library(singlet)\nsce <- load("${gse}")   # SingleCellExperiment`,
+  r: `library(singlet)\nsce <- singlet::load("${gse}")   # SingleCellExperiment`,
 });
 
 /** Summary fields are stored as either a fraction (0–1) or a percentage. */
@@ -269,6 +271,9 @@ export async function getModalities(ctx: SampleQcArgs, args: Record<string, unkn
     r: m.r,
   }));
   const missing = MODALITIES.filter((m) => !counts.has(m.name)).map((m) => m.name);
+  // The per-modality lines below read `b`, `path` and `gsm`; the preamble and
+  // raw_counts snippets define all three so every line runs as written.
+  const exampleGsm = samples[0].gsm_id;
 
   const lines: string[] = [];
   lines.push(
@@ -277,8 +282,8 @@ export async function getModalities(ctx: SampleQcArgs, args: Record<string, unkn
   lines.push("");
   lines.push("Open the bundle once, then read any modality by name:");
   lines.push("");
-  lines.push(`  Python:  import singlet; b = singlet.open_bundle("${gse}"); b.modalities()`);
-  lines.push(`  R:       library(singlet); singlet_modalities(load_path)`);
+  lines.push(`  Python:  import singlet; b = singlet.open_bundle("${gse}"); gsm = "${exampleGsm}"; b.modalities(gsm)`);
+  lines.push(`  R:       library(singlet); path <- download("${gse}"); gsm <- "${exampleGsm}"; singlet_modalities(path, gsm)`);
   lines.push("");
   let group = "";
   for (const r of rows) {
@@ -296,7 +301,7 @@ export async function getModalities(ctx: SampleQcArgs, args: Record<string, unkn
   );
   if (missing.length) {
     lines.push("");
-    lines.push(`Not in this bundle: ${missing.join(", ")}. Older bundles predate the donor, non-host and per-cell annotation outputs.`);
+    lines.push(`Not in this bundle: ${missing.join(", ")}. Not every bundle has the donor, non-host and per-cell annotation outputs.`);
   }
 
   return toolResult(lines.join("\n"), {
@@ -308,8 +313,8 @@ export async function getModalities(ctx: SampleQcArgs, args: Record<string, unkn
     missing,
     per_sample: perSample.map((s) => ({ gsm_id: s.gsm_id, modalities: s.found.map((f) => f.modality.name) })),
     raw_counts: {
-      python: `import singlet\nb = singlet.open_bundle("${gse}")\nadata = b.raw_counts(b.gsm_ids[0])        # X = exon + intron\nadata.layers["spliced"], adata.layers["unspliced"]`,
-      r: `library(singlet)\nsce <- singlet_raw_counts(path, gsm)      # counts = exon + intron\nassayNames(sce)                          # counts, spliced, unspliced`,
+      python: `import singlet\nb = singlet.open_bundle("${gse}")\ngsm = "${exampleGsm}"\nadata = b.raw_counts(gsm)                 # X = exon + intron\nadata.layers["spliced"], adata.layers["unspliced"]`,
+      r: `library(singlet)\npath <- download("${gse}")\ngsm  <- "${exampleGsm}"\nsce  <- singlet_raw_counts(path, gsm)     # counts = exon + intron\nassayNames(sce)                          # counts, spliced, unspliced`,
     },
     download_url: bundleUrl(gse),
     study_url: `${SITE}/study/${gse}`,

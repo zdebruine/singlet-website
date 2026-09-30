@@ -5,7 +5,7 @@ import Footer from "@/components/Footer";
 import { CodeBlock } from "@/components/CodeBlock";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { usePageMeta } from "@/hooks/usePageMeta";
-import { PY_INSTALL, R_INSTALL_STANDALONE, GITHUB_ISSUES } from "@/lib/install-snippets";
+import { BUILD_DEPS, EXAMPLE_GSE, PY_INSTALL, R_INSTALL_STANDALONE, GITHUB_ISSUES } from "@/lib/install-snippets";
 import {
   MCP_URL,
   claudeCodeConfig,
@@ -15,7 +15,15 @@ import {
 } from "@/lib/mcp-snippets";
 
 const KEY_PLACEHOLDER = "sk_live_…";
-const GSE = "GSE178957";
+/** Flagship example: human PBMC, smokers vs non-smokers, 8/8 usable samples, ~193 MB. */
+const GSE = EXAMPLE_GSE;
+/**
+ * Modality demo: Stuart et al. 2019 bone marrow (~245 MB). Its bundle has
+ * donor/, mt/, nonhost/ and V(D)J outputs; the code still checks with has()
+ * because many bundles lack some of them.
+ */
+const MODALITY_GSE = "GSE128639";
+const MODALITY_GSM = "GSM3681519";
 
 const Mono = ({ children }: { children: React.ReactNode }) => <code className="code-inline">{children}</code>;
 
@@ -54,11 +62,10 @@ const MODALITIES: { what: string; name: string; note: string }[] = [
 
 const PY_MODALITY_CODE = `import singlet
 
-b = singlet.open_bundle("${GSE}")          # downloads and caches the .singlet
-b.gsm_ids                                   # ['GSM...', ...]
-b.modalities()                              # {'exon_counts': '...', 'junctions': '...', ...}
-
-gsm = b.gsm_ids[0]
+b = singlet.open_bundle("${MODALITY_GSE}")          # downloads and caches the .singlet
+b.gsm_ids                                   # ['${MODALITY_GSM}', ...]
+gsm = "${MODALITY_GSM}"
+b.modalities(gsm)                           # {'exon_counts': '...', 'junctions': '...', ...}
 
 # --- the conventional combined counts matrix ---------------------------
 adata = b.raw_counts(gsm)                   # cells x genes, exon + intron
@@ -73,22 +80,25 @@ feat.var["gene_id"]                         # which gene each feature belongs to
 # every barcode, including empty droplets (a raw_feature_bc_matrix)
 raw = b.raw_counts(gsm, gene_level=False, cells="all")
 
-# --- everything else ---------------------------------------------------
+# --- everything else (check first: not every bundle has every output) ---
 b.mt_variants(gsm)                          # cells x chrM sites (heteroplasmy)
 b.read("mt_variants", gsm)                  # called chrM variants, as a DataFrame
-b.donors(gsm)                               # barcode -> donor, with doublet calls
-b.nonhost(gsm)                              # microbial / viral abundance per taxon
+if b.has("donor_assignments", gsm):
+    donors = b.donors(gsm)                  # barcode -> donor, with doublet calls
+if b.has("nonhost_species", gsm):
+    taxa = b.nonhost(gsm)                   # microbial / viral abundance per taxon
+if b.has("mt_events", gsm):
+    events = b.read("mt_events", gsm)       # per-cell chrM allele support
 b.junctions(gsm)                            # cells x splice junctions
 b.splice_psi(gsm)                           # cells x splice events (PSI)
 b.vdj(gsm)                                  # cells x V(D)J segments
-b.read("doublet_scores", gsm)               # per-cell doublet score and call
 b.qc(gsm)                                   # the sample's summary.json`;
 
 const R_MODALITY_CODE = `library(singlet)
 
-path <- download("${GSE}")             # local .singlet path
-singlet_modalities(path)                # named vector: modality -> description
-gsm <- "GSM5399457"
+path <- download("${MODALITY_GSE}")             # local .singlet path
+gsm  <- "${MODALITY_GSM}"
+singlet_modalities(path, gsm)           # named vector: modality -> description
 
 # --- the conventional combined counts matrix ---------------------------
 sce <- singlet_raw_counts(path, gsm)
@@ -102,23 +112,24 @@ rowData(feat)$gene_id
 # every barcode, including empty droplets
 raw <- singlet_raw_counts(path, gsm, gene_level = FALSE, cells = "all")
 
-# --- everything else ---------------------------------------------------
+# --- everything else (check first: not every bundle has every output) ---
 singlet_read(path, gsm, "mt_heteroplasmy")   # dgCMatrix, features x cells
 singlet_read(path, gsm, "mt_variants")       # data.frame
-singlet_read(path, gsm, "donor_assignments")
-singlet_read(path, gsm, "nonhost_species")
+if (singlet_has(path, "donor_assignments", gsm))
+  donors <- singlet_read(path, gsm, "donor_assignments")
+if (singlet_has(path, "nonhost_species", gsm))
+  taxa <- singlet_read(path, gsm, "nonhost_species")
 singlet_read(path, gsm, "junctions")
 singlet_read(path, gsm, "splice_psi")
 singlet_read(path, gsm, "vdj_gene_usage")
-singlet_read(path, gsm, "doublet_scores")
 singlet_read(path, gsm, "summary")           # list`;
 
 const CLAUDE_PROMPTS = [
   { ask: "Find me human PBMC studies in COVID-19 with at least 20,000 cells.", tool: "search_datasets" },
   { ask: `Is ${GSE} usable for RNA velocity? What is the QC like?`, tool: "assess_study, get_sample_qc" },
-  { ask: `What is inside ${GSE} besides gene counts — does it have mtDNA variants or donor assignments?`, tool: "get_modalities" },
-  { ask: `Give me the R code to pull donor assignments and non-host species out of ${GSE}.`, tool: "get_modalities" },
-  { ask: "I only want one sample's counts matrix, not the whole 9 GB study.", tool: "get_partial_download" },
+  { ask: `What is inside ${MODALITY_GSE} besides gene counts — does it have mtDNA variants or donor assignments?`, tool: "get_modalities" },
+  { ask: `Give me the R code to pull donor assignments and non-host species out of ${MODALITY_GSE}.`, tool: "get_modalities" },
+  { ask: "I only want one sample's counts matrix from GSE296768, not the whole 1.5 GB study.", tool: "list_bundle_files, get_partial_download" },
   { ask: "Write me a curl script that downloads every mouse brain study in the atlas.", tool: "export_manifest" },
 ];
 
@@ -157,8 +168,11 @@ const Quickstart = () => {
               {/* ── Python ── */}
               <TabsContent value="python" className="mt-7">
                 <Step n={1} title="Install">
-                  <p>Python 3.9 or newer.</p>
-                  <CodeBlock label="bash" code={PY_INSTALL} />
+                  <p>
+                    Python 3.9 or newer. The package installs from GitHub and builds a small C++ extension, so it needs a
+                    C++17 compiler and the zstd headers.
+                  </p>
+                  <CodeBlock label="bash" code={`${BUILD_DEPS}\n${PY_INSTALL}`} />
                 </Step>
 
                 <Step n={2} title="Find a study">
@@ -170,11 +184,12 @@ const Quickstart = () => {
                     label="python"
                     code={`import singlet
 
-accs = singlet.find("microglia in the aging mouse brain")
+accs = singlet.find("microglia in the aging mouse brain", level="gse")
 print(accs)                    # ['GSE...', ...]`}
                   />
                   <p className="text-sm text-muted-foreground">
-                    <Mono>find</Mono> returns GSE accessions. <Mono>find_load(...)</Mono> loads the matches in one call.
+                    <Mono>level="gse"</Mono> returns study accessions (without it, the Python package returns sample
+                    accessions). <Mono>find_load(...)</Mono> loads the matches in one call.
                   </p>
                 </Step>
 
@@ -201,16 +216,25 @@ adata.obs[["gsm_id", "organism", "protocol"]].head()`}
               {/* ── R ── */}
               <TabsContent value="r" className="mt-7">
                 <Step n={1} title="Install">
-                  <p>R 4.2 or newer. Bioconductor is needed for SingleCellExperiment.</p>
+                  <p>
+                    R 4.2 or newer. The Bioconductor packages are needed for the default SingleCellExperiment return
+                    type. The package builds from source, so it needs a C++17 compiler and the zstd headers (Linux:{" "}
+                    <Mono>libzstd-dev</Mono>; macOS: <Mono>brew install zstd</Mono>).
+                  </p>
                   <CodeBlock label="r" code={R_INSTALL_STANDALONE} />
                 </Step>
 
                 <Step n={2} title="Find a study">
+                  <p className="text-sm text-muted-foreground">
+                    Call <Mono>singlet::find()</Mono> and <Mono>singlet::load()</Mono> with the package prefix: the
+                    package's <Mono>load()</Mono> and <Mono>find()</Mono> mask <Mono>base::load</Mono> and{" "}
+                    <Mono>utils::find</Mono>.
+                  </p>
                   <CodeBlock
                     label="r"
                     code={`library(singlet)
 
-accs <- find("microglia in the aging mouse brain")
+accs <- singlet::find("microglia in the aging mouse brain")
 print(accs)                    # c("GSE...", ...)`}
                   />
                 </Step>
@@ -219,11 +243,11 @@ print(accs)                    # c("GSE...", ...)`}
                   <p>One SingleCellExperiment for the whole study, or a Seurat object.</p>
                   <CodeBlock
                     label="r"
-                    code={`sce <- load("${GSE}")                  # SingleCellExperiment
-assayNames(sce)                         # counts, spliced, unspliced
+                    code={`sce <- singlet::load("${GSE}")                  # SingleCellExperiment
+assayNames(sce)                                  # counts, spliced, unspliced
 head(colData(sce)$gsm_id)
 
-seu <- load("${GSE}", as = "seurat")    # Seurat instead`}
+seu <- singlet::load("${GSE}", as = "seurat")    # Seurat instead`}
                   />
                 </Step>
 
@@ -240,8 +264,9 @@ seu <- load("${GSE}", as = "seurat")    # Seurat instead`}
               <TabsContent value="claude" className="mt-7">
                 <p className="mb-6">
                   singlet runs an MCP server at <Mono>{MCP_URL}</Mono>. Connecting it lets Claude search the atlas, read
-                  real QC numbers out of the files, and write the loading code for you. Everything below works without an
-                  account; a free key raises the daily AI-search allowance from 10 to 200.
+                  real QC numbers out of the files, and write the loading code for you. No account is needed except to
+                  save or open a private cohort (<Mono>save_cohort</Mono>, <Mono>get_cohort</Mono>). Plain-English search
+                  goes through a language model and is metered: 10 a day anonymously, 200 with a free key.
                 </p>
 
                 <Step n={1} title="Add the server — Claude Code">
@@ -286,7 +311,7 @@ seu <- load("${GSE}", as = "seurat")    # Seurat instead`}
                   </p>
                   <CodeBlock
                     label="prompt"
-                    code={`Using ${GSE}, check which modalities are available, then write me Python
+                    code={`Using ${MODALITY_GSE}, check which modalities are available, then write me Python
 that loads the combined raw counts matrix with spliced/unspliced layers,
 pulls the mtDNA heteroplasmy matrix, and joins the donor assignments onto
 adata.obs. Tell me what is missing from this bundle.`}
@@ -392,26 +417,26 @@ then add a loader for it to analysis/load_data.py using the singlet package.`}
 
             <h3>Not every bundle has everything</h3>
             <p>
-              Splicing, heteroplasmy and V(D)J outputs are in every bundle. Donor demultiplexing, non-host species,
-              allele-specific expression and the per-cell annotation tables were added later and only appear in newer
-              bundles. Check rather than assume:
+              Splicing, heteroplasmy and V(D)J outputs are in bundles from every pipeline version. Donor demultiplexing,
+              non-host species, allele-specific expression and the per-cell annotation tables are only in some bundles,
+              and a newer pipeline version does not guarantee them. Check rather than assume:
             </p>
             <div className="grid md:grid-cols-2 gap-3">
               <CodeBlock
                 label="python"
-                code={`b = singlet.open_bundle("${GSE}")
+                code={`b = singlet.open_bundle("${MODALITY_GSE}")
 b.modalities()                  # what this bundle has
 b.has("donor_assignments")      # True / False`}
               />
               <CodeBlock
                 label="r"
-                code={`path <- download("${GSE}")
+                code={`path <- download("${MODALITY_GSE}")
 singlet_modalities(path)
 singlet_has(path, "donor_assignments")`}
               />
             </div>
             <p className="text-sm text-muted-foreground">
-              From an assistant, ask “what modalities does {GSE} have?” — that calls <Mono>get_modalities</Mono>, which
+              From an assistant, ask “what modalities does {MODALITY_GSE} have?” — that calls <Mono>get_modalities</Mono>, which
               returns the list plus the Python and R line for each one.
             </p>
           </section>
@@ -420,20 +445,29 @@ singlet_has(path, "donor_assignments")`}
           <section id="partial" className="pb-12 mb-12 border-b border-border scroll-mt-20">
             <h2>Taking one sample instead of the whole study</h2>
             <p>
-              Study files run from hundreds of MB to several GB. The bundle is a ZIP64 archive served with HTTP range
-              support, so a single sample's matrix can be pulled without downloading the rest.
+              The Python and R packages always download the whole study file: <Mono>singlet.load("GSM…")</Mono> fetches
+              the parent study, then keeps that sample's cells. To pull one sample's matrix without the rest, use the HTTP
+              API (or the MCP server). A <Mono>.singlet</Mono> file is a ZIP64 archive served with HTTP range support, so
+              any member can be fetched by byte range.
             </p>
-            <div className="grid md:grid-cols-2 gap-3">
-              <CodeBlock label="python" code={`adata = singlet.load_sample("GSM5399457")`} />
-              <CodeBlock
-                label="r"
-                code={`path <- download("${GSE}")
-sce <- singlet_raw_counts(path, "GSM5399457")`}
-              />
-            </div>
+            <CodeBlock
+              label="bash"
+              code={`# 1. list the files in the study (sizes included) without downloading it
+curl "https://singlet.bio/api/bundle/${GSE}/index"
+
+# 2. ask for one sample's matrix; large members come back as a byte-range recipe
+curl "https://singlet.bio/api/bundle/${GSE}/entry?path=samples/GSM4120733/exon_counts.1pz"
+
+# 3. run the "how" command from that reply
+curl -r 293772-10257905 "https://data.singlet.bio/data/${GSE}/${GSE}.singlet" -o exon_counts.1pz`}
+            />
             <p className="text-sm text-muted-foreground">
-              From an assistant, <Mono>list_bundle_files</Mono> then <Mono>get_partial_download</Mono> return the byte
-              range plus a ready-to-run curl command.
+              Count matrices are added to the archive without ZIP compression (<Mono>"method": "stored"</Mono>; a{" "}
+              <Mono>.1pz</Mono> is already zstd-compressed), so the ranged download is the finished file: about 10 MB here instead of the 193 MB study. A <Mono>.1pz</Mono> matrix is
+              features × cells; read it with <Mono>singlet.read_1pz()</Mono> in Python (returned as cells × features) or{" "}
+              <Mono>read_1pz()</Mono> in R. From an assistant, <Mono>list_bundle_files</Mono> then{" "}
+              <Mono>get_partial_download</Mono> return the same byte range and command. Details:{" "}
+              <Link to="/docs#partial-download" className="text-primary hover:underline">Download just part of a study</Link>.
             </p>
           </section>
 
@@ -458,6 +492,7 @@ sce <- singlet_raw_counts(path, "GSM5399457")`}
               <li>One <Mono>.singlet</Mono> file per study. Filter on <Mono>gsm_id</Mono> after loading to work with individual samples.</li>
               <li>Files are cached locally after the first load. Set <Mono>SINGLET_CACHE_DIR</Mono> to choose where.</li>
               <li>Counts are raw. Nothing is normalised, batch-corrected or filtered beyond cell calling.</li>
+              <li>Input was capped at 30,000,000 reads per sample, and files come from more than one pipeline release — see <Link to="/about#processing" className="text-primary hover:underline">What a study goes through</Link>.</li>
               <li>Gene ids come from the reference build recorded in the bundle — see <Link to="/about#references" className="text-primary hover:underline">References</Link>.</li>
               <li>Anonymous AI search is limited to 10 questions per day. Keyword search and downloads are unlimited and need no account.</li>
               <li>All data is CC0; code is MIT.</li>

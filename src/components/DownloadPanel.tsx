@@ -9,7 +9,6 @@ import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { CodeBlock } from "@/components/CodeBlock";
 import { fmtBytes } from "@/lib/catalog-display";
-import { PY_INSTALL, R_INSTALL } from "@/lib/install-snippets";
 
 interface DownloadPanelProps {
   /** GSE accession */
@@ -36,12 +35,14 @@ export function DownloadPanel({ accession, bundleUrl, bundleBytes, bundleNSample
   const partlyEmpty = !!downloadUrl && usableSamples != null && assessedSamples != null && usableSamples > 0 && usableSamples < assessedSamples;
   const showSampleCount = downloadUrl && bundleNSamples != null && processedSamples != null && bundleNSamples !== processedSamples;
   // In the narrow sidebar the trailing comments don't fit; drop them there.
+  // Install lines live on /docs#install — a pip command never goes in a Python block.
   const py = stacked
-    ? `# ${PY_INSTALL}\nimport singlet\nadata = singlet.load("${accession}")`
-    : `# ${PY_INSTALL}\nimport singlet\nadata = singlet.load("${accession}")   # AnnData`;
+    ? `import singlet\nadata = singlet.load("${accession}")`
+    : `import singlet\nadata = singlet.load("${accession}")   # AnnData`;
+  // singlet::load, not bare load(): the package's load() masks base::load.
   const r = stacked
-    ? `# ${R_INSTALL}\nlibrary(singlet)\nsce <- load("${accession}")`
-    : `# ${R_INSTALL}\nlibrary(singlet)\nsce <- load("${accession}")   # SingleCellExperiment`;
+    ? `library(singlet)\nsce <- singlet::load("${accession}")`
+    : `library(singlet)\nsce <- singlet::load("${accession}")   # SingleCellExperiment`;
   const curl = downloadUrl ? `curl -L "${downloadUrl}" -o "${accession}.singlet"` : `# No bundle published yet for ${accession}`;
 
   return (
@@ -55,7 +56,7 @@ export function DownloadPanel({ accession, bundleUrl, bundleBytes, bundleNSample
           {!stacked && (
             <>
               <span aria-hidden="true">·</span>
-              <span>CC0 · no account required</span>
+              <span>no account required</span>
             </>
           )}
         </div>
@@ -72,9 +73,11 @@ export function DownloadPanel({ accession, bundleUrl, bundleBytes, bundleNSample
           This file currently contains no usable count data.
         </p>
       ) : (
-        <div className={cn("p-4 grid gap-3", stacked ? "grid-cols-1" : "md:grid-cols-2")}>
-          <CodeBlock code={py} label="python" compact />
-          <CodeBlock code={r} label="r" compact />
+        // min-w-0 lets each block shrink to its column so long lines scroll inside
+        // the block instead of being clipped; the narrow sidebar soft-wraps instead.
+        <div className={cn("p-4 grid gap-3 [&>*]:min-w-0", stacked ? "grid-cols-1" : "md:grid-cols-2")}>
+          <CodeBlock code={py} label="python" compact wrap={stacked} />
+          <CodeBlock code={r} label="r" compact wrap={stacked} />
           <CodeBlock code={curl} label="curl" compact wrap={stacked} className={cn(!stacked && "md:col-span-2")} />
         </div>
       )}
@@ -84,11 +87,12 @@ export function DownloadPanel({ accession, bundleUrl, bundleBytes, bundleNSample
             ? `Contains ${usableSamples} usable of ${assessedSamples} samples. `
             : showSampleCount ? `Contains ${bundleNSamples} of ${processedSamples} processed samples. ` : ""}
           One file holds every processed sample in the study; select samples with <code className="code-inline">gsm_id</code> after
-          loading. <Link to="/docs#singlet-file" className="text-primary hover:underline">What's inside →</Link>
+          loading. <Link to="/docs#install" className="text-primary hover:underline">Install the package</Link> ·{" "}
+          <Link to="/docs#singlet-file" className="text-primary hover:underline">What's inside →</Link>
         </p>
       ) : (
         <p className="px-4 pb-3 text-xs text-muted-foreground leading-relaxed">
-          The samples are processed but the study file hasn't been assembled yet, so <code className="code-inline">load("{accession}")</code> will
+          The samples are processed but the study file hasn't been assembled yet, so <code className="code-inline">singlet.load("{accession}")</code> will
           not work until it is. Files are built in batches; check back soon.
         </p>
       )}

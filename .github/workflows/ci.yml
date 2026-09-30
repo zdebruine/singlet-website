@@ -1,0 +1,37 @@
+name: CI
+
+# Every PR and every push to main runs the same build Cloudflare Pages runs
+# (prebuild = vitest + functions typecheck + functions bundle, then vite build).
+# Cloudflare reports the static deploy as green even when Functions fail to
+# compile, so this is the gate that catches it.
+on:
+  pull_request:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "public/data/hpc/**"
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Build (vitest + functions typecheck + functions bundle + vite build)
+        run: npm run build
+      - name: Typecheck app (advisory)
+        run: npx tsc -p tsconfig.app.json --noEmit
+        continue-on-error: true
+      - name: Lint (advisory)
+        run: npm run lint
+        continue-on-error: true

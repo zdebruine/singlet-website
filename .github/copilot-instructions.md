@@ -1,37 +1,28 @@
 # Copilot Instructions
 
-## Repository Overview
+## Repository overview
 
-`singletai-website` is the React + TypeScript website for SingletDB (singletdb.com). Part of [Singlet AI](https://github.com/Singlet-AI).
+The website and API for [singlet.bio](https://singlet.bio): a catalog of public GEO single-cell RNA-seq studies, reprocessed from raw reads, one `.singlet` file per study. Deployed on Cloudflare Pages; `main` auto-deploys.
 
-## Large File Creation
+## Stack
 
-When creating files larger than ~200 lines, break into phases of ≤200 lines each.
+- **Frontend:** React 18 + TypeScript + Vite + Tailwind CSS + shadcn/ui in `src/` (pages in `src/pages/`, shared components in `src/components/`, API client in `src/integrations/api/`).
+- **API and MCP server:** Cloudflare Pages Functions in `functions/` (`functions/api/*`, `functions/mcp.ts`, shared logic in `functions/_shared/`).
+- **Data:** Cloudflare D1 (binding `DB`, the catalog) and R2 (`.singlet` files served from `data.singlet.bio`; private user files on the `USER_DATA` binding).
+- Do not add Supabase or Lovable dependencies; the target is Cloudflare only.
 
-## Project Structure
+## Build and checks
 
-- **Website:** React 18 + TypeScript + Vite + Tailwind CSS + shadcn/ui
-  - `src/pages/` — Page components (18 pages)
-  - `src/pages/invest/` — 8 investor subsections with scrollspy
-  - `src/components/` — Shared components (Navbar, Footer, ui/)
-  - `src/hooks/` — Custom hooks (useAuth, useScrollspy)
-  - `src/integrations/supabase/` — Supabase client + types
-  - `src/assets/` — Images (team photos, etc.)
-- **Docs:** `docs/` — Sphinx operational documentation (furo theme)
+- `npm run build` runs `prebuild` first: vitest, a strict typecheck of `functions/` (`tsconfig.functions.json`), and a `wrangler pages functions build`. A type error in `functions/` fails the production deploy even though Pages reports the static assets as deployed.
+- `npm run dev` serves the SPA; `scripts/dev-api/` runs the Functions locally against a seeded SQLite catalog.
 
-## Website Patterns
+## Conventions
 
-- Pages use shadcn/ui components, Lucide icons, Tailwind CSS
-- Invest subpages follow scrollspy sidebar + section pattern
-- Math rendering: use KaTeX with `react-katex` or inline rendering
-- Expandable sections: use Collapsible from shadcn/ui or accordion
-- Code blocks: copy-to-clipboard, Python/R highlighting
-- Pro features marked with Crown icon
+- Copy is short and factual; no claims the data can't support (pipeline versions differ between files, input is capped at 30M reads per sample).
+- Install commands come from `src/lib/install-snippets.ts`; never print a bare PyPI install line.
+- In R snippets use `singlet::load()` / `singlet::find()` (the package masks `base::load` and `utils::find`).
+- Keep shell commands and Python in separate code blocks.
 
-## Related Repositories
+## Related repositories
 
-- [singlet](https://github.com/Singlet-AI/singlet) — Python client documented on site
-- [singlepress](https://github.com/Singlet-AI/singlepress) — Compression format featured on site
-- [geo-reprocess](https://github.com/Singlet-AI/geo-reprocess) — Pipeline powering data
-- [singlet-intelligence](https://github.com/Singlet-AI/singlet-intelligence) — ML models featured
-- [singlet-strategy](https://github.com/Singlet-AI/singlet-strategy) — Strategy informing content
+- [Singlet-Bio/singlet](https://github.com/Singlet-Bio/singlet) — the C++ pipeline and the Python and R clients.

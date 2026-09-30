@@ -41,7 +41,7 @@ function LoadSnippet({ gseId }: { gseId: string }) {
     <button
       type="button"
       onClick={copy}
-      className="relative z-10 inline-flex items-center gap-2 rounded font-mono text-[12px] h-7 px-2 bg-dark text-dark-foreground hover:brightness-110 transition"
+      className="relative z-10 inline-flex items-center gap-2 rounded font-mono text-[12px] h-6 px-2 bg-dark text-dark-foreground hover:brightness-110 transition"
       aria-label={`Copy ${code}`}
       title="Copy to clipboard"
     >
@@ -80,11 +80,31 @@ export function StudyCard({ row, selected, onToggle, ai, why, aiWhy }: Props) {
           className="mt-[3px] h-4 w-4 shrink-0 rounded-[2px]"
         />
         <div className="min-w-0 flex-1">
-          <div className="flex items-baseline justify-between gap-3">
+          {/* Actions share the accession row (revealed on hover on desktop) so they
+              never leave an empty strip at the bottom of the card. */}
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
             <Link to={`/study/${row.gse_id}`} className="relative z-10 font-mono text-[13px] text-primary hover:underline">
               {row.gse_id}
             </Link>
-            {row.year && <span className="font-mono text-[12px] text-muted-foreground tabular">{row.year}</span>}
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 lg:group-focus-within:opacity-100 transition-opacity">
+                <LoadSnippet gseId={row.gse_id} />
+                {row.has_bundle ? (
+                  <a
+                    href={bundleUrl(row.gse_id)}
+                    className="relative z-10 inline-flex items-center gap-1.5 text-[13px] text-primary hover:underline"
+                    download
+                  >
+                    <Download size={13} />
+                    Download .singlet
+                    {row.bundle_bytes != null && <span className="text-muted-foreground">· {fmtBytes(row.bundle_bytes)}</span>}
+                  </a>
+                ) : (
+                  <span className="text-[13px] text-muted-foreground">File not built yet</span>
+                )}
+              </div>
+              {row.year && <span className="font-mono text-[12px] text-muted-foreground tabular">{row.year}</span>}
+            </div>
           </div>
           <h3 id={`${row.gse_id}-title`} className="mt-0.5 text-[15px] font-semibold leading-snug text-foreground line-clamp-2">
             <Link to={`/study/${row.gse_id}`} className="before:absolute before:inset-0 hover:text-primary transition-colors">
@@ -159,23 +179,6 @@ export function StudyCard({ row, selected, onToggle, ai, why, aiWhy }: Props) {
               <span className="text-foreground/85">{explanation}</span>
             </p>
           )}
-
-          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 lg:group-focus-within:opacity-100 transition-opacity">
-            <LoadSnippet gseId={row.gse_id} />
-            {row.has_bundle ? (
-              <a
-                href={bundleUrl(row.gse_id)}
-                className="relative z-10 inline-flex items-center gap-1.5 text-[13px] text-primary hover:underline"
-                download
-              >
-                <Download size={13} />
-                Download .singlet
-                {row.bundle_bytes != null && <span className="text-muted-foreground">· {fmtBytes(row.bundle_bytes)}</span>}
-              </a>
-            ) : (
-              <span className="text-[13px] text-muted-foreground">File not built yet</span>
-            )}
-          </div>
         </div>
       </div>
     </article>
@@ -192,7 +195,6 @@ export function StudyCardSkeleton() {
           <div className="h-4 w-3/4 rounded bg-secondary" />
           <div className="h-3 w-1/2 rounded bg-secondary" />
           <div className="h-3 w-full rounded bg-secondary" />
-          <div className="h-7 w-48 rounded bg-secondary" />
         </div>
       </div>
     </div>

@@ -25,8 +25,10 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import { AiQuotaBadge, AiQuotaExceeded } from "@/components/browse/AiQuotaNotice";
 import {
   DEFAULT_STATE,
+  EXTRA_SORTS,
   PAGE_SIZE,
   SORTS,
+  defaultSort,
   appliedToQuery,
   activeFilters,
   appliedToState,
@@ -109,7 +111,7 @@ const Browse = () => {
 
   usePageMeta({
     title: state.q ? `${state.raw || state.q} — search` : "Browse studies",
-    description: "Search every uniformly reprocessed public scRNA-seq study by organism, tissue, disease, assay, cell type, or in plain English.",
+    description: "Search reprocessed public scRNA-seq studies from GEO by organism, tissue, disease, assay, cell type, or in plain English.",
     path: "/browse",
     noindex: !!state.q || hasExplicitFilters(state),
   });
@@ -132,7 +134,9 @@ const Browse = () => {
       return;
     }
     // A new question starts clean: the interpreter (or you, via the rail) adds filters back.
-    go({ ...DEFAULT_STATE, q: t, level: state.level, view: state.view, sort: state.sort });
+    // A sort the visitor picked is kept; the default one follows the text (newest → best match).
+    const sort = state.sort === defaultSort(state.q) ? defaultSort(t) : state.sort;
+    go({ ...DEFAULT_STATE, q: t, level: state.level, view: state.view, sort });
   };
 
   // ── Results ───────────────────────────────────────────────────────────────
@@ -371,6 +375,9 @@ const Browse = () => {
 
           {/* Results */}
           <section aria-label="Results" className="min-w-0">
+            <h1 className="mb-3 text-[20px] font-semibold tracking-tight text-foreground">
+              {state.q ? "Search results" : state.level === "gsm" ? "Browse samples" : "Browse studies"}
+            </h1>
             {mine && (
               <section className="mb-5" aria-label="Private project results">
                 <div className="flex items-center justify-between mb-2"><h2 className="text-[13px] inline-flex items-center gap-1.5"><LockKeyhole size={13}/>Your private studies ({fmtInt(privateStudies.length)})</h2><a href="/my-data" className="type-small text-primary">Manage data</a></div>
@@ -418,7 +425,7 @@ const Browse = () => {
             {/* Header */}
             {readingQuery && <p className="mb-3 text-[13px] text-muted-foreground" aria-live="polite">Reading your query…</p>}
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mb-3">
-              <h1 className="text-[15px] font-sans font-semibold tracking-normal text-foreground tabular" aria-live="polite">
+              <p className="text-[15px] font-sans font-semibold tracking-normal text-foreground tabular" aria-live="polite">
                 {loadingInitial ? (
                   <span className="inline-block h-4 w-56 rounded bg-secondary animate-pulse align-middle" />
                 ) : totals ? (
@@ -441,7 +448,7 @@ const Browse = () => {
                 ) : (
                   "Studies"
                 )}
-              </h1>
+              </p>
 
               <div className="ml-auto flex flex-wrap items-center gap-2">
                 <Segmented
@@ -467,7 +474,8 @@ const Browse = () => {
                 <label className="inline-flex items-center gap-1.5 text-[12.5px] text-muted-foreground">
                   <span className="sr-only sm:not-sr-only">Sort</span>
                   <select value={state.sort} onChange={(e) => setSort(e.target.value as Sort)} className="input h-8 w-auto px-2 text-[12.5px]">
-                    {SORTS.map((s) => (
+                    {/* Table column sorts aren't in the menu; show the active one so the control never lies. */}
+                    {[...SORTS, ...EXTRA_SORTS.filter((s) => s.value === state.sort)].map((s) => (
                       <option key={s.value} value={s.value}>
                         {s.label}
                       </option>
