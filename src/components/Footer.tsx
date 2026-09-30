@@ -22,12 +22,16 @@ const Footer = () => (
   <footer className="surface-dark mt-auto">
     <div className="container-site py-7 flex flex-col md:flex-row md:items-center gap-5 md:gap-8">
       <Logo variant="lockup" theme="dark" height={24} />
-      <p className="text-[13px] text-dark-muted md:flex-1">
-        Data CC0 · Code MIT · No account required ·{" "}
-        <a href={GITHUB_ISSUES} target="_blank" rel="noopener noreferrer" className="text-dark-foreground/85 hover:text-dark-foreground transition-colors">
-          Questions or bugs → GitHub Issues
-        </a>
-      </p>
+      <div className="md:flex-1 space-y-1">
+        <p className="text-[13px] text-dark-muted">Data CC0 · Code MIT · No account required</p>
+        {/* The support contact for the site, the API and the MCP connector (no email address exists). */}
+        <p className="text-[13px] text-dark-muted">
+          Contact and support (site, API, MCP connector):{" "}
+          <a href={GITHUB_ISSUES} target="_blank" rel="noopener noreferrer" className="text-dark-foreground/85 underline underline-offset-2 hover:text-dark-foreground transition-colors">
+            GitHub Issues
+          </a>
+        </p>
+      </div>
       <nav aria-label="Footer" className="flex flex-wrap items-center gap-x-5 gap-y-2">
         {LINKS.map((l) =>
           l.href ? (

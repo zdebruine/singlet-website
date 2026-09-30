@@ -443,6 +443,23 @@ const Browse = () => {
                     )}
                     {totals.cells != null && <span className="text-muted-foreground font-normal"> · {fmtCompact(totals.cells)} cells</span>}
                     <span className="text-muted-foreground font-normal"> match</span>
+                    {/* The server sums catalog fields here (processed samples, recorded cells), not the
+                        usable-samples-in-files definition the home page uses — say so rather than mix them. */}
+                    {(totals.samples != null || totals.cells != null) && (
+                      <>
+                        {" "}
+                        <span
+                          className="text-muted-foreground font-normal underline decoration-dotted underline-offset-2 cursor-help"
+                          title={
+                            state.q
+                              ? "These totals are summed from the catalog: for ranked study results, each study's file counts where they are known, otherwise its catalog metadata. The home page counts only usable samples and cells in the published files."
+                              : "These totals are catalog metadata: the samples and cells the processing database records for the matching results. The home page counts only usable samples and cells in the published files, so these totals are larger."
+                          }
+                        >
+                          (catalog counts)
+                        </span>
+                      </>
+                    )}
                     {shown.ms != null && <span className="text-muted-foreground font-normal"> · {fmtInt(shown.ms)} ms</span>}
                   </>
                 ) : (

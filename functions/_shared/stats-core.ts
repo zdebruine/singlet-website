@@ -14,8 +14,29 @@
  *     samples that were ingested, so DONE/COUNT(gsm) measures survivors, not
  *     yield. `SUM(gse.n_gsm_total)` is the number of samples GEO advertises for
  *     the studies we track, which is the honest denominator for coverage.
+ *
+ *  3. **One headline definition.** The home page, /about and the MCP
+ *     `get_atlas_stats` text lead with `studies_with_files`,
+ *     `samples_in_files` (usable samples only) and `cells_in_files`. Every
+ *     other count here (`series_count`, `success_samples`, `total_cells`,
+ *     `geo_samples_known`, `species_count`, …) is catalog metadata and is
+ *     labelled as such wherever it is shown.
  */
 import { SUSPECT_CELLS_SQL, UNVERIFIED_CELLS_SQL, COUNTABLE_CELLS_SQL } from "./suspect-cells";
+
+/**
+ * Distinct species over the normalised `gsm.organism_primary` (the raw GEO
+ * `organism` string has ~3x as many spellings). Genus-only leftovers ("Homo",
+ * "Mus"), one-word placeholders ("unidentified", "Unknown") and non-organism
+ * labels are not species, so they are not counted; case is folded so
+ * "Synthetic construct" and "synthetic construct" cannot count twice.
+ */
+export const SPECIES_COUNT_SQL = `COUNT(DISTINCT CASE
+             WHEN organism_primary IS NOT NULL
+              AND organism_primary != 'Unknown'
+              AND instr(trim(organism_primary), ' ') > 0
+              AND lower(trim(organism_primary)) NOT IN ('blank sample', 'synthetic construct')
+             THEN lower(trim(organism_primary)) END)`;
 
 interface StatsRow {
   total_samples: number;
@@ -57,6 +78,7 @@ export interface CorpusStats {
   unverified_samples: number;
   /** total_cells + suspect + unverified. Matches a naive SUM(n_cells). */
   raw_cells_all: number;
+  /** Distinct normalised species (gsm.organism_primary) in the catalog. See SPECIES_COUNT_SQL. */
   species_count: number;
   series_count: number;
   avg_mapping_rate: number | null;
@@ -98,7 +120,7 @@ export async function computeStats(db: D1Database): Promise<CorpusStats | null> 
                     THEN 1 ELSE 0 END)                                AS suspect_samples,
            SUM(CASE WHEN status = 'DONE' AND ${UNVERIFIED_CELLS_SQL}
                     THEN 1 ELSE 0 END)                                AS unverified_samples,
-           COUNT(DISTINCT organism)                                   AS species_count,
+           ${SPECIES_COUNT_SQL}                                       AS species_count,
            COUNT(DISTINCT gse_id)                                     AS series_count,
            AVG(CASE WHEN status = 'DONE' THEN mapping_rate END)       AS avg_mapping_rate,
            AVG(CASE WHEN status = 'DONE' THEN median_genes END)       AS avg_median_genes

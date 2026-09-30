@@ -2,7 +2,8 @@
  * Everything a Pages Function can find on `context.env`.
  *
  * Bindings (wrangler.toml): DB (D1 singlet-catalog), USER_DATA (R2, private
- * uploads), AI (Workers AI / AI Gateway).
+ * uploads), HPC_DASHBOARD (R2, HPC dashboard snapshots), AI (Workers AI / AI
+ * Gateway).
  *
  * Plain vars live in wrangler.toml [vars]; secrets are set in the Cloudflare
  * dashboard (Pages → singlet → Settings → Variables and Secrets) for both
@@ -12,6 +13,8 @@
 export interface AppEnv {
   DB: D1Database;
   USER_DATA?: R2Bucket;
+  /** HPC dashboard JSON (POST /api/ingest/hpc, GET /api/hpc/<path>). */
+  HPC_DASHBOARD?: R2Bucket;
   AI?: Ai;
   ENVIRONMENT?: string;
 

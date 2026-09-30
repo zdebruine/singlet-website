@@ -28,9 +28,13 @@ const Index = () => {
     queryFn: () => apiClient.stats(),
     staleTime: 120_000,
   });
+  // The site-wide headline definition (same on /about and in /api/stats):
+  // what is in the published files, counting only usable samples (non-empty
+  // matrix, ≥ 1 called cell) and the cells called in them. Catalog-level
+  // numbers live on /about under "Catalog metadata".
   const statItems = [
     { value: stats ? fmtInt(stats.studies_with_files) : null, label: "studies with files" },
-    { value: stats ? fmtInt(stats.samples_in_files) : null, label: "samples in files" },
+    { value: stats ? fmtInt(stats.samples_in_files) : null, label: "usable samples in files" },
     { value: stats ? fmtCompact(stats.cells_in_files) : null, label: "cells called in files" },
   ];
 
@@ -82,6 +86,10 @@ const Index = () => {
               </div>
             ))}
           </dl>
+          <p className="mt-2.5 text-center text-[12px] text-muted-foreground">
+            Counted from the published files; samples with an empty matrix or no called cells are left out.{" "}
+            <Link to="/about#status" className="text-primary hover:underline">Catalog numbers →</Link>
+          </p>
         </section>
 
         {/* ── Start from ── */}

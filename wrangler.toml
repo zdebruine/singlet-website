@@ -23,6 +23,13 @@ bucket_name = "singlet-data"
 binding = "USER_DATA"
 bucket_name = "singlet-user-data"
 
+# HPC dashboard snapshots (/hpc page). The cluster orchestrators upload JSON
+# with POST /api/ingest/hpc?path=… and the page reads GET /api/hpc/<path>;
+# see functions/api/ingest/hpc.ts.
+[[r2_buckets]]
+binding = "HPC_DASHBOARD"
+bucket_name = "singlet-hpc-dashboard"
+
 # ── Environment variables (non-secret) ───────────────────────────────────────
 # NOTE: VITE_R2_PUBLIC_URL is a Vite *build-time* var (baked into the static
 # bundle), NOT a Worker runtime var, so it does NOT belong here. Its committed

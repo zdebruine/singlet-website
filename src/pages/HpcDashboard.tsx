@@ -209,18 +209,20 @@ function ClusterTabs({ cluster, onChange }: { cluster: ClusterKey; onChange: (k:
 
 type ClusterKey = "clipper" | "anvil";
 
+// Snapshots are uploaded by the cluster orchestrators to R2 and served by
+// functions/api/hpc/[[path]].ts, which falls back to public/data/hpc/<path>.
 const CLUSTERS: Record<ClusterKey, { label: string; sub: string; url: string; timeseriesUrl: string }> = {
   clipper: {
     label: "GVSU Clipper",
     sub: "Human scRNA-seq reprocessing",
-    url: "/data/hpc/latest.json",
-    timeseriesUrl: "/data/hpc/timeseries.json",
+    url: "/api/hpc/latest.json",
+    timeseriesUrl: "/api/hpc/timeseries.json",
   },
   anvil: {
     label: "Purdue ANVIL",
     sub: "Mouse 10x scRNA-seq (NSF ACCESS)",
-    url: "/data/hpc/anvil/latest.json",
-    timeseriesUrl: "/data/hpc/anvil/timeseries.json",
+    url: "/api/hpc/anvil/latest.json",
+    timeseriesUrl: "/api/hpc/anvil/timeseries.json",
   },
 };
 

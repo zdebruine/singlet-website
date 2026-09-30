@@ -3,12 +3,11 @@
  * tables, so the HPC packing job can write manifests / GEO metadata into D1
  * without the Cloudflare dashboard.
  *
- * Auth: header `X-Ingest-Token`. Only the SHA-256 hex digest of the token is
- * ever known to this repo — the plaintext token is NEVER stored here. Setting
- * `INGEST_TOKEN_SHA256` as a Cloudflare Pages environment variable overrides
- * the baked-in digest below. It may hold several comma-separated digests, so a
- * token is rotated without downtime: add the new digest next to the old one,
- * switch the HPC orchestrator to the new token, then drop the old digest.
+ * Auth: header `X-Ingest-Token`, checked by ../../_shared/ingest-auth (only
+ * the SHA-256 hex digest of the token is known to this repo; the
+ * `INGEST_TOKEN_SHA256` Pages variable holds the comma-separated accepted
+ * digests, see that file for rotation). POST /api/ingest/hpc (./hpc.ts) uses
+ * the same token.
  *
  * GET /api/ingest/index-next?n=25 — UNAUTHENTICATED backfill crank. It only
  * reads public `.singlet` files and fills the cache tables `bundle_index` and
@@ -57,14 +56,7 @@ import {
   refreshNext,
   refreshRemaining,
 } from "../../_shared/catalog-refresh";
-
-// Fallback used ONLY while INGEST_TOKEN_SHA256 is unset or blank, to keep the
-// HPC orchestrator's current token working. TODO(rotation): delete this
-// constant (and the fallback in acceptedDigests) once INGEST_TOKEN_SHA256 is
-// set in the Pages project and the orchestrator has moved to the new token.
-const DEFAULT_TOKEN_SHA256 = "b37e6cb5277791ff7d0de2550f0944ea39e580ec4f94e9f4c3b8dcd842a8aaab";
-
-const SHA256_HEX_RE = /^[0-9a-f]{64}$/;
+import { checkIngestToken } from "../../_shared/ingest-auth";
 
 const MAX_ROWS = 2000;
 const MAX_BODY_BYTES = 4 * 1024 * 1024;
@@ -196,42 +188,6 @@ function json(body: unknown, status: number, origin: string | null): Response {
   return new Response(JSON.stringify(body), { status, headers: cors(origin) });
 }
 
-async function sha256Hex(s: string): Promise<string> {
-  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
-  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
-}
-
-/** Constant-time comparison of two equal-length hex strings. */
-function timingSafeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return diff === 0;
-}
-
-/**
- * Token digests currently accepted: the comma-separated INGEST_TOKEN_SHA256
- * list, or the baked-in default when that variable is unset. Malformed entries
- * are ignored, so a variable holding no valid digest rejects every token
- * rather than silently falling back to the default.
- */
-function acceptedDigests(env: Env): string[] {
-  const configured = (env.INGEST_TOKEN_SHA256 ?? "").trim();
-  const raw = configured || DEFAULT_TOKEN_SHA256;
-  return raw
-    .split(",")
-    .map((d) => d.trim().toLowerCase())
-    .filter((d) => SHA256_HEX_RE.test(d));
-}
-
-/** True when the token's digest is in the accepted list (every entry is compared). */
-async function tokenAccepted(env: Env, token: string): Promise<boolean> {
-  const got = await sha256Hex(token);
-  let ok = false;
-  for (const digest of acceptedDigests(env)) ok = timingSafeEqual(got, digest) || ok;
-  return ok;
-}
-
 function nowIso(): string {
   return new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
 }
@@ -244,11 +200,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, params }
   const started = Date.now();
 
   // ── Auth ──────────────────────────────────────────────────────────────────
-  const token = request.headers.get("X-Ingest-Token") ?? "";
-  if (!token) return json({ error: "Missing X-Ingest-Token" }, 401, origin);
-  if (!(await tokenAccepted(env, token))) {
-    return json({ error: "Invalid ingest token" }, 401, origin);
-  }
+  const auth = await checkIngestToken(request, env);
+  if (!auth.ok) return json({ error: auth.error }, 401, origin);
 
   // ── POST /api/ingest/index-bundle?gse=GSE…&gse=… ─────────────────────────
   // Reads each study's .singlet central directory and its per-sample
