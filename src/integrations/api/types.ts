@@ -611,3 +611,10 @@ export interface RelatedResponse {
   total: number;
   related: RelatedStudy[];
 }
+
+/** GET /api/auth/me */
+export interface AuthMe {
+  user: { id: string; email: string | null; displayName: string | null; avatarUrl: string | null } | null;
+  /** Which sign-in providers are configured on this deployment. */
+  providers: { github: boolean; google: boolean };
+}

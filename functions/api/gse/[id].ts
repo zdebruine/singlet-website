@@ -11,11 +11,10 @@
  */
 import { corsOk, corsErr, handleOptions } from "../../_shared/cors";
 import { cachedJson } from "../../_shared/cache";
-import { type CloudEnv } from "../../_shared/cloud";
 import { resolveIdentity } from "../../_shared/identity";
 import { GSE_RE, loadStudy } from "../../_shared/study-core";
 
-interface Env extends CloudEnv {
+interface Env {
   DB: D1Database;
 }
 

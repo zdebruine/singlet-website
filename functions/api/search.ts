@@ -29,7 +29,6 @@
 import { ensureCatalogColumns } from "../_shared/catalog-refresh";
 import { CORS_HEADERS, corsOk, corsErr, handleOptions } from "../_shared/cors";
 import { cachedJson, CATALOG_CACHE_TTL } from "../_shared/cache";
-import { type CloudEnv } from "../_shared/cloud";
 import { resolveIdentity } from "../_shared/identity";
 import { loadRules } from "../_shared/vocab";
 import {
@@ -44,7 +43,7 @@ import {
   MAX_EXPORT,
 } from "../_shared/search-core";
 
-interface Env extends CloudEnv {
+interface Env {
   DB: D1Database;
 }
 

@@ -1,24 +1,26 @@
 /**
- * Who is calling the catalog API.
+ * Who is calling the catalog API — resolved entirely on Cloudflare (D1).
  *
  * Three shapes of caller:
- *   - a signed-in browser: `Authorization: Bearer <session JWT>` — forwarded
- *     untouched to the Lovable Cloud function, which validates it;
+ *   - a signed-in browser: the `__Host-singlet_session` cookie (see session.ts).
+ *     For unsafe methods (POST/PUT/PATCH/DELETE) the cookie only counts when the
+ *     request's Origin is this site — a cross-site form can never act as the
+ *     user even if a browser ignored SameSite;
  *   - a script or MCP client: `Authorization: Bearer sk_live_…` or
- *     `X-API-Key: sk_live_…` — validated HERE (hash lookup through the public
- *     `resolve_api_key` database function, 60 s per-isolate memo,
- *     `last_used_at` refreshed at most every 5 min), then forwarded so the
- *     Cloud function charges the key's OWNER (200 AI searches / day);
- *   - everyone else: anonymous, metered by a salted hash of the IP. The hash
- *     MUST be computed here: the Cloud function only ever sees the Pages
- *     egress address. Salt and `anon:<hex>` shape mirror
- *     supabase/functions/_shared/quota.ts.
+ *     `X-API-Key: sk_live_…`, looked up by sha256 in `api_keys` (60 s
+ *     per-isolate memo; `last_used_at` refreshed at most every 5 min). A key
+ *     acts as its owner, so it spends the owner's signed-in AI budget;
+ *   - everyone else: anonymous, metered by a salted hash of the IP.
  *
- * Downloads never need any of this; keys exist for programmatic natural-
- * language search and the MCP server.
+ * Downloads never need any of this; accounts exist for AI budgets, API keys,
+ * private projects, cohorts and workspaces.
  */
-import { cloudAnonKey, cloudRpc, type CloudEnv } from "./cloud";
+import type { WaitUntil } from "./env";
 import { CORS_HEADERS } from "./cors";
+import { sha256Hex } from "./hash";
+import { lookupSession, nowIso, type SessionUser } from "./session";
+
+export { sha256Hex };
 
 const ANON_SALT = "singlet-ai-quota-v1";
 
@@ -34,7 +36,7 @@ const ACCOUNT_URL = "https://singlet.bio/account";
 export type KeyReason = "unknown" | "revoked" | "expired" | "unavailable";
 
 export type KeyCheck =
-  | { ok: true; keyId: string }
+  | { ok: true; keyId: string; userId: string }
   | { ok: false; reason: KeyReason; message: string };
 
 interface MemoEntry {
@@ -46,11 +48,9 @@ interface MemoEntry {
 /** Per-isolate memo, keyed by SHA-256 of the key (the plain key is never kept). */
 const memo = new Map<string, MemoEntry>();
 
-export async function sha256Hex(text: string): Promise<string> {
-  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
-  return Array.from(new Uint8Array(buf))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
+/** Drop memoised key results (call after a key is created or revoked in this isolate). */
+export function forgetKeyMemo(): void {
+  memo.clear();
 }
 
 export async function anonSubjectFromIp(ip: string): Promise<string> {
@@ -75,16 +75,6 @@ export function apiKeyFromRequest(request: Request): string | null {
   return API_KEY_RE.test(token) ? token : null;
 }
 
-/** A user's bearer JWT, or null when the request is anonymous / carries the public key / an API key. */
-export function userBearer(request: Request, anonKey: string): string | null {
-  const raw = request.headers.get("Authorization") ?? "";
-  const m = /^Bearer\s+(.+)$/i.exec(raw.trim());
-  if (!m) return null;
-  const token = m[1].trim();
-  if (!token || token === anonKey || API_KEY_RE.test(token) || token.split(".").length !== 3) return null;
-  return token;
-}
-
 export function keyMessage(reason: KeyReason): string {
   switch (reason) {
     case "revoked":
@@ -98,29 +88,30 @@ export function keyMessage(reason: KeyReason): string {
   }
 }
 
-interface ResolveRow {
-  key_id: string;
+interface KeyRow {
+  id: string;
+  user_id: string;
   expires_at: string | null;
   revoked_at: string | null;
   last_used_at: string | null;
 }
 
 /**
- * Validate an API key. Results (valid or not) are memoised for 60 s per
- * isolate; `last_used_at` is refreshed in the background at most every 5 min.
+ * Validate an API key against D1. Results (valid or not) are memoised for
+ * 60 s per isolate; `last_used_at` is refreshed in the background at most
+ * every 5 min.
  */
-export async function checkApiKey(
-  env: CloudEnv,
-  key: string,
-  waitUntil: (p: Promise<unknown>) => void
-): Promise<KeyCheck> {
+export async function checkApiKey(env: { DB: D1Database }, key: string, waitUntil: WaitUntil): Promise<KeyCheck> {
   const hash = await sha256Hex(key);
   const now = Date.now();
+  const touch = () =>
+    env.DB.prepare(`UPDATE api_keys SET last_used_at = ?2 WHERE key_hash = ?1`).bind(hash, nowIso(now)).run().catch(() => undefined);
+
   const hit = memo.get(hash);
   if (hit && now - hit.at < KEY_MEMO_TTL_MS) {
     if (hit.result.ok && now - hit.lastTouched >= TOUCH_EVERY_MS) {
       hit.lastTouched = now;
-      waitUntil(cloudRpc(env, "touch_api_key", { _key_hash: hash }).catch(() => undefined));
+      waitUntil(touch());
     }
     return hit.result;
   }
@@ -128,17 +119,20 @@ export async function checkApiKey(
   let result: KeyCheck;
   let lastTouched = 0;
   try {
-    const rows = await cloudRpc<ResolveRow[]>(env, "resolve_api_key", { _key_hash: hash });
-    const row = Array.isArray(rows) ? rows[0] : undefined;
+    const row = await env.DB.prepare(
+      `SELECT id, user_id, expires_at, revoked_at, last_used_at FROM api_keys WHERE key_hash = ?1`,
+    )
+      .bind(hash)
+      .first<KeyRow>();
     if (!row) result = { ok: false, reason: "unknown", message: keyMessage("unknown") };
     else if (row.revoked_at) result = { ok: false, reason: "revoked", message: keyMessage("revoked") };
     else if (row.expires_at && Date.parse(row.expires_at) <= now) result = { ok: false, reason: "expired", message: keyMessage("expired") };
     else {
-      result = { ok: true, keyId: row.key_id };
+      result = { ok: true, keyId: row.id, userId: row.user_id };
       const lastUsed = row.last_used_at ? Date.parse(row.last_used_at) : 0;
       if (!Number.isFinite(lastUsed) || now - lastUsed >= TOUCH_EVERY_MS) {
         lastTouched = now;
-        waitUntil(cloudRpc(env, "touch_api_key", { _key_hash: hash }).catch(() => undefined));
+        waitUntil(touch());
       } else {
         lastTouched = lastUsed;
       }
@@ -154,56 +148,92 @@ export async function checkApiKey(
 }
 
 export type Identity =
-  | { kind: "anonymous" }
-  | { kind: "session"; token: string }
-  | { kind: "api_key"; key: string; keyId: string };
+  | { kind: "anonymous"; subject: string }
+  | { kind: "session"; subject: string; userId: string; user: SessionUser }
+  | { kind: "api_key"; subject: string; userId: string; keyId: string };
+
+export type SignedInIdentity = Exclude<Identity, { kind: "anonymous" }>;
 
 export type IdentityOutcome = { ok: true; identity: Identity } | { ok: false; response: Response };
+
+export function isSignedIn(identity: Identity): identity is SignedInIdentity {
+  return identity.kind !== "anonymous";
+}
 
 /** JSON 401 in the same shape as every other API error, with CORS. */
 export function unauthorized(message: string, reason: KeyReason): Response {
   return new Response(JSON.stringify({ error: "invalid_api_key", message, reason, account: ACCOUNT_URL }), {
     status: reason === "unavailable" ? 503 : 401,
-    headers: { ...CORS_HEADERS, "Cache-Control": "no-store" },
+    headers: { ...CORS_HEADERS, "Content-Type": "application/json", "Cache-Control": "no-store" },
   });
 }
 
+const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+
 /**
- * Resolve the caller before touching the cache or D1. Only an API key can
- * fail: a bad session token simply degrades to anonymous (the Cloud function
- * makes the final call), and anonymous is always allowed.
+ * True when a cookie-authenticated request may act as the user: safe methods
+ * always; unsafe methods only with an Origin (or, failing that, Referer) on
+ * this same host.
+ */
+export function sameOriginOrSafe(request: Request): boolean {
+  if (SAFE_METHODS.has(request.method.toUpperCase())) return true;
+  const self = new URL(request.url).origin;
+  const origin = request.headers.get("Origin");
+  if (origin) return origin === self;
+  const referer = request.headers.get("Referer");
+  if (referer) {
+    try {
+      return new URL(referer).origin === self;
+    } catch {
+      return false;
+    }
+  }
+  return false;
+}
+
+/**
+ * Resolve the caller before touching the cache or D1-heavy work. Only an API
+ * key can fail (401 / 503): a missing, expired or cross-origin session simply
+ * degrades to anonymous, and anonymous is always allowed.
  */
 export async function resolveIdentity(
   request: Request,
-  env: CloudEnv,
-  waitUntil: (p: Promise<unknown>) => void
+  env: { DB: D1Database },
+  waitUntil: WaitUntil,
 ): Promise<IdentityOutcome> {
   const key = apiKeyFromRequest(request);
   if (key) {
     const check = await checkApiKey(env, key, waitUntil);
     if (!check.ok) return { ok: false, response: unauthorized(check.message, check.reason) };
-    return { ok: true, identity: { kind: "api_key", key, keyId: check.keyId } };
+    return { ok: true, identity: { kind: "api_key", subject: `user:${check.userId}`, userId: check.userId, keyId: check.keyId } };
   }
-  const token = userBearer(request, cloudAnonKey(env));
-  if (token) return { ok: true, identity: { kind: "session", token } };
-  return { ok: true, identity: { kind: "anonymous" } };
+  if (sameOriginOrSafe(request)) {
+    const user = await lookupSession(env.DB, request, waitUntil);
+    if (user) return { ok: true, identity: { kind: "session", subject: `user:${user.userId}`, userId: user.userId, user } };
+  }
+  return { ok: true, identity: { kind: "anonymous", subject: await anonSubjectFromIp(clientIp(request)) } };
+}
+
+/** 401 for endpoints that need an account. */
+export function signInRequired(message = "Sign in to use private projects, cohorts and workspaces."): Response {
+  return new Response(JSON.stringify({ error: "sign_in_required", message }), {
+    status: 401,
+    headers: { ...CORS_HEADERS, "Content-Type": "application/json", "Cache-Control": "no-store" },
+  });
 }
 
 /**
- * Headers to attach when calling a Lovable Cloud function on the visitor's
- * behalf. `apikey` is always the public key; `Authorization` is the user's
- * token when signed in. An API key travels in `X-API-Key` so the Cloud
- * function resolves — and charges — its owner. Anonymous callers send the
- * salted IP hash.
+ * Resolve a signed-in caller or produce the error response to return.
+ * Bad API key → 401/503 from resolveIdentity; anonymous → 401 sign_in_required.
  */
-export async function identityHeaders(request: Request, anonKey: string): Promise<Record<string, string>> {
-  const key = apiKeyFromRequest(request);
-  if (key) return { apikey: anonKey, Authorization: `Bearer ${anonKey}`, [API_KEY_HEADER]: key };
-  const user = userBearer(request, anonKey);
-  if (user) return { apikey: anonKey, Authorization: `Bearer ${user}` };
-  return {
-    apikey: anonKey,
-    Authorization: `Bearer ${anonKey}`,
-    "X-Singlet-Anon": await anonSubjectFromIp(clientIp(request)),
-  };
+export async function requireUser(
+  request: Request,
+  env: { DB: D1Database },
+  waitUntil: WaitUntil,
+  message?: string,
+): Promise<{ ok: true; identity: SignedInIdentity } | { ok: false; response: Response }> {
+  const who = await resolveIdentity(request, env, waitUntil);
+  if (!who.ok) return who;
+  if (!isSignedIn(who.identity)) return { ok: false, response: signInRequired(message) };
+  return { ok: true, identity: who.identity };
 }
