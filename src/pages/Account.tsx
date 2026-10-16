@@ -5,7 +5,7 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { CodeBlock } from "@/components/CodeBlock";
 import { useAuth } from "@/components/auth/AuthProvider";
-import { apiClient, isApiError } from "@/integrations/api/client";
+import { apiClient, isApiError, type AccountUsage } from "@/integrations/api/client";
 import type { ApiKeySummary } from "@/integrations/api/types";
 import { usePageMeta } from "@/hooks/usePageMeta";
 import { useAiQuota } from "@/lib/ai-quota";
@@ -17,7 +17,7 @@ const SEARCH_LIMIT = 200;
 const EXPLAIN_LIMIT = 100;
 
 interface UsageState {
-  usage: { search: number; explain: number; searchLimit: number | null; explainLimit: number | null } | null;
+  usage: AccountUsage | null;
   failed: boolean;
 }
 
@@ -258,10 +258,49 @@ const Account = () => {
               </p>
             </header>
 
+            {/* ── Monthly AI allowance ── */}
+            <section className="surface p-5" aria-labelledby="allowance-h">
+              <h2 id="allowance-h" className="text-[15px] font-semibold text-foreground">
+                This month's AI allowance
+              </h2>
+              {usage?.allowance ? (
+                <>
+                  <p className="mt-1 type-small text-muted-foreground">
+                    <span className="font-medium text-foreground tabular">{fmtInt(usage.allowance.used)}</span> of{" "}
+                    <span className="tabular">{fmtInt(usage.allowance.limit)}</span> tokens used
+                    {usage.allowance.resetsAt ? <>, renews {fmtDate(usage.allowance.resetsAt)}</> : null}. Output tokens count more than input
+                    tokens.
+                  </p>
+                  <div
+                    className="mt-3 h-2 rounded-full bg-secondary overflow-hidden"
+                    role="progressbar"
+                    aria-label="AI allowance used this month"
+                    aria-valuemin={0}
+                    aria-valuemax={usage.allowance.limit}
+                    aria-valuenow={usage.allowance.used}
+                  >
+                    <div
+                      className="h-full bg-primary"
+                      style={{ width: `${Math.min(100, usage.allowance.limit ? (100 * usage.allowance.used) / usage.allowance.limit : 0)}%` }}
+                    />
+                  </div>
+                  <p className="mt-3 text-[13px] text-muted-foreground tabular">
+                    {fmtInt(usage.allowance.tokensIn)} input and {fmtInt(usage.allowance.tokensOut)} output tokens · {fmtInt(usage.mcpCalls)} MCP tool
+                    calls this month
+                  </p>
+                  {usage.allowance.billing ? <p className="mt-2 text-[12.5px] text-muted-foreground">{usage.allowance.billing}</p> : null}
+                </>
+              ) : (
+                <p className="mt-1 type-small text-muted-foreground">
+                  {usageFailed ? "The allowance could not be loaded. Reload to try again." : "Loading your allowance…"}
+                </p>
+              )}
+            </section>
+
             {/* ── AI usage ── */}
             <section className="surface p-5" aria-labelledby="usage-h">
               <h2 id="usage-h" className="text-[15px] font-semibold text-foreground">
-                Today's AI usage
+                Today's AI requests
               </h2>
               <p className="mt-1 type-small text-muted-foreground">Signing in raises the daily AI allowance. Data and downloads are available to everyone.</p>
               <dl className="mt-3 grid sm:grid-cols-2 gap-4 text-[13.5px]">
