@@ -42,7 +42,19 @@ jobs:
 
       - name: Wait for the Cloudflare Pages deploy
         if: github.event_name == 'push'
-        run: sleep 240
+        # A deploy takes a few minutes and nothing in the response says which commit is
+        # live yet, so wait a fixed 150 s, then confirm the site answers with the
+        # security-header middleware (this also proves the Functions bundle compiled).
+        # The smoke step below retries once after 120 s, which covers a slow deploy.
+        run: |
+          sleep 150
+          for i in $(seq 1 72); do
+            if curl -s -m 20 -o /dev/null -D - https://singlet.bio/api/stats | tr -d '\r' | grep -qi '^strict-transport-security:'; then
+              echo "deploy is live after $((i*10)) s"; exit 0
+            fi
+            sleep 10
+          done
+          echo "::warning::deploy not confirmed after 12 minutes; testing anyway"
 
       - name: Smoke test (retried once after 120 s)
         env:

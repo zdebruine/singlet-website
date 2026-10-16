@@ -91,5 +91,46 @@ mcp=$(curl -s -m 30 -X POST "$BASE/mcp" -H 'content-type: application/json' \
 n=$(printf '%s' "$mcp" | grep -o '"name":"[a-z_]*","title"' | wc -l | tr -d ' ')
 if [ "$n" = "14" ]; then ok "mcp tools/list (14)"; else bad "mcp tools/list ($n tools)"; fi
 
+# MCP tool calls need a key: without one a call is a tool error that says so (not an answer, not a 500).
+mcpcall=$(curl -s -m 30 -X POST "$BASE/mcp" -H 'content-type: application/json'   -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"get_atlas_stats","arguments":{}}}')
+if printf '%s' "$mcpcall" | grep -q 'key_required'; then ok "mcp tool call without a key is refused"; else bad "mcp tool call without a key (got: $(printf '%s' "$mcpcall" | head -c 120))"; fi
+
+# An invalid key is HTTP 401, whatever the method.
+code=$(curl -s -m 30 -o /dev/null -w '%{http_code}' -X POST "$BASE/mcp" -H 'content-type: application/json'   -H 'authorization: Bearer sk_live_not-a-real-key-for-the-smoke-test' -d '{"jsonrpc":"2.0","id":3,"method":"tools/list"}')
+if [ "$code" = 401 ]; then ok "mcp invalid key is 401"; else bad "mcp invalid key ($code, want 401)"; fi
+
+# The crank endpoints write production D1: no token, no entry.
+for r in refresh-next index-next; do
+  code=$(curl -s -m 30 -o /dev/null -w '%{http_code}' "$BASE/api/ingest/$r")
+  if [ "$code" = 401 ]; then ok "$r needs the ingest token"; else bad "$r without a token ($code, want 401)"; fi
+done
+
+# Security headers on the page, the API and the sitemap.
+hdr() { curl -s -m 30 -o /dev/null -D - "$1" | tr -d '\r'; }
+for u in "/" "/api/stats" "/sitemap.xml"; do
+  h=$(hdr "$BASE$u")
+  for want in "x-content-type-options: *nosniff" "strict-transport-security:" "referrer-policy:"; do
+    if printf '%s' "$h" | grep -q -i -E "^$want"; then ok "header $want on $u"; else bad "header $want missing on $u"; fi
+  done
+done
+
+# The numbers on the home page and in search count the same thing.
+fetch "$BASE/api/stats"
+st_studies=$(printf '%s' "$body" | grep -o '"studies_with_files": *[0-9]*' | head -n 1 | grep -o '[0-9]*$')
+st_samples=$(printf '%s' "$body" | grep -o '"samples_in_files": *[0-9]*' | head -n 1 | grep -o '[0-9]*$')
+fetch "$BASE/api/search?limit=1"
+se_totals=$(printf '%s' "$body" | tr -d ' \r\n' | grep -o '"totals":{[^}]*')
+se_studies=$(printf '%s' "$se_totals" | grep -o '"studies":[0-9]*' | grep -o '[0-9]*$')
+se_samples=$(printf '%s' "$se_totals" | grep -o '"samples":[0-9]*' | grep -o '[0-9]*$')
+if [ -n "$st_studies" ] && [ "$st_studies" = "$se_studies" ] && [ "$st_samples" = "$se_samples" ]; then
+  ok "stats and search agree ($st_studies studies, $st_samples samples)"
+else
+  bad "stats and search disagree (stats $st_studies/$st_samples, search ${se_studies:-?}/${se_samples:-?})"
+fi
+
+# Sitemap and robots.
+check "sitemap"              200 "$BASE/sitemap.xml"                        "<loc>https://singlet.bio/"  "xml"
+check "robots"               200 "$BASE/robots.txt"                         "User-agent"
+
 echo "---- $pass passed, $fail failed ($BASE)"
 [ "$fail" = 0 ]
