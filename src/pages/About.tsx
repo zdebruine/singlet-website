@@ -179,8 +179,8 @@ const About = () => {
           <section id="status" className="pb-12 mb-12 border-b border-border scroll-mt-20">
             <h2>Processing status</h2>
             <p>
-              We are continuing to perform data reprocessing today. Here are live updates on the state of our continually
-              growing catalog.
+              Reprocessing runs in campaigns, and none is running right now. Here is where the catalog stands; the numbers
+              update whenever files are published.
             </p>
 
             <h3>Available to download now</h3>

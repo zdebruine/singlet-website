@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   Activity, Cpu, HardDrive, Server, AlertTriangle, CheckCircle2,
   Clock, TrendingDown, Zap, RefreshCw, Database
@@ -353,6 +354,19 @@ const HpcDashboard = () => {
               Refresh {lastFetched && `· fetched ${lastFetched.toLocaleTimeString("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit", hour12: true, timeZoneName: "short" })}`}
             </button>
           </div>
+
+          {/* Idle campaign: nothing running and nothing in flight. Say so, and say these are not catalog numbers. */}
+          {k.samples_in_flight === 0 && k.nodes_in_use === 0 && (snap!.running_jobs?.length ?? 0) === 0 && (
+            <div role="status" className="mb-6 rounded-md border border-border bg-secondary px-4 py-3 text-[13.5px] text-foreground">
+              <strong className="font-semibold">No reprocessing jobs are running.</strong> The figures below describe the last campaign, not the
+              catalog: {fmtNum(k.samples_pending)} samples were still queued when it stopped and none is in flight. For what you can download,
+              and where every sample stands, see{" "}
+              <Link to="/about#status" className="text-primary hover:underline">
+                Processing status
+              </Link>
+              .
+            </div>
+          )}
 
           {/* KPI grid */}
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-6">
