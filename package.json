@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "prebuild": "vitest run && tsc -p tsconfig.functions.json --noEmit && wrangler pages functions build --outdir /tmp/fnbuild",
+    "check": "vitest run && tsc -p tsconfig.functions.json --noEmit && wrangler pages functions build --outdir /tmp/fnbuild",
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",

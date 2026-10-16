@@ -27,7 +27,9 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Build (vitest + functions typecheck + functions bundle + vite build)
+      - name: Check (vitest + functions typecheck + functions bundle)
+        run: npm run check
+      - name: Build
         run: npm run build
       - name: Typecheck app (advisory)
         run: npx tsc -p tsconfig.app.json --noEmit
