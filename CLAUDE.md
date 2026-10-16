@@ -25,7 +25,7 @@ either back.
   are applied.
 - "Downloadable" = `DOWNLOADABLE_SQL` in `functions/_shared/search-core.ts`: has a file, at least one usable
   sample (`sample_qc.usable`: matrix bytes > 400 and cells called > 0), no species/reference mismatch.
-  Headline numbers are usable samples/cells in files (`/api/stats` samples_in_files, cells_in_files); label
+  Headline numbers count what a visitor can download: studies passing `DOWNLOADABLE_SQL` (`studies_with_files`), their usable samples and the cells called in them (`/api/stats` samples_in_files, cells_in_files). `files_published` is every file, `studies_withheld` the difference. Default searches total on the same basis (`totals.basis = "file"`), and `accounting` places every sample in exactly one bucket; label
   catalog metadata as such.
 - The catalog crank (`/api/ingest/refresh-next`, `/api/ingest/index-next`) is idempotent and runs every 3 h
   from `catalog-crank.yml`. Both are public GETs that write production D1.

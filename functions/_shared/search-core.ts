@@ -159,8 +159,12 @@ export interface SampleRow {
 
 export interface SearchTotals {
   studies: number | null;
+  /** Usable samples in the published files when `basis` is "file"; samples processed (catalog) otherwise. */
   samples: number | null;
+  /** Cells called in those usable samples when `basis` is "file"; catalog cell counts otherwise. */
   cells: number | null;
+  /** What samples and cells count: the published files (default searches) or catalog metadata (include_unbuilt). */
+  basis?: "file" | "catalog";
 }
 
 export interface SearchResult<T> {
@@ -819,6 +823,7 @@ interface StudyDbRow {
   file_cells: number | null;
   reference_build: string | null;
   n_usable_samples?: number | null;
+  n_usable_cells?: number | null;
   reference_mismatch?: number | null;
   n_gsm_failed: number | null;
   s_gse: number | null;
@@ -836,7 +841,7 @@ export const DOWNLOADABLE_SQL = "(m.has_bundle = 1 AND COALESCE(m.n_usable_sampl
 const STUDY_SELECT = `
   m.gse_id, m.organism_primary, m.organisms, m.tissue_groups, m.disease_groups, m.assay_families,
   m.tissues_raw, m.cell_types_raw, m.n_conditions, m.n_done, m.n_total, m.n_cells, m.has_bundle, m.year,
-  m.n_usable_samples, m.reference_mismatch,
+  m.n_usable_samples, m.n_usable_cells, m.reference_mismatch,
   g.title, g.abstract, g.r2_bundle_bytes, g.r2_bundle_key, g.n_gsm_failed,
   (SELECT b.n_gsms_in_bundle FROM bundle_manifest b WHERE b.gse_id = m.gse_id) AS bundle_n_samples,
   (SELECT b.reference_build FROM bundle_manifest b WHERE b.gse_id = m.gse_id) AS reference_build,
@@ -909,9 +914,21 @@ export function planStudyQuery(p: SearchParams, matchOverride?: string | null, c
 
   const whereSql = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
   const hitCols = match ? "h.s_gse, h.s_gsm, h.n_match," : "NULL AS s_gse, NULL AS s_gsm, NULL AS n_match,";
+  // Downloadable studies are totalled from what is in their files (usable samples, cells called in them), the
+  // numbers the home page shows; a search that includes unbuilt studies falls back to catalog counts.
+  // n_usable_cells is filled as studies are recomputed; until then the catalog count stands in.
+  const fileBasis = p.has_bundle === true;
+  const samplesWin = fileBasis ? "SUM(COALESCE(m.n_usable_samples, 0)) OVER ()" : "SUM(m.n_done) OVER ()";
+  const cellsWin = fileBasis
+    ? "CASE WHEN COUNT(m.n_usable_cells) OVER () = 0 THEN SUM(m.n_cells) OVER () ELSE SUM(COALESCE(m.n_usable_cells, 0)) OVER () END"
+    : "SUM(m.n_cells) OVER ()";
+  const samplesAgg = fileBasis ? "SUM(COALESCE(m.n_usable_samples, 0))" : "SUM(m.n_done)";
+  const cellsAgg = fileBasis
+    ? "CASE WHEN COUNT(m.n_usable_cells) = 0 THEN SUM(m.n_cells) ELSE SUM(COALESCE(m.n_usable_cells, 0)) END"
+    : "SUM(m.n_cells)";
   const sql = `${cte}
     SELECT ${STUDY_SELECT}, ${hitCols} ${scoreExpr} AS score,
-           COUNT(*) OVER () AS _total, SUM(m.n_done) OVER () AS _samples, SUM(m.n_cells) OVER () AS _cells
+           COUNT(*) OVER () AS _total, ${samplesWin} AS _samples, ${cellsWin} AS _cells
       FROM gse_meta m
       ${join}
       LEFT JOIN gse g ON g.id = m.gse_id
@@ -919,7 +936,7 @@ export function planStudyQuery(p: SearchParams, matchOverride?: string | null, c
      ORDER BY ${studyOrder(p.sort, !!match)}
      LIMIT ? OFFSET ?`;
   const countSql = `${cte}
-    SELECT COUNT(*) AS n, SUM(m.n_done) AS samples, SUM(m.n_cells) AS cells
+    SELECT COUNT(*) AS n, ${samplesAgg} AS samples, ${cellsAgg} AS cells
       FROM gse_meta m ${join} ${whereSql}`;
 
   return {
@@ -1229,7 +1246,7 @@ export async function runStudySearch(
     candidateAccessions = kept.map((x) => x.row.gse_id);
     groups = { full: kept.filter((x) => x.full).length, partial: kept.filter((x) => !x.full).length };
     total = kept.length;
-    samples = kept.reduce((sum, x) => sum + (x.row.bundle_n_samples ?? x.row.n_done), 0);
+    samples = kept.reduce((sum, x) => sum + (x.row.usable_samples ?? x.row.bundle_n_samples ?? x.row.n_done), 0);
     cells = kept.reduce((sum, x) => sum + (x.row.file_cells ?? x.row.n_cells), 0);
     const start = (p.page - 1) * p.limit;
     rows = kept.slice(start, start + p.limit).map((x) => x.row);
@@ -1242,7 +1259,12 @@ export async function runStudySearch(
 
   return {
     total,
-    totals: { studies: total, samples: samples != null ? Number(samples) : null, cells: cells != null ? Number(cells) : null },
+    totals: {
+      studies: total,
+      samples: samples != null ? Number(samples) : null,
+      cells: cells != null ? Number(cells) : null,
+      basis: p.has_bundle === true ? "file" : "catalog",
+    },
     page: p.page,
     limit: p.limit,
     data: rows,

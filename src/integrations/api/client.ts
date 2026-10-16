@@ -560,10 +560,13 @@ function normalizeStats(raw: unknown): CorpusStats {
     coverage_rate: numOrNull(r.coverage_rate),
     failure_categories: normalizeFacetOptions(r.failure_categories),
     studies_with_files: num(r.studies_with_files),
+    files_published: num(r.files_published),
+    studies_withheld: num(r.studies_withheld),
     samples_in_files: num(r.samples_in_files),
     cells_in_files: num(r.cells_in_files),
     samples_unusable: num(r.samples_unusable),
     studies_unusable: num(r.studies_unusable),
+    accounting: Object.fromEntries(Object.entries(rec(r.accounting)).map(([k, v]) => [k, num(v)])),
   };
 }
 

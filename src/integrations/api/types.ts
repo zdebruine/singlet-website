@@ -285,8 +285,11 @@ export interface CorpusStats {
   coverage_rate: number | null;
   /** Why samples fail, most common first. */
   failure_categories: FacetOption[];
-  /** Headline definition, used on every page: studies with a published file… */
+  /** Headline definition, used on every page: studies you can download and use (a published file, ≥ 1 usable sample, matching reference)… */
   studies_with_files: number;
+  /** Files published in total; the difference to studies_with_files is what is withheld as unusable or mismatched. */
+  files_published: number;
+  studies_withheld: number;
   /** …usable samples in those files (non-empty matrix and ≥ 1 called cell)… */
   samples_in_files: number;
   /** …and the cells called in those usable samples. */
@@ -295,6 +298,8 @@ export interface CorpusStats {
   samples_unusable: number;
   /** Studies with a file but 0 usable samples. */
   studies_unusable: number;
+  /** Every study and sample, placed in exactly one bucket (see functions/_shared/stats-core.ts). */
+  accounting: Record<string, number>;
 }
 
 // ── Study / sample detail (/api/gse/:id, /api/gsm/:id) ──────────────────────

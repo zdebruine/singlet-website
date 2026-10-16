@@ -33,7 +33,7 @@ const Index = () => {
   // matrix, ≥ 1 called cell) and the cells called in them. Catalog-level
   // numbers live on /about under "Catalog metadata".
   const statItems = [
-    { value: stats ? fmtInt(stats.studies_with_files) : null, label: "studies with files" },
+    { value: stats ? fmtInt(stats.studies_with_files) : null, label: "downloadable studies" },
     { value: stats ? fmtInt(stats.samples_in_files) : null, label: "usable samples in files" },
     { value: stats ? fmtCompact(stats.cells_in_files) : null, label: "cells called in files" },
   ];
