@@ -1,5 +1,5 @@
 /**
- * GET /api/projects/:id/:study[?token=spr_…] — download (or range-read) one
+ * GET /api/projects/:id/:study — download (token in the X-Project-Token header, or Authorization: Bearer spr_…; ?token= still accepted) (or range-read) one
  * private study's .singlet. Allowed for the owner, workspace members when the
  * project is shared with the workspace, or anyone holding the project's read
  * token — the loader token is the only anonymous way in.
@@ -17,7 +17,11 @@ import { json, privateDownloadHeaders, productContext, routeError, storageUnavai
 
 export const onRequestGet: PagesFunction<AppEnv> = async ({ request, env, params, waitUntil }) => {
   const url = new URL(request.url);
-  const token = url.searchParams.get("token");
+  // The token belongs in a header: a ?token= query string ends up in access logs, browser history and
+  // Referer headers. The query form still works for links that already exist; rotate_project_token
+  // replaces a token that has been shared too widely.
+  const bearer = /^Bearer\s+(spr_[0-9a-f]{48})$/i.exec(request.headers.get("Authorization") ?? "")?.[1];
+  const token = request.headers.get("X-Project-Token")?.trim() || bearer || url.searchParams.get("token");
   const who = await resolveIdentity(request, env, waitUntil);
   if (!who.ok) return who.response;
   const uid = isSignedIn(who.identity) ? who.identity.userId : null;
