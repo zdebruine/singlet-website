@@ -148,7 +148,13 @@ export async function checkApiKey(env: { DB: D1Database }, key: string, waitUnti
 }
 
 export type Identity =
-  | { kind: "anonymous"; subject: string }
+  /**
+   * `sandbox` is true for a request that looks like the website's own search
+   * box (same-origin fetch from a singlet.bio page or preview). It is a
+   * routing hint, not a credential: anyone can send those headers, so the
+   * sandbox allowance is tiny and every call is also capped globally.
+   */
+  | { kind: "anonymous"; subject: string; sandbox?: boolean }
   | { kind: "session"; subject: string; userId: string; user: SessionUser }
   | { kind: "api_key"; subject: string; userId: string; keyId: string };
 
@@ -211,7 +217,15 @@ export async function resolveIdentity(
     const user = await lookupSession(env.DB, request, waitUntil);
     if (user) return { ok: true, identity: { kind: "session", subject: `user:${user.userId}`, userId: user.userId, user } };
   }
-  return { ok: true, identity: { kind: "anonymous", subject: await anonSubjectFromIp(clientIp(request)) } };
+  return { ok: true, identity: { kind: "anonymous", subject: await anonSubjectFromIp(clientIp(request)), sandbox: isSiteRequest(request) } };
+}
+
+const SITE_ORIGIN_RE = /^https:\/\/(singlet\.bio|[a-z0-9-]+\.singlet-4gc\.pages\.dev|alpha\.singlet\.bio)$/i;
+
+/** True when the request comes from a page on this site (the browser sets these headers; scripts can forge them). */
+export function isSiteRequest(request: Request): boolean {
+  if ((request.headers.get("Sec-Fetch-Site") ?? "") === "same-origin") return true;
+  return SITE_ORIGIN_RE.test(request.headers.get("Origin") ?? "");
 }
 
 /** 401 for endpoints that need an account. */

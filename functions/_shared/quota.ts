@@ -107,6 +107,14 @@ export async function usageToday(db: D1Database, env: LimitEnv, identity: Identi
   return { search: q("search"), explain: q("explain") };
 }
 
+/** A zero allowance that is already used up: what a caller outside the sandbox sees. */
+export function deniedQuota(now: number = Date.now()): Quota {
+  return { kind: "anon", used: 0, limit: 0, resets_at: nextMidnightIso(now), exceeded: true };
+}
+
+export const SIGN_IN_FOR_AI =
+  "AI-assisted search outside the singlet.bio search box needs a free account and API key. Create one at https://singlet.bio/account.";
+
 /** Human sentence for the 429 body — the UI shows it verbatim as a fallback. */
 export function quotaMessage(env: LimitEnv, q: Quota, what: string): string {
   const when = new Date(q.resets_at);

@@ -47,6 +47,8 @@ export interface RunJsonOptions {
   schema: Record<string, unknown>;
   maxTokens?: number;
   timeoutMs?: number;
+  /** Called once with the provider's token counts for the call that produced the reply, when it reports them. */
+  onUsage?: (usage: { inputTokens: number; outputTokens: number }) => void;
 }
 
 /** Neither ANTHROPIC_API_KEY nor the AI binding is available. */
@@ -109,6 +111,7 @@ export async function runJson(env: AiEnv, opts: RunJsonOptions): Promise<unknown
 interface AnthropicReply {
   content?: { type?: string; text?: string }[];
   stop_reason?: string;
+  usage?: { input_tokens?: number; output_tokens?: number };
 }
 
 /** Only these accept `temperature`; newer models reject sampling parameters outright. */
@@ -147,6 +150,7 @@ async function runAnthropic(env: AiEnv, key: string, opts: RunJsonOptions, maxTo
       throw new AiError(`Anthropic ${res.status}: ${detail}`, res.status);
     }
     const data = (await res.json()) as AnthropicReply;
+    reportUsage(opts, data.usage?.input_tokens, data.usage?.output_tokens);
     if (data.stop_reason === "refusal") throw new AiError("Anthropic declined the request");
     const text = (data.content ?? [])
       .filter((b) => b.type === "text" && typeof b.text === "string")
@@ -188,7 +192,10 @@ async function runWorkersAi(env: AiEnv, ai: LooseAi, opts: RunJsonOptions, maxTo
     if (i > 0 && left < MIN_RETRY_MS) break;
     try {
       const call = a.options ? ai.run(model, a.inputs, a.options) : ai.run(model, a.inputs);
-      return parseAiResult(await withTimeout(call, left));
+      const result = await withTimeout(call, left);
+      const u = (result as { usage?: { prompt_tokens?: number; completion_tokens?: number; input_tokens?: number; output_tokens?: number } } | null)?.usage;
+      reportUsage(opts, u?.prompt_tokens ?? u?.input_tokens, u?.completion_tokens ?? u?.output_tokens);
+      return parseAiResult(result);
     } catch (e) {
       if (e instanceof AiTimeout) throw e;
       last = e;
@@ -196,6 +203,13 @@ async function runWorkersAi(env: AiEnv, ai: LooseAi, opts: RunJsonOptions, maxTo
     }
   }
   throw last instanceof AiError ? last : new AiError(String(last));
+}
+
+/** Hand the provider's token counts to the caller's meter, if both are real numbers. */
+function reportUsage(opts: RunJsonOptions, input: unknown, output: unknown): void {
+  if (!opts.onUsage) return;
+  if (typeof input !== "number" || typeof output !== "number" || !(input >= 0) || !(output >= 0)) return;
+  opts.onUsage({ inputTokens: input, outputTokens: output });
 }
 
 /** Pull the JSON object out of whatever shape the binding returned. */

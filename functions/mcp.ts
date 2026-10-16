@@ -8,16 +8,15 @@
  *   notifications/initialized → 202
  *   ping                      → {}
  *   tools/list                → the fourteen tools below
- *   tools/call                → works WITHOUT a key (the connector directory
- *                               needs an authless server). Every tool except
- *                               save_cohort answers anonymously. Only a search
- *                               that needs the AI reading of the question is
- *                               metered (10/day per visitor by default, by a
- *                               salted IP hash); vocabulary-only and cached
- *                               readings and everything deterministic are free.
- *                               A personal key (Authorization: Bearer sk_live_…
- *                               or X-API-Key) raises that to 200/day and is
- *                               required to save cohorts.
+ *   tools/call                → needs a personal API key (Authorization: Bearer
+ *                               sk_live_… or X-API-Key; free at /account). Each
+ *                               call is counted per key and month, and a key is
+ *                               limited to MCP_RATE_PER_MIN calls a minute. A
+ *                               search that needs the AI reading of the question
+ *                               also spends the owner's monthly token allowance
+ *                               (_shared/spend); readings the vocabulary can
+ *                               make, and cached ones, cost none. initialize,
+ *                               tools/list, prompts and resources need no key.
  *   prompts/list, prompts/get → three guided workflows
  *   resources/list, /read     → singlet://stats, singlet://vocab
  *
@@ -30,6 +29,8 @@ import type { AppEnv } from "./_shared/env";
 import { anonSubjectFromIp, apiKeyFromRequest, checkApiKey, clientIp, keyMessage, type Identity, type KeyCheck } from "./_shared/identity";
 import { nlSearch, type NlSearchBody } from "./_shared/nl-search-core";
 import { limitFor, type Quota } from "./_shared/quota";
+import { recordToolCall, withinRate } from "./_shared/spend";
+import { requestId } from "./_shared/errors";
 import { loadStudy, bundleUrl, GSE_RE, type StudyDetail } from "./_shared/study-core";
 import { computeStats } from "./_shared/stats-core";
 import { TISSUE_GROUPS, DISEASE_GROUPS, ASSAY_FAMILIES } from "./_shared/vocab";
@@ -71,7 +72,7 @@ Recommended order: search_datasets → assess_study or get_study → get_sample_
 
 A .singlet file is not just gene counts: it can also carry splice junctions and PSI, mitochondrial heteroplasmy and chrM variants, genotype-free donor demultiplexing, non-host (microbial/viral) abundance, V(D)J usage and per-cell doublet/cell-cycle/ambient annotations. Older bundles have fewer of these — call get_modalities before telling a user a modality is available.
 
-Every number and every "why" string is computed, not generated — quote them, don't paraphrase. Catalog cell counts can differ from the file's own QC; the file is the truth. Downloads never need a key, and every tool except save_cohort works without one. Searches the built-in vocabulary can read are free; only questions that need the AI reading count: ${ANON_SEARCH_LIMIT}/day anonymously, ${KEY_SEARCH_LIMIT}/day with a free key from ${ACCOUNT_URL}.`;
+Every number and every "why" string is computed, not generated — quote them, don't paraphrase. Catalog cell counts can differ from the file's own QC; the file is the truth. Every tool call needs a free personal API key from ${ACCOUNT_URL}; calls are counted per key. Downloads themselves (the data.singlet.bio links) never need one. Searches the built-in vocabulary can read cost no AI tokens; a question that needs the AI reading uses your monthly AI token allowance (shown in \`_meta.allowance\`).`;
 
 
 // ── JSON-RPC plumbing ───────────────────────────────────────────────────────
@@ -103,7 +104,7 @@ const TOOLS = [
     name: "search_datasets",
     title: "Search single-cell studies",
     description:
-      "Find public scRNA-seq studies (or individual samples) in the singlet.bio atlas from a plain-English question, e.g. \"microglia in the aging mouse brain\" or \"human PBMC covid-19 10x\". GEO accessions (GSE…, GSM…) are looked up directly. The question is turned into structured filters (organism, tissue, disease, assay, cell type) which are ANDed and never relaxed silently; when nothing matches, `suggestions` says what dropping one filter would return. Each result carries a deterministic `why` explaining the match, the download URL and one-line Python/R loaders. Works without an API key. Questions the built-in vocabulary can read (and repeats of any question) are free; only a question that needs a fresh AI reading counts against the allowance of 10 per day per visitor, or 200/day with a free key from https://singlet.bio/account. Remaining budget is in `_meta.quota`.",
+      "Find public scRNA-seq studies (or individual samples) in the singlet.bio atlas from a plain-English question, e.g. \"microglia in the aging mouse brain\" or \"human PBMC covid-19 10x\". GEO accessions (GSE…, GSM…) are looked up directly. The question is turned into structured filters (organism, tissue, disease, assay, cell type) which are ANDed and never relaxed silently; when nothing matches, `suggestions` says what dropping one filter would return. Each result carries a deterministic `why` explaining the match, the download URL and one-line Python/R loaders. Needs a free API key from https://singlet.bio/account. Questions the built-in vocabulary can read (and repeats of any question) use no AI tokens; a question that needs a fresh AI reading uses your monthly AI token allowance. Remaining allowance is in `_meta.allowance`.",
     inputSchema: {
       type: "object",
       properties: {
@@ -257,7 +258,7 @@ const TOOLS = [
     name: "find_matched_controls",
     title: "Find matched control studies",
     description:
-      "Candidate control studies for a given study: same organism and tissue group, no disease label (or a healthy/control one), preferring the same assay family and reference build, ordered by samples in the file then year. Each candidate carries a deterministic `why` and its loader line, plus honest `caveats` about study-level labels and batch effects. Deterministic (no model call), no key needed, not metered.",
+      "Candidate control studies for a given study: same organism and tissue group, no disease label (or a healthy/control one), preferring the same assay family and reference build, ordered by samples in the file then year. Each candidate carries a deterministic `why` and its loader line, plus honest `caveats` about study-level labels and batch effects. Deterministic (no model call); needs an API key like every tool, and uses no AI tokens.",
     inputSchema: {
       type: "object",
       properties: {
@@ -317,8 +318,11 @@ const TOOLS = [
   },
 ];
 
-/** Tools that need a personal API key; everything else answers anonymously. */
-const KEY_ONLY_TOOLS = new Set(["save_cohort"]);
+/** MCP calls per minute and key (override with MCP_RATE_PER_MIN). */
+const DEFAULT_MCP_RATE_PER_MIN = 60;
+/** Requests are small JSON-RPC messages; anything bigger is refused before parsing. */
+const MAX_BODY_BYTES = 256 * 1024;
+const MAX_BATCH = 10;
 /** Only AI-interpreted search spends the daily budget. */
 const METERED_TOOLS = new Set(["search_datasets"]);
 
@@ -479,7 +483,7 @@ function quotaMeta(env: Env, hasKey: boolean, quota?: Quota) {
       metered: false,
       kind: hasKey ? "user" : "anon",
       ai_search_limit_per_day: hasKey ? keyLimit : anonLimit,
-      note: `This call was not metered. Only a search that needs a fresh AI reading counts: ${anonLimit}/day without a key, ${keyLimit}/day with a free key from ${ACCOUNT_URL}.`,
+      note: "This call used no AI tokens. Only a search that needs a fresh AI reading does; that comes out of your monthly AI token allowance.",
     },
   };
 }
@@ -839,17 +843,28 @@ async function callTool(ctx: CallContext, params: Record<string, unknown>) {
   if (!ctx.auth.ok && ctx.auth.reason !== "missing") {
     return { result: toolError(ctx.auth.message, { auth: ctx.auth.reason, account_url: ACCOUNT_URL }) };
   }
-  const keyRequired = (tool: string) => ({
-    result: toolError(
-      `${tool} needs a personal singlet.bio API key. Sign in at ${ACCOUNT_URL} (free), create a key under "API keys", then send it as \`Authorization: Bearer sk_live_…\` (or \`X-API-Key\`) with requests to ${SITE}/mcp. Everything else here — search, study details, QC, assessments, controls, downloads — works without one.`,
-      { auth: "key_required", tool, account_url: ACCOUNT_URL, ...quotaMeta(ctx.env, false) }
-    ),
-  });
-  if (!hasKey && KEY_ONLY_TOOLS.has(name)) return keyRequired(name);
+  if (!ctx.auth.ok) {
+    return {
+      result: toolError(
+        `${name} needs a personal singlet.bio API key. Sign in at ${ACCOUNT_URL} (free), create a key under "API keys", then send it as \`Authorization: Bearer sk_live_…\` (or \`X-API-Key\`) with requests to ${SITE}/mcp. Calls are counted per key.`,
+        { auth: "key_required", tool: name, account_url: ACCOUNT_URL, ...quotaMeta(ctx.env, false) }
+      ),
+    };
+  }
+  const perMinute = Number.parseInt(ctx.env.MCP_RATE_PER_MIN ?? "", 10) || DEFAULT_MCP_RATE_PER_MIN;
+  if (!(await withinRate(ctx.env.DB, ctx.identity.subject, "mcp", perMinute, 60_000))) {
+    return {
+      result: toolError(`Rate limit: this key may make ${perMinute} MCP calls a minute. Wait a few seconds and try again.`, {
+        error: "rate_limited",
+        retry_after_seconds: 60 - Math.floor((Date.now() % 60_000) / 1000),
+      }),
+    };
+  }
+  await recordToolCall(ctx.env.DB, ctx.identity.subject, name);
 
   const meta = quotaMeta(ctx.env, hasKey);
   const db = { db: ctx.env.DB, waitUntil: ctx.waitUntil };
-  const uid = ctx.auth.ok ? ctx.auth.userId : null;
+  const uid = ctx.auth.userId;
   try {
     switch (name) {
       case "search_datasets":
@@ -877,12 +892,10 @@ async function callTool(ctx: CallContext, params: Record<string, unknown>) {
       case "assess_study":
         return { result: withQuota(await assessStudy(db, args), meta) };
       case "get_cohort": {
-        // A link cohort opens with its share token alone; anything else needs the owner's (or a member's) key.
-        if (uid === null && typeof args.token !== "string") return keyRequired(name);
+        // Every tool here already needs a key; a link cohort additionally opens with its share token.
         return { result: await productTool(ctx, meta, (p) => getCohort(p, uid, { id: args.id, token: args.token })) };
       }
       case "save_cohort": {
-        if (uid === null) return keyRequired(name);
         const body = { name: args.name, notes: args.notes ?? "", visibility: args.visibility ?? "private", workspace_id: args.workspace_id ?? null, public_gse_ids: args.gse_ids };
         return { result: await productTool(ctx, meta, (p) => saveCohort(p, uid, body)) };
       }
@@ -890,7 +903,9 @@ async function callTool(ctx: CallContext, params: Record<string, unknown>) {
         return { error: rpcError(null, -32602, `Unknown tool: ${name}`) };
     }
   } catch (e) {
-    return { result: toolError(`The atlas could not answer right now (${String(e).slice(0, 200)}). Try again in a minute.`) };
+    const id = requestId();
+    console.error(`[${id}] mcp tool ${name}:`, e instanceof Error ? (e.stack ?? e.message) : String(e));
+    return { result: toolError(`The atlas could not answer right now. Try again in a minute. (request ${id})`) };
   }
 }
 
@@ -966,20 +981,36 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request, waitUnti
     return json({ jsonrpc: "2.0", id: null, error: { code: -32600, message: `Unsupported MCP-Protocol-Version: ${version}. Supported: ${PROTOCOL_VERSIONS.join(", ")}` } }, 400);
   }
 
+  const declared = Number.parseInt(request.headers.get("Content-Length") ?? "", 10);
+  if (Number.isFinite(declared) && declared > MAX_BODY_BYTES) {
+    return json(rpcError(null, -32600, `Request body too large (limit ${MAX_BODY_BYTES} bytes)`), 413);
+  }
   let payload: unknown;
   try {
-    payload = await request.json();
+    const text = await request.text();
+    if (text.length > MAX_BODY_BYTES) return json(rpcError(null, -32600, `Request body too large (limit ${MAX_BODY_BYTES} bytes)`), 413);
+    payload = JSON.parse(text);
   } catch {
     return json(rpcError(null, -32700, "Parse error: body must be JSON"), 400);
   }
 
   const auth = await authFor(env, request, waitUntil);
+  // A key that was sent but is wrong, revoked or expired is an HTTP 401 for the
+  // whole request, so a client with a stale key sees it at once instead of
+  // being served as someone else.
+  if (!auth.ok && auth.reason !== "missing") {
+    return new Response(JSON.stringify(rpcError(null, -32001, auth.message)), {
+      status: auth.reason === "unavailable" ? 503 : 401,
+      headers: { ...JSON_HEADERS, "WWW-Authenticate": `Bearer realm="singlet.bio", error="invalid_token"` },
+    });
+  }
   const identity: Identity = auth.ok
     ? { kind: "api_key", subject: `user:${auth.userId}`, userId: auth.userId, keyId: auth.keyId }
     : { kind: "anonymous", subject: await anonSubjectFromIp(clientIp(request)) };
   const ctx: CallContext = { env, request, waitUntil, auth, identity };
   const messages = Array.isArray(payload) ? (payload as JsonRpcRequest[]) : [payload as JsonRpcRequest];
   if (!messages.length) return json(rpcError(null, -32600, "Empty batch"), 400);
+  if (messages.length > MAX_BATCH) return json(rpcError(null, -32600, `Batch too large (limit ${MAX_BATCH} messages)`), 400);
 
   const replies: unknown[] = [];
   for (const m of messages) {

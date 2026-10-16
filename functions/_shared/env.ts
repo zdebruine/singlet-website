@@ -44,6 +44,18 @@ export interface AppEnv {
   AI_LIMIT_EXPLAIN_ANON?: string;
   AI_LIMIT_EXPLAIN_USER?: string;
 
+  /** Monthly AI allowance per signed-in account, in dollars at list price (default 1). Shown to users only as tokens. */
+  AI_MONTHLY_CAP_USD?: string;
+  /** Monthly allowance for the anonymous browser sandbox, per visitor (default 0.02). */
+  AI_ANON_MONTHLY_CAP_USD?: string;
+  /** Monthly ceiling across all users, the circuit breaker (default 50). */
+  AI_GLOBAL_MONTHLY_CAP_USD?: string;
+  /** Override list prices (dollars per million tokens) for a model the price table does not know. */
+  AI_PRICE_IN_USD_PER_M?: string;
+  AI_PRICE_OUT_USD_PER_M?: string;
+  /** MCP calls per minute per API key (default 60). */
+  MCP_RATE_PER_MIN?: string;
+
   // ── Ingest ──────────────────────────────────────────────────────────────
   /** sha256 hex of the HPC ingest token. */
   INGEST_TOKEN_SHA256?: string;
