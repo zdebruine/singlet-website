@@ -63,6 +63,7 @@ export type InterpretEnv = Pick<
   | "AI_MONTHLY_CAP_USD"
   | "AI_ANON_MONTHLY_CAP_USD"
   | "AI_GLOBAL_MONTHLY_CAP_USD"
+  | "AI_ANON_POOL_CAP_USD"
   | "AI_PRICE_IN_USD_PER_M"
   | "AI_PRICE_OUT_USD_PER_M"
 >;

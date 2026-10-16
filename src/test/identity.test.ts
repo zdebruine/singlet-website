@@ -105,3 +105,14 @@ describe("anonymous subjects", () => {
     expect(out.ok && out.identity.subject).toBe(b);
   });
 });
+
+describe("IPv6 visitors", () => {
+  it("share one subject per /64, so cycling addresses inside a block gains nothing", async () => {
+    const { normalizeIp } = await import("../../functions/_shared/identity");
+    expect(normalizeIp("2001:db8:1:2:aaaa:bbbb:cccc:dddd")).toBe(normalizeIp("2001:db8:1:2:1::9"));
+    expect(normalizeIp("2001:db8:1:2:aaaa:bbbb:cccc:dddd")).not.toBe(normalizeIp("2001:db8:1:3:aaaa:bbbb:cccc:dddd"));
+    expect(normalizeIp("2001:0DB8::1")).toBe(normalizeIp("2001:db8:0:0:5::7"));
+    expect(normalizeIp("203.0.113.7")).toBe("203.0.113.7");
+    expect(normalizeIp("::ffff:203.0.113.7")).toBe("::ffff:203.0.113.7");
+  });
+});

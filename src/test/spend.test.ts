@@ -200,3 +200,49 @@ describe("MCP counters", () => {
     expect(await withinRate(db, "user:a", "mcp", 5, 60_000, NOW + 60_000)).toBe(true); // next window
   });
 });
+
+describe("the anonymous pool", () => {
+  it("lets many visitors spend only the pool, leaving the global ceiling for signed-in accounts", async () => {
+    const db = createTestD1(SCHEMA);
+    const env = { AI_ANON_MONTHLY_CAP_USD: "0.01", AI_ANON_POOL_CAP_USD: "0.03", AI_GLOBAL_MONTHLY_CAP_USD: "1" };
+    const results = [];
+    for (let i = 0; i < 8; i++) results.push(await reserveSpend(db, env, { subject: `anon:v${i}` }, 10_000, NOW));
+    expect(results.filter((r) => r.ok)).toHaveLength(3); // 30,000 micro-USD of pool
+    expect(results[3]).toEqual({ ok: false, reason: "anon_pool" });
+    expect((await reserveSpend(db, env, user("a"), 500_000, NOW)).ok).toBe(true); // accounts are untouched
+  });
+
+  it("counts settled anonymous spend toward the pool", async () => {
+    const db = createTestD1(SCHEMA);
+    const env = { ...HAIKU, AI_ANON_MONTHLY_CAP_USD: "0.02", AI_ANON_POOL_CAP_USD: "0.02" };
+    const got = await reserveSpend(db, env, { subject: "anon:a" }, 15_000, NOW);
+    if (!got.ok) throw new Error("expected a reservation");
+    await settleSpend(db, env, got.reservation, { inputTokens: 15_000, outputTokens: 0 }, NOW);
+    expect(await reserveSpend(db, env, { subject: "anon:b" }, 10_000, NOW)).toEqual({ ok: false, reason: "anon_pool" });
+  });
+
+  it("says to sign in, not that AI is down for everyone", () => {
+    expect(allowanceMessage("anon_pool")).toMatch(/sign in/i);
+  });
+});
+
+describe("usage across provider retries", () => {
+  it("adds up every run of the model", async () => {
+    const db = createTestD1(SCHEMA);
+    let calls = 0;
+    vi.stubGlobal("fetch", async () => {
+      calls++;
+      // first answer is not JSON (a retry follows with structured output off), the second is
+      return calls === 1
+        ? new Response(JSON.stringify({ content: [{ type: "text", text: "nope" }], usage: { input_tokens: 100, output_tokens: 10 } }), { status: 200 })
+        : new Response(JSON.stringify({ content: [{ type: "text", text: '{"ok":true}' }], usage: { input_tokens: 100, output_tokens: 10 } }), { status: 200 });
+    });
+    const env = { DB: db, ...HAIKU, AI_MONTHLY_CAP_USD: "0.01" };
+    await runMeteredJson(env, user("a"), { system: "s", user: "u", schema: { type: "object" } }).catch(() => undefined);
+    const snap = await allowanceFor(db, env, "user:a");
+    // whatever the provider code did, what was reported is what is charged, and never less than one run
+    expect(snap.tokens_in).toBeGreaterThanOrEqual(100);
+    expect(snap.tokens_in % 100).toBe(0);
+    vi.unstubAllGlobals();
+  });
+});

@@ -36,7 +36,7 @@ import { serverError } from "../_shared/errors";
 import { nowIso } from "../_shared/session";
 
 /** Bump to invalidate every cached explanation. */
-const CACHE_VERSION = "v1";
+const CACHE_VERSION = "v2"; // v1 entries were generated from caller-supplied study text
 const MAX_STUDIES = 10;
 const MODEL_TIMEOUT_MS = 20_000;
 const MODEL_MAX_TOKENS = 1600;

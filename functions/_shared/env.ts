@@ -50,6 +50,8 @@ export interface AppEnv {
   AI_ANON_MONTHLY_CAP_USD?: string;
   /** Monthly ceiling across all users, the circuit breaker (default 50). */
   AI_GLOBAL_MONTHLY_CAP_USD?: string;
+  /** Monthly ceiling for all anonymous visitors together (default 10). */
+  AI_ANON_POOL_CAP_USD?: string;
   /** Override list prices (dollars per million tokens) for a model the price table does not know. */
   AI_PRICE_IN_USD_PER_M?: string;
   AI_PRICE_OUT_USD_PER_M?: string;

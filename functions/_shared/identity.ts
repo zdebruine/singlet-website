@@ -63,11 +63,26 @@ export async function anonSubjectFromIp(ip: string, salt: string = ANON_SALT): P
 }
 
 export function clientIp(request: Request): string {
-  return (
+  return normalizeIp(
     request.headers.get("CF-Connecting-IP") ??
-    request.headers.get("X-Forwarded-For")?.split(",")[0]?.trim() ??
-    "0.0.0.0"
+      request.headers.get("X-Forwarded-For")?.split(",")[0]?.trim() ??
+      "0.0.0.0",
   );
+}
+
+/**
+ * An IPv6 subscriber usually holds a whole /64, so the address alone is not a visitor: collapse it to its
+ * /64 (first four groups). IPv4 and IPv4-mapped addresses are returned as they are.
+ */
+export function normalizeIp(ip: string): string {
+  const v = ip.trim();
+  if (!v.includes(":") || /^::ffff:\d+\.\d+\.\d+\.\d+$/i.test(v)) return v;
+  const [head, tail = ""] = v.split("::");
+  const headGroups = head ? head.split(":") : [];
+  const tailGroups = v.includes("::") && tail ? tail.split(":") : [];
+  const fill = v.includes("::") ? Array(Math.max(0, 8 - headGroups.length - tailGroups.length)).fill("0") : [];
+  const groups = [...headGroups, ...fill, ...tailGroups].slice(0, 4).map((g) => g.toLowerCase().replace(/^0+(?=.)/, ""));
+  return `${groups.join(":")}::/64`;
 }
 
 /** The `sk_live_…` key on the request, if any (header wins over bearer). */

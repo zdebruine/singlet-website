@@ -947,6 +947,14 @@ async function handleMessage(ctx: CallContext, msg: JsonRpcRequest): Promise<unk
     case "resources/templates/list":
       return rpcResult(id, { resourceTemplates: [] });
     case "resources/read": {
+      // singlet://stats and singlet://vocab run aggregate queries over the catalog, so reading them
+      // is a metered tool call like any other: it needs a key and counts against the per-key limit.
+      if (!ctx.auth.ok) return rpcError(id, -32001, `Reading resources needs a personal API key. Create one at ${ACCOUNT_URL}.`);
+      const perMinute = Number.parseInt(ctx.env.MCP_RATE_PER_MIN ?? "", 10) || DEFAULT_MCP_RATE_PER_MIN;
+      if (!(await withinRate(ctx.env.DB, ctx.identity.subject, "mcp", perMinute, 60_000))) {
+        return rpcError(id, -32002, `Rate limit: ${perMinute} MCP calls a minute per key.`);
+      }
+      await recordToolCall(ctx.env.DB, ctx.identity.subject, "resources/read");
       const uri = typeof params.uri === "string" ? params.uri : "";
       const contents = await readResource(ctx.env, uri).catch(() => null);
       if (!contents) return rpcError(id, -32602, `Unknown resource: ${uri}`);

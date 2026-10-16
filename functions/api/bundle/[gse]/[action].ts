@@ -42,8 +42,11 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, params, request, w
   // catalog crank, so it needs the ingest token; for everyone else it is ignored.
   const refresh = url.searchParams.get("refresh") === "1" && (await checkIngestToken(request, env)).ok;
 
+  // A forced refresh has to reach the producer, so it skips the edge cache.
+  const cached: typeof cachedJson = refresh ? (_request, _waitUntil, producer) => producer() : cachedJson;
+
   if (action === "index") {
-    return cachedJson(
+    return cached(
       request,
       waitUntil,
       async () => {
@@ -59,7 +62,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, params, request, w
   }
 
   if (action === "samples") {
-    return cachedJson(
+    return cached(
       request,
       waitUntil,
       async () => {

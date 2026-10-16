@@ -35,6 +35,9 @@ const RESERVATION_TTL_MS = 120_000;
 const DEFAULT_USER_CAP_USD = 1;
 const DEFAULT_ANON_CAP_USD = 0.02;
 const DEFAULT_GLOBAL_CAP_USD = 50;
+/** All anonymous visitors together, so a crowd of fresh addresses cannot use up the global ceiling. */
+const DEFAULT_ANON_POOL_CAP_USD = 10;
+export const ANON_POOL_SUBJECT = "*anon";
 
 export interface Price {
   /** Dollars per million input tokens (= micro-USD per input token). */
@@ -70,6 +73,7 @@ export type SpendEnv = Pick<
   | "AI_MONTHLY_CAP_USD"
   | "AI_ANON_MONTHLY_CAP_USD"
   | "AI_GLOBAL_MONTHLY_CAP_USD"
+  | "AI_ANON_POOL_CAP_USD"
   | "AI_PRICE_IN_USD_PER_M"
   | "AI_PRICE_OUT_USD_PER_M"
 >;
@@ -93,6 +97,8 @@ export function capMicros(env: SpendEnv, subject: string): number {
   const usd =
     subject === GLOBAL_SUBJECT
       ? (positive(env.AI_GLOBAL_MONTHLY_CAP_USD) ?? DEFAULT_GLOBAL_CAP_USD)
+      : subject === ANON_POOL_SUBJECT
+        ? (positive(env.AI_ANON_POOL_CAP_USD) ?? DEFAULT_ANON_POOL_CAP_USD)
       : subject.startsWith("anon:")
         ? (positive(env.AI_ANON_MONTHLY_CAP_USD) ?? DEFAULT_ANON_CAP_USD)
         : (positive(env.AI_MONTHLY_CAP_USD) ?? DEFAULT_USER_CAP_USD);
@@ -126,7 +132,7 @@ export interface Reservation {
 
 export type ReserveResult =
   | { ok: true; reservation: Reservation }
-  | { ok: false; reason: "allowance" | "service_cap" | "unavailable" };
+  | { ok: false; reason: "allowance" | "service_cap" | "anon_pool" | "unavailable" };
 
 function newId(): string {
   const b = new Uint8Array(12);
@@ -146,6 +152,8 @@ export async function reserveSpend(
   const subject = identity.subject;
   const userCap = capMicros(env, subject);
   const globalCap = capMicros(env, GLOBAL_SUBJECT);
+  // Anonymous visitors also share one pool; everyone else is not limited by it.
+  const poolCap = subject.startsWith("anon:") ? capMicros(env, ANON_POOL_SUBJECT) : Number.MAX_SAFE_INTEGER;
   const id = newId();
   try {
     const res = await db
@@ -157,9 +165,12 @@ export async function reserveSpend(
                + ?4 ) <= ?7
            AND ( COALESCE((SELECT micro_usd FROM ai_spend WHERE subject = ?8 AND month = ?3), 0)
                + COALESCE((SELECT SUM(micro_usd) FROM ai_reservation WHERE month = ?3 AND expires_at > ?6), 0)
-               + ?4 ) <= ?9`
+               + ?4 ) <= ?9
+           AND ( COALESCE((SELECT micro_usd FROM ai_spend WHERE subject = ?10 AND month = ?3), 0)
+               + COALESCE((SELECT SUM(micro_usd) FROM ai_reservation WHERE subject LIKE 'anon:%' AND month = ?3 AND expires_at > ?6), 0)
+               + ?4 ) <= ?11`
       )
-      .bind(id, subject, month, micros, now + RESERVATION_TTL_MS, now, userCap, GLOBAL_SUBJECT, globalCap)
+      .bind(id, subject, month, micros, now + RESERVATION_TTL_MS, now, userCap, GLOBAL_SUBJECT, globalCap, ANON_POOL_SUBJECT, poolCap)
       .run();
     if (Number(res.meta?.changes ?? 0) === 1) return { ok: true, reservation: { id, subject, month, micros } };
 
@@ -171,7 +182,18 @@ export async function reserveSpend(
       )
       .bind(subject, month, now)
       .first<{ mine: number }>();
-    return { ok: false, reason: Number(row?.mine ?? 0) + micros > userCap ? "allowance" : "service_cap" };
+    if (Number(row?.mine ?? 0) + micros > userCap) return { ok: false, reason: "allowance" };
+    if (subject.startsWith("anon:")) {
+      const pool = await db
+        .prepare(
+          `SELECT COALESCE((SELECT micro_usd FROM ai_spend WHERE subject = ?1 AND month = ?2), 0)
+                + COALESCE((SELECT SUM(micro_usd) FROM ai_reservation WHERE subject LIKE 'anon:%' AND month = ?2 AND expires_at > ?3), 0) AS used`
+        )
+        .bind(ANON_POOL_SUBJECT, month, now)
+        .first<{ used: number }>();
+      if (Number(pool?.used ?? 0) + micros > poolCap) return { ok: false, reason: "anon_pool" };
+    }
+    return { ok: false, reason: "service_cap" };
   } catch (e) {
     console.error("[spend] reserve failed, refusing the AI call:", String(e));
     return { ok: false, reason: "unavailable" };
@@ -211,6 +233,7 @@ export async function settleSpend(
       db.prepare(`DELETE FROM ai_reservation WHERE id = ?1`).bind(r.id),
       upsert(r.subject),
       upsert(GLOBAL_SUBJECT),
+      ...(r.subject.startsWith("anon:") ? [upsert(ANON_POOL_SUBJECT)] : []),
     ]);
   } catch (e) {
     // The reservation still holds the budget until it expires, so nothing is lost.
@@ -280,7 +303,8 @@ export async function allowanceFor(db: D1Database, env: SpendEnv, subject: strin
 }
 
 /** The message for a refused AI call; speaks in tokens and never mentions money. */
-export function allowanceMessage(reason: "allowance" | "service_cap" | "unavailable", snap?: AllowanceSnapshot): string {
+export function allowanceMessage(reason: "allowance" | "service_cap" | "anon_pool" | "unavailable", snap?: AllowanceSnapshot): string {
+  if (reason === "anon_pool") return "The free search box has reached its limit for this month. Sign in for your own AI allowance. Searching and downloads still work.";
   if (reason === "service_cap") return "AI features are paused for everyone until the start of next month. Searching and downloads still work.";
   if (reason === "unavailable") return "AI features are unavailable for a moment. Searching and downloads still work.";
   const when = snap ? snap.resets_at.slice(0, 10) : "the start of next month";

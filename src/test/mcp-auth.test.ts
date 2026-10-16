@@ -99,3 +99,22 @@ describe("MCP access", () => {
     expect((await post(big, env)).status).toBe(413);
   });
 });
+
+describe("MCP resources", () => {
+  const read = (uri: string) => ({ jsonrpc: "2.0", id: 9, method: "resources/read", params: { uri } });
+
+  it("need a key: they run catalog-wide queries", async () => {
+    const env = await setup();
+    const res = await post(read("singlet://stats"), env);
+    const body = (await res.json()) as { error?: { message: string } };
+    expect(body.error?.message).toMatch(/API key/);
+  });
+
+  it("count against the per-key limit once a key is sent", async () => {
+    const env = await setup({ MCP_RATE_PER_MIN: "1" });
+    const first = (await (await post(read("singlet://stats"), env, auth)).json()) as { error?: { message: string } };
+    expect(first.error?.message ?? "").not.toMatch(/Rate limit|API key/);
+    const second = (await (await post(read("singlet://stats"), env, auth)).json()) as { error?: { message: string } };
+    expect(second.error?.message).toMatch(/Rate limit/);
+  });
+});
