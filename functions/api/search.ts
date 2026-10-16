@@ -26,6 +26,7 @@
  *
  * Cached at the edge for CATALOG_CACHE_TTL seconds keyed on the normalised params.
  */
+import { serverError } from "../_shared/errors";
 import { ensureCatalogColumns } from "../_shared/catalog-refresh";
 import { CORS_HEADERS, corsOk, corsErr, handleOptions } from "../_shared/cors";
 import { cachedJson, CATALOG_CACHE_TTL } from "../_shared/cache";
@@ -111,7 +112,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request, waitUntil
           ...(note ? { note } : {}),
         });
       } catch (e) {
-        return corsErr(String(e));
+        return serverError(e, "search");
       }
     },
     { ttl: CATALOG_CACHE_TTL, key }

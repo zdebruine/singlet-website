@@ -13,6 +13,7 @@
  * assay_family, protocol, reference_build, year, cell_type, …) require the
  * `gse_meta` join and live on /api/search.
  */
+import { serverError } from "../../_shared/errors";
 import { corsOk, corsErr, handleOptions, intParam, clampPageSize } from "../../_shared/cors";
 import { cachedJson, CATALOG_CACHE_TTL } from "../../_shared/cache";
 import { safeList } from "../../_shared/json";
@@ -185,7 +186,7 @@ async function listSeries(env: Env, request: Request): Promise<Response> {
 
     return corsOk({ total, page, page_size: pageSize, data });
   } catch (e) {
-    return corsErr(String(e));
+    return serverError(e, "gse/index");
   }
 }
 

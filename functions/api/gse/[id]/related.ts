@@ -12,6 +12,7 @@
  * A failed query is a 500, never an empty list: cachedJson stores only 200s,
  * so a D1 hiccup must not leave the panel empty for the whole TTL.
  */
+import { serverError } from "../../../_shared/errors";
 import { corsOk, corsErr, handleOptions } from "../../../_shared/cors";
 import { cachedJson } from "../../../_shared/cache";
 import { GSE_RE } from "../../../_shared/study-core";
@@ -135,7 +136,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, params, request, w
 
         return corsOk({ gse_id: id, total: out.length, related: out });
       } catch (e) {
-        return corsErr(String(e));
+        return serverError(e, "gse/[id]/related");
       }
     },
     TTL

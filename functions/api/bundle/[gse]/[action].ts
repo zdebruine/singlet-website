@@ -10,6 +10,8 @@
  * central directory is memoised in D1 (`bundle_index`).
  */
 import { corsOk, corsErr, handleOptions, CORS_HEADERS } from "../../../_shared/cors";
+import { serverError } from "../../../_shared/errors";
+import { checkIngestToken } from "../../../_shared/ingest-auth";
 import { cachedJson } from "../../../_shared/cache";
 import { GSE_RE, bundleUrl } from "../../../_shared/study-core";
 import { getBundleIndex, readEntry, entryRange, MAX_INFLATE_BYTES } from "../../../_shared/bundle-reader";
@@ -17,6 +19,7 @@ import { bundleIndexResponse, loadSampleQc } from "../../../_shared/bundle-core"
 
 interface Env {
   DB: D1Database;
+  INGEST_TOKEN_SHA256?: string;
 }
 
 const DAY = 86400;
@@ -35,7 +38,9 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, params, request, w
   if (!GSE_RE.test(gse)) return corsErr("Invalid series id", 400);
 
   const url = new URL(request.url);
-  const refresh = url.searchParams.get("refresh") === "1";
+  // ?refresh=1 re-reads the file and rewrites the cached index. It is for the
+  // catalog crank, so it needs the ingest token; for everyone else it is ignored.
+  const refresh = url.searchParams.get("refresh") === "1" && (await checkIngestToken(request, env)).ok;
 
   if (action === "index") {
     return cachedJson(
@@ -46,10 +51,10 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, params, request, w
           const index = await getBundleIndex(env.DB, gse, { refresh, waitUntil });
           return corsOk(await bundleIndexResponse(env.DB, gse, index, waitUntil));
         } catch (e) {
-          return corsErr(`Could not read ${gse}.singlet: ${String(e)}`, 502);
+          return serverError(e, `bundle index ${gse}`, {}, 502);
         }
       },
-      DAY
+      { ttl: DAY, key: "v=1" } // one cache entry per study: extra query parameters must not mint new ones
     );
   }
 
@@ -62,16 +67,18 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, params, request, w
           const { source, samples } = await loadSampleQc(env.DB, gse, { refresh, waitUntil });
           return corsOk({ gse_id: gse, source, n_samples: samples.length, samples });
         } catch (e) {
-          return corsErr(`Could not read per-sample QC for ${gse}: ${String(e)}`, 502);
+          return serverError(e, `bundle samples ${gse}`, {}, 502);
         }
       },
-      DAY
+      { ttl: DAY, key: "v=1" }
     );
   }
 
   if (action === "entry") {
     const path = url.searchParams.get("path") ?? "";
     if (!path) return corsErr("path is required", 400);
+    // An entry never changes under the same study file, so one cache entry per (study, path).
+    const produce = async (): Promise<Response> => {
     try {
       const index = await getBundleIndex(env.DB, gse, { waitUntil });
       const entry = index.entries.find((e) => e.p === path);
@@ -107,8 +114,10 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, params, request, w
         },
       });
     } catch (e) {
-      return corsErr(`Could not read entry: ${String(e)}`, 502);
+      return serverError(e, `bundle entry ${gse}`, {}, 502);
     }
+    };
+    return cachedJson(request, waitUntil, produce, { ttl: DAY, key: `path=${encodeURIComponent(path)}` });
   }
 
   return corsErr(`Unknown bundle action '${action}'. Use index, samples or entry.`, 400);

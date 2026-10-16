@@ -22,6 +22,7 @@
  * `accessions` (flat GSE / GSM id list) is a stable contract consumed by the
  * Python and R packages.
  */
+import { serverError } from "../_shared/errors";
 import { ensureCatalogColumns } from "../_shared/catalog-refresh";
 import { CORS_HEADERS, corsOk, corsErr, handleOptions } from "../_shared/cors";
 import { cachedJson, CATALOG_CACHE_TTL } from "../_shared/cache";
@@ -41,7 +42,7 @@ async function respond(env: AppEnv, identity: Identity, waitUntil: WaitUntil, ur
     }
     return corsOk(r.body, { headers: r.headers });
   } catch (e) {
-    return corsErr(String(e));
+    return serverError(e, "nl-search");
   }
 }
 
@@ -68,7 +69,7 @@ export const onRequestPost: PagesFunction<AppEnv> = async ({ env, request, waitU
     }
     return await respond(env, id.identity, waitUntil, url);
   } catch (e) {
-    return corsErr(String(e));
+    return serverError(e, "nl-search");
   }
 };
 

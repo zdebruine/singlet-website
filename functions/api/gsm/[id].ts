@@ -2,6 +2,7 @@
  * GET /api/gsm/:id
  * Sample detail: sample row + parent series (summary) + siblings (same GSE, up to 20).
  */
+import { serverError } from "../../_shared/errors";
 import { corsOk, corsErr, handleOptions } from "../../_shared/cors";
 import { safeJson, safeList } from "../../_shared/json";
 
@@ -49,7 +50,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, params }) => {
       siblings: siblingsResult.results,
     });
   } catch (e) {
-    return corsErr(String(e));
+    return serverError(e, "gsm/[id]");
   }
 };
 

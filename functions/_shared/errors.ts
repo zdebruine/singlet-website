@@ -11,11 +11,11 @@ export function requestId(): string {
   return Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
 }
 
-export function serverError(cause: unknown, context: string, extra: Record<string, unknown> = {}): Response {
+export function serverError(cause: unknown, context: string, extra: Record<string, unknown> = {}, status = 500): Response {
   const id = requestId();
   console.error(`[${id}] ${context}:`, cause instanceof Error ? (cause.stack ?? cause.message) : String(cause));
   return new Response(JSON.stringify({ error: "Internal error", request_id: id, ...extra }), {
-    status: 500,
+    status,
     headers: CORS_HEADERS,
   });
 }

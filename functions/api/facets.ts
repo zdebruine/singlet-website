@@ -13,6 +13,7 @@
  * Cached at the edge for FACETS_CACHE_TTL seconds, keyed on the normalised
  * filter set. The unfiltered catalog is served from a daily `meta_cache` blob.
  */
+import { serverError } from "../_shared/errors";
 import { ensureCatalogColumns } from "../_shared/catalog-refresh";
 import { corsOk, corsErr, handleOptions } from "../_shared/cors";
 import { cachedJson, FACETS_CACHE_TTL } from "../_shared/cache";
@@ -46,7 +47,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request, waitUntil
         const facets = await computeFacets({ db: env.DB, rules, waitUntil }, applied, params.level, candidateIds.length ? candidateIds : null);
         return corsOk({ ...facets, applied, dropped });
       } catch (e) {
-        return corsErr(String(e));
+        return serverError(e, "facets");
       }
     },
     { ttl: FACETS_CACHE_TTL, key }
