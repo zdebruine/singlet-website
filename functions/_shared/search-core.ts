@@ -165,6 +165,8 @@ export interface SearchTotals {
   cells: number | null;
   /** What samples and cells count: the published files (default searches) or catalog metadata (include_unbuilt). */
   basis?: "file" | "catalog";
+  /** True when a ranked search stopped at its candidate limit, so `studies` is a floor ("200+"), not the full count. */
+  truncated?: boolean;
 }
 
 export interface SearchResult<T> {
@@ -1264,6 +1266,7 @@ export async function runStudySearch(
       samples: samples != null ? Number(samples) : null,
       cells: cells != null ? Number(cells) : null,
       basis: p.has_bundle === true ? "file" : "catalog",
+      ...(isRanked && (candidateIds?.length ?? 0) >= RANKED_CANDIDATE_LIMIT ? { truncated: true } : {}),
     },
     page: p.page,
     limit: p.limit,

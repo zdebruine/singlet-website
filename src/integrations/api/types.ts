@@ -115,6 +115,10 @@ export interface SearchTotals {
   studies: number | null;
   samples: number | null;
   cells: number | null;
+  /** "file": usable samples and cells in the published files (the home-page definition); "catalog": processing-database counts. */
+  basis?: "file" | "catalog";
+  /** A ranked search stopped at its candidate limit, so the study count is a floor. */
+  truncated?: boolean;
 }
 
 /** Filters as the server applied them (canonical values). */

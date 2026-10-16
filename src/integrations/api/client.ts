@@ -333,7 +333,13 @@ function normalizeSearch<T>(raw: unknown, level: "gse" | "gsm"): SearchResponse<
   return {
     level: lvl,
     total: num(r.total, rows.length),
-    totals: { studies: numOrNull(totals.studies), samples: numOrNull(totals.samples), cells: numOrNull(totals.cells) },
+    totals: {
+      studies: numOrNull(totals.studies),
+      samples: numOrNull(totals.samples),
+      cells: numOrNull(totals.cells),
+      basis: totals.basis === "file" ? "file" : totals.basis === "catalog" ? "catalog" : undefined,
+      truncated: totals.truncated === true ? true : undefined,
+    },
     page: num(r.page, 1),
     limit: num(r.limit, rows.length),
     data: rows,
