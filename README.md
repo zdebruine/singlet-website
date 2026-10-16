@@ -42,7 +42,7 @@ npm run dev        # Vite on :8080, /api/* proxied to https://singlet.bio
 npm test           # vitest
 ```
 
-Set `VITE_API_PROXY_TARGET` to point the dev proxy at another API host. `npm run build` runs the same gate Cloudflare runs: vitest, the strict Functions typecheck, the Functions bundle, then `vite build`. Sign-in needs the Functions running locally (`npx wrangler pages dev dist` after a build).
+Set `VITE_API_PROXY_TARGET` to point the dev proxy at another API host. `npm run check` runs vitest, the strict Functions typecheck and the Functions bundle (GitHub CI runs it before `npm run build`, which is `vite build` only and is what Cloudflare runs). Sign-in needs the Functions running locally (`npx wrangler pages dev dist` after a build).
 
 ## Deployment
 

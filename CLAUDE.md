@@ -9,8 +9,9 @@ either back.
 ## Working rules
 - Branch + PR for every change. `main` auto-deploys to singlet.bio; PR branches get previews at
   `https://<branch-with-dashes>.singlet-4gc.pages.dev`. **Previews share the production D1 database.**
-- CI (`.github/workflows/ci.yml`) runs `npm run build`, whose `prebuild` is vitest + strict
-  `tsc -p tsconfig.functions.json` + `wrangler pages functions build`. It must be green before merge.
+- CI (`.github/workflows/ci.yml`) runs `npm run check` (vitest + strict
+  `tsc -p tsconfig.functions.json` + `wrangler pages functions build`) and then `npm run build` (vite only). It
+  must be green before merge. Cloudflare's own build runs only `npm run build`; the tests need Node >= 22.13 for node:sqlite.
 - Cloudflare reports the static deploy as green even when Functions fail to compile. After merging, confirm
   the change is live (hit an endpoint whose behaviour changed). `scripts/smoke.sh <base-url>` runs after every
   deploy to main (`smoke.yml`); run it against a preview before merging.
