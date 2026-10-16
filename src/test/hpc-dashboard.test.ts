@@ -52,9 +52,9 @@ describe("acceptedDigests", () => {
   const a = "a".repeat(64);
   const b = "B".repeat(64);
 
-  it("falls back to the baked-in digest only when the variable is unset or blank", () => {
-    expect(acceptedDigests({})).toHaveLength(1);
-    expect(acceptedDigests({ INGEST_TOKEN_SHA256: "  " })).toEqual(acceptedDigests({}));
+  it("accepts nothing when the variable is unset or blank (no baked-in fallback)", () => {
+    expect(acceptedDigests({})).toEqual([]);
+    expect(acceptedDigests({ INGEST_TOKEN_SHA256: "  " })).toEqual([]);
   });
 
   it("reads a comma-separated list, lowercased, and drops malformed entries", () => {

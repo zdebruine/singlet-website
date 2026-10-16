@@ -18,6 +18,7 @@
  * /api/ingest/hpc (Pages prefers the more specific route). It exports POST
  * only, so a GET falls through to [table].ts and gets its JSON 404.
  */
+import { serverError } from "../../_shared/errors";
 import { checkIngestToken } from "../../_shared/ingest-auth";
 import { HPC_MAX_BODY_BYTES, hpcPath } from "../../_shared/hpc-dashboard";
 
@@ -81,6 +82,6 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     });
     return json({ ok: true, path, bytes: bytes.byteLength, etag: obj?.etag ?? null }, 200);
   } catch (e) {
-    return json({ error: String(e), path }, 500);
+    return serverError(e, "hpc upload", { path });
   }
 };

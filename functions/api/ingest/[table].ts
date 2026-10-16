@@ -9,11 +9,12 @@
  * digests, see that file for rotation). POST /api/ingest/hpc (./hpc.ts) uses
  * the same token.
  *
- * GET /api/ingest/index-next?n=25 — UNAUTHENTICATED backfill crank. It only
- * reads public `.singlet` files and fills the cache tables `bundle_index` and
- * `sample_qc`, so no token is needed, but it is hard rate-limited with a single
- * D1 row (`meta_cache` key `index-next:lock`): one run in flight at a time and
- * at least one second between runs globally — otherwise 429. Each call picks
+ * GET /api/ingest/index-next?n=25 — backfill crank, same `X-Ingest-Token` as the
+ * POSTs (it writes production D1, so it is not public). It only reads public
+ * `.singlet` files and fills the cache tables `bundle_index` and `sample_qc`.
+ * It is single-flight through one D1 row (`meta_cache` key `index-next:lock`,
+ * taken with one atomic upsert, see _shared/crank-lock): one run in flight at a
+ * time and at least one second between runs globally — otherwise 429. Each call picks
  * the next `n` studies from `bundle_manifest` that have no `bundle_index` row
  * or whose summaries were never read (no `sample_qc` rows and no
  * `summaries_indexed` row), and are not parked in `bundle_index_failure`, and
@@ -22,7 +23,7 @@
  * written; warnings adds notes such as partial summaries) or failed (unreadable
  * or no summary.json; parked so it is not retried). Loop until `remaining` is 0.
  *
- * GET /api/ingest/refresh-next?n=50 — UNAUTHENTICATED freshness crank, locked
+ * GET /api/ingest/refresh-next?n=50 — freshness crank, token-protected and locked
  * the same way (`meta_cache` key `refresh-next:lock`) and idempotent. Each call:
  * (a) fills gsm.organism_primary/tissue_group/disease_group/assay_family where
  * organism_primary IS NULL (vocab.ts rules); (b) computes sample_qc.usable /
@@ -49,6 +50,7 @@
 import { getBundleIndex, ensureSampleQcTable } from "../../_shared/bundle-reader";
 import { readSampleSummaries, upsertSampleQcStatement } from "../../_shared/bundle-core";
 import {
+  UNREADABLE_FILE_ERRORS,
   applyUsable,
   ensureCatalogColumns,
   ensureCrankTables,
@@ -56,6 +58,8 @@ import {
   refreshNext,
   refreshRemaining,
 } from "../../_shared/catalog-refresh";
+import { acquireCrankLock, releaseCrankLock } from "../../_shared/crank-lock";
+import { serverError } from "../../_shared/errors";
 import { checkIngestToken } from "../../_shared/ingest-auth";
 
 const MAX_ROWS = 2000;
@@ -390,14 +394,14 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, params }
       }
     }
   } catch (e) {
-    return json({ error: String(e), table, received: rows.length, written }, 500, origin);
+    return serverError(e, `ingest ${table}`, { table, received: rows.length, written });
   }
 
   return json({ ok: true, table, received: rows.length, written, ms: Date.now() - started }, 200, origin);
 };
 
 // ── GET /api/ingest/index-next?n=25 ─────────────────────────────────────────
-// Unauthenticated backfill crank (see header comment). Only writes the cache
+// Token-protected backfill crank (see header comment). Only writes the cache
 // tables bundle_index / sample_qc from public files.
 
 const LOCK_KEY = "index-next:lock";
@@ -418,11 +422,20 @@ const COOLDOWN_MS = 1_000;
 // Studies that cannot be read (missing/corrupt file) are parked in
 // bundle_index_failure so the backfill loop can reach remaining = 0 instead of
 // retrying them forever.
-const PENDING_SQL = `FROM bundle_manifest m
+// A park holds for good when the file itself is the problem (broken zip, no
+// summary.json). Any other reason (5xx, timeout, subrequest budget) is treated
+// as transient: the study is retried once the park is PARK_RETRY_HOURS old, so a
+// bad minute at R2 does not hide a study from the catalog forever.
+const PARK_RETRY_HOURS = 6;
+const PARK_HOLDS = `(instr(f.error, 'no summary.json') > 0
+    OR ${UNREADABLE_FILE_ERRORS.map((e) => `instr(f.error, '${e}') > 0`).join(" OR ")}
+    OR f.updated_at > strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-${PARK_RETRY_HOURS} hours'))`;
+
+export const PENDING_SQL = `FROM bundle_manifest m
   WHERE (NOT EXISTS (SELECT 1 FROM bundle_index i WHERE i.gse_id = m.gse_id)
          OR (NOT EXISTS (SELECT 1 FROM sample_qc q WHERE q.gse_id = m.gse_id)
              AND NOT EXISTS (SELECT 1 FROM summaries_indexed s WHERE s.gse_id = m.gse_id)))
-    AND NOT EXISTS (SELECT 1 FROM bundle_index_failure f WHERE f.gse_id = m.gse_id)`;
+    AND NOT EXISTS (SELECT 1 FROM bundle_index_failure f WHERE f.gse_id = m.gse_id AND ${PARK_HOLDS})`;
 
 const SUMMARY_RE = /^samples\/GSM\d+\/summary\.json$/;
 
@@ -441,27 +454,11 @@ async function parkStudy(db: D1Database, gse: string, reason: string): Promise<v
     .catch(() => undefined);
 }
 
-async function readLockUntil(db: D1Database, key = LOCK_KEY): Promise<number> {
-  const row = await db
-    .prepare(`SELECT value FROM meta_cache WHERE key = ?`)
-    .bind(key)
-    .first<{ value: string }>()
-    .catch(() => null);
-  const until = Number(row?.value ?? 0);
-  return Number.isFinite(until) ? until : 0;
-}
-
-async function writeLockUntil(db: D1Database, until: number, key = LOCK_KEY): Promise<void> {
-  await db
-    .prepare(`INSERT OR REPLACE INTO meta_cache (key, value, updated_at) VALUES (?, ?, ?)`)
-    .bind(key, String(until), nowIso())
-    .run()
-    .catch(() => undefined);
-}
-
 export const onRequestGet: PagesFunction<Env> = async ({ request, env, params }) => {
   const origin = request.headers.get("Origin");
   const route = String(params.table ?? "");
+  const auth = await checkIngestToken(request, env);
+  if (!auth.ok) return json({ error: auth.error }, 401, origin);
   if (route === "refresh-next") return refreshNextHandler(request, env, origin);
   if (route !== "index-next") {
     return json({ error: "Unknown GET endpoint. Use /api/ingest/index-next?n=25 or /api/ingest/refresh-next?n=50" }, 404, origin);
@@ -470,11 +467,11 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env, params })
   const url = new URL(request.url);
   const n = Math.min(MAX_INDEX_PER_CALL, Math.max(1, Number(url.searchParams.get("n") ?? "25") || 25));
 
-  const until = await readLockUntil(env.DB);
-  if (Date.now() < until) {
-    return json({ error: "Busy — another index-next run is in flight or cooling down", retry_after_ms: until - Date.now() }, 429, origin);
+  const got = await acquireCrankLock(env.DB, LOCK_KEY, LOCK_MS).catch((e) => e as Error);
+  if (got instanceof Error) return serverError(got, "index-next lock");
+  if (!got.ok) {
+    return json({ error: "Busy — another index-next run is in flight or cooling down", retry_after_ms: got.retryAfterMs }, 429, origin);
   }
-  await writeLockUntil(env.DB, Date.now() + LOCK_MS);
 
   const indexed: string[] = [];
   const failed: { gse_id: string; error: string }[] = [];
@@ -574,9 +571,9 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env, params })
       origin
     );
   } catch (e) {
-    return json({ error: String(e), indexed, failed, warnings }, 500, origin);
+    return serverError(e, "index-next", { indexed, failed, warnings });
   } finally {
-    await writeLockUntil(env.DB, Date.now() + COOLDOWN_MS);
+    await releaseCrankLock(env.DB, got.lock, COOLDOWN_MS);
   }
 };
 
@@ -586,11 +583,11 @@ async function refreshNextHandler(request: Request, env: Env, origin: string | n
   const started = Date.now();
   const url = new URL(request.url);
   const n = Math.min(200, Math.max(1, Number(url.searchParams.get("n") ?? "50") || 50));
-  const until = await readLockUntil(env.DB, REFRESH_LOCK_KEY);
-  if (Date.now() < until) {
-    return json({ error: "Busy — another refresh-next run is in flight or cooling down", retry_after_ms: until - Date.now() }, 429, origin);
+  const got = await acquireCrankLock(env.DB, REFRESH_LOCK_KEY, LOCK_MS).catch((e) => e as Error);
+  if (got instanceof Error) return serverError(got, "refresh-next lock");
+  if (!got.ok) {
+    return json({ error: "Busy — another refresh-next run is in flight or cooling down", retry_after_ms: got.retryAfterMs }, 429, origin);
   }
-  await writeLockUntil(env.DB, Date.now() + LOCK_MS, REFRESH_LOCK_KEY);
   try {
     // META_PENDING reads summaries_indexed, so it must exist before counting.
     await ensureCrankTables(env.DB).catch(() => undefined);
@@ -610,8 +607,8 @@ async function refreshNextHandler(request: Request, env: Env, origin: string | n
     const remaining_total = counts.some((v) => v < 0) ? -1 : counts.reduce((a, b) => a + b, 0);
     return json({ ok: true, done, errors, remaining, remaining_total, ms: Date.now() - started }, 200, origin);
   } catch (e) {
-    return json({ error: String(e) }, 500, origin);
+    return serverError(e, "refresh-next");
   } finally {
-    await writeLockUntil(env.DB, Date.now() + COOLDOWN_MS, REFRESH_LOCK_KEY);
+    await releaseCrankLock(env.DB, got.lock, COOLDOWN_MS);
   }
 }
