@@ -53,8 +53,13 @@ export function forgetKeyMemo(): void {
   memo.clear();
 }
 
-export async function anonSubjectFromIp(ip: string): Promise<string> {
-  return `anon:${(await sha256Hex(`${ANON_SALT}:${ip.trim()}`)).slice(0, 32)}`;
+/**
+ * Anonymous subject: a salted hash of the address. The default salt is in the repository, so with it alone
+ * a short IPv4 space can be hashed back; set ANON_IP_SALT (a secret) in Pages so the hashes cannot be
+ * reversed or linked to another deployment. Changing it resets every anonymous allowance.
+ */
+export async function anonSubjectFromIp(ip: string, salt: string = ANON_SALT): Promise<string> {
+  return `anon:${(await sha256Hex(`${salt}:${ip.trim()}`)).slice(0, 32)}`;
 }
 
 export function clientIp(request: Request): string {
@@ -204,7 +209,7 @@ export function sameOriginOrSafe(request: Request): boolean {
  */
 export async function resolveIdentity(
   request: Request,
-  env: { DB: D1Database },
+  env: { DB: D1Database; ANON_IP_SALT?: string },
   waitUntil: WaitUntil,
 ): Promise<IdentityOutcome> {
   const key = apiKeyFromRequest(request);
@@ -217,7 +222,7 @@ export async function resolveIdentity(
     const user = await lookupSession(env.DB, request, waitUntil);
     if (user) return { ok: true, identity: { kind: "session", subject: `user:${user.userId}`, userId: user.userId, user } };
   }
-  return { ok: true, identity: { kind: "anonymous", subject: await anonSubjectFromIp(clientIp(request)), sandbox: isSiteRequest(request) } };
+  return { ok: true, identity: { kind: "anonymous", subject: await anonSubjectFromIp(clientIp(request), env.ANON_IP_SALT?.trim() || ANON_SALT), sandbox: isSiteRequest(request) } };
 }
 
 const SITE_ORIGIN_RE = /^https:\/\/(singlet\.bio|[a-z0-9-]+\.singlet-4gc\.pages\.dev|alpha\.singlet\.bio)$/i;

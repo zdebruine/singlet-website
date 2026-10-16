@@ -56,6 +56,9 @@ export interface AppEnv {
   /** MCP calls per minute per API key (default 60). */
   MCP_RATE_PER_MIN?: string;
 
+  /** Secret salt for hashing anonymous visitors' addresses (default: a public constant). */
+  ANON_IP_SALT?: string;
+
   // ── Ingest ──────────────────────────────────────────────────────────────
   /** sha256 hex of the HPC ingest token. */
   INGEST_TOKEN_SHA256?: string;

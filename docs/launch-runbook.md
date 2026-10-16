@@ -10,6 +10,7 @@ are in the pull requests; this file is the order to do the rest in, and how to u
 | Set `INGEST_TOKEN_SHA256` (Production **and** Preview) | Pages → singlet → Settings → Variables and Secrets | The baked-in fallback digest is gone: unset means every ingest and crank call gets 401. Accepts several comma-separated digests for rotation. |
 | Add GitHub secret `SINGLET_INGEST_TOKEN` | repo Settings → Secrets → Actions | `catalog-crank.yml` now sends it. It is the plaintext whose SHA-256 is `INGEST_TOKEN_SHA256`. |
 | Apply `schema/012_ai_budget.sql` | `npx wrangler d1 execute singlet-catalog --remote --file=schema/012_ai_budget.sql` | AI calls refuse (fail closed) and MCP counters are not recorded until the tables exist. Idempotent. |
+| Set `ANON_IP_SALT` (secret, any long random string) | Pages → Variables and Secrets | Anonymous visitors are keyed by a salted hash of their address; the default salt is public, so without this the hashes can be reversed. Changing it resets anonymous allowances. |
 | Choose the AI caps | Pages variables `AI_MONTHLY_CAP_USD` (default 1), `AI_GLOBAL_MONTHLY_CAP_USD` (default 50), `AI_ANON_MONTHLY_CAP_USD` (default 0.02) | Users only ever see tokens. The global cap is the circuit breaker: pick a number you can afford. |
 | Check the model price table | `functions/_shared/spend.ts` (`ANTHROPIC_PRICES`, `WORKERS_AI_PRICES`) | Prices were taken from the provider pages on 2026-10-16. An unlisted model is priced high; override with `AI_PRICE_IN_USD_PER_M` / `AI_PRICE_OUT_USD_PER_M`. |
 
