@@ -1,0 +1,273 @@
+{
+  "name": "singlet_annotation_marker_based_cell_assignment",
+  "title": "Marker-based cell type assignment",
+  "description": "Assigns each cell to a candidate cell type, or to unknown, using a user-supplied table of positive and negative marker genes per type. The default method, cellassign, fits a marker-constrained negative-binomial mixture on raw counts and returns posterior probabilities; sctype, aucell and module_score are heuristic comparators and scina is a two-state Gaussian comparator. It writes obs/marker_label_<method>, obs/marker_confidence_<method>, obsm/marker_scores_<method> and uns/marker_assign_<method>, and it also writes models/cellassign for the cellassign method. Do not use it without a marker table, or when labels should come from a reference atlas; use reference label transfer for that.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "marker_table": {
+        "type": "object",
+        "description": "Candidate type to marker map: each type lists positive genes and optional negative genes.",
+        "additionalProperties": {
+          "type": "object",
+          "properties": {
+            "positive": {
+              "type": "array",
+              "items": {"type": "string"},
+              "minItems": 1,
+              "description": "Positive marker gene symbols."
+            },
+            "negative": {
+              "type": "array",
+              "items": {"type": "string"},
+              "default": [],
+              "description": "Negative marker gene symbols; read by sctype only."
+            }
+          },
+          "required": ["positive"],
+          "additionalProperties": false
+        }
+      },
+      "method": {
+        "type": "string",
+        "enum": ["cellassign", "sctype", "aucell", "module_score", "scina"],
+        "default": "cellassign",
+        "description": "Assignment method. cellassign is the proposed default; the others are published comparators."
+      },
+      "layer": {
+        "type": ["string", "null"],
+        "default": null,
+        "description": "Layer to read. Null selects counts for cellassign and lognorm for other methods."
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu", "cuda"],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "minimum": 0,
+        "default": 1,
+        "description": "Seed for the AddModuleScore control draw and CellAssign initialisation."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      },
+      "cellassign": {
+        "type": "object",
+        "description": "Options read only when method is cellassign.",
+        "properties": {
+          "min_delta": {
+            "type": "number",
+            "minimum": 0,
+            "default": 2,
+            "description": "Lower bound on the natural-log marker shift; 2 is the published value."
+          },
+          "basis_count": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 10,
+            "description": "Number of dispersion spline basis functions."
+          },
+          "shrinkage": {
+            "type": "boolean",
+            "default": true,
+            "description": "Shrink marker shifts towards a shared mean on the log scale."
+          },
+          "dirichlet_concentration": {
+            "type": "number",
+            "minimum": 0,
+            "default": 0.01,
+            "description": "Symmetric Dirichlet concentration on type proportions."
+          },
+          "num_runs": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 3,
+            "description": "Independent EM restarts; the best log-likelihood is kept. Published default is 1."
+          },
+          "include_other": {
+            "type": "boolean",
+            "default": true,
+            "description": "Add an all-zero marker column for cells of no listed type. Published list default is false."
+          },
+          "assign_prob": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.95,
+            "description": "Minimum maximum posterior for a called label; otherwise unknown."
+          },
+          "covariates": {
+            "type": "array",
+            "items": {"type": "string"},
+            "default": [],
+            "description": "obs columns used as model covariates, such as batch."
+          }
+        },
+        "additionalProperties": false
+      },
+      "sctype": {
+        "type": "object",
+        "description": "Options read only when method is sctype.",
+        "properties": {
+          "scaled": {
+            "type": "boolean",
+            "default": true,
+            "description": "True means expression is already gene-wise z-scored; false z-scores it first."
+          },
+          "uppercase_genes": {
+            "type": "boolean",
+            "default": true,
+            "description": "Uppercase gene symbols before matching the marker table."
+          },
+          "cluster_key": {
+            "type": ["string", "null"],
+            "default": null,
+            "description": "obs column of clusters; when set, clusters below the threshold become unknown."
+          },
+          "unknown_fraction": {
+            "type": "number",
+            "minimum": 0,
+            "default": 0.25,
+            "description": "Cluster Unknown threshold as a fraction of cluster size, applied to the summed score."
+          }
+        },
+        "additionalProperties": false
+      },
+      "aucell": {
+        "type": "object",
+        "description": "Options read only when method is aucell.",
+        "properties": {
+          "n_up": {
+            "type": ["integer", "null"],
+            "minimum": 2,
+            "default": null,
+            "description": "Recovery-curve cutoff in ranked genes; null uses ceil(0.05 G), clipped to [2, G]."
+          }
+        },
+        "additionalProperties": false
+      },
+      "scina": {
+        "type": "object",
+        "description": "Options read only when method is scina.",
+        "properties": {
+          "max_iter": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 100,
+            "description": "Maximum EM iterations."
+          },
+          "convergence_n": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 10,
+            "description": "Number of recent label vectors compared for stability."
+          },
+          "convergence_rate": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.99,
+            "description": "Fraction of cells whose labels must stay stable."
+          },
+          "allow_unknown": {
+            "type": "boolean",
+            "default": true,
+            "description": "Include the residual unknown state."
+          },
+          "rm_overlap": {
+            "type": "boolean",
+            "default": true,
+            "description": "Remove genes shared between signatures before fitting."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "required": ["dataset", "marker_table"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "For completed runs: n_cells, unknown_fraction, per_type_counts, method, converged, and log_likelihood where defined.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "annotation.marker_based_cell_assignment",
+      "reads": [
+        "layers/counts",
+        "layers/lognorm",
+        "var",
+        "obs/size_factor",
+        "obs/<covariate>"
+      ],
+      "writes": [
+        "obs/marker_label_<method>",
+        "obs/marker_confidence_<method>",
+        "obsm/marker_scores_<method>",
+        "uns/marker_assign_<method>",
+        "models/cellassign"
+      ],
+      "devices": ["cpu", "cuda"],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "model-based",
+      "docs": "tasks/annotation/marker_based_cell_assignment.md"
+    }
+  }
+}

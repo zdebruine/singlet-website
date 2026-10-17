@@ -1,0 +1,255 @@
+{
+  "name": "singlet_communication_differential_communication",
+  "title": "Donor-aware differential communication",
+  "description": "Tests which sender-receiver ligand-receptor interactions change between two conditions, with donors or samples as the unit of inference. The default multinichenet method sums cells to donor-by-cell-type pseudobulk, fits negative-binomial contrasts for ligands and receptors, and writes effect sizes, adjusted p-values and a weighted prioritisation score to uns/ccc_diff_results and uns/ccc_diff_prioritization. Needs raw counts in layers/counts, sample, donor, condition and cell-type columns, an LR resource, and several donors per condition. Do not use it for cell-level comparisons, single-donor conditions, or interaction strength within one condition (use communication.lr_interaction_scoring). Call with dry_run true first; tensor_cell2cell writes factors without p-values.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu", "cuda"],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 1,
+        "minimum": 0,
+        "description": "Random seed for tensor initialisation; the multinichenet method ignores it."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing ccc_diff members for the same contrast and method instead of failing."
+      },
+      "method": {
+        "type": "string",
+        "enum": ["multinichenet", "tensor_cell2cell"],
+        "default": "multinichenet",
+        "description": "multinichenet: default sample-level route with empirical null. tensor_cell2cell: donor-resolved factors, no p-values."
+      },
+      "contrast": {
+        "type": "string",
+        "description": "Condition contrast written test_vs_reference, for example treated_vs_control; both levels must exist."
+      },
+      "design": {
+        "type": "object",
+        "description": "Column names and donor settings for the design.",
+        "properties": {
+          "sample_key": {
+            "type": "string",
+            "default": "sample_id",
+            "description": "obs column identifying the sample (one donor in one condition)."
+          },
+          "donor_key": {
+            "type": "string",
+            "default": "donor_id",
+            "description": "obs column identifying the donor; the unit of inference."
+          },
+          "condition_key": {
+            "type": "string",
+            "default": "condition",
+            "description": "obs column holding the condition labels."
+          },
+          "cell_type_key": {
+            "type": "string",
+            "default": "cell_type",
+            "description": "obs column holding cell-type labels; each type is tested separately."
+          },
+          "batch_keys": {
+            "type": "array",
+            "items": {"type": "string"},
+            "default": [],
+            "description": "Optional batch covariates in the design (multinichenet only)."
+          },
+          "min_donors_per_group": {
+            "type": "integer",
+            "minimum": 2,
+            "default": 3,
+            "description": "Minimum donors per condition before a contrast is tested."
+          }
+        },
+        "additionalProperties": false
+      },
+      "lr_resource": {
+        "type": "string",
+        "default": "uns/lr_resource",
+        "description": "Ligand-receptor table in uns, or a resource name from communication.lr_resource_curation."
+      },
+      "p_val_threshold": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1,
+        "default": 0.05,
+        "description": "Significance cut-off used to flag triplets in tables and the summary."
+      },
+      "multinichenet": {
+        "type": "object",
+        "description": "Options for the multinichenet method.",
+        "properties": {
+          "fraction_cutoff": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.05,
+            "description": "Minimum fraction of cells in a sample expressing a gene for it to count as expressed."
+          },
+          "min_sample_prop": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.5,
+            "description": "Fraction of samples in the smallest group that must express a gene."
+          },
+          "min_cells": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 10,
+            "description": "Minimum cells per sample and cell type for a pseudobulk observation."
+          },
+          "scenario": {
+            "type": "string",
+            "enum": ["regular", "no_activity", "lower_DE", "no_frac_LR_expr"],
+            "default": "regular",
+            "description": "Prioritisation weight scenario; regular weights all criteria equally."
+          },
+          "ligand_activity_down": {
+            "type": "boolean",
+            "default": false,
+            "description": "Include downregulated ligand activity in the prioritisation score."
+          },
+          "logFC_threshold": {
+            "type": "number",
+            "minimum": 0,
+            "default": 0.5,
+            "description": "Minimum absolute log fold change for the NicheNet target gene set."
+          },
+          "empirical_pval": {
+            "type": "boolean",
+            "default": true,
+            "description": "Calibrate p-values with an empirical null estimated from the test statistics."
+          },
+          "top_n_target": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 250,
+            "description": "Top predicted target genes kept per ligand for NicheNet links."
+          },
+          "top_n_LR": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 2500,
+            "description": "Number of LR pairs kept in the output table."
+          },
+          "n_cores": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 1,
+            "description": "Parallel workers for per-cell-type fits."
+          }
+        },
+        "additionalProperties": false
+      },
+      "tensor_cell2cell": {
+        "type": "object",
+        "description": "Options for the tensor_cell2cell method.",
+        "properties": {
+          "rank": {
+            "type": ["integer", "null"],
+            "minimum": 1,
+            "default": null,
+            "description": "Fixed NN-CP rank; null runs an elbow search up to upper_rank."
+          },
+          "upper_rank": {
+            "type": "integer",
+            "minimum": 2,
+            "default": 25,
+            "description": "Largest rank tried by the elbow search."
+          },
+          "tf_init": {
+            "type": "string",
+            "enum": ["random", "svd"],
+            "default": "random",
+            "description": "Initialisation of the NN-CP factors; the choice is recorded in the output."
+          },
+          "n_iter_max": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 100,
+            "description": "Maximum multiplicative-update iterations per rank."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "required": ["dataset", "contrast"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: ran inline and wrote members; dry_run: estimate only; queued: long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written, e.g. uns/ccc_diff_results. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Keys: method, contrast, donors_per_group, triplets_tested, triplets_flagged, null_scale, device, seed. Completed runs only.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Provenance record id (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "description": "For dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "communication.differential_communication",
+      "reads": ["layers/counts", "obs/<cell_type_key>", "obs/<sample_key>", "obs/<donor_key>", "obs/<condition_key>", "obs/<batch_keys>", "uns/lr_resource"],
+      "writes": ["uns/ccc_diff_sample_scores", "uns/ccc_diff_results", "uns/ccc_diff_prioritization", "models/ccc_diff_pb_nb", "models/ccc_nncp_factors"],
+      "devices": ["cpu", "cuda"],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": true,
+      "paradigm": "hybrid",
+      "docs": "tasks/communication/differential_communication.md"
+    }
+  }
+}

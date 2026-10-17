@@ -1,0 +1,210 @@
+{
+  "name": "singlet_trajectory_fate_probability",
+  "title": "Cell-fate probability estimation",
+  "description": "Estimates each cell's probability of reaching each terminal state, using absorbing Markov chains on a kNN or velocity kernel, or optimal-transport couplings across time points. Needs an embedding or kNN graph plus a root or pseudotime, and optionally terminal states; writes a row-stochastic fate matrix with entropy and argmax. Do not use it as evidence of fate accuracy without outcome data, and do not use waddington_ot without day labels.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "method": {
+        "type": "string",
+        "enum": ["palantir", "cellrank", "waddington_ot"],
+        "default": "palantir",
+        "description": "palantir: absorbing chain on a kNN graph; cellrank: multiview kernel absorption; waddington_ot: time-course couplings."
+      },
+      "embedding": {
+        "type": "string",
+        "default": "X_pca",
+        "description": "obsm key of the embedding used to build the kNN graph when no graph is stored."
+      },
+      "root": {
+        "type": ["string", "null"],
+        "default": null,
+        "description": "Start cell: obs column with one TRUE value. Required when obs/pseudotime is absent."
+      },
+      "terminal_key": {
+        "type": ["string", "null"],
+        "default": null,
+        "description": "uns key listing terminal states; null uses the method's own terminal-state detection."
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu", "cuda"],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 20,
+        "description": "Seed for Palantir waypoint sampling; default matches Palantir."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      },
+      "palantir": {
+        "type": "object",
+        "description": "Options used when method is palantir.",
+        "additionalProperties": false,
+        "properties": {
+          "knn": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 30,
+            "description": "Neighbours per cell in the kNN graph."
+          },
+          "num_waypoints": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 1200,
+            "description": "Waypoints for the absorbing chain; cells are lifted to them."
+          },
+          "max_iterations": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 25,
+            "description": "Maximum pseudotime refinement iterations."
+          }
+        }
+      },
+      "cellrank": {
+        "type": "object",
+        "description": "Options used when method is cellrank.",
+        "additionalProperties": false,
+        "properties": {
+          "threshold_scheme": {
+            "type": "string",
+            "enum": ["hard", "soft"],
+            "default": "hard",
+            "description": "Pseudotime edge rule: hard keeps forward edges plus a neighbour fraction; soft is VIA-inspired."
+          },
+          "frac_to_keep": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.3,
+            "description": "Fraction of neighbours kept regardless of direction (hard scheme)."
+          },
+          "tol": {
+            "type": "number",
+            "minimum": 0,
+            "default": 1e-6,
+            "description": "Relative residual tolerance for the absorption linear solve."
+          }
+        }
+      },
+      "waddington_ot": {
+        "type": "object",
+        "description": "Options used when method is waddington_ot.",
+        "additionalProperties": false,
+        "properties": {
+          "time_key": {
+            "type": "string",
+            "default": "day",
+            "description": "obs column with time-point labels; required for this method."
+          },
+          "epsilon": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 0.05,
+            "description": "Entropic regularisation; small values give near-deterministic maps."
+          },
+          "lambda1": {
+            "type": "number",
+            "minimum": 0,
+            "default": 1,
+            "description": "Unbalanced penalty on the source marginal."
+          },
+          "lambda2": {
+            "type": "number",
+            "minimum": 0,
+            "default": 50,
+            "description": "Unbalanced penalty on the target marginal."
+          }
+        }
+      }
+    },
+    "required": ["dataset"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Compact summary for completed runs. Keys: method, terminal_states, waypoints, row_sum_error_max, solver_residual_max. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "trajectory.fate_probability",
+      "reads": [
+        "obsm/X_pca",
+        "obsp/connectivities",
+        "obs/pseudotime",
+        "obs/root_flag",
+        "uns/terminal_states",
+        "obs/day"
+      ],
+      "writes": [
+        "obsm/fate_probabilities",
+        "uns/fate_probabilities_columns",
+        "obs/fate_entropy",
+        "obs/fate_argmax",
+        "obs/absorption_time"
+      ],
+      "devices": ["cpu", "cuda"],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/trajectory/fate_probability.md"
+    }
+  }
+}

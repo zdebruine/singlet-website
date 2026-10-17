@@ -1,0 +1,188 @@
+{
+  "name": "singlet_immune_repertoire_tcr_clonotype_definition",
+  "title": "TCR clonotype definition and grouping",
+  "description": "Assigns each cell with paired TCR chains to a clonotype by exact CDR3 identity (default, nucleotide) or by an amino-acid distance threshold, blocking links across donors by default, and records the rule in uns/clone_definition. Use it to define clones before clonal expansion, overlap or specificity analysis. Do not use it for B-cell receptors, where somatic hypermutation needs clonal family inference, and do not compare clone counts across definitions without the recorded rule.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "method": {
+        "type": "string",
+        "enum": ["identity_nt", "identity_aa", "hamming", "levenshtein", "tcrdist"],
+        "default": "identity_nt",
+        "description": "identity_nt is the default; hamming, levenshtein and tcrdist are amino-acid distance graphs and need cutoff."
+      },
+      "receptor_arms": {
+        "type": "string",
+        "enum": ["VJ", "VDJ", "all", "any"],
+        "default": "all",
+        "description": "Chains that must match; all combines chain distances by maximum, any by minimum."
+      },
+      "dual_ir": {
+        "type": "string",
+        "enum": ["primary_only", "all", "any"],
+        "default": "primary_only",
+        "description": "Chain pairs considered per cell; primary_only uses the most abundant pair by UMI count."
+      },
+      "gene_match": {
+        "type": "object",
+        "description": "Gene constraints on links.",
+        "properties": {
+          "same_v_gene": {
+            "type": "boolean",
+            "default": false,
+            "description": "Require identical V genes for linked cells."
+          },
+          "same_j_gene": {
+            "type": "boolean",
+            "default": false,
+            "description": "Require identical J genes for linked cells."
+          }
+        },
+        "additionalProperties": false
+      },
+      "within_group": {
+        "type": "array",
+        "items": {"type": "string"},
+        "default": ["donor_id"],
+        "description": "Columns that must match for two cells to be linked; donor_id blocks cross-donor merging."
+      },
+      "cutoff": {
+        "type": ["integer", "null"],
+        "minimum": 0,
+        "maximum": 255,
+        "default": null,
+        "description": "Maximum distance counted as a match; null uses 2 for hamming and levenshtein, 20 for tcrdist; refused for identity methods."
+      },
+      "graph": {
+        "type": "object",
+        "description": "Graph partitioning options for distance methods.",
+        "properties": {
+          "partitions": {
+            "type": "string",
+            "enum": ["connected", "leiden", "fastgreedy"],
+            "default": "connected",
+            "description": "Partition of the thresholded graph; connected is the default and does not use seed."
+          },
+          "resolution": {
+            "type": "number",
+            "default": 1,
+            "description": "Leiden resolution; ignored unless partitions is leiden."
+          },
+          "n_iterations": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 5,
+            "description": "Leiden iterations; ignored unless partitions is leiden."
+          }
+        },
+        "additionalProperties": false
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Random seed for Leiden partitions; no effect otherwise."
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu", "cuda"],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": ["dataset"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written, e.g. obs/clone_id. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "For completed calls: n_cells, n_assigned, n_clonotypes, n_multichain and rule. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "immune-repertoire.tcr_clonotype_definition",
+      "reads": [
+        "obs/tcr_alpha_cdr3_nt",
+        "obs/tcr_beta_cdr3_nt",
+        "obs/tcr_alpha_cdr3_aa",
+        "obs/tcr_beta_cdr3_aa",
+        "obs/tcr_alpha_v",
+        "obs/tcr_alpha_j",
+        "obs/tcr_beta_v",
+        "obs/tcr_beta_j",
+        "obs/tcr_alpha_productive",
+        "obs/tcr_beta_productive",
+        "obs/tcr_alpha_umis",
+        "obs/tcr_beta_umis",
+        "obs/donor_id",
+        "obsp/tcr_distance"
+      ],
+      "writes": [
+        "obs/clone_id",
+        "obs/clone_size",
+        "obs/clone_status",
+        "obsp/clone_graph",
+        "uns/clone_definition"
+      ],
+      "devices": ["cpu", "cuda"],
+      "stochastic": true,
+      "long_running": false,
+      "streaming": true,
+      "paradigm": "heuristic",
+      "docs": "tasks/immune-repertoire/tcr_clonotype_definition.md"
+    }
+  }
+}

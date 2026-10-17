@@ -1,0 +1,368 @@
+{
+  "name": "singlet_ambient_count_removal",
+  "title": "Ambient RNA count removal",
+  "description": "Removes the cell-free ambient RNA contribution from each cell's UMI counts and writes a corrected count layer plus per-cell removed-count estimates. Needs the droplet matrix including empty barcodes (raw/counts) and cell calls (obs/is_cell); optionally an ambient profile, cluster labels, per-cell contamination fractions or a gene mask. The default method cellbender is model-based and needs a GPU for practical run times, so call with dry_run first; decontx and soupx are fast CPU alternatives and scar is a PyTorch autoencoder. Do not use it to label individual UMIs as ambient, to decide which genes are contaminated, to remove index hopping between samples, or on data without empty droplets.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "cellbender",
+          "decontx",
+          "soupx",
+          "scar"
+        ],
+        "default": "cellbender",
+        "description": "Correction method; options for the other methods are ignored."
+      },
+      "keys": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Names of the dataset members to read.",
+        "properties": {
+          "layer": {
+            "type": "string",
+            "default": "counts",
+            "description": "Cell-level counts layer to correct; its genes and cells define the output."
+          },
+          "cell": {
+            "type": "string",
+            "default": "is_cell",
+            "description": "obs column of boolean cell calls."
+          },
+          "ambient_profile": {
+            "type": "string",
+            "default": "ambient_profile",
+            "description": "uns key of a precomputed ambient profile summing to one; when absent it is estimated from non-cell barcodes."
+          },
+          "cluster": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null,
+            "description": "obs column of cluster labels; required for soupx unless contamination is set, optional for decontx."
+          },
+          "contamination": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null,
+            "description": "obs column of per-cell contamination fractions from ambient.contamination_fraction; replaces the soupx estimate, ignored by other methods."
+          },
+          "gene_mask": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null,
+            "description": "var boolean column; only true genes are corrected and the others are copied unchanged."
+          }
+        }
+      },
+      "output_integer": {
+        "type": "boolean",
+        "default": false,
+        "description": "Also write layers/decontaminated_int by unbiased stochastic rounding of the corrected counts."
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 12345,
+        "minimum": 0,
+        "description": "Random seed for training and rounding; ignored by soupx."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      },
+      "cellbender": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options for method cellbender.",
+        "properties": {
+          "model": {
+            "type": "string",
+            "enum": [
+              "full",
+              "swapping",
+              "ambient"
+            ],
+            "default": "full",
+            "description": "Noise model: ambient only, barcode swapping only, or both."
+          },
+          "fpr": {
+            "type": "number",
+            "minimum": 0,
+            "exclusiveMaximum": 1,
+            "default": 0.01,
+            "description": "Target false-positive rate for signal removal; 0 for cohorts analysed jointly for differential expression."
+          },
+          "epochs": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 150,
+            "description": "Training epochs."
+          },
+          "learning_rate": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 0.0001,
+            "description": "Base learning rate; the OneCycle schedule peaks at ten times this value."
+          },
+          "z_dim": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 64,
+            "description": "Latent dimension of the encoder."
+          },
+          "low_count_threshold": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 5,
+            "description": "Barcodes with fewer UMIs are excluded from training."
+          }
+        }
+      },
+      "decontx": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options for method decontx.",
+        "properties": {
+          "max_iter": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 500,
+            "description": "Maximum EM iterations."
+          },
+          "delta": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "minItems": 2,
+            "maxItems": 2,
+            "default": [
+              10,
+              10
+            ],
+            "description": "Dirichlet pseudocounts for native and contamination counts."
+          },
+          "estimate_delta": {
+            "type": "boolean",
+            "default": true,
+            "description": "Re-fit delta at every iteration by Dirichlet maximum likelihood."
+          },
+          "convergence": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 0.001,
+            "description": "Stop when the largest change in contamination proportions falls below this value."
+          },
+          "var_genes": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 5000,
+            "description": "Variable genes used for internal clustering when keys.cluster is null."
+          }
+        }
+      },
+      "soupx": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options for method soupx (subtraction adjustment).",
+        "properties": {
+          "tfidf_min": {
+            "type": "number",
+            "minimum": 0,
+            "default": 1.0,
+            "description": "Minimum tf-idf of a marker gene."
+          },
+          "soup_quantile": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "exclusiveMaximum": 1,
+            "default": 0.9,
+            "description": "Only genes at or above this quantile of soup expression are used as markers."
+          },
+          "max_markers": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 100,
+            "description": "Maximum number of marker genes kept."
+          },
+          "contamination_range": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "minItems": 2,
+            "maxItems": 2,
+            "default": [
+              0.01,
+              0.8
+            ],
+            "description": "Lower and upper bound of the estimated contamination fraction."
+          }
+        }
+      },
+      "scar": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options for method scar.",
+        "properties": {
+          "latent_dim": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 15,
+            "description": "Latent dimension of the autoencoder."
+          },
+          "epochs": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 400,
+            "description": "Training epochs."
+          },
+          "batch_size": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 64,
+            "description": "Mini-batch size."
+          },
+          "count_model": {
+            "type": "string",
+            "enum": [
+              "binomial",
+              "poisson",
+              "zeroinflatedpoisson"
+            ],
+            "default": "binomial",
+            "description": "Likelihood of the observed counts."
+          }
+        }
+      }
+    },
+    "required": [
+      "dataset"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. layers/decontaminated and obs/ambient_removed_counts. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "additionalProperties": true,
+        "description": "Compact summary for completed runs: method, device, profile_source, n_cells, n_genes_corrected, removed_fraction_median, removed_fraction_p90, fpr (cellbender), warnings. Never raw matrices."
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "additionalProperties": true,
+        "description": "Present for dry_run: seconds, peak_memory_gb, device."
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "ambient.count_removal",
+      "reads": [
+        "raw/counts",
+        "layers/counts",
+        "obs/is_cell",
+        "uns/ambient_profile",
+        "obs/ambient_frac_<method>",
+        "obs/<cluster_key>",
+        "var/<gene_mask_key>"
+      ],
+      "writes": [
+        "layers/decontaminated",
+        "layers/decontaminated_int",
+        "obs/ambient_removed_counts",
+        "obs/ambient_removed_fraction",
+        "uns/ambient_count_removal",
+        "models/<name>"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/ambient/count_removal.md"
+    }
+  }
+}

@@ -1,0 +1,256 @@
+{
+  "name": "singlet_cross_species_cell_type_correspondence",
+  "title": "Cross-species cell-type correspondence",
+  "description": "Scores every cell type of a species-A atlas against every cell type of a species-B atlas over one-to-one orthologs, then reports best matches and conserved versus species-specific flags. The default method, metaneighbor, is a heuristic that needs no training; scanvi returns posterior label probabilities and samap suits distant metazoan atlases. Do not use it for within-species matching, for building the ortholog table (run cross-species ortholog assignment first), or when either atlas lacks cell-type labels. It writes only to dataset and never modifies the partner atlas.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Species-A dataset handle: a .singlet path or URI, or a workspace handle. Outputs are written here only."
+      },
+      "label_key": {
+        "type": "string",
+        "description": "Species-A obs column with cell-type labels."
+      },
+      "partner": {
+        "type": "object",
+        "description": "Species-B atlas, read-only.",
+        "properties": {
+          "source": {
+            "type": "string",
+            "description": "Species-B .singlet path, URI or workspace handle."
+          },
+          "label_key": {
+            "type": "string",
+            "description": "Species-B obs column with cell-type labels."
+          }
+        },
+        "required": ["source", "label_key"],
+        "additionalProperties": false
+      },
+      "method": {
+        "type": "string",
+        "enum": ["metaneighbor", "samap", "seurat_anchors", "scanvi"],
+        "default": "metaneighbor",
+        "description": "Scorer. metaneighbor is the default heuristic; scanvi gives posterior probabilities."
+      },
+      "conserved_threshold": {
+        "type": ["number", "null"],
+        "default": null,
+        "description": "Score at or above which a best match is flagged conserved; null writes no flags. Reciprocal top hits are always reported."
+      },
+      "min_cells_per_type": {
+        "type": "integer",
+        "minimum": 1,
+        "default": 10,
+        "description": "Types with fewer cells in either atlas are excluded from scoring."
+      },
+      "method_options": {
+        "type": "object",
+        "description": "Options for the chosen method; each nested object applies only to the method it is named after.",
+        "properties": {
+          "metaneighbor": {
+            "type": "object",
+            "properties": {
+              "auroc_candidate_threshold": {
+                "type": "number",
+                "default": 0.9,
+                "description": "AUROC above which a pair is a candidate; a documented within-study heuristic."
+              },
+              "reciprocal_top_hit": {
+                "type": "boolean",
+                "default": true,
+                "description": "Report reciprocal best matches as candidate conserved pairs."
+              }
+            },
+            "additionalProperties": false
+          },
+          "samap": {
+            "type": "object",
+            "properties": {
+              "k": {
+                "type": "integer",
+                "default": 20,
+                "description": "Neighbours in each species manifold."
+              },
+              "cross_species_k": {
+                "type": "integer",
+                "default": 20,
+                "description": "Cross-species edges kept per cell."
+              },
+              "n_iterations": {
+                "type": "integer",
+                "default": 3,
+                "description": "SAMap alignment iterations."
+              },
+              "npcs": {
+                "type": "integer",
+                "default": 150,
+                "description": "Principal components per species."
+              },
+              "n_genes": {
+                "type": "integer",
+                "default": 3000,
+                "description": "Highly variable genes per species."
+              }
+            },
+            "additionalProperties": false
+          },
+          "seurat_anchors": {
+            "type": "object",
+            "properties": {
+              "dims": {
+                "type": "integer",
+                "default": 30,
+                "description": "CCA dimensions 1 to dims used to find anchors."
+              },
+              "k_anchor": {
+                "type": "integer",
+                "default": 5,
+                "description": "Neighbours used to find anchors."
+              },
+              "k_filter": {
+                "type": "integer",
+                "default": 200,
+                "description": "Neighbours used to filter anchors."
+              },
+              "k_score": {
+                "type": "integer",
+                "default": 30,
+                "description": "Neighbours used to score anchors."
+              },
+              "max_features": {
+                "type": "integer",
+                "default": 200,
+                "description": "Maximum features used for anchor scoring."
+              }
+            },
+            "additionalProperties": false
+          },
+          "scanvi": {
+            "type": "object",
+            "properties": {
+              "n_hidden": {
+                "type": "integer",
+                "default": 128,
+                "description": "Hidden units per encoder and decoder layer."
+              },
+              "n_latent": {
+                "type": "integer",
+                "default": 10,
+                "description": "Latent dimension of the variational model."
+              },
+              "n_layers": {
+                "type": "integer",
+                "default": 1,
+                "description": "Hidden layers."
+              },
+              "dropout_rate": {
+                "type": "number",
+                "default": 0.1,
+                "description": "Dropout rate in the networks."
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Random seed for scanvi and samap."
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu", "cuda"],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members for the same method instead of failing."
+      }
+    },
+    "required": ["dataset", "label_key", "partner"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the species-A dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written, for example uns/cross_species_matrix_metaneighbor. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Summary keys: method, n_types_a, n_types_b, n_one_to_one_orthologs, n_reciprocal_top_hits, conserved_threshold, n_conserved, n_species_specific, warnings.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "cross-species.cell_type_correspondence",
+      "reads": [
+        "layers/counts",
+        "layers/normalized",
+        "obs/<label_key>",
+        "var/<gene_id>",
+        "uns/ortholog_pairs",
+        "obsm/X_pca"
+      ],
+      "writes": [
+        "uns/cross_species_matrix_<method>",
+        "obs/best_match_<method>",
+        "uns/conserved_flags_<method>",
+        "uns/correspondence_params_<method>",
+        "models/<name>"
+      ],
+      "devices": ["cpu", "cuda"],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/cross-species/cell_type_correspondence.md"
+    }
+  }
+}

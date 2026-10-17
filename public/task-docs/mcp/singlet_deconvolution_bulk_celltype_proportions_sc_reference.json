@@ -1,0 +1,230 @@
+{
+  "name": "singlet_deconvolution_bulk_celltype_proportions_sc_reference",
+  "title": "Bulk cell-type proportions from a single-cell reference",
+  "description": "Estimates, for each bulk sample, the fraction of each cell type in a labelled multi-donor single-cell or single-nucleus reference, writing obsm/proportions. The default method music needs several donors per cell type; use simplex_ls when the reference has no donor labels, and scaden only when training time is acceptable. Do not use on log-scale input, on single-cell data, or when the reference omits cell types present in the bulk.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Bulk dataset handle (.singlet path or URI) holding raw counts in layers/counts, genes by samples."
+      },
+      "reference": {
+        "type": "object",
+        "description": "Single-cell reference: dataset handle and label keys.",
+        "required": ["dataset"],
+        "additionalProperties": false,
+        "properties": {
+          "dataset": {
+            "type": "string",
+            "description": "Reference dataset handle with raw counts and cell-type labels."
+          },
+          "cell_type_key": {
+            "type": "string",
+            "default": "cell_type",
+            "description": "obs column with cell-type labels; undefined and mixed labels must be removed first."
+          },
+          "subject_key": {
+            "type": "string",
+            "default": "subject",
+            "description": "obs column with donor IDs; required by music and bisque."
+          },
+          "min_cells_per_type": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 1,
+            "description": "Drop types with fewer reference cells; 1 keeps every type."
+          },
+          "size_correction": {
+            "type": "boolean",
+            "default": true,
+            "description": "Convert RNA shares to cell-count fractions using per-type mean library sizes."
+          }
+        }
+      },
+      "method": {
+        "type": "string",
+        "enum": ["music", "bisque", "simplex_ls", "scaden"],
+        "default": "music",
+        "description": "music is the default; simplex_ls is the unweighted heuristic baseline; scaden trains a network."
+      },
+      "normalisation": {
+        "type": "string",
+        "enum": ["cpm", "none"],
+        "default": "cpm",
+        "description": "cpm library-size normalises bulk and reference; none assumes linear, already normalised input."
+      },
+      "marker_genes": {
+        "type": ["array", "null"],
+        "items": {"type": "string"},
+        "default": null,
+        "description": "Optional gene list restricting the regression; null uses all shared genes."
+      },
+      "music": {
+        "type": "object",
+        "description": "Options for method music.",
+        "additionalProperties": false,
+        "properties": {
+          "iter_max": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 1000,
+            "description": "Maximum reweighting iterations."
+          },
+          "nu": {
+            "type": "number",
+            "minimum": 0,
+            "default": 0.0001,
+            "description": "Regulariser added to the gene-weight denominator."
+          },
+          "eps": {
+            "type": "number",
+            "minimum": 0,
+            "default": 0.01,
+            "description": "Convergence threshold on the L1 change in proportions."
+          }
+        }
+      },
+      "bisque": {
+        "type": "object",
+        "description": "Options for method bisque.",
+        "additionalProperties": false,
+        "properties": {
+          "use_overlap": {
+            "type": "boolean",
+            "default": true,
+            "description": "Learn the bulk transform from donors present in both reference and bulk."
+          }
+        }
+      },
+      "scaden": {
+        "type": "object",
+        "description": "Options for method scaden (training on simulated mixtures).",
+        "additionalProperties": false,
+        "properties": {
+          "simulated_samples": {
+            "type": "integer",
+            "minimum": 2,
+            "default": 1000,
+            "description": "In-silico bulk samples generated for training."
+          },
+          "cells_per_sample": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 100,
+            "description": "Cells drawn per simulated sample."
+          },
+          "batch_size": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 128,
+            "description": "Training batch size."
+          },
+          "learning_rate": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 0.0001,
+            "description": "Adam learning rate."
+          },
+          "num_steps": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 1000,
+            "description": "Number of training steps."
+          }
+        }
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Random seed for scaden training and simulation; other methods are deterministic."
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu", "cuda"],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without computing proportions."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": ["dataset", "reference"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the bulk dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: ran inline and wrote members; dry_run: estimate only; queued: long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written, e.g. obsm/proportions. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "For completed runs: method, estimand, n_samples, n_cell_types, shared_genes, non_converged_samples, dropped_types.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "deconvolution-bulk.celltype_proportions_sc_reference",
+      "reads": [
+        "bulk/layers/counts",
+        "reference/layers/counts",
+        "reference/obs/cell_type",
+        "reference/obs/subject"
+      ],
+      "writes": [
+        "obsm/proportions",
+        "uns/proportions_meta",
+        "uns/proportion_var",
+        "models/<name>"
+      ],
+      "devices": ["cpu", "cuda"],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": true,
+      "paradigm": "model-based",
+      "docs": "tasks/deconvolution-bulk/celltype_proportions_sc_reference.md"
+    }
+  }
+}

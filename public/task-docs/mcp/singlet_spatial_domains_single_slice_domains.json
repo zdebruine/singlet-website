@@ -1,0 +1,364 @@
+{
+  "name": "singlet_spatial_domains_single_slice_domains",
+  "title": "Assign spatial domains on one section",
+  "description": "Assigns each spot or cell on one tissue section to a spatial domain from its expression, 2D coordinates and, optionally, an aligned H&E image. Methods: leiden_joint (default; Leiden on a mix of expression and spatial kNN graphs), potts_mean_field and potts_gibbs (Potts-t mixtures that also return per-unit label probabilities), spagcn (graph convolution with a clustering layer; histology needs an image). Needs obsm/spatial and obsm/X_pca (or layers/counts) for one section; writes obs/<output_key>, the graph and parameters, probabilities for the Potts methods and an embedding for spagcn; potts_gibbs and spagcn may return queued. Do NOT use it for several sections jointly (use the multi-slice task), to choose the number of domains or the spatial scale (use the domain-number task), to score labels against annotation, or to assign cell types.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "leiden_joint",
+          "potts_mean_field",
+          "potts_gibbs",
+          "spagcn"
+        ],
+        "default": "leiden_joint",
+        "description": "leiden_joint: Leiden on a mixed expression and spatial graph. potts_mean_field and potts_gibbs: Potts-t mixture with probabilities. spagcn: graph convolution with clustering layer."
+      },
+      "n_domains": {
+        "type": [
+          "integer",
+          "null"
+        ],
+        "minimum": 2,
+        "default": null,
+        "description": "Target number of domains. Resolution search for leiden_joint and spagcn; fixes K for Potts methods. Null: default resolution, or ICL selection of K."
+      },
+      "output_key": {
+        "type": "string",
+        "pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$",
+        "default": "spatial_domain",
+        "description": "Prefix of all written members, for example obs/<output_key> and obsp/<output_key>_graph."
+      },
+      "common": {
+        "type": "object",
+        "description": "Options shared by all methods.",
+        "properties": {
+          "n_pcs": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1,
+            "maximum": 200,
+            "default": null,
+            "description": "Principal components used. Null: all of obsm/X_pca for leiden_joint, 50 for spagcn, 15 for Potts methods."
+          },
+          "n_hvgs": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 2000,
+            "description": "Highly variable genes for PCA; used only when obsm/X_pca is absent."
+          },
+          "graph_type": {
+            "type": "string",
+            "enum": [
+              "knn",
+              "delaunay"
+            ],
+            "default": "knn",
+            "description": "Spatial graph: k nearest neighbours, or Delaunay for generic positions."
+          },
+          "n_neighbors": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 6,
+            "description": "Spatial neighbours k; 6 is the Squidpy grid default. Ignored for delaunay."
+          }
+        },
+        "additionalProperties": false
+      },
+      "leiden_joint": {
+        "type": "object",
+        "description": "Options for method leiden_joint.",
+        "properties": {
+          "expr_n_neighbors": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 15,
+            "description": "Neighbours in the expression graph (Scanpy default)."
+          },
+          "spatial_weight": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.2,
+            "description": "Weight lambda of the spatial graph in the joint graph."
+          },
+          "resolution": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 1.0,
+            "description": "Leiden resolution; used when n_domains is null."
+          },
+          "refine_labels": {
+            "type": "boolean",
+            "default": false,
+            "description": "Apply the SpaGCN refinement rule to the final labels."
+          }
+        },
+        "additionalProperties": false
+      },
+      "potts": {
+        "type": "object",
+        "description": "Options for methods potts_mean_field and potts_gibbs.",
+        "properties": {
+          "gamma": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0,
+            "default": null,
+            "description": "Degree-normalised Potts strength. Null: 3 on a hexagonal lattice, 2 otherwise (BayesSpace defaults)."
+          },
+          "k_max": {
+            "type": "integer",
+            "minimum": 2,
+            "default": 15,
+            "description": "Largest K tried by ICL when n_domains is null."
+          },
+          "mcmc_iterations": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 1000,
+            "description": "Gibbs sweeps for potts_gibbs; must exceed burn_in."
+          },
+          "burn_in": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 100,
+            "description": "Gibbs sweeps discarded before summarising; below mcmc_iterations."
+          }
+        },
+        "additionalProperties": false
+      },
+      "spagcn": {
+        "type": "object",
+        "description": "Options for method spagcn.",
+        "properties": {
+          "image_key": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null,
+            "description": "uns/spatial key of the H&E image; non-null adds the colour coordinate. Null: coordinates only."
+          },
+          "histology_patch": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 49,
+            "description": "Patch size beta for averaging colour around each unit."
+          },
+          "histology_scale": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 1.0,
+            "description": "Scale alpha of the colour coordinate."
+          },
+          "p": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 0.5,
+            "description": "Target mean summed neighbour weight that calibrates the length scale."
+          },
+          "lr": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 0.005,
+            "description": "Learning rate of the training loop."
+          },
+          "max_epochs": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 2000,
+            "description": "Maximum training epochs."
+          },
+          "refine_labels": {
+            "type": "boolean",
+            "default": false,
+            "description": "Apply the SpaGCN refinement rule to the final labels."
+          }
+        },
+        "additionalProperties": false
+      },
+      "seed": {
+        "type": "integer",
+        "minimum": 0,
+        "default": 0,
+        "description": "Random seed for initialisation, Gibbs sampling and spagcn training."
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when the method has a CUDA path and memory allows. leiden_joint runs on CPU."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without computing labels."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing members with the same output_key instead of failing."
+      }
+    },
+    "required": [
+      "dataset"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, for example obs/spatial_domain and uns/spatial_domain/params. The probability and embedding members appear only for the methods that produce them. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Compact summary for completed runs; never raw matrices.",
+        "properties": {
+          "method": {
+            "type": "string",
+            "description": "Method that produced the labels."
+          },
+          "n_domains": {
+            "type": "integer",
+            "description": "Number of distinct domain labels written."
+          },
+          "domain_counts": {
+            "type": "object",
+            "description": "Units per domain label, keyed by label.",
+            "additionalProperties": {
+              "type": "integer"
+            }
+          },
+          "graph": {
+            "type": "object",
+            "description": "Size of the graph used: n_nodes, n_edges and mean_degree.",
+            "additionalProperties": true
+          },
+          "k_selection": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "ICL value by K when the Potts methods selected K; null otherwise."
+          },
+          "mean_max_probability": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "Mean of the maximum label probability for the Potts methods; null for leiden_joint and spagcn."
+          },
+          "parameters": {
+            "type": "object",
+            "description": "Effective parameter values after resolving null defaults.",
+            "additionalProperties": true
+          },
+          "length_scale": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "SpaGCN length scale l; null for other methods."
+          }
+        },
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "spatial-domains.single_slice_domains",
+      "reads": [
+        "layers/counts",
+        "obsm/spatial",
+        "obsm/X_pca",
+        "obsp/spatial_connectivities",
+        "uns/spatial/<library>/images",
+        "obs/array_row",
+        "obs/array_col"
+      ],
+      "writes": [
+        "obs/<output_key>",
+        "obsm/<output_key>_prob",
+        "obsm/<output_key>_embedding",
+        "obsp/<output_key>_graph",
+        "uns/<output_key>/params"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/spatial-domains/single_slice_domains.md"
+    }
+  }
+}

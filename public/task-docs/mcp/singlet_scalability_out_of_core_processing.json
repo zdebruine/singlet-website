@@ -1,0 +1,274 @@
+{
+  "name": "singlet_scalability_out_of_core_processing",
+  "title": "Out-of-core and GPU execution of standard steps",
+  "description": "Runs one standard step (QC metrics, normalisation, highly variable genes, PCA, kNN graph or Leiden clustering) on a dataset that may exceed memory, using a chunked, Dask or GPU route, and writes the same members as the in-memory path. Use strategy auto unless a route is required; set fidelity.reference to in_memory to compare a route with the CPU float64 reference on a subset. Reads layers/counts and the members of earlier steps; writes its outputs and, when requested, uns/fidelity_report. Do not use it to choose n_comps, the gene count or to correct batch effects; approximate routes give approximate values.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "operation": {
+        "type": "string",
+        "enum": ["qc_metrics", "normalize", "highly_variable_genes", "pca", "neighbors", "leiden"],
+        "default": "pca",
+        "description": "Standard step to run; leiden needs neighbors output and neighbors needs pca output."
+      },
+      "strategy": {
+        "type": "string",
+        "enum": ["auto", "in_memory", "backed_chunked", "dask_covariance", "gpu", "gpu_dask"],
+        "default": "auto",
+        "description": "Execution route; auto uses in_memory when the peak estimate fits RAM, otherwise a chunked route."
+      },
+      "chunk_size": {
+        "type": "integer",
+        "minimum": 1,
+        "default": 20000,
+        "description": "Rows per chunk for chunked and Dask routes; backed_chunked PCA needs chunk_size of at least n_comps."
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu", "cuda"],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "minimum": 0,
+        "default": 0,
+        "description": "Seed for Leiden, approximate neighbour indices and fidelity subsets; exact routes ignore it."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, peak host and device memory and the resolved strategy without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      },
+      "n_comps": {
+        "type": "integer",
+        "minimum": 2,
+        "maximum": 200,
+        "default": 50,
+        "description": "Number of principal components k; neighbours use the first n_comps scores."
+      },
+      "zero_center": {
+        "type": "boolean",
+        "default": true,
+        "description": "Centre genes before PCA on every route; scanpy's chunked path ignores this option."
+      },
+      "fidelity": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Validation against the in-memory CPU float64 reference; off by default.",
+        "properties": {
+          "reference": {
+            "type": "string",
+            "enum": ["none", "in_memory"],
+            "default": "none",
+            "description": "in_memory computes the CPU reference and writes uns/fidelity_report."
+          },
+          "subset_cells": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 0,
+            "description": "Cells in a fixed random subset used for both candidate and reference; 0 uses all cells."
+          },
+          "pca_rtol": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 1e-7,
+            "description": "Relative tolerance on PCA scores and loadings after sign alignment."
+          },
+          "pca_atol": {
+            "type": "number",
+            "minimum": 0,
+            "default": 1e-6,
+            "description": "Absolute tolerance on PCA scores and loadings after sign alignment."
+          },
+          "variance_rtol": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 1e-5,
+            "description": "Relative tolerance on variance ratios."
+          },
+          "hvg_rtol": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 2e-5,
+            "description": "Relative tolerance on HVG scores; the selected gene set must match exactly."
+          },
+          "min_recall": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.9,
+            "description": "Minimum neighbour recall R@k against brute-force neighbours."
+          },
+          "min_ari": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.9,
+            "description": "Minimum adjusted Rand index between candidate and reference partitions."
+          }
+        }
+      },
+      "options": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Method-specific options; each object applies only to the operation of the same name.",
+        "properties": {
+          "normalize": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Options for normalize.",
+            "properties": {
+              "target_sum": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "default": 10000,
+                "description": "Library size each cell is scaled to before log1p."
+              }
+            }
+          },
+          "highly_variable_genes": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Options for highly_variable_genes.",
+            "properties": {
+              "n_top_genes": {
+                "type": "integer",
+                "minimum": 10,
+                "maximum": 50000,
+                "default": 2000,
+                "description": "Number of genes selected by the seurat_v3 score."
+              },
+              "flavor": {
+                "type": "string",
+                "enum": ["seurat_v3"],
+                "default": "seurat_v3",
+                "description": "Only flavour in this version; the trend is fitted across all genes."
+              }
+            }
+          },
+          "neighbors": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Options for neighbors.",
+            "properties": {
+              "n_neighbors": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 200,
+                "default": 15,
+                "description": "Neighbours per cell, self excluded."
+              },
+              "metric": {
+                "type": "string",
+                "enum": ["euclidean"],
+                "default": "euclidean",
+                "description": "Distance between cells in the first n_comps scores."
+              },
+              "algorithm": {
+                "type": "string",
+                "enum": ["brute", "cagra", "ivfflat", "ivfpq", "mg_ivfflat", "mg_ivfpq", "nn_descent"],
+                "default": "brute",
+                "description": "brute is exact; all other values are approximate and need recall checks."
+              }
+            }
+          },
+          "leiden": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Options for leiden.",
+            "properties": {
+              "resolution": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "default": 1.0,
+                "description": "Resolution of the modularity objective; larger values give more clusters."
+              },
+              "n_iterations": {
+                "type": "integer",
+                "minimum": -1,
+                "maximum": 10000,
+                "default": 100,
+                "description": "Maximum iterations; -1 iterates until convergence."
+              },
+              "use_dask": {
+                "type": "boolean",
+                "default": false,
+                "description": "Distributes clustering over GPUs; requires strategy gpu_dask."
+              }
+            }
+          }
+        }
+      }
+    },
+    "required": ["dataset"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate; queued: long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written, e.g. obsm/X_pca. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "additionalProperties": true,
+        "description": "Compact summary with keys operation, strategy_resolved, n_cells, n_genes, wall_seconds, peak_host_gb, peak_device_gb and, when fidelity.reference is in_memory, fidelity_passed and max_errors."
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "additionalProperties": true,
+        "description": "Present for dry_run: seconds, peak_host_gb, peak_device_gb and strategy_resolved."
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": true,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "scalability.out_of_core_processing",
+      "reads": ["layers/counts", "layers/log1p_norm", "var/highly_variable", "obsm/X_pca", "obsp/connectivities"],
+      "writes": ["layers/log1p_norm", "obs/n_genes_by_counts", "obs/total_counts", "var/highly_variable", "obsm/X_pca", "varm/PCs", "uns/pca", "obsp/distances", "obsp/connectivities", "obs/leiden", "uns/fidelity_report"],
+      "devices": ["cpu", "cuda"],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": true,
+      "paradigm": "hybrid",
+      "docs": "tasks/scalability/out_of_core_processing.md"
+    }
+  }
+}

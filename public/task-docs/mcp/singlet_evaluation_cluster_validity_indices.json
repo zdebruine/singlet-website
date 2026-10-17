@@ -1,0 +1,214 @@
+{
+  "name": "singlet_evaluation_cluster_validity_indices",
+  "title": "Label-free cluster validity indices",
+  "description": "Scores candidate cluster partitions of the same cells with geometric validity indices (silhouette, Davies-Bouldin, Calinski-Harabasz) in one shared embedding, and optionally with scIB label and batch silhouette terms. Writes per-partition scores, per-cell silhouette and a granularity flag under uns/cluster_validity. Use it to compare partitions from one embedding; it does not establish biological validity, which needs held-out labels or planted structure. Do not treat the label-based terms as label-free evidence.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (s3://, r2://, https://) or a workspace handle."
+      },
+      "embedding": {
+        "type": "string",
+        "default": "X_pca",
+        "description": "obsm key of the embedding used for every distance; all partitions share it."
+      },
+      "cluster_keys": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "minItems": 1,
+        "description": "obs columns holding candidate partitions, one per resolution or k; all scored on the same cells."
+      },
+      "indices": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "enum": [
+            "silhouette",
+            "davies_bouldin",
+            "calinski_harabasz",
+            "asw_label",
+            "asw_batch"
+          ]
+        },
+        "default": [
+          "silhouette",
+          "davies_bouldin",
+          "calinski_harabasz"
+        ],
+        "description": "Indices to compute. asw_label and asw_batch need scib_asw keys and are label-based comparators."
+      },
+      "metric": {
+        "type": "string",
+        "default": "euclidean",
+        "description": "Distance for silhouette and scIB terms; a scikit-learn metric name."
+      },
+      "min_clusters": {
+        "type": "integer",
+        "minimum": 2,
+        "default": 2,
+        "description": "Smallest number of clusters in a partition considered for scoring."
+      },
+      "silhouette": {
+        "type": "object",
+        "description": "Options for the silhouette index and its support flag.",
+        "properties": {
+          "sample_size": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 2,
+            "default": null,
+            "description": "Subsample size for approximate silhouette; null computes the exact value."
+          },
+          "support_threshold": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.25,
+            "description": "Mean silhouette below which the flag reports unsupported granularity; proposed, uncalibrated."
+          }
+        },
+        "additionalProperties": false
+      },
+      "scib_asw": {
+        "type": "object",
+        "description": "Label and batch keys for the scIB terms.",
+        "properties": {
+          "label_key": {
+            "type": "string",
+            "description": "obs column of annotation labels; required for asw_label and benchmark B1."
+          },
+          "batch_key": {
+            "type": "string",
+            "description": "obs column of batch labels; required for asw_batch."
+          }
+        },
+        "additionalProperties": false
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Seed for subsampling and k-means initialisation."
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": [
+      "dataset",
+      "cluster_keys"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. obs/<name>_silhouette. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Per partition: cluster count and index values; chosen partition, supported flag and smallest cluster size. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "evaluation.cluster_validity_indices",
+      "reads": [
+        "obsm/<embedding>",
+        "obs/<cluster_key>",
+        "obs/<label_key>",
+        "obs/<batch_key>"
+      ],
+      "writes": [
+        "obs/<name>_silhouette",
+        "uns/cluster_validity/<name>/scores",
+        "uns/cluster_validity/<name>/per_cluster",
+        "uns/cluster_validity/<name>/flag"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/evaluation/cluster_validity_indices.md"
+    }
+  }
+}

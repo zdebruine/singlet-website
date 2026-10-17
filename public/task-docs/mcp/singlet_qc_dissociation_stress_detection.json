@@ -1,0 +1,268 @@
+{
+  "name": "singlet_qc_dissociation_stress_detection",
+  "title": "Dissociation stress score and removal",
+  "description": "Scores each cell on a fixed panel of ex vivo dissociation stress genes using module_score (default), ucell or aucell, and can exclude the panel or regress the score out before clustering. Requires log-normalised X and a panel fixed before inspecting test labels. Writes obs/dissociation_score; flags are off by default because no threshold is validated. Do not use it to call low-quality cells.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "panel": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "minItems": 3,
+        "maxItems": 2000,
+        "uniqueItems": true,
+        "description": "Gene symbols of the stress program, fixed before inspecting test labels; matched to var names."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "module_score",
+          "ucell",
+          "aucell"
+        ],
+        "default": "module_score",
+        "description": "Scorer: module_score (expression-matched controls, default), ucell (rank-based) or aucell (recovery curve)."
+      },
+      "flag": {
+        "type": "object",
+        "description": "Flagging rule applied to the score; off by default.",
+        "properties": {
+          "rule": {
+            "type": "string",
+            "enum": [
+              "none",
+              "within_batch_quantile"
+            ],
+            "default": "none",
+            "description": "none keeps scores only; within_batch_quantile flags cells above a quantile within each batch."
+          },
+          "batch_key": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null,
+            "description": "obs column of batches for within_batch_quantile; null treats the dataset as one batch."
+          },
+          "quantile": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "exclusiveMaximum": 1,
+            "default": 0.95,
+            "description": "Score quantile above which cells are flagged within each batch."
+          }
+        },
+        "additionalProperties": false
+      },
+      "pre_clustering": {
+        "type": "object",
+        "description": "Treatment of the stress program before clustering.",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "none",
+              "exclude_panel",
+              "regress_out"
+            ],
+            "default": "none",
+            "description": "none keeps the matrix; exclude_panel drops panel genes from clustering features; regress_out removes the score from other genes."
+          },
+          "protect_genes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [],
+            "description": "In vivo activation genes never excluded or regressed in any mode."
+          }
+        },
+        "additionalProperties": false
+      },
+      "module_score": {
+        "type": "object",
+        "description": "Options for module_score only.",
+        "properties": {
+          "convention": {
+            "type": "string",
+            "enum": [
+              "seurat",
+              "scanpy"
+            ],
+            "default": "seurat",
+            "description": "Control-gene convention: seurat draws controls per panel gene, scanpy per expression bin."
+          },
+          "n_bins": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1,
+            "default": null,
+            "description": "Expression bins; null uses the convention's standard value."
+          },
+          "n_control": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1,
+            "default": null,
+            "description": "Controls per panel gene (seurat) or per bin (scanpy); null uses the convention's standard value."
+          }
+        },
+        "additionalProperties": false
+      },
+      "ucell": {
+        "type": "object",
+        "description": "Options for ucell only.",
+        "properties": {
+          "max_rank": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 1500,
+            "description": "Rank cutoff for the capped rank statistic."
+          }
+        },
+        "additionalProperties": false
+      },
+      "aucell": {
+        "type": "object",
+        "description": "Options for aucell only.",
+        "properties": {
+          "max_rank_frac": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 1,
+            "default": 0.05,
+            "description": "Fraction of all genes used to truncate the recovery curve."
+          }
+        },
+        "additionalProperties": false
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Seed for module_score control sampling; the other methods are deterministic."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": [
+      "dataset",
+      "panel"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. obs/dissociation_score. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Keys: method, n_cells, panel_genes_found, panel_genes_missing, n_flagged, mode. Never raw scores.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "qc.dissociation_stress_detection",
+      "reads": [
+        "X",
+        "obs/<batch_key>"
+      ],
+      "writes": [
+        "obs/dissociation_score",
+        "obs/dissociation_flag",
+        "uns/dissociation_panel_used",
+        "layers/dissociation_regressed"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": false,
+      "streaming": true,
+      "paradigm": "heuristic",
+      "docs": "tasks/qc/dissociation_stress_detection.md"
+    }
+  }
+}

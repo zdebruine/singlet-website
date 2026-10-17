@@ -1,0 +1,305 @@
+{
+  "name": "singlet_genetics_expression_cnv_inference",
+  "title": "Infer copy-number states from scRNA-seq expression",
+  "description": "Calls per-cell, per-segment copy-number states (loss, neutral, gain) from gene expression ordered along the genome, relative to normal reference cells, and writes segment scores plus cell-level aneuploidy and clone labels. The default method copykat needs only counts and gene coordinates; numbat adds haplotype-aware calls and loss of heterozygosity when an allele table is supplied. Do not use it to detect copy-neutral events without allele counts, or focal events, which expression resolves weakly.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI, or a workspace handle, with counts and gene coordinates."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "copykat",
+          "numbat",
+          "scevan",
+          "casper"
+        ],
+        "default": "copykat",
+        "description": "copykat for expression-only data; numbat when numbat.allele_table is set."
+      },
+      "reference_obs_key": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "default": null,
+        "description": "obs column marking normal reference cells; required for numbat, null runs copykat reference-free."
+      },
+      "genome_build": {
+        "type": "string",
+        "enum": [
+          "hg38",
+          "hg19",
+          "mm10"
+        ],
+        "default": "hg38",
+        "description": "Gene coordinate build; must equal uns/genome_build recorded at ingest."
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; wrapped callers use CPU, and CUDA applies to the planned HMM path."
+      },
+      "seed": {
+        "type": "integer",
+        "minimum": 0,
+        "default": 0,
+        "description": "Seed for copykat MCMC segmentation and numbat initialisation."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      },
+      "copykat": {
+        "type": "object",
+        "description": "Options used only when method is copykat.",
+        "additionalProperties": false,
+        "properties": {
+          "ks_cut": {
+            "type": "number",
+            "default": 0.1,
+            "description": "Segmentation cut-off for MCMC breakpoints; halved when fewer than 25 breakpoints are found."
+          },
+          "win_size": {
+            "type": "integer",
+            "default": 25,
+            "description": "Minimal window size in genes for segmentation."
+          },
+          "low_dr": {
+            "type": "number",
+            "default": 0.05,
+            "description": "Minimal population fraction of genes used in smoothing."
+          },
+          "up_dr": {
+            "type": "number",
+            "default": 0.1,
+            "description": "Minimum population fraction used in segmentation."
+          },
+          "ngene_chr": {
+            "type": "integer",
+            "default": 5,
+            "description": "Minimum genes per chromosome, used in cell filtering."
+          },
+          "min_gene_per_cell": {
+            "type": "integer",
+            "default": 200,
+            "description": "Minimum detected genes for a cell to be analysed."
+          },
+          "n_cores": {
+            "type": "integer",
+            "default": 1,
+            "description": "Threads used by copykat."
+          }
+        }
+      },
+      "numbat": {
+        "type": "object",
+        "description": "Options used only when method is numbat.",
+        "additionalProperties": false,
+        "properties": {
+          "allele_table": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null,
+            "description": "Per-cell allele counts at heterozygous SNPs; enables haplotype-aware calls and loss of heterozygosity."
+          },
+          "t": {
+            "type": "number",
+            "default": 1e-05,
+            "description": "Transition probability of the segment HMM."
+          },
+          "gamma": {
+            "type": "number",
+            "default": 20,
+            "description": "Beta-Binomial overdispersion of the allele model."
+          },
+          "max_iter": {
+            "type": "integer",
+            "default": 2,
+            "description": "Maximum number of Numbat iterations."
+          },
+          "init_k": {
+            "type": "integer",
+            "default": 3,
+            "description": "Number of clusters in the initial clustering."
+          },
+          "min_cells": {
+            "type": "integer",
+            "default": 50,
+            "description": "Minimum cells per clone."
+          },
+          "tau": {
+            "type": "number",
+            "default": 0.3,
+            "description": "Factor setting the maximum clone cost from cell number, between 0 and 1."
+          },
+          "ncores": {
+            "type": "integer",
+            "default": 1,
+            "description": "Threads used by numbat."
+          }
+        }
+      },
+      "scevan": {
+        "type": "object",
+        "description": "Options used only when method is scevan.",
+        "additionalProperties": false,
+        "properties": {
+          "beta_vega": {
+            "type": "number",
+            "default": 0.5,
+            "description": "Segmentation granularity; higher values give coarser segments."
+          },
+          "subclones": {
+            "type": "boolean",
+            "default": true,
+            "description": "Run subclone analysis after segmentation."
+          },
+          "ngenes_chr": {
+            "type": "integer",
+            "default": 5,
+            "description": "Minimum expressed genes per chromosome."
+          },
+          "perc_genes": {
+            "type": "number",
+            "default": 10,
+            "description": "Minimum percentage of genes expressed per cell."
+          },
+          "par_cores": {
+            "type": "integer",
+            "default": 20,
+            "description": "Parallel cores used by SCEVAN."
+          }
+        }
+      },
+      "casper": {
+        "type": "object",
+        "description": "Options used only when method is casper.",
+        "additionalProperties": false,
+        "properties": {
+          "remove_centromere": {
+            "type": "boolean",
+            "default": true,
+            "description": "Remove centromeric regions before segmentation."
+          }
+        }
+      }
+    },
+    "required": [
+      "dataset"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. obsm/cnv_state. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Compact summary for completed runs: method, cells_in, reference_cells, segments, cells_aneuploid, clones. Never matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "genetics.expression_cnv_inference",
+      "reads": [
+        "layers/counts",
+        "var/chrom",
+        "var/start",
+        "var/end",
+        "uns/genome_build",
+        "obs/<reference_obs_key>",
+        "layers/alt_counts",
+        "layers/ref_counts",
+        "uns/phasing_panel"
+      ],
+      "writes": [
+        "obsm/cnv_state",
+        "obsm/cnv_posterior",
+        "obsm/cnv_score",
+        "uns/cnv_segments",
+        "obs/cnv_aneuploid",
+        "obs/cnv_clone"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/genetics/expression_cnv_inference.md"
+    }
+  }
+}

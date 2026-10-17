@@ -1,0 +1,306 @@
+{
+  "name": "singlet_integration_batch_corrected_embedding",
+  "title": "Batch-corrected joint embedding",
+  "description": "Integrates cells from several batches (donors, studies, protocols) of one dataset and writes a batch-corrected embedding, a batch-balanced graph (bbknn) or corrected expression (combat). The default harmony corrects the PCA embedding; scvi and scanvi train a conditional model on raw counts. Needs obsm/X_pca, var/highly_variable, a batch column with at least two levels, and layers/counts for scvi and scanvi. Does not score integration quality; do not use it on a single batch or to remove a biological condition that must be kept.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "harmony",
+          "scanorama",
+          "seurat_cca",
+          "seurat_rpca",
+          "fastmnn",
+          "bbknn",
+          "liger",
+          "scvi",
+          "scanvi",
+          "combat"
+        ],
+        "default": "harmony",
+        "description": "Integration method. harmony (default) corrects the PCA embedding; scvi and scanvi train on raw counts; bbknn writes a graph only; combat corrects expression."
+      },
+      "batch_key": {
+        "type": "string",
+        "default": "batch",
+        "description": "obs column holding the batch label; at least two levels and no missing values."
+      },
+      "n_hvg": {
+        "type": "integer",
+        "default": 2000,
+        "description": "Number of highly variable genes kept, taken in var/hvg_rank order among genes flagged in var/highly_variable.",
+        "minimum": 1
+      },
+      "n_pcs": {
+        "type": "integer",
+        "default": 30,
+        "description": "Embedding width d: PCs read from obsm/X_pca (harmony, bbknn, seurat_*) or PCA width for fastmnn, scanorama, combat. Ignored by liger, scvi, scanvi.",
+        "minimum": 1
+      },
+      "harmony": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options for method harmony.",
+        "properties": {
+          "theta": {
+            "type": "number",
+            "default": 2,
+            "description": "Diversity penalty per batch variable; 0 disables the diversity term.",
+            "minimum": 0
+          },
+          "sigma": {
+            "type": "number",
+            "default": 0.1,
+            "description": "Width of the soft k-means clusters (entropy scale).",
+            "exclusiveMinimum": 0
+          },
+          "nclust": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "default": null,
+            "description": "Number of soft clusters K; null uses min(round(N/30), 100).",
+            "minimum": 1
+          },
+          "max_iter": {
+            "type": "integer",
+            "default": 10,
+            "description": "Maximum outer iterations; stops earlier when the objective converges.",
+            "minimum": 1
+          },
+          "alpha": {
+            "type": "number",
+            "default": 0.2,
+            "description": "Ridge scale: lambda is alpha times the expected cluster-batch count.",
+            "exclusiveMinimum": 0
+          }
+        }
+      },
+      "seurat": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options for methods seurat_cca and seurat_rpca.",
+        "properties": {
+          "k_anchor": {
+            "type": "integer",
+            "default": 5,
+            "description": "Neighbours used to pick anchors.",
+            "minimum": 1
+          },
+          "k_filter": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "default": null,
+            "description": "Neighbours for anchor filtering; null applies no filtering.",
+            "minimum": 1
+          },
+          "k_score": {
+            "type": "integer",
+            "default": 30,
+            "description": "Neighbours used to score anchors.",
+            "minimum": 1
+          },
+          "k_weight": {
+            "type": "integer",
+            "default": 100,
+            "description": "Anchors that weight each cell's correction vector.",
+            "minimum": 1
+          }
+        }
+      },
+      "scvi": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options for methods scvi and scanvi.",
+        "properties": {
+          "n_latent": {
+            "type": "integer",
+            "default": 10,
+            "description": "Latent dimension of the embedding.",
+            "minimum": 1
+          },
+          "n_hidden": {
+            "type": "integer",
+            "default": 128,
+            "description": "Hidden units per layer.",
+            "minimum": 1
+          },
+          "n_layers": {
+            "type": "integer",
+            "default": 1,
+            "description": "Hidden layers in encoder and decoder.",
+            "minimum": 1
+          },
+          "gene_likelihood": {
+            "type": "string",
+            "enum": [
+              "zinb",
+              "nb"
+            ],
+            "default": "zinb",
+            "description": "Count likelihood of the decoder."
+          },
+          "max_epochs": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "default": null,
+            "description": "Training epochs; null uses min(round(400*20000/N), 400), at least 1.",
+            "minimum": 1
+          },
+          "label_key": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null,
+            "description": "obs column with partial cell-type labels; required for scanvi."
+          },
+          "unlabeled_category": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null,
+            "description": "Value in label_key that marks unlabelled cells; required for scanvi."
+          }
+        }
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "minimum": 0,
+        "description": "Random seed for initialisation, minibatches and approximate neighbour search; recorded with the output."
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running or writing."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members of this method instead of failing."
+      }
+    },
+    "required": [
+      "dataset"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. obsm/X_integrated_harmony. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "additionalProperties": true,
+        "description": "For completed runs: method, input_layer, batch_key, n_batches, n_cells, n_hvg_used, n_pcs, device, seed, warnings. Never raw matrices."
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "additionalProperties": true,
+        "description": "Present for dry_run: seconds, peak_memory_gb, device."
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "integration.batch_corrected_embedding",
+      "reads": [
+        "layers/counts",
+        "layers/log1p_norm",
+        "var/highly_variable",
+        "var/hvg_rank",
+        "obs/<batch_key>",
+        "obs/<scvi.label_key>",
+        "obsm/X_pca"
+      ],
+      "writes": [
+        "obsm/X_integrated_<method>",
+        "obsp/bbknn_connectivities",
+        "obsp/bbknn_distances",
+        "layers/integrated_expr",
+        "models/integration_<method>",
+        "uns/neighbors_bbknn",
+        "uns/integration_<method>_params"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/integration/batch_corrected_embedding.md"
+    }
+  }
+}

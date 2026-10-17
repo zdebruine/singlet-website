@@ -1,0 +1,238 @@
+{
+  "name": "singlet_disease_clinical_gwas_celltype_enrichment",
+  "title": "GWAS cell-type enrichment",
+  "description": "Tests which annotated cell types carry more GWAS heritability or polygenic signal for each trait than expected by chance, writing a per-trait enrichment table. The default method, ldsc_seg, fits stratified LD score regression on cell-type specific gene annotations, conditional on a baseline; scdrs aggregates matched-control disease scores per cell type. Requires cell-type labels, per-trait summary statistics and an LD reference matching the GWAS ancestry. Does not write cell-level scores; use the cell-level scoring task for single-cell disease scores, and dry_run first to estimate cost.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "traits": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "minItems": 1,
+        "description": "GWAS summary-statistic handles, one per trait, such as uns/gwas/<trait>/sumstats."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "ldsc_seg",
+          "scdrs"
+        ],
+        "default": "ldsc_seg",
+        "description": "ldsc_seg: stratified LD score regression (default). scdrs: per-cell-type aggregation of matched-control disease scores."
+      },
+      "cell_type_key": {
+        "type": "string",
+        "default": "cell_type",
+        "description": "obs column with cell-type labels used to build annotations and group cells."
+      },
+      "ld_reference": {
+        "type": "string",
+        "description": "LD reference panel handle, such as uns/ld_reference/<panel>; its population must match the GWAS."
+      },
+      "ldsc_seg": {
+        "type": "object",
+        "description": "Options for stratified LD score regression; ignored when method is scdrs.",
+        "properties": {
+          "annotation_window_kb": {
+            "type": "number",
+            "minimum": 0,
+            "default": 100,
+            "description": "Cis window added around each specifically expressed gene when building annotations."
+          },
+          "ld_window_cm": {
+            "type": "number",
+            "minimum": 0,
+            "default": 1,
+            "description": "LD-score window in centimorgans."
+          }
+        },
+        "additionalProperties": false
+      },
+      "scdrs": {
+        "type": "object",
+        "description": "Options for matched-control scoring; ignored when method is ldsc_seg.",
+        "properties": {
+          "n_ctrl": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 1000,
+            "description": "Matched control gene sets per trait; sets the smallest resolvable Monte Carlo p-value."
+          },
+          "ctrl_match_key": {
+            "type": "string",
+            "enum": [
+              "mean_var"
+            ],
+            "default": "mean_var",
+            "description": "Gene statistic for matching controls; mean_var matches on mean and variance."
+          },
+          "n_genebin": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 200,
+            "description": "Number of bins for matching when the matching statistic is continuous."
+          },
+          "weight_opt": {
+            "type": "string",
+            "enum": [
+              "uniform",
+              "vs",
+              "inv_std",
+              "od"
+            ],
+            "default": "vs",
+            "description": "Gene weighting for the raw score; vs weights by inverse root technical variance."
+          }
+        },
+        "additionalProperties": false
+      },
+      "calibration": {
+        "type": "object",
+        "description": "Statistics options shared by both methods.",
+        "properties": {
+          "min_gene_set_size": {
+            "type": "integer",
+            "minimum": 10,
+            "default": 50,
+            "description": "Smallest cell-type gene set kept; scDRS documentation reports reasonable behaviour from 10 genes."
+          },
+          "fdr_method": {
+            "type": "string",
+            "enum": [
+              "bh"
+            ],
+            "default": "bh",
+            "description": "Multiple-testing adjustment across cell types within each trait."
+          }
+        },
+        "additionalProperties": false
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Random seed for scDRS control draws; ignored by ldsc_seg."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": [
+      "dataset",
+      "traits"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. uns/celltype_enrichment/<trait>/table. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Per trait: method, n_cell_types, n_fdr_0.05 and the top five cell types with enrichment or z, p and fdr. Never raw tables.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "disease-clinical.gwas_celltype_enrichment",
+      "reads": [
+        "layers/counts",
+        "obs/cell_type",
+        "var/chromosome",
+        "var/start",
+        "var/end",
+        "uns/gwas/<trait>/sumstats",
+        "uns/ld_reference/<panel>"
+      ],
+      "writes": [
+        "uns/celltype_enrichment/<trait>/table",
+        "varm/celltype_sets/<name>"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": false,
+      "streaming": true,
+      "paradigm": "model-based",
+      "docs": "tasks/disease-clinical/gwas_celltype_enrichment.md"
+    }
+  }
+}

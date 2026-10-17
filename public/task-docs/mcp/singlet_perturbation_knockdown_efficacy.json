@@ -1,0 +1,312 @@
+{
+  "name": "singlet_perturbation_knockdown_efficacy",
+  "title": "Estimate on-target knockdown per guide",
+  "description": "Estimates how strongly each guide reduces (CRISPRi, CRISPRko) or raises (CRISPRa) its own target gene relative to non-targeting cells, with a confidence interval and a weak-guide flag. The default pseudobulk_nb fits a replicate-level negative-binomial model per target and can correct for ambient target RNA. mimosca, mixscape and mixscale are comparators whose outputs are scores or classes, not calibrated knockdown fractions. Needs single-guide assignments, replicate labels, raw counts and size factors; writes uns/knockdown_efficacy. Not for judging off-target effects or protein-level efficacy.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "pseudobulk_nb",
+          "mimosca",
+          "mixscape",
+          "mixscale"
+        ],
+        "default": "pseudobulk_nb",
+        "description": "Estimator. pseudobulk_nb gives calibrated fractions with intervals; the other three return scores or classes."
+      },
+      "design": {
+        "type": "object",
+        "description": "Study design: count and log layers, guide and replicate columns, controls, covariates, expected direction.",
+        "properties": {
+          "count_layer": {
+            "type": "string",
+            "default": "counts",
+            "description": "Raw integer UMI layer of the target genes; no normalisation is applied."
+          },
+          "log_layer": {
+            "type": "string",
+            "default": "log1p_norm",
+            "description": "Unscaled log-normalised layer used for Mixscape and Mixscale projections."
+          },
+          "guide_key": {
+            "type": "string",
+            "default": "assigned_guide",
+            "description": "obs column of single-guide assignments from perturbation.guide_assignment."
+          },
+          "replicate_key": {
+            "type": "string",
+            "default": "replicate",
+            "description": "obs column of biological replicates; required because replicates are the unit of inference."
+          },
+          "nt_label": {
+            "type": "string",
+            "default": "non-targeting",
+            "description": "Guide label of non-targeting control cells."
+          },
+          "covariates": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [],
+            "description": "obs columns added as covariates to the model or elastic net."
+          },
+          "direction": {
+            "type": "string",
+            "enum": [
+              "repression",
+              "activation"
+            ],
+            "default": "repression",
+            "description": "Expected direction of the target change; sets the sign of the weak-guide flag."
+          },
+          "min_cells_per_guide": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 5,
+            "description": "Guides with fewer assigned cells are skipped and reported."
+          }
+        },
+        "additionalProperties": false
+      },
+      "pseudobulk_nb": {
+        "type": "object",
+        "description": "Options of the pseudobulk negative-binomial model.",
+        "properties": {
+          "ambient_correction": {
+            "type": "boolean",
+            "default": true,
+            "description": "Model ambient target RNA as an additive term from the ambient fraction and profile."
+          },
+          "confidence_level": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 1,
+            "default": 0.95,
+            "description": "Coverage of the Wald intervals for beta and k."
+          },
+          "weak_guide_upper_lfc": {
+            "type": "number",
+            "default": -0.25,
+            "description": "Guide flagged weak when the upper bound of its log2 fold change exceeds this value."
+          }
+        },
+        "additionalProperties": false
+      },
+      "mixscape": {
+        "type": "object",
+        "description": "Options of the Mixscape signature and two-component call.",
+        "properties": {
+          "min_de_genes": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 5,
+            "description": "Minimum DE genes between guide and NT cells to classify a guide."
+          },
+          "logfc_threshold": {
+            "type": "number",
+            "minimum": 0,
+            "default": 0.25,
+            "description": "Log fold-change cutoff for signature genes."
+          },
+          "iter_num": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 10,
+            "description": "Iterations of the two-component mixture fit."
+          },
+          "scale": {
+            "type": "boolean",
+            "default": false,
+            "description": "Scale the signature input; false keeps unscaled log-normalised input, as the rapids-singlecell implementation specifies."
+          }
+        },
+        "additionalProperties": false
+      },
+      "mixscale": {
+        "type": "object",
+        "description": "Options of the Mixscale standardised projection score.",
+        "properties": {
+          "min_de_genes": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 5,
+            "description": "Minimum DE genes between guide and NT cells to score a guide."
+          },
+          "max_de_genes": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 100,
+            "description": "Maximum DE genes in the signature."
+          },
+          "logfc_threshold": {
+            "type": "number",
+            "minimum": 0,
+            "default": 0.25,
+            "description": "Log fold-change cutoff for signature genes."
+          },
+          "scale": {
+            "type": "boolean",
+            "default": false,
+            "description": "Scale the signature input; false keeps unscaled log-normalised input, as the rapids-singlecell implementation specifies."
+          }
+        },
+        "additionalProperties": false
+      },
+      "mimosca": {
+        "type": "object",
+        "description": "Options of the elastic-net comparator.",
+        "properties": {
+          "alpha": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 0.0005,
+            "description": "Elastic-net penalty strength."
+          },
+          "l1_ratio": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.5,
+            "description": "L1 share of the elastic-net penalty."
+          },
+          "max_iter": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 10000,
+            "description": "Maximum coordinate-descent iterations."
+          }
+        },
+        "additionalProperties": false
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Random seed for mixture starts in mixscape and mixscale; other methods are deterministic."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing before anything is written."
+      }
+    },
+    "required": [
+      "dataset"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. uns/knockdown_efficacy. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Compact summary: method, n_guides_tested, n_guides_skipped, n_guides_weak, median_knockdown, ambient_correction, device_used, seed. Per-guide estimates are in uns/knockdown_efficacy. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device, n_cells, n_guides, n_targets.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "perturbation.knockdown_efficacy",
+      "reads": [
+        "layers/counts",
+        "layers/log1p_norm",
+        "obs/assigned_guide",
+        "obs/size_factor",
+        "obs/<replicate_key>",
+        "obs/ambient_frac_<method>",
+        "varm/ambient_profile_<sample>",
+        "var/<feature_key>",
+        "uns/guide_to_target"
+      ],
+      "writes": [
+        "uns/knockdown_efficacy",
+        "obs/knockdown_score",
+        "models/knockdown_glm"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": true,
+      "paradigm": "hybrid",
+      "docs": "tasks/perturbation/knockdown_efficacy.md"
+    }
+  }
+}

@@ -1,0 +1,177 @@
+{
+  "name": "singlet_harmonization_object_integrity_checks",
+  "title": "Object integrity checks",
+  "description": "Checks an annotated single-cell object for duplicate observation or feature names, dimension and row-alignment errors, orientation problems, stored-QC mismatches and declared-species conflicts, and lists the offending keys of each failing check. Use it on a newly built or imported object before count-state detection or schema conformance. It does not repair content: it renames duplicate names only when make_index_unique.policy is make_unique, and it records every renamed key in the report.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "layer": {
+        "type": "string",
+        "default": "counts",
+        "description": "Layer read for shape, sparsity and QC recomputation; X is used when the layer is absent."
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu", "cuda"],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA for the row and column reductions when memory allows."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without writing anything."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing uns/integrity and integrity flag members instead of failing."
+      },
+      "declared_species": {
+        "type": "string",
+        "description": "Species of the feature-symbol namespace, for example human or mouse. Falls back to uns/species; the species check abstains when neither is set."
+      },
+      "strict": {
+        "type": "boolean",
+        "default": false,
+        "description": "Treat anndata UserWarnings, such as duplicate names, as failures instead of warnings."
+      },
+      "max_examples": {
+        "type": "integer",
+        "minimum": 1,
+        "default": 5,
+        "description": "Number of offending keys listed per failing check in the report."
+      },
+      "make_index_unique": {
+        "type": "object",
+        "description": "Options for duplicate observation and feature names.",
+        "properties": {
+          "policy": {
+            "type": "string",
+            "enum": ["report", "make_unique", "fail"],
+            "default": "report",
+            "description": "report lists duplicates; make_unique renames them and lists each renamed key; fail stops the check."
+          },
+          "join": {
+            "type": "string",
+            "default": "-",
+            "description": "Delimiter between a duplicated name and its integer suffix."
+          }
+        },
+        "additionalProperties": false
+      },
+      "content_checks": {
+        "type": "object",
+        "description": "Options for the orientation, stored-QC and species checks.",
+        "properties": {
+          "orientation_mode": {
+            "type": "string",
+            "enum": ["shape_only", "shape_then_content"],
+            "default": "shape_then_content",
+            "description": "shape_only uses dimensions and sparsity; shape_then_content adds row and column statistics."
+          },
+          "qc_rel_tol": {
+            "type": "number",
+            "minimum": 0,
+            "default": 1e-6,
+            "description": "Relative tolerance when recomputing stored per-cell totals from X."
+          },
+          "symbol_margin_delta": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.2,
+            "description": "Vocabulary-overlap margin below which the species check abstains."
+          },
+          "mito_prefixes": {
+            "type": "array",
+            "items": {"type": "string"},
+            "default": ["MT-", "mt-"],
+            "description": "Mitochondrial gene prefixes, matched case-insensitively by the species and QC checks."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "required": ["dataset"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) checked."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: checks ran and flags were written; dry_run: only an estimate; queued: long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Keys: checks (per check pass, fail, warn or abstain), n_flagged, renamed (count and first max_examples old and new names), species_call (declared, predicted, margin).",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "harmonization.object_integrity_checks",
+      "reads": [
+        "X or layers/<layer>",
+        "obs_names",
+        "var_names",
+        "obsm/*",
+        "varm/*",
+        "obs/total_counts",
+        "obs/n_genes_by_counts",
+        "var/gene_symbols",
+        "uns/species"
+      ],
+      "writes": [
+        "uns/integrity/report",
+        "obs/integrity_duplicate",
+        "var/integrity_duplicate",
+        "var/integrity_symbol_flag",
+        "obs/integrity_qc_mismatch",
+        "uns/integrity/species_call"
+      ],
+      "devices": ["cpu", "cuda"],
+      "stochastic": false,
+      "long_running": false,
+      "streaming": true,
+      "paradigm": "hybrid",
+      "docs": "tasks/harmonization/object_integrity_checks.md"
+    }
+  }
+}

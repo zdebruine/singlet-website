@@ -1,0 +1,145 @@
+{
+  "name": "singlet_grn_prior_network_curation",
+  "title": "Curated TF-target prior network construction",
+  "description": "Builds a signed TF-to-target regulon table from a curated source (CollecTRI by default, DoRothEA with confidence tiers, or the OmniPath TF-target dataset) and stores it in uns under the method and species. Use it to create the prior that TF activity scoring reads. It does not infer edges from expression, does not score cells, and needs network access to the source. Non-human species are translated from human by orthology.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI, or a workspace handle, whose uns receives the regulon table."
+      },
+      "method": {
+        "type": "string",
+        "enum": ["collectri", "dorothea", "omnipath_tf_target"],
+        "default": "collectri",
+        "description": "Curated source. collectri is the default; dorothea adds confidence tiers; omnipath_tf_target keeps per-edge evidence."
+      },
+      "species": {
+        "type": "string",
+        "default": "human",
+        "description": "Species of the output table; non-human species are translated from human by orthology."
+      },
+      "context": {
+        "type": ["string", "null"],
+        "default": null,
+        "description": "Optional label recorded on the table; it does not filter edges."
+      },
+      "min_targets": {
+        "type": "integer",
+        "minimum": 1,
+        "default": 5,
+        "description": "Minimum targets per TF; TFs with fewer targets are dropped from the table."
+      },
+      "dorothea": {
+        "type": "object",
+        "description": "Options for method dorothea; ignored by the other methods.",
+        "additionalProperties": false,
+        "properties": {
+          "levels": {
+            "type": "array",
+            "items": {"type": "string", "enum": ["A", "B", "C", "D"]},
+            "minItems": 1,
+            "uniqueItems": true,
+            "default": ["A", "B", "C"],
+            "description": "Confidence levels kept for method dorothea; D is excluded by default."
+          },
+          "license_class": {
+            "type": "string",
+            "enum": ["academic", "commercial", "nonprofit"],
+            "default": "academic",
+            "description": "Access class requested from OmniPath for the DoRothEA download."
+          }
+        }
+      },
+      "collectri": {
+        "type": "object",
+        "description": "Options for method collectri; ignored by the other methods.",
+        "additionalProperties": false,
+        "properties": {
+          "remove_complexes": {
+            "type": "boolean",
+            "default": false,
+            "description": "Drop the AP1 and NFKB complex sources from the CollecTRI table."
+          }
+        }
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu"],
+        "default": "auto",
+        "description": "Execution device; only cpu is implemented, so auto resolves to cpu."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return the source names, levels and device without downloading or writing."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace an existing uns member of the same name instead of failing."
+      }
+    },
+    "required": ["dataset"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written, e.g. uns/regulon_collectri_human. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Completed runs return n_edges, n_tfs, n_targets, tier_counts, n_dropped_min_targets, species_translated and n_edges_before_translation. Never raw tables.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": true
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "grn.prior_network_curation",
+      "reads": [],
+      "writes": ["uns/regulon_<method>_<species>"],
+      "devices": ["cpu"],
+      "stochastic": false,
+      "long_running": false,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/grn/prior_network_curation.md"
+    }
+  }
+}

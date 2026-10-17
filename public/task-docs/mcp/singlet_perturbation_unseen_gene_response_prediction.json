@@ -1,0 +1,199 @@
+{
+  "name": "singlet_perturbation_unseen_gene_response_prediction",
+  "title": "Unseen single-gene perturbation response prediction",
+  "description": "Predicts the pseudobulk expression change for held-out single-gene perturbations that have no training data, from control cells and measured responses to other genes. Default is a ridge bilinear model on training-data gene embeddings; training_mean is the perturbation-agnostic comparator and gears is a graph neural network. Writes uns/pert_pred_mean, with intervals for bilinear_ridge, and scores against measured profiles when they exist. Do not use for combinatorial, chemical or compound perturbations, or to predict single-cell distributions.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "layer": {
+        "type": "string",
+        "default": "counts",
+        "description": "Layer to pseudobulk; cells are size-factor normalised and log1p transformed before averaging."
+      },
+      "method": {
+        "type": "string",
+        "enum": ["bilinear_ridge", "training_mean", "gears"],
+        "default": "bilinear_ridge",
+        "description": "Prediction method; training_mean is the perturbation-agnostic comparator."
+      },
+      "targets": {
+        "type": "array",
+        "items": {"type": "string"},
+        "minItems": 1,
+        "description": "Held-out perturbation labels to predict; excluded from training. Labels with measured profiles are also scored."
+      },
+      "control_label": {
+        "type": "string",
+        "default": "ctrl",
+        "description": "Value of obs/perturbation that marks control cells."
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu", "cuda"],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Random seed for gears training; the linear methods are deterministic given their inputs."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      },
+      "bilinear_ridge": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options for method bilinear_ridge.",
+        "properties": {
+          "pca_dim": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 10,
+            "description": "Dimension of training-data PCA gene and perturbation embeddings."
+          },
+          "ridge_penalty": {
+            "type": "number",
+            "minimum": 0,
+            "default": 0.1,
+            "description": "Ridge penalty applied on both sides of the bilinear solve."
+          },
+          "gene_embedding": {
+            "type": "string",
+            "default": "training_data",
+            "description": "training_data, or a path to an external gene embedding table."
+          },
+          "interval_level": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.9,
+            "description": "Posterior predictive interval level; 0 disables intervals."
+          }
+        }
+      },
+      "gears": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options for method gears.",
+        "properties": {
+          "hidden_size": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 64,
+            "description": "Hidden dimension of gene and perturbation embeddings."
+          },
+          "epochs": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 20,
+            "description": "Training epochs."
+          },
+          "lr": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 0.001,
+            "description": "Adam learning rate."
+          },
+          "direction_lambda": {
+            "type": "number",
+            "minimum": 0,
+            "default": 0.1,
+            "description": "Weight of the sign-agreement (direction) loss."
+          },
+          "coexpress_threshold": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.4,
+            "description": "Correlation threshold for the co-expression graph."
+          }
+        }
+      }
+    },
+    "required": ["dataset", "targets"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written, e.g. uns/pert_pred_mean. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "For completed runs: method, n_targets, n_scored, mean_r_delta, mean_pearson, mean_l2, baseline_mean_r_delta. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "perturbation.unseen_gene_response_prediction",
+      "reads": [
+        "layers/counts",
+        "obs/perturbation",
+        "obs/replicate",
+        "varm/gene_emb",
+        "uns/gene_graph_go",
+        "uns/gene_graph_coexpr"
+      ],
+      "writes": [
+        "uns/pert_pred_mean",
+        "uns/pert_pred_interval",
+        "uns/pert_scores",
+        "uns/pert_split",
+        "models/unseen_response"
+      ],
+      "devices": ["cpu", "cuda"],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": true,
+      "paradigm": "model-based",
+      "docs": "tasks/perturbation/unseen_gene_response_prediction.md"
+    }
+  }
+}

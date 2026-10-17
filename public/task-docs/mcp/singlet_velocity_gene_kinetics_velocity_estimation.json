@@ -1,0 +1,237 @@
+{
+  "name": "singlet_velocity_gene_kinetics_velocity_estimation",
+  "title": "Per-gene kinetics and RNA velocity",
+  "description": "Fits a per-gene kinetic model to spliced and unspliced counts and writes per-gene rates and a per-cell velocity matrix. Needs spliced and unspliced layers and a kNN graph. The default scvelo_dynamical is the reference; velovi and velovae add posterior uncertainty, and scvelo_steady_state is the cheap equilibrium baseline. Do not use on labelled reads; latent time is a separate tool.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "scvelo_dynamical",
+          "scvelo_stochastic",
+          "scvelo_steady_state",
+          "velovi",
+          "velovae"
+        ],
+        "default": "scvelo_dynamical",
+        "description": "Kinetic method; scvelo_dynamical is the default and the reference."
+      },
+      "min_shared_counts": {
+        "type": "integer",
+        "minimum": 1,
+        "default": 20,
+        "description": "Minimum shared spliced plus unspliced counts per gene before fitting."
+      },
+      "n_top_genes": {
+        "type": "integer",
+        "minimum": 1,
+        "default": 2000,
+        "description": "Highly variable genes passed to the kinetic fit."
+      },
+      "n_neighbors": {
+        "type": "integer",
+        "minimum": 1,
+        "default": 30,
+        "description": "kNN size for first and second moment smoothing."
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Random seed; used by velovi and velovae only."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without fitting."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      },
+      "scvelo": {
+        "type": "object",
+        "description": "Options for the three scvelo_* methods; ignored by the learned methods.",
+        "additionalProperties": false,
+        "properties": {
+          "max_iter": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 10,
+            "description": "EM iterations for the dynamical method."
+          },
+          "fit_scaling": {
+            "type": "boolean",
+            "default": true,
+            "description": "Fit the per-gene unspliced and spliced scale ratio rho."
+          },
+          "fit_steady_states": {
+            "type": "boolean",
+            "default": true,
+            "description": "Allow steady-state states in the dynamical model."
+          },
+          "fit_time": {
+            "type": "boolean",
+            "default": true,
+            "description": "Fit per-cell time inside the dynamical model."
+          },
+          "fit_offset": {
+            "type": "boolean",
+            "default": false,
+            "description": "Fit an intercept in the steady-state regression."
+          },
+          "quantiles": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "minItems": 2,
+            "maxItems": 2,
+            "default": [5, 95],
+            "description": "Percentile pair selecting extreme cells for steady-state initialisation."
+          }
+        }
+      },
+      "velovi": {
+        "type": "object",
+        "description": "Options for velovi; ignored by other methods.",
+        "additionalProperties": false,
+        "properties": {
+          "n_samples": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 25,
+            "description": "Posterior samples for velocity uncertainty; other training settings use library defaults."
+          }
+        }
+      },
+      "velovae": {
+        "type": "object",
+        "description": "Options for velovae; ignored by other methods.",
+        "additionalProperties": false,
+        "properties": {
+          "n_samples": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 25,
+            "description": "Posterior samples for velocity uncertainty; other training settings use library defaults."
+          }
+        }
+      }
+    },
+    "required": [
+      "dataset"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: fitted inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. var/gamma and layers/velocity. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Compact summary for completed calls: n_genes_fit, n_velocity_genes, fit_iterations and method. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": true,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "velocity.gene_kinetics_velocity_estimation",
+      "reads": [
+        "layers/spliced",
+        "layers/unspliced",
+        "obsp/connectivities",
+        "obsm/X_pca"
+      ],
+      "writes": [
+        "var/alpha",
+        "var/beta",
+        "var/gamma",
+        "var/velocity_genes",
+        "layers/velocity",
+        "layers/velocity_uncertainty",
+        "uns/velocity_params",
+        "models/<name>"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/velocity/gene_kinetics_velocity_estimation.md"
+    }
+  }
+}

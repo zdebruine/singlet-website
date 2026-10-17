@@ -1,0 +1,259 @@
+{
+  "name": "singlet_ingest_quant_barcode_umi_extraction",
+  "title": "Extract cell barcode, UMI and cDNA fields from raw FASTQ",
+  "description": "Splits raw paired-end FASTQ from a droplet or split-pool library into cell barcode, UMI and cDNA fields under one declared layout and assigns every non-conforming read pair to a named failure class. Use it first when starting from FASTQ with a known layout; it needs fastq_r1, fastq_r2, a layout and, for the layout-match diagnostic, a whitelist. It writes uns/ingest_parse_summary and uns/ingest_geometry plus a per-read parse stream sidecar. Do not use it on count matrices, to correct barcode errors or collapse UMIs (use whitelist correction and UMI deduplication), or when the layout is unknown (run chemistry detection first).",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or workspace handle; created without matrices if absent."
+      },
+      "fastq_r1": {
+        "type": "string",
+        "description": "Path or URI of read 1 (gzip or plain FASTQ)."
+      },
+      "fastq_r2": {
+        "type": "string",
+        "description": "Path or URI of read 2, in the same order as read 1. Mismatching read names stop the call."
+      },
+      "method": {
+        "type": "string",
+        "description": "Extraction method. fixed_layout slices declared spans, with STARsolo CB_UMI_Simple semantics.",
+        "enum": [
+          "fixed_layout"
+        ],
+        "default": "fixed_layout"
+      },
+      "layout": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Protocol layout: a registry key or explicit 1-based spans. Null span fields take the registry value; there is no silent default.",
+        "properties": {
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null,
+            "description": "Registry key, for example 10xv2, 10xv3 or 10x5p. Required unless all four spans are given."
+          },
+          "cb_read": {
+            "type": "integer",
+            "enum": [
+              1,
+              2
+            ],
+            "default": 1,
+            "description": "Read that holds the cell barcode and UMI."
+          },
+          "cb_start": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1,
+            "default": null,
+            "description": "1-based start of the cell barcode; null takes the registry value."
+          },
+          "cb_len": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1,
+            "maximum": 32,
+            "default": null,
+            "description": "Cell barcode length; null takes the registry value."
+          },
+          "umi_start": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1,
+            "default": null,
+            "description": "1-based start of the UMI; null takes the registry value."
+          },
+          "umi_len": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1,
+            "maximum": 32,
+            "default": null,
+            "description": "UMI length; null takes the registry value (10 for v2, 12 for v3)."
+          },
+          "cdna_read": {
+            "type": "integer",
+            "enum": [
+              1,
+              2
+            ],
+            "default": 2,
+            "description": "Read that holds the cDNA. Equal to cb_read for 5' layouts, where the cDNA is the remainder of the read."
+          },
+          "adapter_seq": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[ACGTN]+$",
+            "default": null,
+            "description": "Fixed segment after the UMI in 5' layouts; null takes the registry value, or no adapter for custom layouts."
+          }
+        }
+      },
+      "policy": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Parse policy. Changes counts, not spans; state it in any comparison.",
+        "properties": {
+          "require_exact_length": {
+            "type": "boolean",
+            "default": true,
+            "description": "Reads longer than the layout fail as length_mismatch. Ignored when cdna_read equals cb_read; shorter reads always fail."
+          },
+          "allow_N_in_cb": {
+            "type": "boolean",
+            "default": false,
+            "description": "Accept reads with N in the cell barcode instead of classing them N_in_cb."
+          },
+          "allow_N_in_umi": {
+            "type": "boolean",
+            "default": false,
+            "description": "Accept reads with N in the UMI instead of classing them N_in_umi."
+          },
+          "reverse_complement_cb": {
+            "type": "boolean",
+            "default": false,
+            "description": "Reverse-complement the barcode before diagnostics and output; only for protocols with the barcode on the opposite strand."
+          },
+          "adapter_mismatches_max": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 1,
+            "description": "Mismatches tolerated in the adapter (STARsolo default 1); used only when an adapter is declared."
+          }
+        }
+      },
+      "whitelist": {
+        "type": "string",
+        "description": "Barcode list for the layout diagnostic and layout confidence; does not change cb_seq. Without it, geometry_check is not_run."
+      },
+      "parse_out": {
+        "type": "string",
+        "description": "Path of the parse stream sidecar; omitted means a file beside the dataset."
+      },
+      "device": {
+        "type": "string",
+        "description": "Execution device for candidate scoring; auto picks CUDA when a device with enough memory is available. Decompression stays on CPU.",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto"
+      },
+      "dry_run": {
+        "type": "boolean",
+        "description": "Return estimated time, memory, resolved geometry and device without reading reads.",
+        "default": false
+      },
+      "overwrite": {
+        "type": "boolean",
+        "description": "Replace existing uns members and the parse stream instead of failing.",
+        "default": false
+      }
+    },
+    "required": [
+      "dataset",
+      "fastq_r1",
+      "fastq_r2"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id).",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ]
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written: uns/ingest_parse_summary and uns/ingest_geometry. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "additionalProperties": true,
+        "description": "Keys: layout_name, geometry, reads_in, reads_parsed, parse_rate, failure_counts (one per class, summing to reads_in), whitelist_exact_match_rate, whitelist_distance1_rate, mean_layout_confidence, geometry_check, policies, parse_stream, device."
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "additionalProperties": true,
+        "description": "Present for dry_run: seconds, peak_memory_gb, device, resolved geometry."
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "ingest-quant.barcode_umi_extraction",
+      "reads": [],
+      "writes": [
+        "uns/ingest_parse_summary",
+        "uns/ingest_geometry"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": false,
+      "long_running": true,
+      "streaming": true,
+      "paradigm": "hybrid",
+      "docs": "tasks/ingest-quant/barcode_umi_extraction.md"
+    }
+  }
+}

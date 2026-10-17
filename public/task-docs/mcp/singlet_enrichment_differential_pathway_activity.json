@@ -1,0 +1,251 @@
+{
+  "name": "singlet_enrichment_differential_pathway_activity",
+  "title": "Differential pathway activity between conditions (donor-level)",
+  "description": "Tests whether pathway, TF-regulon or program activity differs between conditions within each annotated cell type, with donors or samples as the replicates. The default takes donor-aware gene-level contrast statistics, scores each pathway with a signed univariate linear model, and calibrates p-values by donor-label permutation. Requires raw counts, donor, cell-type and condition labels and a gene-set or signed footprint resource in uns. Writes uns/pathway_de per method and cell type. Do not use it to test per-cell scores against cells, for cell-type abundance, or when donors per group are below the minimum.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "decoupler_pb_ulm_on_de_statistic",
+          "decoupler_gsva_pseudobulk_then_limma",
+          "muscat_pbDS_edgeR",
+          "muscat_mmDS_dream2_cell_level",
+          "dreamlet_precision_weighted_lmm_pseudobulk",
+          "per_cell_score_then_donor_mean_limma"
+        ],
+        "default": "decoupler_pb_ulm_on_de_statistic",
+        "description": "Pathway inference route. Keep the default; the other values are comparators with documented outputs."
+      },
+      "design": {
+        "type": "object",
+        "description": "Donor, cell-type, condition and covariate keys, and the replicate unit.",
+        "properties": {
+          "donor_key": {
+            "type": "string",
+            "default": "donor",
+            "description": "obs column naming the donor or biological sample."
+          },
+          "cell_type_key": {
+            "type": "string",
+            "default": "cell_type",
+            "description": "obs column of cell-type labels; each type is tested separately."
+          },
+          "condition_key": {
+            "type": "string",
+            "default": "condition",
+            "description": "obs column of condition labels with two or more levels."
+          },
+          "unit": {
+            "type": "string",
+            "enum": ["donor", "sample"],
+            "default": "donor",
+            "description": "Replicate unit; cell-level units are rejected for condition tests."
+          },
+          "covariates": {
+            "type": "array",
+            "items": {"type": "string"},
+            "default": [],
+            "description": "obs columns added to the design, such as batch, sex, age or depth."
+          }
+        },
+        "additionalProperties": false
+      },
+      "pseudobulk": {
+        "type": "object",
+        "description": "Donor-by-cell-type aggregation and filtering before testing.",
+        "properties": {
+          "aggregation": {
+            "type": "string",
+            "enum": ["sum", "mean"],
+            "default": "sum",
+            "description": "Cell aggregation; mean is available as a sensitivity check."
+          },
+          "min_cells": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 10,
+            "description": "Minimum cells in a donor-by-cell-type pseudobulk."
+          },
+          "min_counts": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 1000,
+            "description": "Minimum total counts per pseudobulk sample."
+          },
+          "min_donors_per_group": {
+            "type": "integer",
+            "minimum": 2,
+            "default": 3,
+            "description": "Minimum donors per condition level before a cell type is tested."
+          }
+        },
+        "additionalProperties": false
+      },
+      "pathway_set": {
+        "type": "object",
+        "description": "Pathway resource and set-size limits, required by every method.",
+        "properties": {
+          "resource": {
+            "type": "string",
+            "description": "uns key of a long table with source, target and weight columns."
+          },
+          "min_size": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 10,
+            "description": "Minimum set size after intersection with tested genes."
+          },
+          "max_size": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 500,
+            "description": "Maximum set size after intersection with tested genes."
+          }
+        },
+        "additionalProperties": false
+      },
+      "decoupler_pb_ulm_on_de_statistic": {
+        "type": "object",
+        "description": "Options for the default signed univariate linear model route.",
+        "properties": {
+          "tmin": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 5,
+            "description": "Minimum targets per source for a fit; decoupler examples use 3."
+          },
+          "signed": {
+            "type": "boolean",
+            "default": true,
+            "description": "Use signed footprint weights; false uses unsigned set membership."
+          }
+        },
+        "additionalProperties": false
+      },
+      "calibration": {
+        "type": "object",
+        "description": "Donor-label permutation null used to calibrate p-values.",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "default": true,
+            "description": "Permute donor labels within cell type to build an empirical null."
+          },
+          "n_permutations": {
+            "type": "integer",
+            "minimum": 100,
+            "default": 1000,
+            "description": "Donor-label permutations per cell type; exhaustive when fewer exist."
+          }
+        },
+        "additionalProperties": false
+      },
+      "alpha": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1,
+        "default": 0.05,
+        "description": "Nominal FDR level for significance, Benjamini-Hochberg within cell type."
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu", "cuda"],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Seed for donor permutations and subsampling."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device only; no pathway tests are computed."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing pathway_de members for the same method instead of failing."
+      }
+    },
+    "required": ["dataset"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written, one table per cell type plus the null and model state. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Keys: method, cell_types_tested, n_tests, n_fdr_below_alpha, donors_per_group_min, null_min_pvalue (when calibration is enabled).",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device, and the number of tests and permutations.",
+        "additionalProperties": true
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "enrichment.differential_pathway_activity",
+      "reads": [
+        "layers/counts",
+        "obs/<donor_key>",
+        "obs/<cell_type_key>",
+        "obs/<condition_key>",
+        "obs/<covariate_keys>",
+        "obsm/<score_key>",
+        "uns/<resource_name>"
+      ],
+      "writes": [
+        "uns/pathway_de/<method>/<cell_type>",
+        "uns/pathway_de/<method>/null",
+        "models/pathway_de_<method>"
+      ],
+      "devices": ["cpu", "cuda"],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": true,
+      "paradigm": "hybrid",
+      "docs": "tasks/enrichment/differential_pathway_activity.md"
+    }
+  }
+}

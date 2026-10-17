@@ -1,0 +1,195 @@
+{
+  "name": "singlet_doublets_artifact_cluster_detection",
+  "title": "Doublet artifact cluster detection",
+  "description": "Labels each cluster of a fixed partition as real, doublet artifact or unclear, using per-cell doublet calls, the embedding and optional sample-barcode labels. Writes per-cluster calls, unique-gene rescue flags and the evidence tables used. The default method, composite, uses hashing evidence when hashing_key is set and expression evidence otherwise. Use after per-cell calling and clustering; do not use it to call individual barcodes or to choose clustering resolution.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "method": {
+        "type": "string",
+        "enum": ["composite", "doubletdecon_rescue", "gmm_demux_phony"],
+        "default": "composite",
+        "description": "composite is the proposed default; doubletdecon_rescue and gmm_demux_phony are published criteria. gmm_demux_phony needs hashing_key."
+      },
+      "cluster_key": {
+        "type": "string",
+        "default": "cluster",
+        "description": "obs column holding the fixed cluster partition to evaluate."
+      },
+      "call_key": {
+        "type": "string",
+        "default": "doublet_call_scrublet",
+        "description": "obs column of per-cell doublet calls from doublets.doublet_call_thresholding."
+      },
+      "hashing_key": {
+        "type": ["string", "null"],
+        "default": null,
+        "description": "obs column of sample-barcode calls; enables the hashing channel and gmm_demux_phony."
+      },
+      "composite": {
+        "type": "object",
+        "description": "Options for the default composite method.",
+        "additionalProperties": false,
+        "properties": {
+          "alpha": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.01,
+            "description": "Significance level of the one-sided hashing binomial test; matches the GMM-Demux phony threshold."
+          },
+          "tau_multiplet_fraction": {
+            "type": ["number", "null"],
+            "minimum": 0,
+            "maximum": 1,
+            "default": null,
+            "description": "Hashing-labelled multiplet fraction defining an artifact cluster; required when hashing_key is set. No literature default."
+          },
+          "embedding_key": {
+            "type": "string",
+            "default": "X_pca",
+            "description": "obsm key of the embedding used for segment distance to parent pairs."
+          },
+          "exclusive_pairs": {
+            "type": "array",
+            "default": [],
+            "description": "Pairs of mutually exclusive lineage genes; empty disables the exclusive-marker feature.",
+            "items": {
+              "type": "array",
+              "items": {"type": "string"},
+              "minItems": 2,
+              "maxItems": 2
+            }
+          }
+        }
+      },
+      "doubletdecon": {
+        "type": "object",
+        "description": "Options for doubletdecon_rescue.",
+        "additionalProperties": false,
+        "properties": {
+          "min_unique_genes": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 4,
+            "description": "Unique genes a candidate cluster needs, against both parents, to be rescued as real."
+          },
+          "rhop": {
+            "type": "number",
+            "minimum": 0,
+            "default": 1,
+            "description": "Multiplier of the SD in the medoid-correlation blacklist cutoff."
+          }
+        }
+      },
+      "gmm_demux": {
+        "type": "object",
+        "description": "Options for gmm_demux_phony.",
+        "additionalProperties": false,
+        "properties": {
+          "phony_alpha": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.01,
+            "description": "Significance level for the pure and phony labels, as in GMM-Demux."
+          },
+          "confidence_threshold": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.8,
+            "description": "Minimum posterior confidence for a hashing call, as in GMM-Demux."
+          },
+          "ambiguous_rate": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.05,
+            "description": "Chance that a phony droplet joins a pure cluster; the GMM-Demux command-line default."
+          }
+        }
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu", "cuda"],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": ["dataset"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate; queued: long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written, e.g. obs/artifact_cluster_call. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Counts of real, artifact and unclear clusters, rescued clusters and the method used. Never per-cell data.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "doublets.artifact_cluster_detection",
+      "reads": ["layers/counts", "obsm/X_pca", "obs/<cluster_key>", "obs/<call_key>", "obs/<hashing_key>"],
+      "writes": ["obs/artifact_cluster_call", "obs/unique_gene_rescue", "uns/artifact_clusters", "uns/artifact_markers", "uns/artifact_params"],
+      "devices": ["cpu", "cuda"],
+      "stochastic": false,
+      "long_running": false,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/doublets/artifact_cluster_detection.md"
+    }
+  }
+}

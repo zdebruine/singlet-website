@@ -1,0 +1,279 @@
+{
+  "name": "singlet_cell_calling_nucleus_vs_empty_calling",
+  "title": "Nucleus versus empty-droplet calling (snRNA-seq)",
+  "description": "Labels each barcode of one unfiltered single-nucleus channel as nucleus or non-nucleus and writes obs/nucleus_call_<method> with method-specific scores. The default emptydrops_intronic is a label-free multinomial null test that needs no training; dropletqc_nf and cellbender are alternatives. It needs raw/counts including empty barcodes, and raw/intronic and raw/exonic improve the calls. Do not use it on single-cell data (use cell-calling.cell_vs_empty_droplet_calling), on filtered matrices, or to choose the final cut (use cell-calling.cell_count_cutoff_selection).",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "emptydrops_intronic",
+          "emptydrops_cr",
+          "knee",
+          "dropletqc_nf",
+          "diem",
+          "cellbender",
+          "dropkick_logistic",
+          "umi_floor"
+        ],
+        "default": "emptydrops_intronic",
+        "description": "Calling method. emptydrops_intronic is the default; cellbender and diem are model-based alternatives; umi_floor is a baseline."
+      },
+      "sample_key": {
+        "type": "string",
+        "default": "sample",
+        "description": "Obs column naming the channel; the tool runs once per level because ambient composition differs."
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "minimum": 0,
+        "description": "Seed for Monte Carlo draws, cross-validation and initialisation; unused by knee and umi_floor."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members of the same method suffix instead of failing."
+      },
+      "emptydrops": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options for emptydrops_intronic; emptydrops_cr also reads niters and fdr.",
+        "properties": {
+          "lower": {
+            "type": "integer",
+            "default": 100,
+            "minimum": 1,
+            "description": "Total at or below which barcodes define the ambient profile and are not tested."
+          },
+          "niters": {
+            "type": "integer",
+            "default": 10000,
+            "minimum": 1000,
+            "description": "Monte Carlo draws per tested barcode; the smallest p-value is 1/(niters+1)."
+          },
+          "fdr": {
+            "type": "number",
+            "default": 0.01,
+            "exclusiveMinimum": 0,
+            "exclusiveMaximum": 1,
+            "description": "Benjamini-Hochberg false-call rate among tested barcodes."
+          },
+          "test_ambient": {
+            "type": "boolean",
+            "default": false,
+            "description": "Also test barcodes at or below lower for a p-value histogram diagnostic; their FDR stays NaN."
+          }
+        }
+      },
+      "cellbender": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options for cellbender.",
+        "properties": {
+          "fpr": {
+            "type": "number",
+            "default": 0.01,
+            "exclusiveMinimum": 0,
+            "exclusiveMaximum": 1,
+            "description": "False-positive rate for denoised counts; does not change the nucleus call."
+          },
+          "posterior_threshold": {
+            "type": "number",
+            "default": 0.5,
+            "exclusiveMinimum": 0,
+            "exclusiveMaximum": 1,
+            "description": "Posterior probability of cell presence above which a barcode is called."
+          },
+          "expected_cells": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "default": null,
+            "minimum": 1,
+            "description": "Expected nucleus count; null lets CellBender choose."
+          }
+        }
+      },
+      "dropletqc": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options for dropletqc_nf.",
+        "properties": {
+          "nf_rescue": {
+            "type": "number",
+            "default": 0.05,
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Minimum nuclear fraction for UMI-based rescue of barcodes flagged empty."
+          },
+          "umi_rescue": {
+            "type": "integer",
+            "default": 1000,
+            "minimum": 1,
+            "description": "Minimum UMI total for rescue, used together with nf_rescue."
+          }
+        }
+      },
+      "rank_rules": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options for knee, emptydrops_cr and umi_floor.",
+        "properties": {
+          "expected_cells": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "default": null,
+            "minimum": 1,
+            "description": "Expected nucleus count for emptydrops_cr; null uses 3000."
+          },
+          "umi_floor": {
+            "type": "integer",
+            "default": 200,
+            "minimum": 1,
+            "description": "Fixed minimum UMI total for the umi_floor baseline."
+          },
+          "knee_distance": {
+            "type": "boolean",
+            "default": false,
+            "description": "Select the knee-distance variant of the knee rule. In alevin-fry the flag selects the same knee-finding branch (section 4)."
+          }
+        }
+      },
+      "qc_flags": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Quality flags written for every method; they never change the call.",
+        "properties": {
+          "mito_max": {
+            "type": "number",
+            "default": 0.3,
+            "exclusiveMinimum": 0,
+            "exclusiveMaximum": 1,
+            "description": "Mitochondrial share above which a barcode is flagged high_mito; cell-tuned default."
+          }
+        }
+      }
+    },
+    "required": [
+      "dataset"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, for example obs/nucleus_call_emptydrops_intronic. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Compact summary for completed runs: method, sample_key, per-sample n_barcodes, n_tested, n_called, n_limited, cut and warnings. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "cell-calling.nucleus_vs_empty_calling",
+      "reads": [
+        "raw/counts",
+        "raw/intronic",
+        "raw/exonic",
+        "obs/<sample_key>"
+      ],
+      "writes": [
+        "obs/nucleus_call_<method>",
+        "obs/nucleus_prob_<method>",
+        "obs/nucleus_fdr_<method>",
+        "obs/nucleus_qc_flag_<method>",
+        "obs/nucleus_ambient_score_<method>",
+        "uns/nucleus_ambient_profile_<method>",
+        "uns/nucleus_call_params_<method>",
+        "models/nucleus_call_<method>"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": true,
+      "paradigm": "hybrid",
+      "docs": "tasks/cell-calling/nucleus_vs_empty_calling.md"
+    }
+  }
+}

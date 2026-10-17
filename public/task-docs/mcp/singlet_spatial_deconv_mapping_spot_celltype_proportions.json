@@ -1,0 +1,265 @@
+{
+  "name": "singlet_spatial_deconv_mapping_spot_celltype_proportions",
+  "title": "Cell type proportions for spots and bins",
+  "description": "Estimates the fraction of each reference cell type in every spot or bin of a spatial transcriptomics dataset from a labelled single-cell or single-nucleus reference of the same tissue, and writes a unit-by-type proportion matrix with the ordered type names and the fitted reference model. Needs raw UMI counts in layers/counts and gene identifiers shared with the reference. The default cell2location is the only method with posterior intervals; rctd and nnls are fast deterministic baselines. Units smaller than a Visium spot (55 micrometres) are unvalidated. Do not use for single-cell data, for labelling individual cells, for reference-free discovery, or without a matched reference.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "reference": {
+        "type": "string",
+        "description": "Labelled reference dataset (path, URI or workspace handle); read only. Needs layers/counts and var/gene_id."
+      },
+      "label_key": {
+        "type": "string",
+        "description": "Reference obs column with cell-type labels; at least two types with enough cells are required."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "cell2location",
+          "stereoscope",
+          "destvi",
+          "rctd",
+          "nnls"
+        ],
+        "default": "cell2location",
+        "description": "Estimator. cell2location is the default; rctd and nnls are deterministic and need no GPU."
+      },
+      "feature_key": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "default": null,
+        "description": "Boolean var column present in both datasets selecting genes; null uses all genes shared after filtering."
+      },
+      "min_cells_per_type": {
+        "type": "integer",
+        "default": 25,
+        "minimum": 1,
+        "description": "Reference types with fewer cells are dropped and listed in types_dropped."
+      },
+      "max_epochs": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Training epochs for the reference and spatial models; null keeps method defaults. Ignored by rctd and nnls.",
+        "properties": {
+          "reference": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "default": null,
+            "minimum": 1,
+            "description": "Reference-model epochs; defaults 250 (cell2location), 100 (stereoscope), 500 (destvi)."
+          },
+          "spatial": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "default": null,
+            "minimum": 1,
+            "description": "Spatial-model epochs; defaults 30000 (cell2location), 1000 (stereoscope), 10000 (destvi)."
+          }
+        }
+      },
+      "cell2location": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options used only when method is cell2location.",
+        "properties": {
+          "batch_key": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null,
+            "description": "Reference obs column naming donor or study; set it to estimate signatures by NB regression with batch, otherwise class means."
+          },
+          "cells_per_spot_key": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null,
+            "description": "Spatial obs column with a per-unit cell count from histology or nuclei; replaces n_cells_per_location."
+          },
+          "n_cells_per_location": {
+            "type": "number",
+            "default": 20,
+            "exclusiveMinimum": 0,
+            "description": "Expected cells per unit when cells_per_spot_key is null; a histology-derived value is preferred."
+          },
+          "detection_alpha": {
+            "type": "number",
+            "default": 20.0,
+            "exclusiveMinimum": 0,
+            "description": "Detection-efficiency hyperprior; larger values constrain its variation across units more tightly."
+          },
+          "amortised": {
+            "type": "boolean",
+            "default": false,
+            "description": "Infer abundances with the trained encoder at models/cell2location_encoder; fails if the encoder is absent."
+          },
+          "num_samples": {
+            "type": "integer",
+            "default": 1000,
+            "minimum": 1,
+            "description": "Posterior draws per unit used for the summaries."
+          },
+          "proportion_summary": {
+            "type": "string",
+            "enum": [
+              "q05",
+              "q50",
+              "mean"
+            ],
+            "default": "q05",
+            "description": "Posterior summary written as proportions: q05 or q50 of abundance, normalised per unit, or mean of per-draw composition."
+          },
+          "write_posterior": {
+            "type": "boolean",
+            "default": false,
+            "description": "Also write abundance q05 and q50 and the 5th and 95th percentiles of per-draw composition."
+          }
+        }
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available. rctd always uses cpu."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Random seed for training and posterior sampling; rctd and nnls are deterministic."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": [
+      "dataset",
+      "reference",
+      "label_key"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. obsm/cell2location_proportions. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Compact summary for completed runs: method, proportion_summary, n_units, n_reference_cells, n_types, types_dropped, n_shared_genes, median_top_type_fraction, converged, warnings. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device and the epoch counts that would apply.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "spatial-deconv-mapping.spot_celltype_proportions",
+      "reads": [
+        "layers/counts",
+        "var/gene_id",
+        "obs/<cells_per_spot_key>",
+        "var/<feature_key>",
+        "reference:layers/counts",
+        "reference:var/gene_id",
+        "reference:obs/<label_key>",
+        "reference:obs/<batch_key>",
+        "reference:var/<feature_key>",
+        "models/cell2location_encoder"
+      ],
+      "writes": [
+        "obsm/<method>_proportions",
+        "obsm/<method>_proportions_q05",
+        "obsm/<method>_proportions_q95",
+        "obsm/<method>_abundance_q05",
+        "obsm/<method>_abundance_q50",
+        "uns/<method>_cell_types",
+        "uns/<method>_params",
+        "uns/<method>_diagnostics",
+        "models/<method>_reference"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": true,
+      "paradigm": "model-based",
+      "docs": "tasks/spatial-deconv-mapping/spot_celltype_proportions.md"
+    }
+  }
+}

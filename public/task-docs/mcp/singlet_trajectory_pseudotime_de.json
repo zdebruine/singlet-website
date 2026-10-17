@@ -1,0 +1,194 @@
+{
+  "name": "singlet_trajectory_pseudotime_de",
+  "title": "Pseudotime differential expression",
+  "description": "Tests, for each gene, whether expression changes along pseudotime, differs between lineages or branches, or changes from lineage start to end, using negative-binomial models with FDR control. Default method is tradeseq (GAM Wald tests). Use pseudotimede when pseudotime was estimated from the same cells and calibrated p-values matter more than cost. Needs raw counts and an obs pseudotime column, plus lineage weights for lineage tests. Writes per-gene p-values, FDR and fitted curves. Do not use to infer pseudotime or to order cells.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "pseudotime": {
+        "type": "string",
+        "default": "pseudotime",
+        "description": "obs column with per-cell pseudotime, oriented from the root cell."
+      },
+      "lineage_key": {
+        "type": ["string", "null"],
+        "default": null,
+        "description": "obsm key of cell-by-lineage weights in [0, 1]; null tests a single lineage."
+      },
+      "test": {
+        "type": "string",
+        "enum": ["association", "start_vs_end", "pattern", "early_de", "branch_beam"],
+        "default": "association",
+        "description": "association: trend along pseudotime; start_vs_end: end minus start; pattern, early_de: lineage differences; branch_beam: monocle_beam only."
+      },
+      "method": {
+        "type": "string",
+        "enum": ["tradeseq", "pseudotimede", "monocle_dgt", "monocle_beam"],
+        "default": "tradeseq",
+        "description": "tradeseq: NB GAM Wald tests; pseudotimede: estimated-pseudotime null; monocle_dgt, monocle_beam: NB likelihood-ratio tests."
+      },
+      "alpha": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1,
+        "default": 0.05,
+        "description": "FDR level for summary counts and calls; does not change the FDR values written."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Seed for lineage-weight draws, subsamples and permutations."
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu", "cuda"],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      },
+      "tradeseq": {
+        "type": "object",
+        "description": "Options used when method is tradeseq.",
+        "additionalProperties": false,
+        "properties": {
+          "nknots": {
+            "type": "integer",
+            "minimum": 3,
+            "default": 6,
+            "description": "Spline basis functions per lineage; knots sit at pseudotime quantiles."
+          },
+          "min_cells_per_lineage": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 20,
+            "description": "Cells a lineage needs before its smoother is fitted; a singlet guard, not a tradeSeq default."
+          }
+        }
+      },
+      "pseudotimede": {
+        "type": "object",
+        "description": "Options used when method is pseudotimede.",
+        "additionalProperties": false,
+        "properties": {
+          "n_subsamples": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 1000,
+            "description": "Pseudotime subsamples B for the permutation null; p-values have resolution 1/(B+1)."
+          },
+          "subsample_fraction": {
+            "type": "number",
+            "minimum": 0.1,
+            "maximum": 1,
+            "default": 0.8,
+            "description": "Fraction of cells in each subsample."
+          },
+          "reinference": {
+            "type": "string",
+            "default": "pseudotime_ordering",
+            "description": "Ordering method re-run on each subsample; the trajectory.pseudotime_ordering method by default."
+          },
+          "model": {
+            "type": "string",
+            "enum": ["nb", "zinb", "auto"],
+            "default": "nb",
+            "description": "Count model; auto chooses zinb over nb when the AIC gain exceeds aicdiff."
+          },
+          "k": {
+            "type": "integer",
+            "minimum": 3,
+            "default": 6,
+            "description": "Spline basis dimension for each smooth."
+          },
+          "aicdiff": {
+            "type": "number",
+            "minimum": 0,
+            "default": 10,
+            "description": "AIC margin for choosing zinb over nb when model is auto."
+          }
+        }
+      }
+    },
+    "required": ["dataset"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: wrote members; dry_run: estimate only; queued: long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written, e.g. var/association_pvalue. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "For completed fits: method, test, n_genes_tested, n_failed_fits, n_fdr_below_alpha; pseudotimede adds n_subsamples and min_attainable_pvalue.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "trajectory.pseudotime_de",
+      "reads": ["layers/counts", "obs/pseudotime", "obsm/lineage_weights"],
+      "writes": [
+        "var/<test>_pvalue",
+        "var/<test>_pvalue_fixed",
+        "var/<test>_fdr",
+        "var/<test>_statistic",
+        "varm/<test>_coefficients",
+        "uns/<test>_smoothers",
+        "uns/<test>_run"
+      ],
+      "devices": ["cpu", "cuda"],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "model-based",
+      "docs": "tasks/trajectory/pseudotime_de.md"
+    }
+  }
+}

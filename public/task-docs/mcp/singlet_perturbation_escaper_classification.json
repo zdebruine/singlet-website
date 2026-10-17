@@ -1,0 +1,312 @@
+{
+  "name": "singlet_perturbation_escaper_classification",
+  "title": "Classify perturbed versus escaper guide cells",
+  "description": "Labels each guide-carrying cell of a CRISPR knockout screen as perturbed (KO) or non-perturbed (NP) and reports per-target escape fractions. The default mixscape method projects kNN non-targeting perturbation signatures onto a per-target direction and fits a mixture with the non-targeting component fixed; mixscale returns a continuous score only. Needs per-cell target labels, non-targeting controls, replicate labels, unscaled log-normalised expression and PCA; writes class, posterior, signature and escape-rate members. Not for CRISPRa screens, guides without a target, or deciding whether a target has any effect.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "mixscape",
+          "mixscale"
+        ],
+        "default": "mixscape",
+        "description": "mixscape gives KO/NP calls and posteriors; mixscale returns a graded score and no class."
+      },
+      "targets": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "default": [],
+        "description": "Target genes to classify; an empty list classifies every target with guide cells."
+      },
+      "design": {
+        "type": "object",
+        "description": "Column names, control label, split key, layer and embedding of the input.",
+        "properties": {
+          "target_key": {
+            "type": "string",
+            "default": "target_gene",
+            "description": "obs column with each cell's target gene."
+          },
+          "control_label": {
+            "type": "string",
+            "default": "NT",
+            "description": "Target value of non-targeting control cells."
+          },
+          "split_by": {
+            "type": "string",
+            "default": "replicate",
+            "description": "obs column; non-targeting neighbours and mixture fits stay within one level."
+          },
+          "layer": {
+            "type": "string",
+            "default": "log1p",
+            "description": "Unscaled log-normalised layer used for signatures and DE tests."
+          },
+          "embedding_key": {
+            "type": "string",
+            "default": "X_pca",
+            "description": "obsm key of the embedding for neighbour search; computed from the layer when absent."
+          }
+        },
+        "additionalProperties": false
+      },
+      "neighbourhood": {
+        "type": "object",
+        "description": "Non-targeting neighbours used to build perturbation signatures.",
+        "properties": {
+          "n_neighbors": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 20,
+            "description": "Non-targeting neighbours averaged per cell for the signature."
+          },
+          "n_dims": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 15,
+            "description": "Embedding dimensions used for the neighbour search."
+          },
+          "exclude_self": {
+            "type": "boolean",
+            "default": true,
+            "description": "Remove each non-targeting cell from its own neighbour set."
+          },
+          "epsilon": {
+            "type": "number",
+            "minimum": 0,
+            "default": 0.1,
+            "description": "Approximate neighbour search tolerance."
+          }
+        },
+        "additionalProperties": false
+      },
+      "de": {
+        "type": "object",
+        "description": "Direction-gene selection.",
+        "properties": {
+          "min_de_genes": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 5,
+            "description": "Fewer direction genes than this labels all cells of the target NP."
+          },
+          "logfc_threshold": {
+            "type": "number",
+            "minimum": 0,
+            "default": 0.25,
+            "description": "Minimum absolute log fold change of direction genes."
+          },
+          "pval_cutoff": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 1,
+            "default": 0.05,
+            "description": "Adjusted p-value cut-off of direction genes."
+          },
+          "exclude_target": {
+            "type": "boolean",
+            "default": true,
+            "description": "Drop the target gene from direction genes and mixture inputs."
+          },
+          "split_fraction": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 0.9,
+            "default": 0,
+            "description": "Share of cells used to select direction genes; 0 disables cross-fitting."
+          }
+        },
+        "additionalProperties": false
+      },
+      "mixscape": {
+        "type": "object",
+        "description": "Options of the two-component mixture call.",
+        "properties": {
+          "iter_num": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 10,
+            "description": "Maximum relabelling iterations of direction and mixture."
+          },
+          "posterior_prior": {
+            "type": "string",
+            "enum": [
+              "pooled_lambda",
+              "equal"
+            ],
+            "default": "pooled_lambda",
+            "description": "pooled_lambda uses the fitted mixing weight; equal reproduces the Seurat posterior."
+          },
+          "posterior_threshold": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "exclusiveMaximum": 1,
+            "default": 0.5,
+            "description": "Posterior above which a guide cell is called KO."
+          },
+          "min_cells": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 5,
+            "description": "Targets with fewer KO cells in an iteration are labelled all NP."
+          },
+          "scale": {
+            "type": "boolean",
+            "default": true,
+            "description": "Z-score direction genes before the mixture fit."
+          }
+        },
+        "additionalProperties": false
+      },
+      "mixscale": {
+        "type": "object",
+        "description": "Options of the standardised projection score.",
+        "properties": {
+          "max_de_genes": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 100,
+            "description": "Largest number of direction genes used for the score."
+          },
+          "clip": {
+            "type": "number",
+            "minimum": 0,
+            "default": 10,
+            "description": "Absolute clip of each direction gene's z-score before projection."
+          }
+        },
+        "additionalProperties": false
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Seed for mixture starts; the mixscale path is deterministic."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": [
+      "dataset"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. obs/mixscape_class. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Compact summary for completed runs. Keys: method, n_targets, n_targets_all_np, n_guide_cells, fraction_ko, targets_not_converged. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "perturbation.escaper_classification",
+      "reads": [
+        "layers/log1p",
+        "obsm/X_pca",
+        "obs/target_gene",
+        "obs/replicate"
+      ],
+      "writes": [
+        "obs/mixscape_class",
+        "obs/mixscape_class_global",
+        "obs/mixscape_p_ko",
+        "obs/mixscale_score",
+        "layers/X_pert",
+        "uns/mixscape_de_genes",
+        "uns/mixscape_escape_rate",
+        "uns/escaper_diagnostics"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "model-based",
+      "docs": "tasks/perturbation/escaper_classification.md"
+    }
+  }
+}

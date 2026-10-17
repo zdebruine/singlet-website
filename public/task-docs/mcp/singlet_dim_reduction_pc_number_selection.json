@@ -1,0 +1,273 @@
+{
+  "name": "singlet_dim_reduction_pc_number_selection",
+  "title": "Choose number of principal components",
+  "description": "Chooses how many leading principal components to keep for neighbour graphs, clustering and embeddings by testing the PCA spectrum of the highly variable gene matrix against a null. The default denoise_tech uses a technical-variance threshold from raw counts; alternatives are gavish_donoho, marchenko_pastur, horn, jackstraw, count_null, findpc and fixed. It needs uns/pca (or layers/log1p_norm) and var/highly_variable, plus layers/counts for denoise_tech and count_null, and writes uns/pc_selection/<method>/ members and uns/pc_selection/summary. Do not use it to set clustering resolution, to choose genes, to match a preferred number, or when the user fixed the number of components. jackstraw and count_null are slow, so run dry_run first on large datasets.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "denoise_tech",
+          "findpc",
+          "gavish_donoho",
+          "marchenko_pastur",
+          "horn",
+          "jackstraw",
+          "count_null",
+          "fixed"
+        ],
+        "default": "denoise_tech",
+        "description": "Rule that chooses k. denoise_tech is the provisional default; fixed returns max_pcs."
+      },
+      "max_pcs": {
+        "type": "integer",
+        "minimum": 2,
+        "maximum": 200,
+        "default": 50,
+        "description": "K: components considered and ceiling on k. findpc scans this many standard deviations. Recomputes the spectrum if uns/pca holds fewer values."
+      },
+      "min_pcs": {
+        "type": "integer",
+        "minimum": 1,
+        "default": 5,
+        "description": "Floor on the emitted k; must not exceed max_pcs. k_raw is reported unclamped."
+      },
+      "noise_var": {
+        "anyOf": [
+          {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          {
+            "type": "string",
+            "enum": [
+              "estimate"
+            ]
+          }
+        ],
+        "default": "estimate",
+        "description": "Noise variance for gavish_donoho and marchenko_pastur, in variance units of the centred log values; 'estimate' uses the discarded-eigenvalue mean."
+      },
+      "horn": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options for method=horn.",
+        "properties": {
+          "niters": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000,
+            "default": 50,
+            "description": "B: number of gene-wise permutations."
+          },
+          "threshold": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 1,
+            "default": 0.1,
+            "description": "tau: a component is kept while the fraction of permuted eigenvalues at least as large is at most tau."
+          }
+        }
+      },
+      "jackstraw": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options for method=jackstraw; requires varm/PCs.",
+        "properties": {
+          "dims": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 20,
+            "description": "Number of components tested."
+          },
+          "replicates": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10000,
+            "default": 100,
+            "description": "M: number of permutation replicates."
+          },
+          "prop_freq": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 1,
+            "default": 0.01,
+            "description": "Fraction of features permuted in each replicate."
+          },
+          "score_thresh": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 1,
+            "default": 1e-05,
+            "description": "Gene-level empirical p-value threshold for counting significant features per component."
+          },
+          "pc_alpha": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 1,
+            "default": 0.05,
+            "description": "Level of the component-level proportion test (a design choice)."
+          }
+        }
+      },
+      "count_null": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options for method=count_null; requires layers/counts.",
+        "properties": {
+          "replicates": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000,
+            "default": 99,
+            "description": "B: simulated null matrices; alpha*(B+1) integer gives an exact test level."
+          },
+          "model": {
+            "type": "string",
+            "enum": [
+              "negative_binomial",
+              "poisson"
+            ],
+            "default": "negative_binomial",
+            "description": "Count model of the null; poisson sets the dispersion to zero."
+          },
+          "alpha": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 1,
+            "default": 0.05,
+            "description": "Nominal level of the per-component test against the leading null eigenvalue."
+          }
+        }
+      },
+      "seed": {
+        "type": "integer",
+        "minimum": 0,
+        "default": 42,
+        "description": "Random seed for horn, jackstraw, count_null and randomised decompositions; other methods are deterministic."
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing members under uns/pc_selection/<method>/ instead of failing."
+      }
+    },
+    "required": [
+      "dataset"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. uns/pc_selection/denoise_tech/k. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Compact summary: method, k, k_raw, min_pcs, max_pcs, n_cells, n_genes, spectrum_source, noise_var_used, clamped, warnings and the method's extra keys. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "dim-reduction.pc_number_selection",
+      "reads": [
+        "obsm/X_pca",
+        "uns/pca",
+        "layers/counts",
+        "layers/log1p_norm",
+        "var/highly_variable",
+        "varm/PCs"
+      ],
+      "writes": [
+        "uns/pc_selection/summary",
+        "uns/pc_selection/<method>/k",
+        "uns/pc_selection/<method>/per_pc_stat",
+        "uns/pc_selection/<method>/per_pc_flags",
+        "uns/pc_selection/<method>/limit",
+        "varm/jackstraw_pvalues"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/dim-reduction/pc_number_selection.md"
+    }
+  }
+}

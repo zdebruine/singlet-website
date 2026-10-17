@@ -1,0 +1,221 @@
+{
+  "name": "singlet_spatial_genes_neighborhood_enrichment",
+  "title": "Cell-type neighbourhood enrichment",
+  "description": "Tests whether cells of two labelled types are adjacent in a spatial neighbour graph more or less often than a label-shuffled null predicts, and returns a type-by-type z-score, count or fold-change matrix. Use it when labels are not derived from the same graph, since clustering on that graph makes enrichment circular. It writes uns/<cluster_key>_nhood_enrichment and does not model abundance or distance; use spatial-genes.cooccurrence_by_distance for distance curves.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "cluster_key": {
+        "type": "string",
+        "description": "obs column with categorical cell-type or domain labels; must have no missing values."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "label_permutation_zscore",
+          "conditional_zscore",
+          "endpoint_repairing_log2fc",
+          "edge_counts"
+        ],
+        "default": "label_permutation_zscore",
+        "description": "Statistic and null. label_permutation_zscore is the published default; the others are comparators or descriptive."
+      },
+      "graph": {
+        "type": "string",
+        "enum": [
+          "stored",
+          "knn6",
+          "delaunay"
+        ],
+        "default": "stored",
+        "description": "stored reads obsp/spatial_connectivities; knn6 and delaunay are built from obsm/spatial."
+      },
+      "library_key": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "default": null,
+        "description": "obs column; permutations stay within each library. Not allowed with endpoint_repairing_log2fc."
+      },
+      "n_perms": {
+        "type": "integer",
+        "minimum": 100,
+        "maximum": 10000,
+        "default": 1000,
+        "description": "Label permutations, or simulations for endpoint_repairing_log2fc."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Random seed for permutations or simulations; a fixed seed and backend reproduce results."
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      },
+      "squidpy": {
+        "type": "object",
+        "description": "Options for label_permutation_zscore and conditional_zscore.",
+        "properties": {
+          "min_cell_count": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 0,
+            "description": "Clusters with fewer cells are dropped and reported as NaN. Default 0 keeps all clusters."
+          },
+          "handle_nan": {
+            "type": "string",
+            "enum": [
+              "keep",
+              "zero"
+            ],
+            "default": "keep",
+            "description": "keep leaves undefined z as NaN; zero sets it to 0 and can hide undefined enrichment."
+          }
+        },
+        "additionalProperties": false
+      },
+      "giotto": {
+        "type": "object",
+        "description": "Options for endpoint_repairing_log2fc.",
+        "properties": {
+          "adjust_method": {
+            "type": "string",
+            "enum": [
+              "none",
+              "fdr",
+              "bonferroni",
+              "BH",
+              "holm",
+              "hochberg",
+              "hommel",
+              "BY"
+            ],
+            "default": "BH",
+            "description": "Multiplicity adjustment of endpoint p-values used by PI. Giotto's own default is none."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "dataset",
+      "cluster_key"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. uns/cell_type_nhood_enrichment/zscore. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Compact summary for completed runs: method, graph, n_labels, n_directed_edges, n_perms_used, seed, top_enriched and top_depleted pairs, and dropped_labels. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "spatial-genes.neighborhood_enrichment",
+      "reads": [
+        "obsp/spatial_connectivities",
+        "obsm/spatial",
+        "obs/<cluster_key>",
+        "obs/<library_key>"
+      ],
+      "writes": [
+        "uns/<cluster_key>_nhood_enrichment/zscore",
+        "uns/<cluster_key>_nhood_enrichment/count",
+        "uns/<cluster_key>_nhood_enrichment/conditional_ratio",
+        "uns/<cluster_key>_nhood_enrichment/log2_enrichment",
+        "uns/<cluster_key>_nhood_enrichment/p_high",
+        "uns/<cluster_key>_nhood_enrichment/p_low",
+        "uns/<cluster_key>_nhood_enrichment/p_adj",
+        "uns/<cluster_key>_nhood_enrichment/PI"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/spatial-genes/neighborhood_enrichment.md"
+    }
+  }
+}

@@ -1,0 +1,262 @@
+{
+  "name": "singlet_perturbation_guide_assignment",
+  "title": "Assign perturbation guides to cells",
+  "description": "Assigns each cell of a pooled CRISPR screen to the guide or guides it carries, from a raw cell-by-guide UMI count layer. Default method poisson_gauss (per-guide Poisson plus Gaussian mixture); threshold, max and ratio are fixed rules, gauss is a tied Gaussian mixture. Writes per-cell labels and status, a binary call matrix and per-guide count thresholds; needs a guide count layer, usually after feature-barcode counting and cell calling. Not for sample-hashtag demultiplexing, donor assignment or judging whether a guide reduced its target.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "guide_modality": {
+        "type": "string",
+        "default": "gdo",
+        "description": "Modality holding the guide count layer; receives the per-guide gdo/var fields."
+      },
+      "layer": {
+        "type": "string",
+        "default": "counts",
+        "description": "Layer of the guide modality with raw integer guide UMI counts; no normalisation is applied."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "threshold",
+          "max",
+          "ratio",
+          "gauss",
+          "poisson_gauss"
+        ],
+        "default": "poisson_gauss",
+        "description": "Assignment rule: threshold (count floor), max (top guide above floor), ratio (top-guide share), gauss (tied Gaussian mixture), poisson_gauss (Poisson plus Gaussian mixture)."
+      },
+      "batch_key": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "default": null,
+        "description": "obs column of batch labels. When set, gauss and poisson_gauss are fitted separately per batch level; ignored by other methods."
+      },
+      "calls": {
+        "type": "object",
+        "description": "Options shaping the per-cell label, for all methods.",
+        "properties": {
+          "max_assignments_per_cell": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 5,
+            "description": "Cells with more called guides than this are labelled multiple."
+          },
+          "no_grna_assigned_key": {
+            "type": "string",
+            "default": "negative",
+            "description": "Label for cells with no called guide; set to Negative to match pertpy threshold and max output."
+          },
+          "multi_guide_separator": {
+            "type": "string",
+            "default": "+",
+            "description": "Separator joining the sorted guide names of multi-guide cells."
+          }
+        },
+        "additionalProperties": false
+      },
+      "rules": {
+        "type": "object",
+        "description": "Options of the count rules threshold, max and ratio.",
+        "properties": {
+          "assignment_threshold": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 5,
+            "description": "Integer UMI floor, used by threshold and max. The default 5 is a tutorial value, not a published default."
+          },
+          "min_guide_fraction": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.5,
+            "description": "Share of the cell's guide UMIs the top guide must exceed, used by ratio only."
+          }
+        },
+        "additionalProperties": false
+      },
+      "mixture": {
+        "type": "object",
+        "description": "Options of the fitted mixtures gauss and poisson_gauss.",
+        "properties": {
+          "posterior_threshold": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 1,
+            "default": null,
+            "description": "Signal posterior a count must exceed to be called; null uses 0.5."
+          },
+          "n_iter": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1,
+            "default": null,
+            "description": "Optimiser steps, fixed number; null uses 250 for gauss and 500 for poisson_gauss."
+          },
+          "learning_rate": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 0.01,
+            "description": "Adam step size of the MAP fit."
+          },
+          "n_init_seeds": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 10,
+            "description": "Prior-based starts per guide for poisson_gauss; the start with the lowest initial objective is optimised. No effect on gauss."
+          },
+          "min_nonzero_cells": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 2,
+            "description": "Guides with fewer non-zero cells are not fitted, receive no calls and are reported."
+          },
+          "min_max_count": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 2,
+            "description": "Guides whose largest count is below this are not fitted, receive no calls and are reported."
+          }
+        },
+        "additionalProperties": false
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 2024,
+        "description": "Random seed for mixture starts; threshold, max and ratio are deterministic."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, peak memory and device without fitting or writing."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing before anything is written."
+      }
+    },
+    "required": [
+      "dataset"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. obs/assigned_guide and gdo/var/threshold. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Compact summary for completed runs: method, n_cells, n_guides_input, n_guides_fitted, n_guides_skipped, n_guides_no_threshold, fraction_singlet, fraction_negative, fraction_multiple, fraction_unassigned, device_used, seed, batch_levels. Skipped guide names are kept in uns/guide_assignment_params. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device, n_cells, n_guides, nnz.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "perturbation.guide_assignment",
+      "reads": [
+        "gdo/layers/counts",
+        "obs/n_umi_guide",
+        "obs/<batch_key>"
+      ],
+      "writes": [
+        "obs/assigned_guide",
+        "obs/n_guides_assigned",
+        "obs/guide_call_status",
+        "gdo/layers/assigned_guides",
+        "gdo/var/threshold",
+        "gdo/var/poisson_rate",
+        "gdo/var/gaussian_mean",
+        "gdo/var/gaussian_std",
+        "gdo/var/mix_probs_0",
+        "gdo/var/mix_probs_1",
+        "gdo/var/final_loss",
+        "uns/guide_assignment_params"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": true,
+      "paradigm": "hybrid",
+      "docs": "tasks/perturbation/guide_assignment.md"
+    }
+  }
+}

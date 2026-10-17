@@ -1,0 +1,297 @@
+{
+  "name": "singlet_multimodal_adt_background_removal_normalization",
+  "title": "ADT background removal and normalization",
+  "description": "Normalises or denoises droplet ADT (antibody-derived tag) UMI counts so that protein values are comparable across cells. Methods: clr, dsb (empty-droplet standardisation with a per-cell background), decontpro (Poisson ambient and background model) and totalvi (joint RNA and protein model); the default auto picks dsb when empty-droplet counts and an isotype control exist, otherwise clr. It reads layers/counts of the protein modality, writes the corrected matrix to X and method-specific members, and never changes layers/counts. Use it before ADT clustering, embedding, positivity calling or joint RNA-protein analysis; do not use it for RNA counts, for positive or negative calls (multimodal.adt_positivity_calling) or for ambient RNA removal (ambient.count_removal).",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle with the protein modality."
+      },
+      "layer": {
+        "type": "string",
+        "default": "counts",
+        "description": "Layer holding raw integer ADT UMI counts of called cells (cells by proteins) on the protein modality."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "clr",
+          "dsb",
+          "totalvi",
+          "decontpro"
+        ],
+        "default": "auto",
+        "description": "auto uses dsb when empty-droplet counts and an isotype control exist, otherwise clr. totalvi needs paired RNA counts; decontpro needs cell-type labels."
+      },
+      "empty_droplets": {
+        "type": "string",
+        "default": "uns/empty_droplets_adt",
+        "description": "Member holding the empty-droplet ADT matrix (barcodes by proteins, same protein order). Required by dsb; optional for decontpro; unused by clr and totalvi."
+      },
+      "clr": {
+        "type": "object",
+        "description": "Options for method clr.",
+        "properties": {
+          "flavor": {
+            "type": "string",
+            "enum": [
+              "seurat",
+              "stoeckius"
+            ],
+            "default": "seurat",
+            "description": "seurat: log1p over the cell geometric mean, zeros stay zero. stoeckius: pseudocount 1, dense output."
+          },
+          "axis": {
+            "type": "integer",
+            "enum": [
+              0,
+              1
+            ],
+            "default": 1,
+            "description": "1 normalises each cell across proteins. 0 normalises each protein across cells, so values depend on the cohort."
+          }
+        },
+        "additionalProperties": false
+      },
+      "dsb": {
+        "type": "object",
+        "description": "Options for method dsb.",
+        "properties": {
+          "pseudocount": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 10,
+            "description": "Pseudocount added inside the logarithms of step I."
+          },
+          "denoise_counts": {
+            "type": "boolean",
+            "default": true,
+            "description": "true applies step II (per-cell background and regression); false stops after step I."
+          },
+          "isotype_controls": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "default": null,
+            "description": "Isotype control names used as covariates. null uses var/is_isotype flags; an empty list disables the covariate. Unmatched names are skipped and reported."
+          },
+          "scale_factor": {
+            "type": "string",
+            "enum": [
+              "standardize",
+              "mean_subtract"
+            ],
+            "default": "standardize",
+            "description": "standardize divides step I by the empty-droplet standard deviation; mean_subtract only centres."
+          },
+          "quantile_clip": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "minItems": 2,
+            "maxItems": 2,
+            "default": null,
+            "description": "Lower and upper output quantiles for clipping, lower below upper. null disables clipping; (0.001, 0.9995) is the muon setting."
+          }
+        },
+        "additionalProperties": false
+      },
+      "totalvi": {
+        "type": "object",
+        "description": "Options for method totalvi.",
+        "properties": {
+          "n_latent": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 20,
+            "description": "Latent dimension of the joint RNA and protein model."
+          },
+          "batch_key": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null,
+            "description": "obs column with batch labels used as the batch covariate. null fits one batch."
+          },
+          "empirical_background_prior": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "default": null,
+            "description": "null initialises the protein background prior empirically when more than 10 proteins exist; false uses random initialisation."
+          },
+          "include_protein_background": {
+            "type": "boolean",
+            "default": false,
+            "description": "false writes the foreground expectation; true adds the background term pi times beta."
+          }
+        },
+        "additionalProperties": false
+      },
+      "decontpro": {
+        "type": "object",
+        "description": "Options for method decontpro.",
+        "properties": {
+          "cell_type_key": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null,
+            "description": "obs column with cell-type labels defining the native profiles. Required for decontpro."
+          },
+          "delta_sd": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 2e-05,
+            "description": "Scale of the half-normal prior on the standard deviation of the ambient fractions."
+          },
+          "background_sd": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 2e-06,
+            "description": "Scale of the half-normal prior on the standard deviation of the background fractions."
+          }
+        },
+        "additionalProperties": false
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "minimum": 0,
+        "default": 0,
+        "description": "Random seed for dsb mixture initialisation and the totalvi and decontpro fits. Ignored by clr."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without computing the normalisation."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing X and other output members instead of failing."
+      }
+    },
+    "required": [
+      "dataset"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. X and obs/adt_background_mean. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Compact summary for completed calls with keys method_requested, method_used, n_cells, n_proteins, n_empty_droplets, isotype_controls_used, background_mean_quantiles (dsb), ambient_fraction_median (decontpro), isotype_background_rho (dsb; null if none remain) and flags. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "multimodal.adt_background_removal_normalization",
+      "reads": [
+        "layers/counts",
+        "var/is_isotype",
+        "uns/empty_droplets_adt",
+        "obs/<batch_key>",
+        "obs/<cell_type_key>"
+      ],
+      "writes": [
+        "X",
+        "obs/adt_background_mean",
+        "obs/adt_ambient_fraction",
+        "obsm/totalvi_latent",
+        "models/totalvi",
+        "uns/adt_normalization"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": true,
+      "paradigm": "hybrid",
+      "docs": "tasks/multimodal/adt_background_removal_normalization.md"
+    }
+  }
+}

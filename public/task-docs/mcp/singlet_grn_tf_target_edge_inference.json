@@ -1,0 +1,256 @@
+{
+  "name": "singlet_grn_tf_target_edge_inference",
+  "title": "Directed TF-to-target edge scores",
+  "description": "Scores every candidate TF against every target gene from an unperturbed log-normalised matrix and writes a ranked directed edge list with no threshold. The default method is grnboost2 with arboreto settings; ppcor with conditioning tfs gives per-edge calibrated statistics. Scores are dependence, not causal effects, so use perturbation tasks for causal claims.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "grnboost2",
+          "genie3",
+          "ppcor",
+          "pearson"
+        ],
+        "default": "grnboost2",
+        "description": "Edge scoring method. grnboost2 is the default; ppcor with conditioning tfs gives per-edge Student-t statistics whose calibration is unvalidated (section 10 of the task document)."
+      },
+      "layer": {
+        "type": "string",
+        "default": "log1p_norm",
+        "description": "Log-normalised expression layer used for inference."
+      },
+      "tf_list": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Candidate regulators. Defaults to genes flagged in var/is_tf; restricts edge direction by construction."
+      },
+      "grnboost2": {
+        "type": "object",
+        "description": "Options for method grnboost2; defaults are the arboreto stochastic gradient boosting settings.",
+        "properties": {
+          "learning_rate": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 0.01,
+            "description": "Boosting shrinkage per stage."
+          },
+          "max_estimators": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 5000,
+            "description": "Cap on boosting stages; early stopping usually ends earlier."
+          },
+          "max_features": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 1,
+            "default": 0.1,
+            "description": "Fraction of candidate TFs considered at each split."
+          },
+          "subsample": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "exclusiveMaximum": 1,
+            "default": 0.9,
+            "description": "Row subsampling per stage; must be below 1 for early stopping and scaling."
+          },
+          "early_stop_window": {
+            "type": "integer",
+            "minimum": 2,
+            "default": 25,
+            "description": "Early-stopping window length in stages."
+          }
+        },
+        "additionalProperties": false
+      },
+      "genie3": {
+        "type": "object",
+        "description": "Options for method genie3, a random forest per target.",
+        "properties": {
+          "n_estimators": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 1000,
+            "description": "Number of random-forest trees per target."
+          },
+          "max_features": {
+            "type": [
+              "string",
+              "number"
+            ],
+            "default": "sqrt",
+            "description": "Candidate TFs per split: sqrt or a fraction."
+          },
+          "n_jobs": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 1,
+            "description": "Parallel workers per forest (arboreto default 1)."
+          }
+        },
+        "additionalProperties": false
+      },
+      "ppcor": {
+        "type": "object",
+        "description": "Options for method ppcor, a Gaussian partial correlation per pair.",
+        "properties": {
+          "conditioning": {
+            "type": "string",
+            "enum": [
+              "all_genes",
+              "tfs"
+            ],
+            "default": "all_genes",
+            "description": "all_genes conditions on every other gene; tfs conditions only on other candidate TFs (proposed)."
+          },
+          "p_value_cutoff": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 1,
+            "default": null,
+            "description": "If set, pairs above this p-value get weight 0 (BEELINE-compatible output)."
+          }
+        },
+        "additionalProperties": false
+      },
+      "pearson": {
+        "type": "object",
+        "description": "Options for method pearson, a marginal correlation per pair.",
+        "properties": {
+          "normalise_per_gene_max": {
+            "type": "boolean",
+            "default": true,
+            "description": "Divide each gene by its maximum first (BEELINE behaviour; leaves r unchanged)."
+          }
+        },
+        "additionalProperties": false
+      },
+      "seed": {
+        "type": "integer",
+        "minimum": 0,
+        "default": 666,
+        "description": "Random seed for tree methods; pass explicitly for reproducibility."
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "auto uses CUDA for pearson and ppcor when memory suffices; tree methods run on CPU."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": [
+      "dataset"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote edges; dry_run: estimate only; queued: long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. uns/grn/grnboost2/edges. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "For completed runs: method, conditioning, n_targets, n_tfs, n_edges, failed_targets, seed, device, seconds. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device, planned_targets.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "grn.tf_target_edge_inference",
+      "reads": [
+        "layers/<layer>",
+        "var/is_tf"
+      ],
+      "writes": [
+        "uns/grn/<method>/edges",
+        "uns/grn/<method>/params"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "model-based",
+      "docs": "tasks/grn/tf_target_edge_inference.md"
+    }
+  }
+}

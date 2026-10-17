@@ -1,0 +1,216 @@
+{
+  "name": "singlet_sample_level_multi_sample_power_analysis",
+  "title": "Multi-sample power and sample-number planning",
+  "description": "Plans the donors per group and cells per donor needed to detect a donor-level condition effect in one cell type at a target power and FDR, from a pilot's donor variance and gene dispersion. Method nb_analytic (default) gives closed-form negative-binomial power with FDR-threshold solving; method simulation runs planted-effect simulations of the pseudobulk test. Writes design grid, power curves and required donors. Do not use it for cell-level, abundance or paired designs.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Pilot dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "design": {
+        "type": "object",
+        "description": "Donor, condition and cell-type keys of the pilot, and the cell type to plan for.",
+        "properties": {
+          "donor_key": {
+            "type": "string",
+            "default": "donor",
+            "description": "obs column giving the donor identifier of each cell."
+          },
+          "condition_key": {
+            "type": "string",
+            "default": "condition",
+            "description": "obs column with two condition levels, constant within donor."
+          },
+          "cell_type_key": {
+            "type": "string",
+            "default": "cell_type",
+            "description": "obs column with cell-type labels."
+          },
+          "cell_type": {
+            "type": "string",
+            "description": "Cell type to plan for; must occur in at least two donors per condition."
+          }
+        },
+        "required": ["cell_type"],
+        "additionalProperties": false
+      },
+      "method": {
+        "type": "string",
+        "enum": ["nb_analytic", "simulation"],
+        "default": "nb_analytic",
+        "description": "nb_analytic: closed-form power (default). simulation: planted-effect simulation from the pilot; slower."
+      },
+      "target_power": {
+        "type": "number",
+        "default": 0.8,
+        "exclusiveMinimum": 0,
+        "exclusiveMaximum": 1,
+        "description": "Mean per-gene power over planted DE genes that the design must reach."
+      },
+      "fdr": {
+        "type": "number",
+        "default": 0.05,
+        "exclusiveMinimum": 0,
+        "maximum": 0.5,
+        "description": "Target FDR under BY control; the planning threshold is solved to meet it."
+      },
+      "scenario": {
+        "type": "object",
+        "description": "Planned effects and grids.",
+        "properties": {
+          "effect_log2fc": {
+            "type": "array",
+            "items": {"type": "number", "minimum": 0},
+            "default": [0.5, 1, 2],
+            "description": "Absolute donor-level log2 fold changes to evaluate."
+          },
+          "prop_de": {
+            "type": "number",
+            "default": 0.1,
+            "exclusiveMinimum": 0,
+            "maximum": 1,
+            "description": "Fraction of filtered genes assumed differentially expressed."
+          },
+          "donors_per_group": {
+            "type": "array",
+            "items": {"type": "integer", "minimum": 2},
+            "default": [3, 5, 8, 12, 16, 20],
+            "description": "Donor counts per condition to evaluate."
+          },
+          "cells_per_donor": {
+            "type": "array",
+            "items": {"type": "integer", "minimum": 1},
+            "default": [50, 200, 1000, 5000],
+            "description": "Cells per donor to evaluate."
+          }
+        },
+        "additionalProperties": false
+      },
+      "nb_analytic": {
+        "type": "object",
+        "description": "Options for method nb_analytic.",
+        "properties": {
+          "cost_donor": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Cost per donor; with cost_cell gives the cost-optimal cells per donor."
+          },
+          "cost_cell": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Cost per cell; with cost_donor gives the cost-optimal cells per donor."
+          }
+        },
+        "additionalProperties": false
+      },
+      "simulation": {
+        "type": "object",
+        "description": "Options for method simulation.",
+        "properties": {
+          "n_replicates": {
+            "type": "integer",
+            "default": 50,
+            "minimum": 1,
+            "description": "Simulated replicates per design point; cost scales linearly."
+          }
+        },
+        "additionalProperties": false
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu", "cuda"],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Random seed for simulation replicates; nb_analytic is deterministic."
+      }
+    },
+    "required": ["dataset"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the pilot dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written, e.g. uns/power_planning/required_donors. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Keys: cell_type, alpha_star (planning threshold), required_donors_per_group (cells per donor to donors), design_power, cost_optimal_cells (null without costs). Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "sample-level.multi_sample_power_analysis",
+      "reads": [
+        "layers/counts",
+        "obs/<donor_key>",
+        "obs/<condition_key>",
+        "obs/<cell_type_key>"
+      ],
+      "writes": [
+        "uns/power_planning/design_grid",
+        "uns/power_planning/power_curves",
+        "uns/power_planning/required_donors",
+        "uns/power_planning/cost_optimal_cells",
+        "var/donor_variance",
+        "var/dispersion"
+      ],
+      "devices": ["cpu", "cuda"],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "model-based",
+      "docs": "tasks/sample-level/multi_sample_power_analysis.md"
+    }
+  }
+}

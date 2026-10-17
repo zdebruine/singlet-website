@@ -1,0 +1,212 @@
+{
+  "name": "singlet_feature_selection_batch_aware_selection_for_integration",
+  "title": "Select batch-aware shared genes for integration",
+  "description": "Chooses one gene set shared by all batches before integration. It scores each gene inside every batch and combines the batch results; the default is a binomial deviance against per-batch null models with automatic consensus. It needs a batch column, raw counts for count methods or log-normalised values for dispersion methods, and writes selection flags, batch counts, ranks and scores without integrating cells. Do not use it on single-batch data or for clustering-only gene selection; use singlet_feature_selection_highly_variable_gene_selection for that.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "scry_deviance_binomial",
+          "scry_deviance_poisson",
+          "scvi_poisson_zeros",
+          "scanpy_seurat_v3",
+          "scanpy_seurat",
+          "scanpy_cell_ranger",
+          "scanpy_pearson_residuals",
+          "scib_hvg_batch",
+          "seurat_vst",
+          "osca_block_variance"
+        ],
+        "default": "scry_deviance_binomial",
+        "description": "Per-batch statistic. The default is the model-based deviance; other values are published implementations kept as comparators."
+      },
+      "batch_key": {
+        "type": "string",
+        "default": "batch",
+        "description": "obs column defining batches; must have at least two levels."
+      },
+      "selection_scope": {
+        "type": "string",
+        "enum": [
+          "pooled",
+          "per_batch_consensus",
+          "per_lineage"
+        ],
+        "default": "per_batch_consensus",
+        "description": "pooled ranks all cells together as a baseline; per_batch_consensus combines batches; per_lineage repeats that within each lineage."
+      },
+      "consensus_rule": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "nbatches_then_median_rank",
+          "median_rank_then_nbatches",
+          "nbatches_then_score",
+          "sum_of_batch_scores",
+          "intersect_fill",
+          "fisher_combine"
+        ],
+        "default": "auto",
+        "description": "How batch results combine; auto applies the rule published for the chosen method."
+      },
+      "n_features": {
+        "type": "integer",
+        "minimum": 1,
+        "default": 2000,
+        "description": "Number of genes in the shared set after consensus."
+      },
+      "lineage_key": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "default": null,
+        "description": "obs column of coarse lineage labels; required when selection_scope is per_lineage."
+      },
+      "scvi": {
+        "type": "object",
+        "description": "Options for scvi_poisson_zeros only: Binomial samples per gene and cells per minibatch.",
+        "properties": {
+          "n_samples": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 10000,
+            "description": "Binomial samples per gene for the zero-enrichment posterior."
+          },
+          "minibatch_size": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 5000,
+            "description": "Cells per minibatch for the zero-enrichment statistics."
+          }
+        },
+        "additionalProperties": false
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Random seed for sampling in scvi_poisson_zeros; other methods are deterministic."
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": [
+      "dataset"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. var/hvg_batch_selected. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Compact summary for completed runs: method, consensus_rule, n_genes_selected, n_batches, n_lineages, score_at_K, top_genes (first 20), warnings. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "feature-selection.batch_aware_selection_for_integration",
+      "reads": [
+        "layers/counts",
+        "layers/log1p_norm",
+        "obs/<batch_key>",
+        "obs/<lineage_key>"
+      ],
+      "writes": [
+        "var/hvg_batch_selected",
+        "var/hvg_batch_nbatches",
+        "var/hvg_batch_rank",
+        "var/hvg_batch_score",
+        "uns/hvg_batch/params"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": false,
+      "streaming": true,
+      "paradigm": "hybrid",
+      "docs": "tasks/feature-selection/batch_aware_selection_for_integration.md"
+    }
+  }
+}

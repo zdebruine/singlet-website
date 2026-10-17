@@ -1,0 +1,228 @@
+{
+  "name": "singlet_cell_state_developmental_potency_scoring",
+  "title": "Developmental potency scoring",
+  "description": "Scores each cell's developmental potency from one transcriptome on a 0-1 scale within the dataset, higher meaning more primitive, and writes the raw statistic of the chosen method. The default cytotrace needs only counts; scent_sr and ccat need a PPI adjacency and a normalised layer; stemid_entropy is per-cell entropy only. Use dry_run first on large data. Do not use it to assign fates or root cells, or to compare absolute scores across datasets; use potency_raw for that.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "cytotrace",
+          "scent_sr",
+          "ccat",
+          "stemid_entropy"
+        ],
+        "default": "cytotrace",
+        "description": "Scoring rule. cytotrace is the default; scent_sr and ccat need ppi_network and a normalised layer; stemid_entropy is per-cell entropy only."
+      },
+      "layer": {
+        "type": "string",
+        "default": "counts",
+        "description": "Expression layer read. Keep counts for cytotrace and stemid_entropy; scent_sr and ccat need a normalised layer such as lognorm."
+      },
+      "log_transform": {
+        "type": "boolean",
+        "default": false,
+        "description": "Apply log2(x + pseudocount) before scent_sr or ccat; set true only when the layer holds size-normalised counts."
+      },
+      "ppi_network": {
+        "type": "string",
+        "description": "Symmetric gene-by-gene PPI adjacency as a uns key or file path; required for scent_sr and ccat; largest component used."
+      },
+      "cytotrace": {
+        "type": "object",
+        "description": "CytoTRACE options: number of top-correlated genes averaged and the aggregation rule.",
+        "properties": {
+          "n_genes": {
+            "type": "integer",
+            "default": 200,
+            "minimum": 1,
+            "description": "Number of top positively correlated genes averaged into the score."
+          },
+          "aggregation": {
+            "type": "string",
+            "enum": [
+              "mean",
+              "median",
+              "hmean",
+              "gmean"
+            ],
+            "default": "mean",
+            "description": "Aggregation of the selected genes' expression per cell."
+          }
+        },
+        "additionalProperties": false
+      },
+      "scent": {
+        "type": "object",
+        "description": "SCENT options: minimum overlap with the PPI and the log pseudocount used when log_transform is true.",
+        "properties": {
+          "min_overlap_genes": {
+            "type": "integer",
+            "default": 5000,
+            "minimum": 1,
+            "description": "Stop if fewer genes are shared with the PPI than this."
+          },
+          "log_pseudocount": {
+            "type": "number",
+            "default": 1.1,
+            "exclusiveMinimum": 0,
+            "description": "Pseudocount c in log2(x + c) for scent_sr."
+          }
+        },
+        "additionalProperties": false
+      },
+      "ccat": {
+        "type": "object",
+        "description": "CCAT options: minimum overlap with the PPI and the log pseudocount.",
+        "properties": {
+          "min_overlap_genes": {
+            "type": "integer",
+            "default": 5000,
+            "minimum": 1,
+            "description": "Stop if fewer genes are shared with the PPI than this."
+          },
+          "log_pseudocount": {
+            "type": "number",
+            "default": 1.0,
+            "exclusiveMinimum": 0,
+            "description": "Pseudocount c in log2(x + c) for ccat."
+          }
+        },
+        "additionalProperties": false
+      },
+      "stemid_entropy": {
+        "type": "object",
+        "description": "StemID2 per-cell entropy option.",
+        "properties": {
+          "pseudocount": {
+            "type": "number",
+            "default": 1e-10,
+            "exclusiveMinimum": 0,
+            "description": "Pseudocount added inside the logarithm of the gene-share entropy."
+          }
+        },
+        "additionalProperties": false
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": [
+      "dataset"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. obs/potency_score. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Keys: method, n_cells, n_top_genes (cytotrace), ppi_overlap_genes and lambda_max (network methods), score_min, score_max.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "cell-state.developmental_potency_scoring",
+      "reads": [
+        "layers/counts",
+        "layers/lognorm",
+        "uns/ppi_adjacency"
+      ],
+      "writes": [
+        "obs/potency_score",
+        "obs/potency_pseudotime",
+        "obs/potency_raw",
+        "var/potency_gene_corr",
+        "var/potency_correlates",
+        "uns/potency_params"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": false,
+      "long_running": true,
+      "streaming": true,
+      "paradigm": "hybrid",
+      "docs": "tasks/cell-state/developmental_potency_scoring.md"
+    }
+  }
+}

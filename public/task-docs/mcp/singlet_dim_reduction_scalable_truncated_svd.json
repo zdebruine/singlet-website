@@ -1,0 +1,243 @@
+{
+  "name": "singlet_dim_reduction_scalable_truncated_svd",
+  "title": "Approximate PCA and truncated SVD",
+  "description": "Computes the leading k principal components of a normalised, highly-variable-gene layer with implicit centring, using exact ARPACK-type or Lanczos solvers (CPU and GPU), randomized SVD, or a covariance eigendecomposition. The default auto uses ARPACK on CPU and Lanczos or covariance_eigh on GPU. Reads layers/log1p_norm and var/highly_variable; writes obsm/X_pca, varm/PCs and uns/pca. Do not use it to choose k (use singlet_dim_reduction_pc_number_selection), to remove batch effects, or to fit count-model latent factors.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "layer": {
+        "type": "string",
+        "default": "log1p_norm",
+        "description": "Normalised layer under layers/ to decompose after implicit centring."
+      },
+      "use_hvg": {
+        "type": "boolean",
+        "default": true,
+        "description": "Restrict to var/highly_variable; the call fails if the mask is absent."
+      },
+      "n_components": {
+        "type": "integer",
+        "minimum": 2,
+        "maximum": 200,
+        "default": 50,
+        "description": "Number of leading singular triplets k to compute."
+      },
+      "svd_solver": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "arpack",
+          "randomized",
+          "lanczos",
+          "covariance_eigh"
+        ],
+        "default": "auto",
+        "description": "auto: arpack on CPU; lanczos or covariance_eigh on GPU by gene count; randomized only on request."
+      },
+      "zero_center": {
+        "type": "boolean",
+        "default": true,
+        "description": "Centre genes implicitly before the decomposition; false decomposes the uncentred matrix."
+      },
+      "dtype": {
+        "type": "string",
+        "enum": [
+          "float32",
+          "float64"
+        ],
+        "default": "float64",
+        "description": "Working precision; float64 is the reference, float32 is opt-in."
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "minimum": 0,
+        "default": 42,
+        "description": "Seed for randomized test matrices and Krylov start vectors."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory, device and resolved solver without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      },
+      "options": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Method-specific options; each object applies only to the solver of the same name.",
+        "properties": {
+          "randomized": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Options for randomized.",
+            "properties": {
+              "n_oversamples": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 100,
+                "default": 10,
+                "description": "Extra Gaussian test vectors p; the block size is k + p."
+              },
+              "n_iter": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 20,
+                "default": 2,
+                "description": "Power iterations q; more iterations sharpen slowly decaying spectra."
+              }
+            }
+          },
+          "lanczos": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Options for lanczos.",
+            "properties": {
+              "tol": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "default": 0.0001,
+                "description": "Ritz residual tolerance, relative to the top singular value."
+              },
+              "max_iter": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 1000,
+                "default": 100,
+                "description": "Maximum implicit restarts."
+              },
+              "ncv": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 10,
+                "default": null,
+                "description": "Krylov dimension; null uses the size-dependent rule."
+              }
+            }
+          },
+          "arpack": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Options for arpack.",
+            "properties": {
+              "tol": {
+                "type": "number",
+                "minimum": 0,
+                "default": 0,
+                "description": "Convergence tolerance for the Krylov solver; 0 is the sklearn PCA default."
+              }
+            }
+          }
+        }
+      }
+    },
+    "required": [
+      "dataset"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written: obsm/X_pca, varm/PCs, uns/pca. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "For completed runs: k, solver, device, dtype, variance_ratio_sum and relative_gap_at_k. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device and solver.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "dim-reduction.scalable_truncated_svd",
+      "reads": [
+        "layers/log1p_norm",
+        "var/highly_variable"
+      ],
+      "writes": [
+        "obsm/X_pca",
+        "varm/PCs",
+        "uns/pca"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/dim-reduction/scalable_truncated_svd.md"
+    }
+  }
+}

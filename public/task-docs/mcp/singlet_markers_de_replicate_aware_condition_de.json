@@ -1,0 +1,311 @@
+{
+  "name": "singlet_markers_de_replicate_aware_condition_de",
+  "title": "Replicate-aware condition DE within a cell type",
+  "description": "Tests which genes change between conditions within each annotated cell type, with donors or samples as the unit of inference: cells are summed to donor-by-cell-type pseudobulk and a donor-level model (default edgeR_QL) writes per-gene log2 fold change, statistic, p-value and Benjamini-Hochberg FDR to uns/de_replicate. Needs raw counts in layers/counts, keys.donor, a condition column and at least two donors per condition in each tested cell type; call with dry_run true first for time and memory. Do not use it when a condition has a single donor, for cluster markers without a condition (use markers-de.cluster_marker_ranking), or for conclusions from wilcoxon_naive, which treats cells as independent. random_split_null is a calibration check, not a DE result.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "minimum": 0,
+        "description": "Random seed; fixes the donor partitions in random_split_null mode. Condition DE is deterministic."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing uns/de_replicate and models members for the same cell types instead of failing."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "edgeR_QL",
+          "DESeq2",
+          "limma_voom",
+          "limma_trend",
+          "dreamlet",
+          "nebula_LN",
+          "wilcoxon_naive"
+        ],
+        "default": "edgeR_QL",
+        "description": "Test method. DESeq2 runs the PyDESeq2 port (Wald test); wilcoxon_naive ignores donors and is a negative control only."
+      },
+      "mode": {
+        "type": "string",
+        "enum": [
+          "condition_de",
+          "random_split_null"
+        ],
+        "default": "condition_de",
+        "description": "condition_de tests the real contrast. random_split_null reassigns conditions among donors to measure calibration; needs one true condition."
+      },
+      "keys": {
+        "type": "object",
+        "description": "Names of the obs columns and the counts layer.",
+        "properties": {
+          "donor": {
+            "type": "string",
+            "description": "obs column identifying the donor or sample; the unit of inference."
+          },
+          "cell_type": {
+            "type": "string",
+            "default": "cell_type",
+            "description": "obs column with cell-type labels; each cell type is tested separately."
+          },
+          "condition": {
+            "type": "string",
+            "default": "condition",
+            "description": "obs column with the condition; constant within donor for a between-donor design."
+          },
+          "counts_layer": {
+            "type": "string",
+            "default": "counts",
+            "description": "Layer holding raw counts."
+          }
+        },
+        "required": [
+          "donor"
+        ],
+        "additionalProperties": false
+      },
+      "design": {
+        "type": "object",
+        "description": "Model specification.",
+        "properties": {
+          "formula": {
+            "type": "string",
+            "default": "",
+            "description": "Model formula over obs columns; must contain the condition term. Empty means ~ condition."
+          },
+          "contrast": {
+            "type": "string",
+            "default": "",
+            "description": "Coefficient or contrast to test. Empty tests the second condition level against the first."
+          },
+          "paired_donor_block": {
+            "type": "boolean",
+            "default": true,
+            "description": "Add the donor as a blocking term when the condition varies within donor; ignored with a warning when constant within donor."
+          }
+        },
+        "additionalProperties": false
+      },
+      "filters": {
+        "type": "object",
+        "description": "Donor, cell-type and gene filters.",
+        "properties": {
+          "cell_types": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [],
+            "description": "Cell types to test; empty means all."
+          },
+          "min_cells_per_donor": {
+            "type": "integer",
+            "default": 10,
+            "minimum": 1,
+            "description": "A donor enters a cell type only with at least this many cells of that type."
+          },
+          "min_donors_per_group": {
+            "type": "integer",
+            "default": 2,
+            "minimum": 1,
+            "description": "Minimum donors per condition for a cell type to be tested; a warning is issued below 4."
+          },
+          "libsize_outlier_nmads": {
+            "type": "number",
+            "default": 3,
+            "minimum": 0,
+            "description": "Drop donors whose log library size is a lower-tail outlier beyond this many MADs; 0 disables."
+          },
+          "gene_filter": {
+            "type": "string",
+            "enum": [
+              "dreamlet",
+              "filterByExpr"
+            ],
+            "default": "dreamlet",
+            "description": "dreamlet: min.count 5, min.prop 0.4, min.samples 4. filterByExpr: edgeR rule, applied only when the maximum count exceeds 100."
+          }
+        },
+        "additionalProperties": false
+      },
+      "testing": {
+        "type": "object",
+        "description": "Multiple testing, shrinkage and calibration options.",
+        "properties": {
+          "fdr_scope": {
+            "type": "string",
+            "enum": [
+              "within_cell_type",
+              "global"
+            ],
+            "default": "within_cell_type",
+            "description": "Apply Benjamini-Hochberg within each cell type or across all tested cell types."
+          },
+          "alpha": {
+            "type": "number",
+            "default": 0.05,
+            "exclusiveMinimum": 0,
+            "maximum": 1,
+            "description": "Significance level for calls and calibration summaries."
+          },
+          "robust_ebayes": {
+            "type": "boolean",
+            "default": true,
+            "description": "Robust empirical Bayes shrinkage; edgeR_QL, limma_voom and limma_trend only."
+          },
+          "lfc_threshold": {
+            "type": "number",
+            "default": 0,
+            "minimum": 0,
+            "description": "Test against this minimum absolute log2 fold change (TREAT-style); 0 tests against zero. edgeR_QL and limma only."
+          },
+          "n_partitions_null": {
+            "type": "integer",
+            "default": 20,
+            "minimum": 1,
+            "description": "Random donor partitions drawn in random_split_null mode."
+          }
+        },
+        "additionalProperties": false
+      },
+      "nebula": {
+        "type": "object",
+        "description": "nebula_LN options.",
+        "properties": {
+          "cutoff_cell": {
+            "type": "integer",
+            "default": 20,
+            "minimum": 1,
+            "description": "Refit a gene with the HL likelihood when cells per subject times cell-level overdispersion falls below this value."
+          },
+          "cpc": {
+            "type": "number",
+            "default": 0.005,
+            "minimum": 0,
+            "description": "Genes with counts per cell below this value are not analysed."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "dataset",
+      "keys"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. uns/de_replicate/<cell_type>/results. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "additionalProperties": true,
+        "description": "Compact per-run summary: method, mode, design, paired_donor_block_applied, n_cell_types_tested, per cell type donors per condition, genes tested and genes at alpha, skipped cell types with reasons, warnings; in random_split_null mode also type I error and lambda_GC per cell type. Never raw matrices."
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "additionalProperties": true,
+        "description": "Present for dry_run: seconds, peak_memory_gb, device."
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "markers-de.replicate_aware_condition_de",
+      "reads": [
+        "layers/counts",
+        "obs/<cell_type_key>",
+        "obs/<donor_key>",
+        "obs/<condition_key>",
+        "obs/<covariate_keys>",
+        "obs/size_factor"
+      ],
+      "writes": [
+        "uns/de_replicate/<cell_type>/results",
+        "uns/de_replicate/<cell_type>/calibration",
+        "uns/pseudobulk/<cell_type>",
+        "models/<name>"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": true,
+      "paradigm": "model-based",
+      "docs": "tasks/markers-de/replicate_aware_condition_de.md"
+    }
+  }
+}

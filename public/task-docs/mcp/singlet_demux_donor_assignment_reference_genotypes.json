@@ -1,0 +1,306 @@
+{
+  "name": "singlet_demux_donor_assignment_reference_genotypes",
+  "title": "Reference-genotype donor assignment and doublet calling",
+  "description": "Assigns each droplet of a pooled single-cell RNA-seq dataset to a reference donor from allele counts at informative SNPs and a donor genotype VCF, labelling singlets, cross-donor doublets, ambiguous and unassigned droplets, and matches anonymous clusters to reference individuals. Use the default vireo_gt method when every pool donor is in the VCF; demuxlet and souporcell_known are comparators. Do not use without reference genotypes or to find same-donor multiplets, which genotypes cannot separate. Writes donor_id, donor_status, donor_prob_max, donor_doublet_prob and mapping members.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "donor_vcf": {
+        "type": "string",
+        "description": "Reference genotype VCF covering every pool donor; required by demuxlet and souporcell_known."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "vireo_gt",
+          "demuxlet",
+          "souporcell_known"
+        ],
+        "default": "vireo_gt",
+        "description": "Algorithm: vireo_gt (default, model-based), demuxlet, or souporcell_known (known-genotype clustering)."
+      },
+      "vireo_gt": {
+        "type": "object",
+        "description": "Options for method vireo_gt.",
+        "additionalProperties": false,
+        "properties": {
+          "genotype_tag": {
+            "type": "string",
+            "enum": [
+              "PL",
+              "GP",
+              "GT"
+            ],
+            "default": "PL",
+            "description": "VCF FORMAT tag used for donor genotype probabilities."
+          },
+          "n_donor": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Pool donor count; above the VCF sample count, genotypes are learned for the extra donors."
+          },
+          "n_init": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 20,
+            "description": "Random restarts used when genotypes are learned (the CLI default is 50)."
+          },
+          "check_doublet": {
+            "type": "boolean",
+            "default": true,
+            "description": "Score donor pairs as doublets."
+          },
+          "prob_max_unassigned": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.9,
+            "description": "Droplets whose largest donor posterior is below this value are unassigned."
+          },
+          "doublet_prob_threshold": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.9,
+            "description": "Droplets with doublet probability at or above this value are doublets."
+          },
+          "min_informative_variants": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 10,
+            "description": "Droplets covering fewer informative variants are unassigned."
+          },
+          "beta_sum_prior": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 50.0,
+            "description": "Concentration prior on genotype-specific allele fractions."
+          }
+        }
+      },
+      "demuxlet": {
+        "type": "object",
+        "description": "Options for method demuxlet (read-level likelihood over an alpha grid).",
+        "additionalProperties": false,
+        "properties": {
+          "field": {
+            "type": "string",
+            "enum": [
+              "GP",
+              "GT",
+              "PL"
+            ],
+            "default": "GP",
+            "description": "VCF FORMAT field read for genotype probabilities; GP is the popscle default."
+          },
+          "alpha_grid": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "minItems": 1,
+            "default": [
+              0,
+              0.5
+            ],
+            "description": "Second-donor RNA fractions searched for doublets; include 0 for singlets."
+          },
+          "doublet_prior": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.5,
+            "description": "Prior doublet rate; changes BEST.POSTERIOR only, not the droplet type."
+          },
+          "margin_nats": {
+            "type": "number",
+            "minimum": 0,
+            "default": 2.0,
+            "description": "Log-likelihood margin for singlet, doublet and ambiguous calls; demuxlet uses 2."
+          },
+          "min_mapq": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 20,
+            "description": "Minimum mapping quality of reads used."
+          },
+          "geno_error_offset": {
+            "type": "number",
+            "minimum": 0,
+            "default": 0.1,
+            "description": "Genotype error offset applied when loading reference genotypes; 0.10 is the popscle default."
+          }
+        }
+      },
+      "souporcell_known": {
+        "type": "object",
+        "description": "Options for souporcell_known; the input VCF must be uncompressed.",
+        "additionalProperties": false,
+        "properties": {
+          "max_loci": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 2048,
+            "description": "Maximum loci per cell used for clustering."
+          },
+          "min_alt": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 10,
+            "description": "Minimum cells expressing the alternate allele for a locus to be used."
+          },
+          "min_ref": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 10,
+            "description": "Minimum cells expressing the reference allele for a locus to be used."
+          }
+        }
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Random seed for restarts and random initialisation."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": [
+      "dataset"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, for example obs/donor_id. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Compact summary for completed runs: status_counts, n_donors, unmatched_clusters, method_version.",
+        "properties": {
+          "status_counts": {
+            "type": "object",
+            "description": "Droplet counts by obs/donor_status value."
+          },
+          "n_donors": {
+            "type": "integer"
+          },
+          "unmatched_clusters": {
+            "type": "integer"
+          },
+          "method_version": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "demux.donor_assignment_reference_genotypes",
+      "reads": [
+        "layers/alt_counts",
+        "layers/total_counts",
+        "varm/donor_genotype_probs",
+        "uns/donor_reference",
+        "obs/n_informative_snps"
+      ],
+      "writes": [
+        "obs/donor_id",
+        "obs/donor_status",
+        "obs/donor_prob_max",
+        "obs/donor_doublet_prob",
+        "obsm/donor_posterior",
+        "uns/donor_mapping",
+        "uns/demux_params",
+        "models/vireo_gt"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": true,
+      "paradigm": "model-based",
+      "docs": "tasks/demux/donor_assignment_reference_genotypes.md"
+    }
+  }
+}

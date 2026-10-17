@@ -1,0 +1,263 @@
+{
+  "name": "singlet_annotation_mislabelled_cell_detection",
+  "title": "Mislabelled and ambiguous cell detection",
+  "description": "Audits an existing cell-type label against expression: scores each cell, flags erroneous and ambiguous cells, and proposes a supported alternative label. The default method annotatability trains a small network on the given labels and needs no reference; confident_learning and screclassify are alternatives. Writes obs/mislabel_* and uns/mislabel_purity_per_type. Do not use it to label unannotated cells; use reference label transfer for that.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "label_key": {
+        "type": "string",
+        "description": "obs column holding the existing label to audit; required."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "annotatability",
+          "confident_learning",
+          "screclassify"
+        ],
+        "default": "annotatability",
+        "description": "Audit method; annotatability is the default and needs no reference."
+      },
+      "embedding_key": {
+        "type": "string",
+        "default": "X_pca",
+        "description": "obsm key used by confident_learning and screclassify; annotatability uses X."
+      },
+      "flag_fraction": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1,
+        "default": 0.05,
+        "description": "Lowest-scoring fraction reported as erroneous for annotatability and screclassify; confident_learning uses its pruning rule."
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Random seed for training, resampling and fold assignment."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      },
+      "annotatability": {
+        "type": "object",
+        "description": "Options for method annotatability; ignored by other methods.",
+        "additionalProperties": false,
+        "properties": {
+          "epochs": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 100,
+            "description": "Training epochs; confidence and variability depend on this value."
+          },
+          "learning_rate": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 0.001,
+            "description": "SGD learning rate."
+          },
+          "momentum": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.9,
+            "description": "SGD momentum."
+          },
+          "batch_size": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 256,
+            "description": "Minibatch size for SGD."
+          },
+          "num_layers": {
+            "type": "integer",
+            "enum": [
+              3,
+              4,
+              5
+            ],
+            "default": 3,
+            "description": "Depth of the feedforward network."
+          },
+          "weighted_sampler": {
+            "type": "boolean",
+            "default": true,
+            "description": "Sample minibatches with inverse-class-frequency weights."
+          },
+          "ambiguity_band": {
+            "type": "number",
+            "minimum": 0,
+            "default": 1.0,
+            "description": "Half-width of the ambiguity band in units of var(confidence); 1.0 reproduces the source rule."
+          }
+        }
+      },
+      "confident_learning": {
+        "type": "object",
+        "description": "Options for method confident_learning; ignored by other methods.",
+        "additionalProperties": false,
+        "properties": {
+          "cv_folds": {
+            "type": "integer",
+            "minimum": 2,
+            "default": 5,
+            "description": "Folds for out-of-fold predicted probabilities."
+          }
+        }
+      },
+      "screclassify": {
+        "type": "object",
+        "description": "Options for method screclassify; ignored by other methods.",
+        "additionalProperties": false,
+        "properties": {
+          "base_classifier": {
+            "type": "string",
+            "enum": [
+              "svm",
+              "rf"
+            ],
+            "default": "svm",
+            "description": "Base classifier of the adaSampling ensemble."
+          },
+          "L": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 10,
+            "description": "Number of ensemble members."
+          },
+          "iter": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 3,
+            "description": "adaSampling rounds per ensemble member."
+          },
+          "percent": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 1,
+            "description": "Draws per class as a fraction of its size, with replacement."
+          }
+        }
+      }
+    },
+    "required": [
+      "dataset",
+      "label_key"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "For completed runs: method, n_cells, n_correct, n_erroneous and n_ambiguous; the per-type table is uns/mislabel_purity_per_type.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "annotation.mislabelled_cell_detection",
+      "reads": [
+        "X",
+        "obs/<label_key>",
+        "obsm/X_pca"
+      ],
+      "writes": [
+        "obs/mislabel_score",
+        "obs/mislabel_class",
+        "obs/mislabel_proposed_label",
+        "obs/mislabel_proposed_prob",
+        "obs/annotatability_conf",
+        "obs/annotatability_var",
+        "uns/mislabel_purity_per_type",
+        "uns/mislabel_params"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/annotation/mislabelled_cell_detection.md"
+    }
+  }
+}

@@ -1,0 +1,226 @@
+{
+  "name": "singlet_clustering_cluster_number_estimation",
+  "title": "Estimate the number of cell populations",
+  "description": "Estimates how many cell populations an expression dataset supports, returning an integer k_hat, a score curve over candidate k and optionally a partition at k_hat. The default method sc3_tw counts eigenvalues above a Tracy-Widom noise bound and needs no k range; gmm_bic and silhouette scan k_range. Requires log-normalised values, a highly variable gene set and principal components. It does not choose a clustering resolution or test whether clusters are real; use the resolution or significance tools for those.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "sc3_tw",
+          "gmm_bic",
+          "silhouette"
+        ],
+        "default": "sc3_tw",
+        "description": "Estimator: sc3_tw is the default (one noise-bound count, no scan); gmm_bic and silhouette scan k_range."
+      },
+      "k_range": {
+        "type": "object",
+        "default": {
+          "min": 2,
+          "max": 30
+        },
+        "description": "Candidate k range for gmm_bic and silhouette; ignored by sc3_tw.",
+        "properties": {
+          "min": {
+            "type": "integer",
+            "default": 2,
+            "minimum": 1,
+            "description": "Smallest candidate k: at least 1 for gmm_bic, at least 2 for silhouette."
+          },
+          "max": {
+            "type": "integer",
+            "default": 30,
+            "minimum": 2,
+            "description": "Largest candidate k; must be below the number of cells."
+          }
+        },
+        "additionalProperties": false
+      },
+      "n_pcs": {
+        "type": "integer",
+        "default": 50,
+        "minimum": 2,
+        "description": "Principal components for gmm_bic, silhouette and the partition; the sc3_tw count uses genes."
+      },
+      "gmm_bic": {
+        "type": "object",
+        "default": {
+          "covariance": "diagonal",
+          "n_restarts": 5
+        },
+        "description": "Options for gmm_bic: covariance structure and EM restarts per candidate k.",
+        "properties": {
+          "covariance": {
+            "type": "string",
+            "enum": [
+              "diagonal",
+              "full"
+            ],
+            "default": "diagonal",
+            "description": "Covariance per component: diagonal is cheaper; full needs more cells per component."
+          },
+          "n_restarts": {
+            "type": "integer",
+            "default": 5,
+            "minimum": 1,
+            "description": "EM restarts per candidate k; the best log-likelihood is kept."
+          }
+        },
+        "additionalProperties": false
+      },
+      "silhouette": {
+        "type": "object",
+        "default": {
+          "metric": "euclidean",
+          "max_cells": 10000
+        },
+        "description": "Options for silhouette: distance metric and the number of cells scored.",
+        "properties": {
+          "metric": {
+            "type": "string",
+            "enum": [
+              "euclidean",
+              "cosine"
+            ],
+            "default": "euclidean",
+            "description": "Distance metric used for silhouette widths."
+          },
+          "max_cells": {
+            "type": "integer",
+            "default": 10000,
+            "minimum": 100,
+            "description": "Cells scored, drawn with the seed; pairwise distances grow with the square of this number."
+          }
+        },
+        "additionalProperties": false
+      },
+      "partition": {
+        "type": "boolean",
+        "default": true,
+        "description": "Also write a partition at k_hat: k-means on PCs, or mixture labels for gmm_bic."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Seed for EM starts, silhouette subsampling and k-means; identical inputs give identical outputs."
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": [
+      "dataset"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. uns/cluster_number_estimation/k. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Keys: method, k_hat, bound (sc3_tw only, else null), n_cells, n_pcs. Compact; never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "clustering.cluster_number_estimation",
+      "reads": [
+        "layers/log1p_norm",
+        "var/highly_variable",
+        "obsm/X_pca"
+      ],
+      "writes": [
+        "uns/cluster_number_estimation/k",
+        "uns/cluster_number_estimation/curve",
+        "obs/cluster_number_partition"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/clustering/cluster_number_estimation.md"
+    }
+  }
+}

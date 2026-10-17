@@ -1,0 +1,250 @@
+{
+  "name": "singlet_communication_ligand_activity_inference",
+  "title": "Ligand activity inference for a receiver response",
+  "description": "Ranks candidate sender ligands by how well their prior ligand-to-target potential explains a receiver population's response genes, and returns ligand-to-target links. Requires a precomputed receiver DE table and expressed-gene background; the prior is built if absent. Use the default nichenet_aupr method; ulm and mlm are model-based comparators. Do not use on cell-level expression alone, because the score needs an aggregated DE table.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "receiver": {
+        "type": "string",
+        "description": "Receiver cell-type label whose DE table defines the response gene set."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "nichenet_aupr",
+          "ulm",
+          "mlm"
+        ],
+        "default": "nichenet_aupr",
+        "description": "nichenet_aupr is the published default; ulm and mlm are linear-model comparators."
+      },
+      "de": {
+        "type": "object",
+        "description": "Thresholds that select response genes from the receiver DE table.",
+        "properties": {
+          "logfc_threshold": {
+            "type": "number",
+            "minimum": 0,
+            "default": 0.5,
+            "description": "Minimum absolute log fold change for a response gene."
+          },
+          "pvalue_threshold": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.05,
+            "description": "P-value threshold for a response gene."
+          },
+          "use_adjusted_pvalue": {
+            "type": "boolean",
+            "default": false,
+            "description": "Apply the p-value threshold to adjusted p-values."
+          },
+          "top_n_targets": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 250,
+            "description": "Number of top response genes kept for ligand-target links."
+          }
+        },
+        "additionalProperties": false
+      },
+      "prior": {
+        "type": "object",
+        "description": "Prior construction options; used only when the prior is built here.",
+        "properties": {
+          "ltf_cutoff": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.99,
+            "description": "Quantile below which ligand-to-node PageRank scores are set to zero."
+          },
+          "damping_factor": {
+            "type": "number",
+            "minimum": 0,
+            "exclusiveMaximum": 1,
+            "default": 0.5,
+            "description": "Probability that the random walker continues; restart probability is one minus this."
+          },
+          "secondary_targets": {
+            "type": "boolean",
+            "default": false,
+            "description": "Include second-order targets in the ligand-target matrix."
+          }
+        },
+        "additionalProperties": false
+      },
+      "bootstrap": {
+        "type": "object",
+        "description": "Random gene-set null used for nichenet_aupr p-values.",
+        "properties": {
+          "n_iter": {
+            "type": "integer",
+            "minimum": 10,
+            "default": 1000,
+            "description": "Number of random gene sets of equal size drawn from receiver expressed genes."
+          },
+          "metric": {
+            "type": "string",
+            "enum": [
+              "aupr_corrected",
+              "auroc"
+            ],
+            "default": "aupr_corrected",
+            "description": "Ligand activity metric compared against the null."
+          }
+        },
+        "additionalProperties": false
+      },
+      "candidates": {
+        "type": "object",
+        "description": "Candidate ligand set and the number of ligands reported.",
+        "properties": {
+          "senders": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Sender cell-type labels whose expressed ligands are candidates; if omitted, all ligands in the prior are candidates."
+          },
+          "top_n_ligands": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 30,
+            "description": "Number of top-ranked ligands reported with their target links."
+          }
+        },
+        "additionalProperties": false
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Random seed for the bootstrap null gene sets."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": [
+      "dataset",
+      "receiver"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. uns/ligand_activities/<receiver>. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Keys: method, receiver, n_candidate_ligands, n_response_genes, n_background_genes, top_ligands (ligand, aupr_corrected, p_value_bootstrap), warnings.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "communication.ligand_activity_inference",
+      "reads": [
+        "layers/counts",
+        "obs/<cell_type_key>",
+        "uns/receiver_de/<receiver>",
+        "uns/expressed_genes_receiver/<receiver>",
+        "uns/lr_network",
+        "uns/signaling_network",
+        "uns/gr_network",
+        "uns/source_weights",
+        "models/ligand_target_matrix"
+      ],
+      "writes": [
+        "uns/ligand_activities/<receiver>",
+        "uns/ligand_target_links/<receiver>",
+        "models/ligand_target_matrix"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": false,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/communication/ligand_activity_inference.md"
+    }
+  }
+}

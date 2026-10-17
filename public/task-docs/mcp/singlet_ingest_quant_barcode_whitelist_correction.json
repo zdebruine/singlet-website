@@ -1,0 +1,171 @@
+{
+  "name": "singlet_ingest_quant_barcode_whitelist_correction",
+  "title": "Cell barcode correction (whitelist or inferred set)",
+  "description": "Corrects observed cell barcodes against a whitelist or a barcode set inferred from counts, and writes a decision per distinct barcode, a corrected barcode per read and a corrected cell-barcode count table. The default method unique corrects only barcodes with exactly one one-substitution candidate; frequency accepts a count-share leader; exact disables correction. Requires the parse stream from barcode extraction. Do not use to call cells or to correct UMIs.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI, or a workspace handle."
+      },
+      "parse_stream": {
+        "type": ["string", "null"],
+        "default": null,
+        "description": "Parse stream from barcode extraction; null uses the stream recorded for this dataset."
+      },
+      "whitelist": {
+        "type": "string",
+        "description": "Whitelist path or catalogue name, or 'inferred' to derive the set from observed counts."
+      },
+      "method": {
+        "type": "string",
+        "enum": ["exact", "unique", "frequency"],
+        "default": "unique",
+        "description": "unique is the default and corrects only unambiguous one-substitution barcodes; exact disables correction."
+      },
+      "neighbourhood": {
+        "type": "string",
+        "enum": ["hamming-1", "substitution-or-shift-1"],
+        "default": "hamming-1",
+        "description": "Neighbourhood for non-exact barcodes; shift-aware neighbourhoods are abundance heuristics, not indel models."
+      },
+      "frequency": {
+        "type": "object",
+        "description": "Options for method frequency: share threshold, pseudocount and optional Phred weighting.",
+        "properties": {
+          "confidence": {
+            "type": "number",
+            "minimum": 0.5,
+            "maximum": 1,
+            "default": 0.975,
+            "description": "Share the leader must reach; 0.975 matches STARsolo cbMinP and alevin-fry RNA."
+          },
+          "pseudocount": {
+            "type": "number",
+            "minimum": 0,
+            "default": 1,
+            "description": "Added to each candidate's exact count before the share is computed."
+          },
+          "use_quality": {
+            "type": "boolean",
+            "default": false,
+            "description": "Weight candidates by the Phred error at the mismatched base; requires base qualities."
+          }
+        },
+        "additionalProperties": false
+      },
+      "inferred": {
+        "type": "object",
+        "description": "Options when whitelist is inferred: knee rule, expected-cell bound and above-knee handling.",
+        "properties": {
+          "knee_method": {
+            "type": "string",
+            "enum": ["distance", "density"],
+            "default": "distance",
+            "description": "Knee rule applied to ranked barcode counts."
+          },
+          "expect_cells": {
+            "type": ["integer", "null"],
+            "minimum": 1,
+            "default": null,
+            "description": "Expected cell number bounding the inferred set; null applies the knee alone."
+          },
+          "above_knee": {
+            "type": "string",
+            "enum": ["none", "discard", "correct"],
+            "default": "none",
+            "description": "Handling of above-knee barcodes with a higher-count near miss; none disables it."
+          }
+        },
+        "additionalProperties": false
+      },
+      "correction_out": {
+        "type": ["string", "null"],
+        "default": null,
+        "description": "Path of the per-read correction sidecar; null writes a file beside the dataset."
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu", "cuda"],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without reading the stream."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members and the sidecar instead of failing."
+      }
+    },
+    "required": ["dataset", "whitelist"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: finished inline and wrote members; dry_run: only an estimate; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Keys: method, neighbourhood, whitelist_size, n_distinct_observed, n_exact, n_corrected, n_ambiguous, n_no_candidate, n_below_threshold, corrected_read_fraction, n_above_knee_changed. Never per-read records.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "ingest-quant.barcode_whitelist_correction",
+      "reads": ["uns/ingest_geometry"],
+      "writes": [
+        "uns/barcode_correction_run",
+        "uns/barcode_correction_observed",
+        "uns/barcode_correction_counts",
+        "obs/barcode_correction_reads"
+      ],
+      "devices": ["cpu", "cuda"],
+      "stochastic": false,
+      "long_running": true,
+      "streaming": true,
+      "paradigm": "heuristic",
+      "docs": "tasks/ingest-quant/barcode_whitelist_correction.md"
+    }
+  }
+}

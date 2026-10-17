@@ -1,0 +1,256 @@
+{
+  "name": "singlet_cell_calling_cell_count_cutoff_selection",
+  "title": "Cell/empty cut-off and expected cell count",
+  "description": "Chooses the cell/empty cut-off on one unfiltered droplet matrix and estimates how many barcodes contain cells, reporting the count across FDR and expected-cell settings. The default method emptydrops calls barcodes at a stated FDR, so the count is conditional on lower, fdr and retain. Use expected_cells_ordmag only with a trusted expected count. Do not use to label individual barcodes; use singlet_cell_calling_cell_vs_empty_droplet_calling for that.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Unfiltered UMI matrix handle (.singlet path or URI, or workspace handle)."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "emptydrops",
+          "barcode_rank_knee",
+          "expected_cells_ordmag"
+        ],
+        "default": "emptydrops",
+        "description": "Cut-off rule; emptydrops is the default."
+      },
+      "expected_cells": {
+        "type": "integer",
+        "minimum": 1,
+        "description": "Expected recovered cells; falls back to uns/expected_cells."
+      },
+      "lower": {
+        "type": "integer",
+        "minimum": 0,
+        "default": 100,
+        "description": "Totals at or below this define the ambient reference."
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto prefers CUDA when memory allows."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Seed for Monte Carlo draws and bootstrap resamples."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return the estimate only; write nothing."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing outputs instead of failing."
+      },
+      "emptydrops": {
+        "type": "object",
+        "description": "Options for emptydrops.",
+        "additionalProperties": false,
+        "properties": {
+          "fdr": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 1,
+            "default": 0.001,
+            "description": "Benjamini-Hochberg level for called barcodes."
+          },
+          "niters": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 10000,
+            "description": "Monte Carlo draws per tested barcode."
+          },
+          "retain": {
+            "type": "string",
+            "enum": [
+              "knee",
+              "none"
+            ],
+            "default": "knee",
+            "description": "knee leaves totals above the knee untested; none disables this."
+          }
+        }
+      },
+      "barcode_rank_knee": {
+        "type": "object",
+        "description": "Options for barcode_rank_knee.",
+        "additionalProperties": false,
+        "properties": {
+          "exclude_from": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 50,
+            "description": "Top-ranked barcodes excluded from the knee search."
+          },
+          "window_log10": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 1,
+            "description": "Knee search window in log10 units."
+          }
+        }
+      },
+      "expected_cells_ordmag": {
+        "type": "object",
+        "description": "Options for expected_cells_ordmag.",
+        "additionalProperties": false,
+        "properties": {
+          "within_fraction": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 1,
+            "default": 0.1,
+            "description": "Cut-off as a fraction of the baseline barcode count."
+          },
+          "bootstrap_samples": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 100,
+            "description": "Bootstrap resamples for the count interval."
+          }
+        }
+      },
+      "sensitivity": {
+        "type": "object",
+        "description": "Settings for the sensitivity table.",
+        "additionalProperties": false,
+        "properties": {
+          "fdr_levels": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 1
+            },
+            "default": [
+              0.001,
+              0.01
+            ],
+            "description": "FDR levels swept for emptydrops."
+          },
+          "expected_scales": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "default": [
+              0.5,
+              1,
+              2
+            ],
+            "description": "Multipliers on the expected count, when one exists."
+          }
+        }
+      }
+    },
+    "required": [
+      "dataset"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was, or would be, updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: members written; dry_run: estimate only; queued: long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written; empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "additionalProperties": true,
+        "description": "For completed runs: method, estimated_cells, threshold_umi, fdr_level, ci_low, ci_high, limited_share, sensitivity_table."
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Provenance record id; null unless completed."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "additionalProperties": true,
+        "description": "Present for dry_run: seconds, peak_memory_gb, device."
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "cell-calling.cell_count_cutoff_selection",
+      "reads": [
+        "layers/counts",
+        "obs/<sample_key>",
+        "uns/expected_cells"
+      ],
+      "writes": [
+        "uns/cell_count/estimated_cells",
+        "uns/cell_count/threshold_umi",
+        "uns/cell_count/fdr_level",
+        "uns/cell_count/ci_low",
+        "uns/cell_count/ci_high",
+        "uns/cell_count/sensitivity_table",
+        "obs/is_cell_cutoff"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": true,
+      "paradigm": "hybrid",
+      "docs": "tasks/cell-calling/cell_count_cutoff_selection.md"
+    }
+  }
+}

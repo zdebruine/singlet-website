@@ -1,0 +1,141 @@
+{
+  "name": "singlet_markers_de_cluster_marker_ranking",
+  "title": "Rank cluster marker genes",
+  "description": "Ranks genes that separate each cluster or cell type from the other cells, or from one chosen contrast group, and writes per-group marker tables with a score, log fold change and detection fractions. Needs a log-normalised layer and one categorical label per cell. The default method is wilcoxon. Do not read its p-values as calibrated error rates, and do not use it for condition effects between donors; use singlet_markers_de_replicate_aware_condition_de for that.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "groupby": {
+        "type": "string",
+        "description": "Categorical obs column holding the cluster or cell-type label to rank within."
+      },
+      "contrast": {
+        "type": "string",
+        "default": "rest",
+        "description": "'rest' compares each group with all other cells; a group label gives a one-vs-one comparison."
+      },
+      "method": {
+        "type": "string",
+        "enum": ["wilcoxon", "t_test", "auroc", "cohen_d", "logreg"],
+        "default": "wilcoxon",
+        "description": "Ranking score. wilcoxon is the default; logreg gives a coefficient score without p-values."
+      },
+      "layer": {
+        "type": "string",
+        "default": "log1p_norm",
+        "description": "Log-normalised layer to test; t_test, cohen_d and auroc need log values."
+      },
+      "n_genes": {
+        "type": "integer",
+        "minimum": 1,
+        "default": 100,
+        "description": "Top genes kept per group, ordered by descending score."
+      },
+      "min_pct": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1,
+        "default": 0.01,
+        "description": "Minimum detection fraction on either side, for wilcoxon, t_test and cohen_d candidates."
+      },
+      "min_logfc": {
+        "type": "number",
+        "minimum": 0,
+        "default": 0.1,
+        "description": "Minimum absolute log fold change for wilcoxon, t_test and cohen_d candidates; pre-filter only."
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu", "cuda"],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      },
+      "wilcoxon": {
+        "type": "object",
+        "description": "Options for the wilcoxon method only.",
+        "properties": {
+          "tie_correct": {
+            "type": "boolean",
+            "default": true,
+            "description": "Use the tie-corrected variance; needed for discrete counts with many ties."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "required": ["dataset", "groupby"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Keys: method, contrast, n_groups, n_genes_tested, top_markers (first five genes per group).",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "markers-de.cluster_marker_ranking",
+      "reads": ["layers/log1p_norm", "obs/<groupby>"],
+      "writes": ["uns/marker_genes/<groupby>/<contrast>", "uns/marker_genes/<groupby>/params"],
+      "devices": ["cpu", "cuda"],
+      "stochastic": false,
+      "long_running": false,
+      "streaming": true,
+      "paradigm": "hybrid",
+      "docs": "tasks/markers-de/cluster_marker_ranking.md"
+    }
+  }
+}

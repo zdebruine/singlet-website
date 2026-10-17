@@ -1,0 +1,228 @@
+{
+  "name": "singlet_scalability_metacell_construction",
+  "title": "Metacell construction",
+  "description": "Partitions single cells into state-homogeneous metacells and writes the cell-to-metacell assignment and per-metacell QC. Use the default metacell2 method for large datasets, seacells when soft memberships are needed, and supercell for quick graph-based coarse-graining. Requires raw UMI counts in layers/counts. Do not use it to call cell types or to test cell-level differential expression, because metacells are aggregates rather than cell types.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "method": {
+        "type": "string",
+        "enum": ["metacell2", "seacells", "supercell"],
+        "default": "metacell2",
+        "description": "Algorithm: metacell2 (published standard), seacells (model-based, soft memberships) or supercell (graph-based)."
+      },
+      "target_size": {
+        "type": "integer",
+        "minimum": 2,
+        "default": 48,
+        "description": "Target cells per metacell; sets the MetaCell-2 target, the SEACells archetype count round(N/size) or the SuperCell gamma."
+      },
+      "split_by": {
+        "type": ["string", "null"],
+        "default": null,
+        "description": "Obs column whose values are never mixed within a metacell, such as batch or donor."
+      },
+      "label": {
+        "type": ["string", "null"],
+        "default": null,
+        "description": "Obs column of expert labels used only for purity QC; labels never influence construction."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Random seed for SEACells initialisation and SuperCell approximate sampling; fixes reproducibility."
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu", "cuda"],
+        "default": "auto",
+        "description": "Execution device; only seacells uses cuda, and auto selects it only when enough memory is available."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, peak memory and device without constructing metacells."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing metacell members instead of failing."
+      },
+      "metacell2": {
+        "type": "object",
+        "description": "Options used only when method is metacell2.",
+        "additionalProperties": false,
+        "properties": {
+          "min_metacell_size": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 12,
+            "description": "Metacells smaller than this are dissolved into outlier cells."
+          },
+          "target_metacell_umis": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 160000,
+            "description": "UMI target per metacell, combined with the target size to set the divide-and-conquer pile size."
+          },
+          "deviants_max_cell_fraction": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.25,
+            "description": "Maximum fraction of cells that can be flagged as deviant."
+          }
+        }
+      },
+      "seacells": {
+        "type": "object",
+        "description": "Options used only when method is seacells.",
+        "additionalProperties": false,
+        "properties": {
+          "n_metacells": {
+            "type": ["integer", "null"],
+            "minimum": 1,
+            "default": null,
+            "description": "Number of archetypes; null uses round(N / target_size)."
+          },
+          "embedding": {
+            "type": "string",
+            "default": "X_pca",
+            "description": "obsm key of the embedding used to build the kernel."
+          },
+          "n_neighbors": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 15,
+            "description": "kNN size of the adaptive kernel; the bandwidth uses the neighbour at index n_neighbors // 2."
+          },
+          "n_waypoint_eigs": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 10,
+            "description": "Diffusion eigenvectors used for waypoint initialisation."
+          },
+          "convergence_epsilon": {
+            "type": "number",
+            "minimum": 0,
+            "default": 0.001,
+            "description": "Stop when the reconstruction error falls below this fraction of its initial value."
+          },
+          "max_iter": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 100,
+            "description": "Maximum Frank-Wolfe outer iterations."
+          },
+          "min_iter": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 10,
+            "description": "Minimum outer iterations before convergence is checked."
+          },
+          "graph_construction": {
+            "type": "string",
+            "enum": ["union", "intersection"],
+            "default": "union",
+            "description": "How the directed kNN graph is symmetrised for the kernel support."
+          }
+        }
+      },
+      "supercell": {
+        "type": "object",
+        "description": "Options used only when method is supercell.",
+        "additionalProperties": false,
+        "properties": {
+          "k_knn": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 5,
+            "description": "Number of neighbours in the single-cell graph."
+          },
+          "n_pc": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 10,
+            "description": "Principal components used to build the single-cell graph."
+          },
+          "n_var_genes": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 1000,
+            "description": "Most variable genes used for the principal components."
+          },
+          "approx_n": {
+            "type": ["integer", "null"],
+            "minimum": 1,
+            "default": null,
+            "description": "Subsample size for approximate mode; null is exact, and documentation suggests approximate mode above 50,000 cells."
+          }
+        }
+      }
+    },
+    "required": ["dataset"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written, such as obs/metacell. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Keys: method, target_size, n_cells, n_metacells, size_median, size_iqr, n_dissolved, weighted_purity (null without label), compactness_median, separation_median, seed.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "scalability.metacell_construction",
+      "reads": ["layers/counts", "obsm/X_pca"],
+      "writes": ["obs/metacell", "obsm/metacell_assignment", "models/seacells_archetypes", "uns/metacell_qc", "uns/metacell_params"],
+      "devices": ["cpu", "cuda"],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/scalability/metacell_construction.md"
+    }
+  }
+}

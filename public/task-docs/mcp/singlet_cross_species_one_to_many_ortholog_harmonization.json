@@ -1,0 +1,232 @@
+{
+  "name": "singlet_cross_species_one_to_many_ortholog_harmonization",
+  "title": "Harmonize one-to-many orthologs across species",
+  "description": "Combines or weights source-species gene counts that map to one shared feature, so cross-species comparisons use a documented rule. The default one_to_one keeps only unambiguous orthologs and drops multi-copy genes; sum, mean, max, select_expression, samap_graph and saturn_macrogene keep them. Writes layers/harmonized_counts and uns/harmonization_report. Do not use it to infer orthologs (see cross-species.ortholog_assignment) or to integrate cells after harmonization.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI, or a workspace handle; must hold per-species counts and obs/species."
+      },
+      "layer": {
+        "type": "string",
+        "default": "counts",
+        "description": "Count layer to harmonize; raw UMI counts over each species' source genes."
+      },
+      "ortholog_table": {
+        "type": "string",
+        "default": "uns/ortholog_table",
+        "description": "Member holding the ortholog table with relation labels one_to_one, one_to_many, many_to_one or many_to_many."
+      },
+      "collapse": {
+        "type": "string",
+        "enum": [
+          "one_to_one",
+          "sum",
+          "mean",
+          "max",
+          "select_expression",
+          "samap_graph",
+          "saturn_macrogene"
+        ],
+        "default": "one_to_one",
+        "description": "Harmonization rule. one_to_one is the default baseline; prefer samap_graph or saturn_macrogene when coverage matters."
+      },
+      "max_orthologs": {
+        "type": "integer",
+        "minimum": 1,
+        "default": 1,
+        "description": "Maximum paralogs per source gene before the gene is dropped; applies to one_to_one, sum, mean and max."
+      },
+      "select_expression": {
+        "type": "object",
+        "description": "Options for select_expression: the paralog is chosen on cells outside the evaluated set.",
+        "properties": {
+          "selection_split": {
+            "type": "string",
+            "enum": [
+              "heldout_cells"
+            ],
+            "default": "heldout_cells",
+            "description": "Cells used to choose the paralog; must be disjoint from the cells that are evaluated."
+          }
+        },
+        "additionalProperties": false
+      },
+      "samap": {
+        "type": "object",
+        "description": "Options for samap_graph: reciprocal-BLAST homology graph, reweighting and row filter.",
+        "properties": {
+          "eval_threshold": {
+            "type": "number",
+            "minimum": 0,
+            "default": 1e-6,
+            "description": "BLAST e-value threshold for homology edges."
+          },
+          "filter_threshold": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.25,
+            "description": "Keep an edge only if it is at least this fraction of its gene's strongest edge."
+          },
+          "tanh_centre": {
+            "type": "number",
+            "enum": [
+              0.5,
+              0.7
+            ],
+            "default": 0.5,
+            "description": "Centre of the tanh edge reweighting; SAMap uses 0.7 at two other call sites."
+          }
+        },
+        "additionalProperties": false
+      },
+      "saturn": {
+        "type": "object",
+        "description": "Options for saturn_macrogene; num_macrogenes has no default and must be set.",
+        "properties": {
+          "hv_genes": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 8000,
+            "description": "Highly variable genes kept per species before embedding."
+          },
+          "num_macrogenes": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Number of macrogenes, the shared features; required, no default."
+          },
+          "embedding_model": {
+            "type": "string",
+            "enum": [
+              "ESM1b",
+              "MSA1b",
+              "protXL",
+              "ESM1b_protref",
+              "ESM2"
+            ],
+            "description": "Protein language model that embeds each gene's protein; no default."
+          }
+        },
+        "additionalProperties": false
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Random seed for saturn_macrogene training and the select_expression split."
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": [
+      "dataset"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. layers/harmonized_counts. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Completed runs: rule, retained_gene_fraction, n_shared_features, paralog_group_sizes. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "cross-species.one_to_many_ortholog_harmonization",
+      "reads": [
+        "layers/counts",
+        "obs/species",
+        "uns/ortholog_table"
+      ],
+      "writes": [
+        "layers/harmonized_counts",
+        "uns/harmonization_report"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/cross-species/one_to_many_ortholog_harmonization.md"
+    }
+  }
+}

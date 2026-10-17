@@ -1,0 +1,189 @@
+{
+  "name": "singlet_ingest_quant_spliced_unspliced_counting",
+  "title": "Spliced, unspliced and ambiguous molecule counting",
+  "description": "Assigns each deduplicated molecule of one single-cell or single-nucleus library to the spliced, unspliced or ambiguous state of its gene, writing layers/spliced, layers/unspliced and layers/ambiguous per cell. Requires an intron-augmented reference, a read mapping compatible with the chosen method, and collapsed molecules from ingest-quant.umi_deduplication. The default alevin_fry_usa_cr_like is the proposed standard. Do not use it to decide whether intronic reads enter whole-cell totals, or to fit velocity: it supplies the counts those models consume.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI, or a workspace handle; it must hold the outputs of the feeding tasks."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "velocyto_permissive10x",
+          "kb_lamanno",
+          "kb_nac",
+          "alevin_fry_usa_cr_like",
+          "alevin_fry_usa_cr_like_em",
+          "starsolo_velocyto"
+        ],
+        "default": "alevin_fry_usa_cr_like",
+        "description": "Counting logic, ported from the named published counter. Default alevin_fry_usa_cr_like is the proposed standard."
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "cpu"
+        ],
+        "default": "cpu",
+        "description": "All counters run on CPU; this tool exposes no CUDA path."
+      },
+      "threads": {
+        "type": "integer",
+        "minimum": 1,
+        "description": "CPU threads for read and molecule processing; omit to use all available cores."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without writing."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing spliced, unspliced and ambiguous layers instead of failing."
+      },
+      "alevin_fry": {
+        "type": "object",
+        "description": "Options for the alevin_fry_usa methods.",
+        "additionalProperties": false,
+        "properties": {
+          "sa_model": {
+            "type": "string",
+            "enum": [
+              "winner-take-all",
+              "prefer-ambig"
+            ],
+            "default": "winner-take-all",
+            "description": "Splicing-ambiguity model; applies only to alevin_fry_usa_cr_like_em."
+          }
+        }
+      },
+      "starsolo": {
+        "type": "object",
+        "description": "Options for starsolo_velocyto.",
+        "additionalProperties": false,
+        "properties": {
+          "max_intron_span": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 1000000,
+            "description": "Introns longer than this do not mark an alignment intronic."
+          },
+          "min_overlap": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 6,
+            "description": "Bases an alignment must overlap an exon or intron to be classified."
+          }
+        }
+      },
+      "velocyto": {
+        "type": "object",
+        "description": "Options for velocyto_permissive10x.",
+        "additionalProperties": false,
+        "properties": {
+          "min_flank": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 5,
+            "description": "Bases a read must overlap an exon or intron to be classified."
+          }
+        }
+      }
+    },
+    "required": [
+      "dataset"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. layers/spliced. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Keys: method, reference_release, n_cells, n_features, spliced_molecules, unspliced_molecules, ambiguous_molecules, intronic_fraction_median. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": true,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "ingest-quant.spliced_unspliced_counting",
+      "reads": [
+        "uns/ref_build",
+        "uns/t2g",
+        "uns/ec_incidence"
+      ],
+      "writes": [
+        "layers/spliced",
+        "layers/unspliced",
+        "layers/ambiguous",
+        "uns/spliced_unspliced_provenance"
+      ],
+      "devices": [
+        "cpu"
+      ],
+      "stochastic": false,
+      "long_running": true,
+      "streaming": true,
+      "paradigm": "hybrid",
+      "docs": "tasks/ingest-quant/spliced_unspliced_counting.md"
+    }
+  }
+}

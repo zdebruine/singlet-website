@@ -1,0 +1,200 @@
+{
+  "name": "singlet_trajectory_terminal_state_identification",
+  "title": "Terminal and initial state identification",
+  "description": "Identifies the terminal and initial macrostates of a cell process from a directed transition kernel and writes per-cell terminal memberships. The default gpcca_stability method needs pseudotime_key and calls macrostates with coarse self-transition at least 0.96 terminal; palantir needs a root cell and uses a waypoint chain. Do not use on an undirected kernel, where stable macrostates are clusters rather than endpoints, or as a substitute for fate probabilities.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "method": {
+        "type": "string",
+        "enum": ["gpcca_stability", "gpcca_top_n", "gpcca_eigengap", "palantir"],
+        "default": "gpcca_stability",
+        "description": "Terminal-state rule. gpcca_* methods use a pseudotime-directed kernel; palantir uses a root cell."
+      },
+      "root": {
+        "type": ["string", "null"],
+        "default": null,
+        "description": "Root cell id. Required for palantir; optional orientation for gpcca_* methods."
+      },
+      "pseudotime_key": {
+        "type": ["string", "null"],
+        "default": null,
+        "description": "obs key of pseudotime that directs the kernel. Required for gpcca_* methods; ignored by palantir."
+      },
+      "gpcca": {
+        "type": "object",
+        "description": "Options for gpcca_* methods; ignored for palantir.",
+        "properties": {
+          "n_states": {
+            "type": ["integer", "null"],
+            "minimum": 1,
+            "default": null,
+            "description": "Number of macrostates; null uses the eigengap rule. gpcca_top_n requires a value."
+          },
+          "stability_threshold": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.96,
+            "description": "Minimum coarse self-transition for a terminal macrostate (gpcca_stability)."
+          },
+          "n_cells": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 30,
+            "description": "Most likely cells per terminal macrostate."
+          },
+          "alpha": {
+            "type": "number",
+            "minimum": 0,
+            "default": 1.0,
+            "description": "Eigengap weight used by gpcca_eigengap."
+          },
+          "allow_overlap": {
+            "type": "boolean",
+            "default": false,
+            "description": "Allow one cell to belong to more than one terminal state."
+          },
+          "threshold_scheme": {
+            "type": "string",
+            "enum": ["hard", "soft"],
+            "default": "hard",
+            "description": "Pseudotime edge filter: hard removes past edges except nearest neighbours; soft down-weights them."
+          },
+          "frac_to_keep": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.3,
+            "description": "Share of nearest neighbours always kept under the hard filter."
+          },
+          "posterior_draws": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 0,
+            "description": "Dirichlet posterior draws for stability intervals (singlet extension); 0 gives the point estimate."
+          }
+        },
+        "additionalProperties": false
+      },
+      "palantir": {
+        "type": "object",
+        "description": "Options for palantir; ignored for gpcca_* methods.",
+        "properties": {
+          "knn": {
+            "type": "integer",
+            "minimum": 2,
+            "default": 30,
+            "description": "Neighbours for the waypoint Markov chain."
+          },
+          "num_waypoints": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 1200,
+            "description": "Number of max-min sampled waypoints."
+          },
+          "max_iterations": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 25,
+            "description": "Maximum iterations of the pseudotime convergence."
+          }
+        },
+        "additionalProperties": false
+      },
+      "seed": {
+        "type": "integer",
+        "default": 20,
+        "description": "Waypoint sampling seed for palantir (Palantir default); unused by gpcca_* methods."
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu", "cuda"],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": ["dataset"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written, for example obs/terminal_state. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Keys: method, n_macrostates, terminal_states, stability, initial_states, warnings. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "trajectory.terminal_state_identification",
+      "reads": ["obsp/connectivities", "obsm/X_pca", "obs/pseudotime"],
+      "writes": [
+        "obs/terminal_state",
+        "obsm/terminal_state_memberships",
+        "obsm/macrostate_memberships",
+        "uns/terminal_states",
+        "uns/coarse_T",
+        "uns/coarse_stationary",
+        "uns/initial_states"
+      ],
+      "devices": ["cpu", "cuda"],
+      "stochastic": true,
+      "long_running": false,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/trajectory/terminal_state_identification.md"
+    }
+  }
+}

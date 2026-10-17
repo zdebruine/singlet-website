@@ -1,0 +1,229 @@
+{
+  "name": "singlet_communication_spatial_lr_scoring",
+  "title": "Spatial ligand-receptor scoring",
+  "description": "Scores ligand-receptor pairs between spatially neighbouring spots or cells and writes per-pair scores, p-values and FDR q-values, with optional per-spot scores. The default spatialdm_z is an analytic bivariate Moran z-score that needs no permutations; commot needs commot.dis_thr and reports the range it used. Requires obsm/spatial coordinates and an LR table in uns/; do not use it on dissociated data without coordinates (use communication.lr_interaction_scoring), and treat significant pairs as co-localisation evidence, not proof of signalling.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI with obsm/spatial coordinates and an LR table in uns/."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "spatialdm_z",
+          "spatialdm_perm",
+          "commot",
+          "liana_morans",
+          "squidpy_ligrec"
+        ],
+        "default": "spatialdm_z",
+        "description": "Scoring backend. spatialdm_z is the default; commot requires commot.dis_thr; squidpy_ligrec is a non-spatial comparator."
+      },
+      "resource": {
+        "type": "string",
+        "default": "lr_resource",
+        "description": "Name of the ligand-receptor table in uns/ (ligand, receptor and complex subunits)."
+      },
+      "layer": {
+        "type": "string",
+        "default": "X",
+        "description": "Expression layer scored as supplied; singlet applies no further normalisation."
+      },
+      "n_perm": {
+        "type": "integer",
+        "minimum": 1,
+        "default": 1000,
+        "description": "Permutations for permutation p-values; the smallest reportable p-value is 1/n_perm."
+      },
+      "fdr_threshold": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1,
+        "default": 0.1,
+        "description": "Benjamini-Hochberg q-value cut-off for calling significant pairs."
+      },
+      "weights": {
+        "type": "object",
+        "description": "Spatial weights for spatialdm and liana_morans.",
+        "properties": {
+          "n_neighbors": {
+            "type": ["integer", "null"],
+            "minimum": 1,
+            "default": null,
+            "description": "Restrict to this many nearest neighbours per spot; null keeps the weight-based graph."
+          },
+          "rbf_length_scale": {
+            "type": ["number", "null"],
+            "exclusiveMinimum": 0,
+            "default": null,
+            "description": "Radial basis length scale in coordinate units; SpatialDM only."
+          },
+          "weight_cutoff": {
+            "type": "number",
+            "minimum": 0,
+            "default": 0.1,
+            "description": "Zero radial basis weights below this value; SpatialDM only."
+          }
+        },
+        "additionalProperties": false
+      },
+      "commot": {
+        "type": "object",
+        "description": "COMMOT options, used only when method is commot.",
+        "properties": {
+          "dis_thr": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "description": "Hard signalling range in coordinate units; required with commot."
+          },
+          "cost_type": {
+            "type": "string",
+            "enum": ["euc", "euc_square"],
+            "default": "euc",
+            "description": "Distance cost: Euclidean or squared Euclidean."
+          },
+          "eps_p": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 0.1,
+            "description": "Entropic regularisation of the transport coupling, in cost units."
+          },
+          "rho": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 10.0,
+            "description": "Marginal penalty of the unbalanced transport problem."
+          },
+          "nitermax": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 10000,
+            "description": "Maximum solver iterations per LR pair."
+          },
+          "heteromeric_rule": {
+            "type": "string",
+            "enum": ["min", "ave"],
+            "default": "min",
+            "description": "Complex subunit aggregation rule; it changes scores materially."
+          }
+        },
+        "required": ["dis_thr"],
+        "additionalProperties": false
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu", "cuda"],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Random seed for permutation nulls (spatialdm_perm, liana_morans, squidpy_ligrec)."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": [
+      "dataset"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. uns/spatial_lr/pairs. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "For completed runs: method, n_pairs_tested, n_significant, fdr_threshold and top_pairs (up to 10 rows with pair, score, pvalue, qvalue and range). Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "communication.spatial_lr_scoring",
+      "reads": [
+        "X",
+        "obsm/spatial",
+        "uns/lr_resource"
+      ],
+      "writes": [
+        "uns/spatial_lr/pairs",
+        "obsm/spatial_lr_score",
+        "uns/spatial_lr/params"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/communication/spatial_lr_scoring.md"
+    }
+  }
+}

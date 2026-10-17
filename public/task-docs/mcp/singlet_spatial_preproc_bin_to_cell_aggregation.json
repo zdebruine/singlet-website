@@ -1,0 +1,245 @@
+{
+  "name": "singlet_spatial_preproc_bin_to_cell_aggregation",
+  "title": "Aggregate sub-cellular bins into cell-like units",
+  "description": "Assigns sub-cellular bins (2 um Visium HD grid) to cell-like or nucleus-like analysis units using a nucleus or cell prior, then writes a bin-to-unit map and a unit-by-gene count table. The default method, nucleus_expansion, follows bin2cell's distance rule with expression tie-breaking. Use it to turn a bin grid into units before cell-level analysis; do not use it on dissociated or already cell-level data, or to segment images.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI with bin counts, bin centroids and a registered prior."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "nucleus_expansion",
+          "bin2cell",
+          "sopa_bins",
+          "proseg",
+          "fixed_grid"
+        ],
+        "default": "nucleus_expansion",
+        "description": "Grouping method; nucleus_expansion is the proposed default, and bin2cell wraps the published tool."
+      },
+      "prior_source": {
+        "type": "string",
+        "enum": [
+          "nucleus_labels",
+          "cell_polygons"
+        ],
+        "default": "nucleus_labels",
+        "description": "Prior from labels/ (nuclei) or shapes/ (cell polygons)."
+      },
+      "bin_size_um": {
+        "type": "number",
+        "exclusiveMinimum": 0,
+        "default": 2.0,
+        "description": "Nominal bin side in microns; sets unit area and must match the bin grid."
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without computing units."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      },
+      "nucleus_expansion": {
+        "type": "object",
+        "description": "Options for nucleus_expansion and bin2cell; other methods ignore them.",
+        "properties": {
+          "max_bin_distance": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 2,
+            "description": "Maximum bin-grid distance an expanded label may travel from its nucleus."
+          },
+          "tie_k": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 4,
+            "description": "Candidate hits queried per bin; ambiguous bins are resolved among them."
+          },
+          "tie_pca_components": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 50,
+            "description": "PCA components for the expression distance used to break ties."
+          }
+        },
+        "additionalProperties": false
+      },
+      "sopa_bins": {
+        "type": "object",
+        "description": "Options for sopa_bins; other methods ignore them.",
+        "properties": {
+          "expand_radius_ratio": {
+            "type": "number",
+            "minimum": 0,
+            "default": 0,
+            "description": "Fraction of mean cell radius by which prior polygons are expanded before containment."
+          },
+          "no_overlap": {
+            "type": "boolean",
+            "default": false,
+            "description": "If true, shared bins go to one cell by nearest unique-profile centroid."
+          },
+          "pca_components": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 50,
+            "description": "PCA components for the shared-bin distance."
+          }
+        },
+        "additionalProperties": false
+      },
+      "proseg": {
+        "type": "object",
+        "description": "Options for proseg, a comparator; other methods ignore them.",
+        "properties": {
+          "ncomponents": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 10,
+            "description": "Negative-binomial mixture components for cell expression."
+          },
+          "diffusion_probability": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.2,
+            "description": "Prior probability that a transcript is diffused and repositioned."
+          }
+        },
+        "additionalProperties": false
+      },
+      "fixed_grid": {
+        "type": "object",
+        "description": "Options for fixed_grid; other methods ignore them.",
+        "properties": {
+          "block_um": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 8.0,
+            "description": "Side of each grid unit in microns; must be a multiple of bin_size_um. Units are not cells."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "dataset"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. obs/unit_id. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "For completed runs: method, n_bins, n_units, unassigned_bin_fraction, multi_assigned_bin_fraction, median_unit_area_um2. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "spatial-preproc.bin_to_cell_aggregation",
+      "reads": [
+        "layers/counts",
+        "obsm/spatial",
+        "obs/array_row",
+        "obs/array_col",
+        "uns/spatial",
+        "images/<name>",
+        "labels/<name>",
+        "shapes/<name>"
+      ],
+      "writes": [
+        "obs/unit_id",
+        "obsm/bin_unit_map",
+        "obs/unit_source",
+        "uns/bin_to_unit_params",
+        "units/layers/counts",
+        "units/obs/unit_area_um2",
+        "units/obs/n_bins",
+        "units/obs/bin_count",
+        "units/obsm/spatial"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": false,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/spatial-preproc/bin_to_cell_aggregation.md"
+    }
+  }
+}

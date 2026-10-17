@@ -1,0 +1,245 @@
+{
+  "name": "singlet_annotation_cell_ontology_mapping",
+  "title": "Cell Ontology term mapping for cell type labels",
+  "description": "Maps each unique free-text cell type label to one term of a pinned Cell Ontology release, or to no term. The default normalised_index method matches CL labels and exact synonyms offline and deterministically; method ols queries the EBI Ontology Lookup Service and is cached. Writes obs/cl_term_id, obs/cl_match_type and uns/cl_label_map. Do not use it to assign cell types from expression; use an annotation task for that.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "label_column": {
+        "type": "string",
+        "default": "cell_type",
+        "description": "obs column of free-text cell type labels; mapped once per unique label."
+      },
+      "cl_release": {
+        "type": "string",
+        "description": "Pinned Cell Ontology release identifier; required, because mappings are not reproducible without it."
+      },
+      "candidate_root": {
+        "type": "string",
+        "default": "CL:0000548",
+        "description": "Restrict candidates to descendants of this term; the default is the animal cell root."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "normalised_index",
+          "ols"
+        ],
+        "default": "normalised_index",
+        "description": "normalised_index is deterministic and offline; ols calls the EBI Ontology Lookup Service."
+      },
+      "obsolete_policy": {
+        "type": "string",
+        "enum": [
+          "replace_by",
+          "abstain"
+        ],
+        "default": "replace_by",
+        "description": "replace_by follows replaced_by of an obsolete target; abstain leaves the label unmapped."
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu"
+        ],
+        "default": "auto",
+        "description": "Execution device; the current methods run on CPU, so auto selects CPU."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return unique label count, uncached lookup count and estimated seconds without mapping."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing cl_* members instead of failing."
+      },
+      "normalised_index": {
+        "type": "object",
+        "description": "Options for method normalised_index; ignored by ols.",
+        "additionalProperties": false,
+        "properties": {
+          "use_synonyms": {
+            "type": "boolean",
+            "default": true,
+            "description": "Match CL exact synonyms as well as labels; related synonyms are not used."
+          },
+          "synonym_table": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null,
+            "description": "Path to a versioned abbreviation table; its checksum is written to the report."
+          },
+          "tie_break": {
+            "type": "string",
+            "enum": [
+              "abstain",
+              "lca"
+            ],
+            "default": "abstain",
+            "description": "When several active terms share a normalised label: abstain, or report their lowest common ancestor."
+          }
+        }
+      },
+      "ols": {
+        "type": "object",
+        "description": "Options for method ols; ignored by normalised_index.",
+        "additionalProperties": false,
+        "properties": {
+          "cache_remote": {
+            "type": "boolean",
+            "default": true,
+            "description": "Cache responses keyed by normalised label and service version."
+          },
+          "top_k": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 5,
+            "description": "Candidate terms kept per label for review."
+          },
+          "fuzzy_fallback": {
+            "type": "boolean",
+            "default": false,
+            "description": "Repeat a failed exact query as a fuzzy query; the first CL hit depends on ranking."
+          }
+        }
+      }
+    },
+    "required": [
+      "dataset",
+      "cl_release"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: mapped inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. obs/cl_term_id. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Mapping summary for completed calls: unique_labels, n_mapped, n_unmapped, n_collisions, match_type_counts, cl_release, method, service_version, cache_hit_rate. Never raw matrices.",
+        "additionalProperties": true,
+        "properties": {
+          "unique_labels": {
+            "type": "integer"
+          },
+          "n_mapped": {
+            "type": "integer"
+          },
+          "n_unmapped": {
+            "type": "integer"
+          },
+          "n_collisions": {
+            "type": "integer"
+          },
+          "match_type_counts": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "cl_release": {
+            "type": "string"
+          },
+          "method": {
+            "type": "string"
+          },
+          "service_version": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "cache_hit_rate": {
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        }
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": true
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "annotation.cell_ontology_mapping",
+      "reads": [
+        "obs/<label_column>"
+      ],
+      "writes": [
+        "uns/cl_release",
+        "uns/cl_label_map",
+        "obs/cl_term_id",
+        "obs/cl_term_label",
+        "obs/cl_match_type",
+        "uns/cl_mapping_report"
+      ],
+      "devices": [
+        "cpu"
+      ],
+      "stochastic": false,
+      "long_running": false,
+      "streaming": true,
+      "paradigm": "hybrid",
+      "docs": "tasks/annotation/cell_ontology_mapping.md"
+    }
+  }
+}

@@ -1,0 +1,206 @@
+{
+  "name": "singlet_velocity_velocity_transition_graph",
+  "title": "Velocity transition graph and embedding projection",
+  "description": "Builds a row-stochastic cell-to-cell transition matrix from per-cell RNA velocity and a kNN graph, and projects it onto a UMAP when one is present. The default method, scvelo_cosine, is the published comparator; the other kernels exist to reproduce their tools. Writes obsp/velocity_graph, obsp/transition_matrix and obsm/velocity_umap. Do not read edge direction as time order without external time or lineage evidence.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu", "cuda"],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without computing."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      },
+      "vkey": {
+        "type": "string",
+        "default": "velocity",
+        "description": "Layer with per-cell velocity in gene space, or obsm key holding a velocity embedding."
+      },
+      "basis": {
+        "type": "string",
+        "enum": ["gene_space", "pca", "umap"],
+        "default": "gene_space",
+        "description": "Space in which neighbours and displacements are measured; pca or umap restricts both to that embedding."
+      },
+      "method": {
+        "type": "string",
+        "enum": ["scvelo_cosine", "velocyto_correlation", "cellrank_deterministic", "dynamo_pearson"],
+        "default": "scvelo_cosine",
+        "description": "Similarity kernel. The default is the published comparator; the others reproduce their own tools."
+      },
+      "n_neighbors": {
+        "type": "integer",
+        "default": 30,
+        "minimum": 5,
+        "maximum": 200,
+        "description": "Candidate neighbours per cell from obsp/connectivities; the graph is rebuilt when it has fewer."
+      },
+      "scvelo": {
+        "type": "object",
+        "description": "Options for scvelo_cosine, applied to both the transition matrix and the projection.",
+        "additionalProperties": false,
+        "properties": {
+          "lambda_scale": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 10,
+            "description": "Inverse temperature applied to cosine similarities before row normalisation."
+          },
+          "sqrt_transform": {
+            "type": "boolean",
+            "default": false,
+            "description": "Square-root transform of expression before similarity; fixed here rather than inherited from metadata."
+          },
+          "use_negative_cosines": {
+            "type": "boolean",
+            "default": false,
+            "description": "Keep negative similarities as repulsive transitions; false clips them to zero."
+          },
+          "autoscale": {
+            "type": "boolean",
+            "default": true,
+            "description": "Rescale projected arrows by one global factor for display; probabilities are unchanged."
+          }
+        }
+      },
+      "velocyto": {
+        "type": "object",
+        "description": "Options for velocyto_correlation.",
+        "additionalProperties": false,
+        "properties": {
+          "sigma_corr": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 0.05,
+            "description": "Correlation temperature: transitions are proportional to exp(correlation / sigma_corr)."
+          }
+        }
+      },
+      "cellrank": {
+        "type": "object",
+        "description": "Options for cellrank_deterministic.",
+        "additionalProperties": false,
+        "properties": {
+          "similarity": {
+            "type": "string",
+            "enum": ["correlation", "cosine"],
+            "default": "correlation",
+            "description": "Similarity between each velocity vector and neighbour displacement."
+          },
+          "softmax_scale": {
+            "type": ["number", "null"],
+            "exclusiveMinimum": 0,
+            "default": null,
+            "description": "Softmax scale; null estimates the inverse median absolute logit from the data."
+          }
+        }
+      },
+      "dynamo": {
+        "type": "object",
+        "description": "Options for dynamo_pearson.",
+        "additionalProperties": false,
+        "properties": {
+          "correct_density": {
+            "type": "boolean",
+            "default": true,
+            "description": "Correct the projection for neighbourhood density, as dynamo does by default."
+          }
+        }
+      }
+    },
+    "required": ["dataset"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written, e.g. obs/doublet_score. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Compact summary for completed runs: counts and kernel identity. Never raw matrices.",
+        "additionalProperties": true,
+        "properties": {
+          "n_cells": {"type": "integer", "description": "Cells in the dataset."},
+          "n_zero_velocity_cells": {"type": "integer", "description": "Cells with zero velocity; their rows are empty."},
+          "mean_stored_neighbours": {"type": "number", "description": "Mean number of stored neighbours per non-empty row."},
+          "median_top1_probability": {"type": "number", "description": "Median of the largest transition probability per row."},
+          "kernel": {"type": "string", "description": "Kernel used."},
+          "n_similarity_genes": {"type": "integer", "description": "Genes used in the similarity."}
+        }
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "velocity.velocity_transition_graph",
+      "reads": [
+        "layers/Ms",
+        "layers/velocity",
+        "obsp/connectivities",
+        "obsm/X_pca",
+        "obsm/X_umap",
+        "var/velocity_genes"
+      ],
+      "writes": [
+        "obsp/velocity_graph",
+        "obsp/transition_matrix",
+        "obsm/velocity_umap",
+        "uns/velocity_graph_params"
+      ],
+      "devices": ["cpu", "cuda"],
+      "stochastic": false,
+      "long_running": false,
+      "streaming": true,
+      "paradigm": "heuristic",
+      "docs": "tasks/velocity/velocity_transition_graph.md"
+    }
+  }
+}

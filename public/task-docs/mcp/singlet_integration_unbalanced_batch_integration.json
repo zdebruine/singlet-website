@@ -1,0 +1,269 @@
+{
+  "name": "singlet_integration_unbalanced_batch_integration",
+  "title": "Unbalanced and nested batch integration",
+  "description": "Integrates batches whose cell-type composition differs, aligning each population only where it has cells in other batches and keeping batch-specific populations apart. The default scvi method trains a conditional VAE on raw counts with presence gates and writes a batch-free embedding, per-batch presence probabilities and over-correction flags; scanvi, stacas, seurat_cca, seurat_rpca, harmony, fastmnn, scanorama, liger and bbknn are comparators. Needs layers/counts, var/highly_variable, a batch column with at least two levels, and obsm/X_pca for PCA-based methods. Do not use it on one batch or to remove a condition that must be kept; use singlet_integration_integration_quality_scoring for full benchmark scores.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "scvi",
+          "scanvi",
+          "stacas",
+          "seurat_cca",
+          "seurat_rpca",
+          "harmony",
+          "fastmnn",
+          "scanorama",
+          "liger",
+          "bbknn"
+        ],
+        "default": "scvi",
+        "description": "Integration method. scvi (default, with presence gates) is the proposed model; the others are comparators."
+      },
+      "batch_key": {
+        "type": "string",
+        "default": "batch",
+        "description": "obs column with the batch label; at least two levels. For nested designs, name the covariate to remove explicitly."
+      },
+      "label_key": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "default": null,
+        "description": "obs column with cell-type labels; required for scanvi and stacas, otherwise used for stratified diagnostics."
+      },
+      "n_hvg": {
+        "type": "integer",
+        "default": 2000,
+        "minimum": 1,
+        "description": "Number of var/highly_variable genes used as input."
+      },
+      "n_pcs": {
+        "type": "integer",
+        "default": 30,
+        "minimum": 1,
+        "description": "PCs read from obsm/X_pca for PCA-based methods; ignored by scvi and scanvi."
+      },
+      "scvi": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options for scvi and scanvi; presence_gates switches on the proposed gated objective.",
+        "properties": {
+          "n_latent": {
+            "type": "integer",
+            "default": 10,
+            "minimum": 1,
+            "description": "Latent dimension of the batch-free embedding."
+          },
+          "n_hidden": {
+            "type": "integer",
+            "default": 128,
+            "minimum": 1,
+            "description": "Hidden units per layer of encoder and decoder."
+          },
+          "n_layers": {
+            "type": "integer",
+            "default": 1,
+            "minimum": 1,
+            "description": "Hidden layers in encoder and decoder."
+          },
+          "gene_likelihood": {
+            "type": "string",
+            "enum": [
+              "zinb",
+              "nb"
+            ],
+            "default": "zinb",
+            "description": "Decoder count likelihood."
+          },
+          "max_epochs": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "default": null,
+            "minimum": 1,
+            "description": "Training epochs; null lets the library choose from the cell count."
+          },
+          "presence_gates": {
+            "type": "boolean",
+            "default": true,
+            "description": "Apply presence gates to the alignment term; false gives the ungated baseline."
+          },
+          "n_populations": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "default": null,
+            "minimum": 1,
+            "description": "Latent populations for the gates; null uses label levels, or Leiden clusters of the embedding."
+          }
+        }
+      },
+      "diagnostics": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Neighbourhood and label options for the metrics written to uns.",
+        "properties": {
+          "k_neighbors": {
+            "type": "integer",
+            "default": 15,
+            "minimum": 1,
+            "description": "Neighbours for kNN-based metrics such as graph connectivity and kSIM."
+          },
+          "lisi_k0": {
+            "type": "integer",
+            "default": 90,
+            "minimum": 1,
+            "description": "Neighbourhood size for iLISI and cLISI."
+          },
+          "cilisi_min_cells": {
+            "type": "integer",
+            "default": 10,
+            "minimum": 1,
+            "description": "Smallest cell type included in CiLISI."
+          },
+          "kbet_k_max": {
+            "type": "integer",
+            "default": 70,
+            "minimum": 10,
+            "description": "Upper clip of the kBET neighbourhood size; the lower clip is 10."
+          }
+        }
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "minimum": 0,
+        "description": "Random seed for initialisation, minibatches and neighbour search; recorded with the output."
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running or writing."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members of this method instead of failing."
+      }
+    },
+    "required": [
+      "dataset"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. obsm/X_integrated_scvi. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "additionalProperties": true,
+        "description": "For completed runs: method, presence_gates, batch_key, n_batches, n_populations, n_cells, n_hvg_used, n_pcs, device, seed, warnings. Never raw matrices."
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "additionalProperties": true,
+        "description": "Present for dry_run: seconds, peak_memory_gb, device."
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "integration.unbalanced_batch_integration",
+      "reads": [
+        "layers/counts",
+        "var/highly_variable",
+        "obsm/X_pca",
+        "obs/<batch_key>",
+        "obs/<label_key>"
+      ],
+      "writes": [
+        "obsm/X_integrated_<method>",
+        "layers/corrected_<method>",
+        "obsp/connectivities_<method>",
+        "obsp/distances_<method>",
+        "obs/presence_prob_<batch>",
+        "obs/over_correction_flag",
+        "uns/batch_composition_table",
+        "uns/integration_diagnostics_<method>",
+        "models/integration_<method>"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/integration/unbalanced_batch_integration.md"
+    }
+  }
+}

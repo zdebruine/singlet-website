@@ -1,0 +1,216 @@
+{
+  "name": "singlet_enrichment_over_representation_analysis",
+  "title": "Over-representation analysis of a gene list",
+  "description": "Tests whether a thresholded marker or differential-expression gene list overlaps each gene set in a named collection more than chance allows, against a stated background universe. Writes one row per set with overlap, odds ratio, fold enrichment, p-value and adjusted p-value. Use for cluster or DE annotation with a predefined collection; do not use it for rank-based enrichment or for per-cell scores.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "de_table": {
+        "type": "string",
+        "description": "Name of the marker or DE table under uns/de/ with gene, group, logfc, pval and padj columns."
+      },
+      "collection": {
+        "type": "string",
+        "description": "Gene-set collection under uns/gene_sets/. Required; there is no default collection."
+      },
+      "method": {
+        "type": "string",
+        "enum": ["hypergeometric", "fisher_two_sided", "fisher_ease"],
+        "default": "hypergeometric",
+        "description": "One-sided hypergeometric (default), two-sided Fisher, or EASE-reduced Fisher."
+      },
+      "universe": {
+        "type": "object",
+        "description": "Background universe that defines the population size N.",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": ["detected", "tested", "annotated", "var_column"],
+            "default": "detected",
+            "description": "Detected: genes passing min_cells; tested: DE table genes; annotated: all genes; var_column: boolean var column."
+          },
+          "min_cells": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 10,
+            "description": "Minimum cells expressing a gene for the detected universe (proposed default)."
+          },
+          "var_key": {
+            "type": ["string", "null"],
+            "default": null,
+            "description": "Boolean var column used only when mode is var_column."
+          }
+        },
+        "default": {"mode": "detected", "min_cells": 10, "var_key": null},
+        "additionalProperties": false
+      },
+      "foreground": {
+        "type": "object",
+        "description": "Thresholds that define the foreground gene list from the DE table.",
+        "properties": {
+          "padj_threshold": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.05,
+            "description": "Adjusted p-value cut-off for foreground genes."
+          },
+          "min_logfc": {
+            "type": ["number", "null"],
+            "minimum": 0,
+            "default": null,
+            "description": "Absolute log fold-change cut-off; null applies no fold-change filter."
+          },
+          "direction": {
+            "type": "string",
+            "enum": ["up", "down", "both"],
+            "default": "both",
+            "description": "Sign of the score that defines the foreground."
+          },
+          "top_n": {
+            "type": ["integer", "null"],
+            "minimum": 1,
+            "default": null,
+            "description": "Use the top N genes by score instead of thresholds when set."
+          }
+        },
+        "default": {"padj_threshold": 0.05, "min_logfc": null, "direction": "both", "top_n": null},
+        "additionalProperties": false
+      },
+      "sets": {
+        "type": "object",
+        "description": "Size filters applied after intersection with the universe.",
+        "properties": {
+          "min_size": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 10,
+            "description": "Minimum set size after intersection with the universe (proposed default)."
+          },
+          "max_size": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 500,
+            "description": "Maximum set size after intersection with the universe (proposed default)."
+          },
+          "min_overlap": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 3,
+            "description": "Minimum number of foreground genes in a set before it is reported (proposed default)."
+          }
+        },
+        "default": {"min_size": 10, "max_size": 500, "min_overlap": 3},
+        "additionalProperties": false
+      },
+      "correction": {
+        "type": "string",
+        "enum": ["bh", "bonferroni"],
+        "default": "bh",
+        "description": "Multiplicity adjustment across the sets of one list and collection."
+      },
+      "ha_corr": {
+        "type": "number",
+        "minimum": 0,
+        "default": 0.5,
+        "description": "Haldane-Anscombe correction added to each cell for the reported odds ratio only."
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu", "cuda"],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without computing the tests."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": ["dataset", "de_table", "collection"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: wrote members; dry_run: only an estimate; queued: long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written: uns/ora/<name> and uns/ora/<name>/meta. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Counts for completed calls: foreground size, universe size, sets tested, sets significant, method and correction.",
+        "properties": {
+          "n_foreground": {"type": "integer"},
+          "universe_size": {"type": "integer"},
+          "n_sets_tested": {"type": "integer"},
+          "n_sets_significant": {"type": "integer"},
+          "method": {"type": "string"},
+          "correction": {"type": "string"}
+        },
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "enrichment.over_representation_analysis",
+      "reads": [
+        "uns/de/<name>",
+        "var/detected",
+        "var/tested",
+        "uns/gene_sets/<collection>"
+      ],
+      "writes": [
+        "uns/ora/<name>",
+        "uns/ora/<name>/meta"
+      ],
+      "devices": ["cpu", "cuda"],
+      "stochastic": false,
+      "long_running": false,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/enrichment/over_representation_analysis.md"
+    }
+  }
+}

@@ -1,0 +1,244 @@
+{
+  "name": "singlet_reference_mapping_query_embedding_projection",
+  "title": "Map query cells into a frozen reference",
+  "description": "Projects query cells into a frozen reference embedding and returns query coordinates, label predictions with a confidence, and a novelty score per cell. The default method symphony is deterministic and CPU-friendly and needs a reference built by the reference construction task; scarches_scvi, scanvi_query and scpoli need a saved reference model and may train on the query, so they can queue. The reference is never modified. Do not use it to build a reference, to name clusters from markers, or to tune thresholds on the query.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Query dataset handle: a .singlet path or URI, or a workspace handle. Outputs are written here only."
+      },
+      "ref_name": {
+        "type": "string",
+        "pattern": "^[a-zA-Z0-9_-]{1,64}$",
+        "description": "Name of the frozen reference artefacts to use (models, uns and obsm members). Required; no default."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "symphony",
+          "scarches_scvi",
+          "scanvi_query",
+          "scpoli",
+          "knn_baseline"
+        ],
+        "default": "symphony",
+        "description": "Mapping method. symphony is the default; deep methods need a saved reference model."
+      },
+      "batch_key": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "default": null,
+        "description": "Query obs column naming batch or study; used by symphony correction and deep-model query training."
+      },
+      "k_neighbors": {
+        "type": "integer",
+        "default": 15,
+        "minimum": 2,
+        "description": "Reference neighbours per query cell for the query-to-reference graph and the novelty score."
+      },
+      "symphony": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options used only when method is symphony.",
+        "properties": {
+          "sigma": {
+            "type": "number",
+            "default": 0.1,
+            "exclusiveMinimum": 0,
+            "description": "Soft-assignment fuzziness; smaller values approach hard cluster assignment."
+          },
+          "lambda_ridge": {
+            "type": "number",
+            "default": 1,
+            "minimum": 0,
+            "description": "Ridge penalty on the non-intercept coefficients of the query batch correction. The reference code fixes it at 1 (src/utils.cpp:76-78) and takes no argument."
+          },
+          "k_label": {
+            "type": "integer",
+            "default": 5,
+            "minimum": 1,
+            "description": "Reference neighbours in the label vote."
+          },
+          "correct": {
+            "type": "boolean",
+            "default": true,
+            "description": "Apply the per-cluster batch correction; false returns the linear PCA projection."
+          }
+        }
+      },
+      "scvi": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options used only by scarches_scvi and scanvi_query.",
+        "properties": {
+          "freeze_expression": {
+            "type": "boolean",
+            "default": true,
+            "description": "Keep reference expression weights frozen during query training."
+          },
+          "max_epochs": {
+            "type": "integer",
+            "default": 200,
+            "minimum": 1,
+            "description": "Maximum query training epochs."
+          },
+          "query_weight_decay": {
+            "type": "number",
+            "default": 0,
+            "minimum": 0,
+            "description": "Weight decay during query training."
+          }
+        }
+      },
+      "scpoli": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options used only by scpoli query training.",
+        "properties": {
+          "batch_size": {
+            "type": "integer",
+            "default": 128,
+            "minimum": 1,
+            "description": "Training minibatch size."
+          },
+          "weight_decay": {
+            "type": "number",
+            "default": 0.04,
+            "minimum": 0,
+            "description": "Weight decay during query training."
+          }
+        }
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "minimum": 0,
+        "description": "Random seed for deep-model query training; symphony mapping is deterministic."
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": [
+      "dataset",
+      "ref_name"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. obs/my_reference_label_pred. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Completed runs: method, n_query_cells, n_reference_cells, gene_overlap_fraction, k_neighbors, label_confidence_median, novelty_median, warnings. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "reference-mapping.query_embedding_projection",
+      "reads": [
+        "layers/counts",
+        "var/<gene_id>",
+        "obs/<batch_key>",
+        "models/<ref_name>",
+        "uns/<ref_name>_symphony",
+        "obsm/X_<ref_name>",
+        "obs/<ref_label_key>"
+      ],
+      "writes": [
+        "obsm/X_query_<ref_name>",
+        "obsm/<ref_name>_label_prob",
+        "obsp/query_to_ref_connectivities",
+        "obs/<ref_name>_label_pred",
+        "obs/<ref_name>_label_conf",
+        "obs/<ref_name>_novelty",
+        "uns/<ref_name>_mapping"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": true,
+      "paradigm": "hybrid",
+      "docs": "tasks/reference-mapping/query_embedding_projection.md"
+    }
+  }
+}

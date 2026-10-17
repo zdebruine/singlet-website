@@ -1,0 +1,239 @@
+{
+  "name": "singlet_evaluation_expression_based_cluster_purity",
+  "title": "Label-free cluster purity scores",
+  "description": "Computes label-free purity or heterogeneity scores for each cluster of one or more candidate partitions, using ROGUE (default), SCCAF held-out reliability or phiclust clusterability. Needs raw counts in layers/counts and cluster labels in obs; writes per-cluster scores and a granularity summary, and flags mixed clusters only after calibrated thresholds are set. Do not use it alone to choose a resolution, because finer partitions score as purer; do not use it on an embedding without counts.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI, or a workspace handle."
+      },
+      "method": {
+        "type": "string",
+        "enum": ["rogue", "sccaf", "phiclust"],
+        "default": "rogue",
+        "description": "Score to compute; rogue is the default, sccaf and phiclust are comparators."
+      },
+      "partition_keys": {
+        "type": "array",
+        "items": {"type": "string"},
+        "minItems": 1,
+        "description": "obs columns holding candidate partitions, one per resolution; each is scored per cluster."
+      },
+      "gene_subset": {
+        "type": "string",
+        "default": "hvg2000",
+        "description": "uns key of the scoring gene list; fix it before any thinning or subsampling."
+      },
+      "rogue": {
+        "type": "object",
+        "description": "Options for method rogue.",
+        "additionalProperties": false,
+        "properties": {
+          "platform": {
+            "type": "string",
+            "enum": ["UMI", "full-length"],
+            "default": "UMI",
+            "description": "Selects K = 45 for UMI or K = 500 for full-length data."
+          },
+          "span": {
+            "type": "number",
+            "default": 0.5,
+            "description": "loess smoothing parameter of the expected entropy curve."
+          },
+          "r": {
+            "type": "number",
+            "default": 1,
+            "description": "Pseudo-count inside log(mean expression + r)."
+          },
+          "min_cell_n": {
+            "type": "integer",
+            "default": 10,
+            "description": "Minimum cells per cluster and sample before a value is reported."
+          },
+          "remove_outlier_n": {
+            "type": "integer",
+            "default": 2,
+            "description": "Highest values removed per significant gene before refitting."
+          },
+          "sample_key": {
+            "type": ["string", "null"],
+            "default": null,
+            "description": "obs column giving samples; null treats each cluster as one sample."
+          },
+          "flag_below": {
+            "type": ["number", "null"],
+            "default": null,
+            "description": "Scores below this are flagged mixed; null until calibrated on B2."
+          }
+        }
+      },
+      "sccaf": {
+        "type": "object",
+        "description": "Options for method sccaf.",
+        "additionalProperties": false,
+        "properties": {
+          "classifier": {
+            "type": "string",
+            "enum": ["LR", "RF", "GNB", "GPC", "SVM", "SH", "PCP", "DT"],
+            "default": "LR",
+            "description": "Classifier for the self-projection; LR is the default."
+          },
+          "sparsity": {
+            "type": "number",
+            "default": 0.5,
+            "description": "Inverse regularisation strength C of the logistic classifier."
+          },
+          "fraction": {
+            "type": "number",
+            "default": 0.5,
+            "description": "Held-out test fraction of the stratified split."
+          },
+          "cv": {
+            "type": "integer",
+            "default": 5,
+            "description": "Cross-validation folds on the training split."
+          },
+          "flag_below": {
+            "type": ["number", "null"],
+            "default": null,
+            "description": "Reliability below this is flagged mixed; null until calibrated on B2."
+          }
+        }
+      },
+      "phiclust": {
+        "type": "object",
+        "description": "Options for method phiclust.",
+        "additionalProperties": false,
+        "properties": {
+          "exp_genes": {
+            "type": "number",
+            "default": 0.01,
+            "description": "Fraction of genes setting the neighbourhood size, minimum 10."
+          },
+          "p_val": {
+            "type": "number",
+            "default": 0.01,
+            "description": "Marchenko-Pastur fit p-value threshold for significant singular vectors."
+          },
+          "nu": {
+            "type": "integer",
+            "default": 50,
+            "description": "Number of singular values retained in the Marchenko-Pastur fit."
+          },
+          "exclude_covariates": {
+            "type": "array",
+            "items": {"type": "string"},
+            "default": [],
+            "description": "obs columns regressed out of singular vectors; recommended when technical axes are present."
+          },
+          "flag_above": {
+            "type": ["number", "null"],
+            "default": null,
+            "description": "Clusterability above this is flagged mixed; null until calibrated on B2."
+          }
+        }
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu", "cuda"],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Seed for the held-out split, classifier and sampled Marchenko-Pastur fits."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": ["dataset"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: wrote members; dry_run: estimate only; queued: long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written, e.g. uns/purity_rogue/cluster_table. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Keys: method, n_clusters, n_flagged, n_genes, granularity (cell-weighted mean score per partition key).",
+        "additionalProperties": true,
+        "properties": {
+          "method": {"type": "string"},
+          "n_clusters": {"type": "integer"},
+          "n_flagged": {"type": ["integer", "null"]},
+          "n_genes": {"type": "integer"},
+          "granularity": {"type": "array", "items": {"type": "object"}}
+        }
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "evaluation.expression_based_cluster_purity",
+      "reads": [
+        "layers/counts",
+        "obs/<partition_key>",
+        "uns/<gene_subset>"
+      ],
+      "writes": [
+        "obs/purity_<method>_cell",
+        "uns/purity_<method>/cluster_table",
+        "uns/purity_<method>/granularity_curve"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": false,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/evaluation/expression_based_cluster_purity.md"
+    }
+  }
+}

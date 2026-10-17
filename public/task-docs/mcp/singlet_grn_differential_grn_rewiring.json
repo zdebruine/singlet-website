@@ -1,0 +1,235 @@
+{
+  "name": "singlet_grn_differential_grn_rewiring",
+  "title": "Differential GRN and co-expression rewiring between two conditions",
+  "description": "Tests which gene pairs, TF-target edges or regulon activities change their dependence between two conditions beyond their mean expression change, with donors as the unit of replication. The default method cscore estimates cell-type-specific co-expression per condition from raw UMI counts and calibrates the difference by permuting donor labels. Use regulon_limma, module_preservation or edge_diff as comparators rather than as the primary rewiring call. Do not use it with cells as replicates or with fewer than four donors per group.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "cscore",
+          "regulon_limma",
+          "module_preservation",
+          "edge_diff"
+        ],
+        "default": "cscore",
+        "description": "Rewiring estimator; cscore is the default and calibrates pair differences by donor permutation."
+      },
+      "sample_key": {
+        "type": "string",
+        "description": "obs column with the donor or biological sample id; the unit of permutation and replication."
+      },
+      "condition_key": {
+        "type": "string",
+        "description": "obs column with exactly two levels; the difference is level two minus level one."
+      },
+      "celltype_key": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "default": null,
+        "description": "obs column; estimation runs separately within each level. Required for cscore."
+      },
+      "genes": {
+        "type": [
+          "array",
+          "null"
+        ],
+        "items": {
+          "type": "string"
+        },
+        "default": null,
+        "description": "Gene subset for pair methods; null takes the top 1000 genes by mean relative abundance per cell."
+      },
+      "cscore": {
+        "type": "object",
+        "description": "Options for cscore; ignored by the other methods.",
+        "properties": {
+          "n_permu": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 100,
+            "description": "Donor-label permutations; capped at the number of distinct donor partitions."
+          },
+          "n_cores": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 1,
+            "description": "Parallel workers over permutations."
+          },
+          "irls_n_iter": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 10,
+            "description": "Maximum IRLS iterations in the moment regression."
+          },
+          "irls_eps": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 0.05,
+            "description": "IRLS convergence threshold on abs(log(theta / theta_prev))."
+          },
+          "covariates": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [],
+            "description": "Cell-level metadata columns adjusted in the moment regression."
+          }
+        },
+        "additionalProperties": false
+      },
+      "regulon_limma": {
+        "type": "object",
+        "description": "Options for regulon_limma; ignored by the other methods.",
+        "properties": {
+          "prior_network": {
+            "type": "string",
+            "enum": [
+              "collectri_human",
+              "dorothea_human"
+            ],
+            "default": "collectri_human",
+            "description": "Signed prior used to build regulons; should differ from the evaluation prior."
+          },
+          "min_targets": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 5,
+            "description": "Minimum regulon targets present in the layer for a regulon to be scored."
+          }
+        },
+        "additionalProperties": false
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "minimum": 0,
+        "default": 12345,
+        "description": "Seed for donor-label permutations and for stochastic GRN fits."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory, number of model fits and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": [
+      "dataset",
+      "sample_key",
+      "condition_key"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. uns/rewiring_cscore_edges. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Keys: method, n_donors_per_group, n_tested, n_q_le_0_05 (BH q at most 0.05), top (ten strongest rows). Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, model_fits, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "grn.differential_grn_rewiring",
+      "reads": [
+        "layers/counts",
+        "layers/lognorm",
+        "obs/<sample_key>",
+        "obs/<condition_key>",
+        "obs/<celltype_key>",
+        "uns/regulon_<prior>"
+      ],
+      "writes": [
+        "uns/rewiring_<method>_edges",
+        "uns/rewiring_<method>_regulons",
+        "uns/rewiring_<method>_params"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/grn/differential_grn_rewiring.md"
+    }
+  }
+}

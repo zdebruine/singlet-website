@@ -1,0 +1,216 @@
+{
+  "name": "singlet_genetics_clonal_substructure_inference",
+  "title": "Clonal and subclonal grouping of tumour cells",
+  "description": "Assigns tumour cells to clones, and to a clone tree where the method gives one, from copy-number states inferred from expression (scevan, the default), from phased allele counts (numbat), or from heteroplasmic mtDNA variants (mquad). Writes obs/clone_label and, where the method provides them, obsm/clone_posterior and uns/clone_tree. Use scevan for expression-only data and numbat only when a phased allele table is set. Do not use it to call the variants it groups, to score agreement with DNA clones, or to infer copy-neutral events from expression alone.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI, or a workspace handle, holding counts or mtDNA layers."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "scevan",
+          "numbat",
+          "mquad"
+        ],
+        "default": "scevan",
+        "description": "scevan for expression-only data; numbat with an allele table; mquad for mtDNA layers."
+      },
+      "reference_obs_key": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "default": null,
+        "description": "obs column marking normal reference cells; required for numbat, null lets scevan classify normal cells."
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; cuda applies only to the planned HMM and mixture kernels."
+      },
+      "seed": {
+        "type": "integer",
+        "minimum": 0,
+        "default": 0,
+        "description": "Seed for mixture initialisation; identical inputs and seed reproduce the labels."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without computing clones."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing clone members instead of failing."
+      },
+      "numbat": {
+        "type": "object",
+        "description": "Options for method numbat.",
+        "additionalProperties": false,
+        "properties": {
+          "allele_table": {
+            "type": "string",
+            "description": "Dataset table with phased alt and ref allele counts; required for numbat."
+          },
+          "gamma": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 20,
+            "description": "Overdispersion of the allelic emission."
+          },
+          "min_llr": {
+            "type": "number",
+            "minimum": 0,
+            "default": 5,
+            "description": "Minimum log-likelihood ratio for calling a copy-number segment."
+          }
+        }
+      },
+      "scevan": {
+        "type": "object",
+        "description": "Options for method scevan.",
+        "additionalProperties": false,
+        "properties": {
+          "beta_vega": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 0.5,
+            "description": "Segmentation beta; higher values give coarser segments."
+          }
+        }
+      },
+      "mquad": {
+        "type": "object",
+        "description": "Options for method mquad.",
+        "additionalProperties": false,
+        "properties": {
+          "min_dp": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 10,
+            "description": "Minimum depth for a cell-variant to enter variant selection."
+          },
+          "min_ad": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 1,
+            "description": "Minimum alternate reads for a cell-variant to count as alternate."
+          },
+          "min_cells": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 2,
+            "description": "Minimum cells carrying the minor component for a variant to be kept."
+          }
+        }
+      }
+    },
+    "required": [
+      "dataset"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: finished inline and wrote members; dry_run: only an estimate was computed; queued: executing as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. obs/clone_label. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "For completed runs: method, n_clones, n_cells, unassigned_fraction, clone_sizes, tree_method (where a tree is built), n_informative_variants (mquad). Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": true,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "genetics.clonal_substructure_inference",
+      "reads": [
+        "layers/counts",
+        "obs/<reference_obs_key>",
+        "obsm/cnv_state",
+        "uns/genome_build",
+        "layers/alt_counts",
+        "layers/ref_counts",
+        "layers/mito_AD",
+        "layers/mito_DP"
+      ],
+      "writes": [
+        "obs/clone_label",
+        "obsm/clone_posterior",
+        "uns/clone_tree",
+        "models/clone_model"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/genetics/clonal_substructure_inference.md"
+    }
+  }
+}

@@ -1,0 +1,271 @@
+{
+  "name": "singlet_cell_calling_cell_vs_empty_droplet_calling",
+  "title": "Cell versus empty-droplet calling",
+  "description": "Labels each barcode of one unfiltered droplet channel as cell or empty and writes obs/cell_call_is_cell_<method> with method-specific scores (p-value, FDR, probability) and an ambient profile where the method has one. Needs the raw droplet-by-gene UMI matrix (raw/counts) that still contains empty barcodes; the default emptydrops method is a label-free multinomial null test that needs no training. Call it once per channel on unfiltered counts. Do not use it on an already filtered matrix, on pooled channels or on single-nucleus data (use the nucleus calling task), and do not use it to choose the final FDR cut (use the cell-count cutoff task).",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "sample_key": {
+        "type": "string",
+        "default": "sample",
+        "description": "Obs column naming the channel; the tool runs once per level because ambient composition differs between channels."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "emptydrops",
+          "emptydrops_cr",
+          "defaultdrops",
+          "dropkick",
+          "eb_mixture"
+        ],
+        "default": "emptydrops",
+        "description": "Calling method. emptydrops is the default; emptydrops_cr and defaultdrops reproduce Cell Ranger rules; dropkick is a learned comparator; eb_mixture is the proposed posterior model."
+      },
+      "fdr": {
+        "type": [
+          "number",
+          "null"
+        ],
+        "default": null,
+        "exclusiveMinimum": 0,
+        "exclusiveMaximum": 1,
+        "description": "FDR (emptydrops, emptydrops_cr) or posterior-expected FDR (eb_mixture) cut for calls. Null selects 0.001, or 0.01 for emptydrops_cr."
+      },
+      "expected_cells": {
+        "type": [
+          "integer",
+          "null"
+        ],
+        "default": null,
+        "minimum": 1,
+        "description": "Expected cell count for the rank rule (emptydrops_cr, defaultdrops). Null uses 3000."
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "minimum": 0,
+        "description": "Seed for Monte Carlo draws, cross-validation folds and initialisation; unused by defaultdrops."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members of the same method suffix instead of failing."
+      },
+      "emptydrops": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options for emptydrops; eb_mixture also reads lower and alpha.",
+        "properties": {
+          "lower": {
+            "type": "integer",
+            "default": 100,
+            "minimum": 1,
+            "description": "Total at or below which barcodes define the ambient profile and are not tested."
+          },
+          "niters": {
+            "type": "integer",
+            "default": 10000,
+            "minimum": 1000,
+            "description": "Monte Carlo draws per tested barcode; the smallest p-value is 1/(niters+1)."
+          },
+          "alpha": {
+            "type": [
+              "number",
+              "string"
+            ],
+            "default": "inf",
+            "description": "Dirichlet-multinomial overdispersion: a positive number, 'estimate' (fit on barcodes at or below lower) or 'inf' (multinomial)."
+          },
+          "retain": {
+            "type": [
+              "integer",
+              "string",
+              "null"
+            ],
+            "default": null,
+            "description": "Total at or above which barcodes are always called; null uses the knee total; 'disabled' turns retention off."
+          },
+          "test_ambient": {
+            "type": "boolean",
+            "default": false,
+            "description": "Also test barcodes at or below lower for the p-value histogram diagnostic; their FDR stays NaN."
+          }
+        }
+      },
+      "emptydrops_cr": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options for emptydrops_cr; other constants follow STARsolo (section 4 of the task document).",
+        "properties": {
+          "ambient_rank_window": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "minItems": 2,
+            "maxItems": 2,
+            "default": [
+              45000,
+              90000
+            ],
+            "description": "Rank window of barcodes forming the ambient pool; Cell Ranger 10.1.0 uses larger windows for some chemistries."
+          },
+          "umi_min": {
+            "type": "integer",
+            "default": 500,
+            "minimum": 0,
+            "description": "Minimum total for a barcode to enter the candidate pool."
+          }
+        }
+      },
+      "dropkick": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options for dropkick.",
+        "properties": {
+          "min_genes": {
+            "type": "integer",
+            "default": 50,
+            "minimum": 0,
+            "description": "Minimum genes detected for a barcode to be modelled; others are labelled empty."
+          },
+          "n_hvgs": {
+            "type": "integer",
+            "default": 2000,
+            "minimum": 1,
+            "description": "Number of highly variable genes used as classifier features."
+          },
+          "enet_alpha": {
+            "type": "number",
+            "default": 0.1,
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Elastic-net mixing weight; 1 is lasso and 0 is ridge."
+          },
+          "mito_pattern": {
+            "type": "string",
+            "default": "^mt-|^MT-",
+            "description": "Regular expression identifying mitochondrial genes."
+          }
+        }
+      }
+    },
+    "required": [
+      "dataset"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, for example obs/cell_call_is_cell_emptydrops. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Compact summary for completed runs: method, sample_key and per_sample counts (n_barcodes, n_tested, n_called, n_called_by_retain, retain_total, n_limited, fdr, alpha, warnings). Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "cell-calling.cell_vs_empty_droplet_calling",
+      "reads": [
+        "raw/counts",
+        "obs/<sample_key>"
+      ],
+      "writes": [
+        "obs/cell_call_is_cell_<method>",
+        "obs/cell_call_prob_<method>",
+        "obs/cell_call_pvalue_<method>",
+        "obs/cell_call_fdr_<method>",
+        "obs/cell_call_limited_<method>",
+        "uns/cell_call_ambient_profile_<method>",
+        "uns/cell_call_params_<method>",
+        "uns/cell_call_summary_<method>",
+        "models/cell_call_<method>"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/cell-calling/cell_vs_empty_droplet_calling.md"
+    }
+  }
+}

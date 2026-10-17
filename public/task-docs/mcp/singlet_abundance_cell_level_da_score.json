@@ -1,0 +1,222 @@
+{
+  "name": "singlet_abundance_cell_level_da_score",
+  "title": "Per-cell condition enrichment score",
+  "description": "Scores each cell by the local ratio of condition densities in an embedding. The default is a sample-grouped, cross-fitted logistic density ratio; MELD and DA-seq are available as published comparators. Requires an embedding plus per-cell sample and two-level condition labels, with condition constant within sample. Writes obs/<method>_score on a balanced scale from -1 to 1, and an FDR flag where the method defines a threshold. Do not use it for replicate-level claims with one sample per condition; use abundance.neighborhood_da_knn_graph for those.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "method": {
+        "type": "string",
+        "enum": ["logistic_density_ratio", "meld", "daseq"],
+        "default": "logistic_density_ratio",
+        "description": "Estimator. The default is the proposed sample-grouped logistic density ratio; meld and daseq are published comparators."
+      },
+      "condition_key": {
+        "type": "string",
+        "description": "obs column with two condition levels, constant within each sample."
+      },
+      "sample_key": {
+        "type": "string",
+        "description": "obs column with the sample or donor of each cell; defines grouped folds and permutations."
+      },
+      "embedding_key": {
+        "type": "string",
+        "default": "X_pca",
+        "description": "obsm key of the embedding: features for the logistic estimator, kNN graph for MELD and DA-seq."
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu", "cuda"],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Seed for cross-fitting fold splits and label permutations."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      },
+      "logistic_density_ratio": {
+        "type": "object",
+        "description": "Options for the default estimator.",
+        "properties": {
+          "alpha": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0,
+            "description": "Elastic-net mixing: 0 is ridge."
+          },
+          "k_folds": {
+            "type": "integer",
+            "minimum": 2,
+            "default": 10,
+            "description": "Cross-fitting folds, grouped by sample."
+          },
+          "n_runs": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 5,
+            "description": "Repeats of the fold split; out-of-fold predictions are averaged."
+          },
+          "fdr_level": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.05,
+            "description": "Nominal empirical FDR for the flag, from sample-level permutations."
+          },
+          "n_perm": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 100,
+            "description": "Sample-level label permutations for the FDR threshold; 0 disables the flag."
+          }
+        },
+        "additionalProperties": false
+      },
+      "meld": {
+        "type": "object",
+        "description": "Options for the MELD heat-filter comparator.",
+        "properties": {
+          "beta": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 60,
+            "description": "Heat-kernel smoothing relative to the largest graph eigenvalue."
+          },
+          "order": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 1,
+            "description": "Falloff exponent of the filter; 1 gives the exponential heat kernel."
+          },
+          "chebyshev_order": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 50,
+            "description": "Order of the Chebyshev approximation of the filter."
+          },
+          "sample_normalize": {
+            "type": "boolean",
+            "default": true,
+            "description": "True gives a uniform-prior relative likelihood; false gives the population posterior."
+          }
+        },
+        "additionalProperties": false
+      },
+      "daseq": {
+        "type": "object",
+        "description": "Options for the DA-seq comparator.",
+        "properties": {
+          "k_fraction_min": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 1,
+            "default": 0.0035,
+            "description": "Smallest neighbourhood size as a fraction of cells."
+          },
+          "k_fraction_max": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 1,
+            "default": 0.035,
+            "description": "Largest neighbourhood size as a fraction of cells; index memory grows with it."
+          },
+          "k_folds": {
+            "type": "integer",
+            "minimum": 2,
+            "default": 10,
+            "description": "Cross-fitting folds."
+          },
+          "n_runs": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 5,
+            "description": "Repeats of the fold split."
+          },
+          "n_perm": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 2,
+            "description": "Cell-level label permutations for the threshold; 2 is the shipped default."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "required": ["dataset", "condition_key", "sample_key"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written, e.g. obs/logistic_density_ratio_score. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Keys: method, n_cells, label_sizes, effective_params, threshold, n_flagged. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "abundance.cell_level_da_score",
+      "reads": ["obsm/<embedding_key>", "obs/<sample_key>", "obs/<condition_key>"],
+      "writes": ["obs/<method>_score", "obs/<method>_fdr_flag", "uns/<method>_params"],
+      "devices": ["cpu", "cuda"],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/abundance/cell_level_da_score.md"
+    }
+  }
+}

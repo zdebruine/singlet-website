@@ -1,0 +1,292 @@
+{
+  "name": "singlet_covariate_adjustment_cell_cycle_effect_removal",
+  "title": "Remove cell-cycle effect",
+  "description": "Removes S and G2M cell-cycle variation from log-normalised expression and reports the cycle scores, the variance attributed to the cycle before and after removal, and how strongly protected labels are predicted by the cycle covariates. Read the confounding summary first (supply labels.protect_key to get it); removal also erases proliferation-linked biology such as progenitor identity. The default seurat_regress is a linear first-order correction; choose cyclevi or ccremover only deliberately. Do not use this tool to assign cell-cycle phase or to call cycling populations as cell types.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "seurat_regress",
+          "scanpy_regress",
+          "ccremover",
+          "sclvm",
+          "cyclevi"
+        ],
+        "default": "seurat_regress",
+        "description": "Removal method. seurat_regress is linear and the default when the confounding summary is low."
+      },
+      "scoring": {
+        "type": "object",
+        "description": "Gene lists and control settings for the S and G2M scores used by every method.",
+        "properties": {
+          "s_genes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "S-phase genes as symbols or Ensembl IDs; default is the built-in Tirosh-derived list."
+          },
+          "g2m_genes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "G2/M genes as symbols or Ensembl IDs; default is the built-in Tirosh-derived list."
+          },
+          "ctrl_size": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Control genes per score; default is the smaller of the two list lengths. Warns below about 20 genes."
+          }
+        },
+        "additionalProperties": false
+      },
+      "labels": {
+        "type": "object",
+        "description": "obs columns for batches and protected labels.",
+        "properties": {
+          "batch_key": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null,
+            "description": "obs column of batch labels; scores and variance are computed per batch. Null means one batch."
+          },
+          "protect_key": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null,
+            "description": "obs column of protected labels such as cell type; enables the confounding summary."
+          }
+        },
+        "additionalProperties": false
+      },
+      "n_pcs": {
+        "type": "integer",
+        "minimum": 2,
+        "default": 50,
+        "description": "Principal components used for the variance attribution before and after removal."
+      },
+      "ccremover": {
+        "type": "object",
+        "description": "Options for method ccremover.",
+        "properties": {
+          "cutoff": {
+            "type": "number",
+            "default": 3,
+            "description": "Bootstrap t threshold for removing a principal component."
+          },
+          "max_it": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 4,
+            "description": "Maximum removal rounds."
+          },
+          "nboot": {
+            "type": "integer",
+            "minimum": 10,
+            "default": 200,
+            "description": "Bootstrap replicates for the variability of each component's excess."
+          },
+          "ntop": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 10,
+            "description": "Top components tested in each round."
+          }
+        },
+        "additionalProperties": false
+      },
+      "sclvm": {
+        "type": "object",
+        "description": "Options for method sclvm.",
+        "properties": {
+          "max_iter": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 10,
+            "description": "Maximum iterations of the variance decomposition in the linear mixed-model path (varianceDecomposition max_iter)."
+          }
+        },
+        "additionalProperties": false
+      },
+      "cyclevi": {
+        "type": "object",
+        "description": "Options for method cyclevi.",
+        "properties": {
+          "n_fourier": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 3,
+            "description": "Fourier harmonics in the cycle-gene decoder."
+          },
+          "n_hidden": {
+            "type": "integer",
+            "minimum": 8,
+            "default": 128,
+            "description": "Hidden units in the decoder layer."
+          },
+          "adv_lr": {
+            "type": "number",
+            "default": 0.001,
+            "description": "Adam learning rate for the phase adversary."
+          }
+        },
+        "additionalProperties": false
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Random seed for control-gene sampling, ccRemover bootstraps and CycleVI training."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": [
+      "dataset"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. obs/S_score. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Per-batch variance_before, variance_after, variance_ratio and cc_conservation; confounding_r2 per protected label; method used.",
+        "properties": {
+          "method": {
+            "type": "string"
+          },
+          "variance_before": {
+            "type": "object"
+          },
+          "variance_after": {
+            "type": "object"
+          },
+          "variance_ratio": {
+            "type": "object"
+          },
+          "cc_conservation": {
+            "type": "object"
+          },
+          "confounding_r2": {
+            "type": [
+              "object",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "covariate-adjustment.cell_cycle_effect_removal",
+      "reads": [
+        "X",
+        "var_names",
+        "uns/cc_gene_sets",
+        "obs/batch",
+        "obs/cell_type"
+      ],
+      "writes": [
+        "obs/S_score",
+        "obs/G2M_score",
+        "obs/cc_angle",
+        "layers/cc_removed",
+        "obsm/X_cc_free",
+        "uns/cc_removal_report"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": true,
+      "paradigm": "hybrid",
+      "docs": "tasks/covariate-adjustment/cell_cycle_effect_removal.md"
+    }
+  }
+}

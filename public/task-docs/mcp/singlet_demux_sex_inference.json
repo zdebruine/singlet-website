@@ -1,0 +1,227 @@
+{
+  "name": "singlet_demux_sex_inference",
+  "title": "Sex inference per cell and per donor",
+  "description": "Calls each cell as female, male or ambiguous from XIST and chrY-linked expression, optionally aggregating calls to donors, and writes obs/sex_call and obs/sex_score. Use when a per-cell or per-donor sex label is needed for QC or sample identity checks. Do not use it to infer karyotype, loss of Y or ancestry, and do not treat its output as genotype-derived sex.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "layer": {
+        "type": "string",
+        "default": "counts",
+        "description": "Raw UMI count layer; normalised internally to log1p counts per 10,000."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "pegasus_score"
+        ],
+        "default": "pegasus_score",
+        "description": "Scoring rule; pegasus_score is the published default."
+      },
+      "donor_key": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "default": null,
+        "description": "obs column giving donor or sample; enables donor-level calls. Null gives per-cell calls only."
+      },
+      "truth_key": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "default": null,
+        "description": "obs column with genotype-derived sex for evaluation only; adds accuracy metrics to the summary."
+      },
+      "min_sex_umi": {
+        "type": "integer",
+        "minimum": 0,
+        "default": 3,
+        "description": "Cells with fewer sex-panel UMIs are called ambiguous."
+      },
+      "pseudobulk_min_cells": {
+        "type": "integer",
+        "minimum": 1,
+        "default": 10,
+        "description": "Minimum cells for a donor or cluster to receive a donor-level call."
+      },
+      "pegasus_score": {
+        "type": "object",
+        "description": "Options for the pegasus_score method only.",
+        "properties": {
+          "female_genes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [
+              "XIST",
+              "DONSON",
+              "RPS4X"
+            ],
+            "description": "Female-associated gene symbols; XIST carries most of the signal."
+          },
+          "male_genes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [
+              "RPS4Y1",
+              "EIF1AY",
+              "DDX3Y",
+              "USP9Y",
+              "UTY",
+              "LINC00278",
+              "TTTY14",
+              "KDM5D",
+              "NLGN4Y"
+            ],
+            "description": "Y-linked gene symbols from the pegasus male set."
+          },
+          "n_bins": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 50,
+            "description": "Expression bins for background genes in signature scoring."
+          },
+          "standardize": {
+            "type": "boolean",
+            "default": true,
+            "description": "Standardise panel expression against the expression-bin background."
+          },
+          "k_clusters": {
+            "type": "integer",
+            "enum": [
+              3
+            ],
+            "default": 3,
+            "description": "One-dimensional k-means clusters; 3 gives female, ambiguous and male."
+          }
+        },
+        "additionalProperties": false
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Seed for the one-dimensional k-means split."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": [
+      "dataset"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. obs/sex_call. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Counts per call (female, male, ambiguous), donor-level call count, and accuracy when truth_key is set.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "demux.sex_inference",
+      "reads": [
+        "layers/counts",
+        "var/gene_symbol",
+        "obs/donor_id"
+      ],
+      "writes": [
+        "obs/sex_call",
+        "obs/sex_score",
+        "uns/sex_inference"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": true,
+      "paradigm": "hybrid",
+      "docs": "tasks/demux/sex_inference.md"
+    }
+  }
+}

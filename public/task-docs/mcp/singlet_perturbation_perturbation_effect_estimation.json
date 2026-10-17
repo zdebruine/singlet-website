@@ -1,0 +1,318 @@
+{
+  "name": "singlet_perturbation_perturbation_effect_estimation",
+  "title": "Per-perturbation differential expression",
+  "description": "Estimates, for each perturbation, the change of every gene against matched non-targeting cells, using replicate-level pseudobulk tests by default, with adjusted p-values and a perturbation-level energy distance. Use it after guide assignment and size factors, when replicate labels and raw counts exist. Do not use it to call knockdown efficacy, to judge off-target effects, or to predict unseen perturbations; it writes uns/perturbation_de, uns/perturbation_effects and uns/perturbation_edistance.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "pseudobulk_nb",
+          "wilcoxon",
+          "edistance"
+        ],
+        "default": "pseudobulk_nb",
+        "description": "Test or strength measure. pseudobulk_nb gives calibrated gene-level tests; edistance gives perturbation-level strength only."
+      },
+      "design": {
+        "type": "object",
+        "description": "Study design: layers, labels, replicate and control keys, covariates and the multi-guide rule.",
+        "properties": {
+          "layer": {
+            "type": "string",
+            "default": "counts",
+            "description": "Raw integer UMI layer used by pseudobulk_nb."
+          },
+          "log_layer": {
+            "type": "string",
+            "default": "log1p_norm",
+            "description": "Unscaled log-normalised layer used by wilcoxon and by gating."
+          },
+          "perturbation_key": {
+            "type": "string",
+            "default": "perturbation",
+            "description": "obs column holding the perturbation label."
+          },
+          "control_label": {
+            "type": "string",
+            "description": "Label of non-targeting control cells; required, with no universal default."
+          },
+          "replicate_key": {
+            "type": "string",
+            "default": "replicate",
+            "description": "obs column of biological replicates; the unit of inference."
+          },
+          "covariates": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [],
+            "description": "obs columns added to the pseudobulk design or used as covariates."
+          },
+          "multi_guide_rule": {
+            "type": "string",
+            "enum": [
+              "exclude",
+              "combined_label"
+            ],
+            "default": "exclude",
+            "description": "Cells with two or more guides are excluded, or form their own group; never counted for each guide."
+          }
+        },
+        "required": [
+          "control_label"
+        ],
+        "additionalProperties": false
+      },
+      "gating": {
+        "type": "object",
+        "description": "Optional Mixscape gating before testing; changes the target to responding cells.",
+        "properties": {
+          "method": {
+            "type": "string",
+            "enum": [
+              "none",
+              "mixscape"
+            ],
+            "default": "none",
+            "description": "none tests all assigned cells; mixscape tests Mixscape knockout cells only."
+          },
+          "min_de_genes": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 5,
+            "description": "Minimum signature genes before a perturbation is gated."
+          },
+          "logfc_threshold": {
+            "type": "number",
+            "minimum": 0,
+            "default": 0.25,
+            "description": "Log fold-change cutoff for signature genes."
+          },
+          "iter_num": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 10,
+            "description": "Iterations of the two-component mixture fit."
+          }
+        },
+        "additionalProperties": false
+      },
+      "pseudobulk_nb": {
+        "type": "object",
+        "description": "Options of the replicate-level negative-binomial model, the default method.",
+        "properties": {
+          "min_cells": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 10,
+            "description": "Minimum cells per pseudobulk; best-practices guideline."
+          },
+          "min_counts": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 1000,
+            "description": "Minimum total UMI counts per pseudobulk; best-practices guideline."
+          },
+          "lfc_shrinkage": {
+            "type": "boolean",
+            "default": true,
+            "description": "Store shrunk log2 fold changes for ranking; unshrunk estimates are always kept."
+          }
+        },
+        "additionalProperties": false
+      },
+      "wilcoxon": {
+        "type": "object",
+        "description": "Options of the cell-level Wilcoxon rank-sum comparator, which is not replicate-aware.",
+        "properties": {
+          "logfc_threshold": {
+            "type": "number",
+            "minimum": 0,
+            "default": 0.1,
+            "description": "Minimum average log2 fold change for a gene to be tested, as in Seurat."
+          },
+          "min_pct": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.01,
+            "description": "Minimum fraction of cells detecting the gene in either group."
+          }
+        },
+        "additionalProperties": false
+      },
+      "edistance": {
+        "type": "object",
+        "description": "Options of the energy-distance strength and stratified permutation test.",
+        "properties": {
+          "embedding_key": {
+            "type": "string",
+            "default": "X_pca",
+            "description": "obsm key of the embedding in which distances are computed."
+          },
+          "cells_per_perturbation_cap": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 50,
+            "description": "Maximum perturbed cells sampled per perturbation; the best-practices chapter uses 50."
+          },
+          "control_cells_cap": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 5000,
+            "description": "Maximum control cells sampled once per screen; a proposed default."
+          },
+          "n_perms": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 1000,
+            "description": "Label permutations per perturbation, stratified by replicate; resolution is 1/(n+1)."
+          },
+          "padj_method": {
+            "type": "string",
+            "default": "holm-sidak",
+            "description": "Multiple-testing correction across perturbations."
+          }
+        },
+        "additionalProperties": false
+      },
+      "alpha": {
+        "type": "number",
+        "exclusiveMinimum": 0,
+        "maximum": 1,
+        "default": 0.05,
+        "description": "Significance threshold for adjusted p-values of the selected method."
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Random seed for edistance permutations and control subsampling; other methods are deterministic."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without fitting."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": [
+      "dataset",
+      "design"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, for example uns/perturbation_de. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Compact summary: tested and skipped perturbations, dropped pseudobulks, significant pairs and device used. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "perturbation.perturbation_effect_estimation",
+      "reads": [
+        "layers/counts",
+        "layers/log1p_norm",
+        "obs/<perturbation_key>",
+        "obs/<replicate_key>",
+        "obs/size_factor",
+        "obs/<covariate_key>",
+        "obsm/<embedding_key>"
+      ],
+      "writes": [
+        "uns/perturbation_de",
+        "uns/perturbation_effects",
+        "uns/perturbation_edistance",
+        "obs/perturbed_mixscape",
+        "models/perturbation_nb"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": true,
+      "paradigm": "hybrid",
+      "docs": "tasks/perturbation/perturbation_effect_estimation.md"
+    }
+  }
+}

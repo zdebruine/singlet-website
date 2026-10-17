@@ -1,0 +1,185 @@
+{
+  "name": "singlet_doublets_expected_rate_estimation",
+  "title": "Expected doublet rate estimation",
+  "description": "Estimates, for one library, the expected share of cell-containing partitions that hold two or more cells, with the expected doublet count and a homotypic-adjusted lower bound. Declare count_basis (loaded, recovered or post_qc) because the rate scales with the cell count used. It reads scalar cell counts and optional annotation labels, writes only uns/doublet_rate members, and needs no training. Do not use it to call individual barcodes or as a measured rate; it is a prior for doublet thresholds.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "count_basis": {
+        "type": "string",
+        "enum": ["loaded", "recovered", "post_qc"],
+        "description": "Which cell count enters the model. Required because loaded and recovered counts give different rates; there is no default."
+      },
+      "method": {
+        "type": "string",
+        "enum": ["exact_multinomial", "scdblfinder_linear", "pegasus_linear"],
+        "default": "exact_multinomial",
+        "description": "exact_multinomial is the occupancy model (default). The linear methods are published comparators."
+      },
+      "library": {
+        "type": ["string", "null"],
+        "default": null,
+        "description": "Library key under uns/ for multi-library datasets. Null treats the dataset as one library."
+      },
+      "cell_counts": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Cell count overrides; a null field is read from uns/<library>/loaded_cells or recovered_cells.",
+        "properties": {
+          "loaded": {
+            "type": ["integer", "null"],
+            "minimum": 1,
+            "default": null,
+            "description": "Cells loaded into the instrument."
+          },
+          "recovered": {
+            "type": ["integer", "null"],
+            "minimum": 1,
+            "default": null,
+            "description": "Barcodes called as cells before quality filtering."
+          }
+        }
+      },
+      "annotation_column": {
+        "type": ["string", "null"],
+        "default": null,
+        "description": "obs column of cell-type labels for the homotypic adjustment. Null reports the unadjusted rate only."
+      },
+      "exact_multinomial": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options used only when method is exact_multinomial.",
+        "properties": {
+          "partitions": {
+            "type": ["number", "null"],
+            "exclusiveMinimum": 0,
+            "default": null,
+            "description": "Partitions D. Null uses 62500 for recovered or post_qc counts; loaded counts require a value."
+          }
+        }
+      },
+      "scdblfinder_linear": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options used only when method is scdblfinder_linear.",
+        "properties": {
+          "dbr_per_1k": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 0.008,
+            "description": "Expected doublet fraction per 1,000 cells."
+          }
+        }
+      },
+      "pegasus_linear": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options used only when method is pegasus_linear.",
+        "properties": {
+          "lmd_base": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 0.00785,
+            "description": "Loading constant per ncell_base cells."
+          },
+          "ncell_base": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 500,
+            "description": "Reference cell count for lmd_base."
+          }
+        }
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu", "cuda"],
+        "default": "auto",
+        "description": "auto and cpu run on CPU; cuda is accepted and unused because the closed forms need no accelerator."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without writing."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing uns/doublet_rate members for this library instead of failing."
+      }
+    },
+    "required": ["dataset", "count_basis"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written, e.g. uns/doublet_rate/<library>/expected_fraction. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Compact summary for completed runs. Keys: expected_fraction, expected_count, homotypic_adjusted_fraction (null without labels), bounds, poisson_fraction, lambda, partitions, denominator_barcodes, method, count_basis.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "doublets.expected_rate_estimation",
+      "reads": [
+        "uns/<library>/loaded_cells",
+        "uns/<library>/recovered_cells",
+        "obs/<annotation_column>"
+      ],
+      "writes": [
+        "uns/doublet_rate/<library>/expected_fraction",
+        "uns/doublet_rate/<library>/expected_count",
+        "uns/doublet_rate/<library>/homotypic_adjusted_fraction",
+        "uns/doublet_rate/<library>/bounds",
+        "uns/doublet_rate/<library>/basis"
+      ],
+      "devices": ["cpu"],
+      "stochastic": false,
+      "long_running": false,
+      "streaming": true,
+      "paradigm": "hybrid",
+      "docs": "tasks/doublets/expected_rate_estimation.md"
+    }
+  }
+}

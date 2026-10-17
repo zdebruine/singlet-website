@@ -1,0 +1,193 @@
+{
+  "name": "singlet_spatial_preproc_transcript_quality_filtering",
+  "title": "Transcript quality filtering and false-call estimation",
+  "description": "Decides which decoded transcripts in an imaging panel are noise or misdecoded and estimates the false-call share per gene and per panel. The default control_feature_fdr drops control-class calls and calls below min_qv, then reports blank and negative-control estimates. Writes points/transcript_keep and var/false_call_rate. Use before transcript-to-cell assignment; do not use on sequencing-based spatial data, which has no decoded codewords.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle (.singlet path or URI) with a transcript table and codebook metadata."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "control_feature_fdr",
+          "qv_threshold",
+          "baysor_noise_mixture"
+        ],
+        "default": "control_feature_fdr",
+        "description": "Keep rule. control_feature_fdr is the default; baysor_noise_mixture is the model-based option."
+      },
+      "min_qv": {
+        "type": "number",
+        "minimum": 0,
+        "default": 20.0,
+        "description": "Drop calls with quality value below this value; 0 disables the quality rule."
+      },
+      "control_feature_fdr": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options for control_feature_fdr.",
+        "properties": {
+          "estimator": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "negative_control",
+              "blank_codeword"
+            ],
+            "default": "auto",
+            "description": "auto uses negative-control features when present, otherwise blank codewords."
+          },
+          "fallback_pattern": {
+            "type": "string",
+            "default": "NegControl*,BLANK_*,antisense_*",
+            "description": "Glob patterns for control features, used only when var/feature_type is absent."
+          }
+        }
+      },
+      "baysor_noise_mixture": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options for baysor_noise_mixture.",
+        "properties": {
+          "prior_segmentation_confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.2,
+            "description": "Confidence in the prior cell mask, used when labels/<name> is supplied."
+          },
+          "confidence_nn_id": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 0,
+            "description": "Neighbours for the distance statistic; 0 selects max(n_genes/10, 10)."
+          },
+          "max_noise_posterior": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.05,
+            "description": "Keep molecules whose noise posterior is at or below this value (proposed)."
+          }
+        }
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA for the Baysor option when a device is available."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing keep flags and QC members instead of failing."
+      }
+    },
+    "required": [
+      "dataset"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: estimate only; queued: long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. points/transcript_keep. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Compact summary for completed runs: method, estimator, n_transcripts, n_removed, epsilon_blank, epsilon_nc, agreement_ratio, removed_by_class.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "spatial-preproc.transcript_quality_filtering",
+      "reads": [
+        "points/<name>",
+        "labels/<name>",
+        "var/feature_type",
+        "uns/codebook"
+      ],
+      "writes": [
+        "points/transcript_keep",
+        "points/transcript_noise_prob",
+        "var/false_call_rate",
+        "obs/retained_fraction",
+        "uns/transcript_qc"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": false,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/spatial-preproc/transcript_quality_filtering.md"
+    }
+  }
+}

@@ -1,0 +1,182 @@
+{
+  "name": "singlet_cell_calling_multiome_cell_calling",
+  "title": "Multiome nucleus calling (joint RNA and ATAC)",
+  "description": "Calls which barcodes in a single-nucleus RNA plus ATAC multiome run contain a nucleus rather than only ambient background. The default, emptydrops_multiome, tests each barcode against per-modality ambient profiles and writes a joint FDR with RNA and ATAC FDRs. It needs the RNA and ATAC layers over the same unfiltered barcodes. Use emptydrops_rna only without an ATAC layer; do not use this tool for RNA-only libraries.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "method": {
+        "type": "string",
+        "enum": ["emptydrops_multiome", "emptydrops_rna"],
+        "default": "emptydrops_multiome",
+        "description": "emptydrops_multiome: joint RNA and ATAC test; emptydrops_rna: RNA-only test, ATAC not read."
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu", "cuda"],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "fdr_threshold": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1,
+        "default": 0.001,
+        "description": "Barcodes with FDR at or below this value are called nuclei."
+      },
+      "rna_layer": {
+        "type": "string",
+        "default": "counts",
+        "description": "RNA UMI layer to read; all barcodes, unfiltered, must be present."
+      },
+      "atac_layer": {
+        "type": "string",
+        "default": "atac_peaks",
+        "description": "ATAC barcode-by-peak count layer; required only by emptydrops_multiome."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Random seed for Monte Carlo null draws."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      },
+      "emptydrops_multiome": {
+        "type": "object",
+        "description": "Options for emptydrops_multiome.",
+        "properties": {
+          "lower_rna": {
+            "type": ["integer", "null"],
+            "minimum": 0,
+            "default": null,
+            "description": "RNA total at or below which barcodes define the RNA ambient profile; null selects automatically."
+          },
+          "lower_atac": {
+            "type": ["integer", "null"],
+            "minimum": 0,
+            "default": null,
+            "description": "ATAC total at or below which barcodes define the ATAC ambient profile; null selects automatically."
+          },
+          "niter_rna": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 30000,
+            "description": "Monte Carlo draws for RNA p-values; p resolution is 1/(niter+1)."
+          },
+          "niter_atac": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 30000,
+            "description": "Monte Carlo draws for ATAC p-values; p resolution is 1/(niter+1)."
+          }
+        },
+        "additionalProperties": false
+      },
+      "emptydrops_rna": {
+        "type": "object",
+        "description": "Options for emptydrops_rna.",
+        "properties": {
+          "lower": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 100,
+            "description": "RNA total at or below which barcodes define the ambient profile."
+          },
+          "niters": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 10000,
+            "description": "Monte Carlo draws for p-values."
+          },
+          "alpha": {
+            "type": "string",
+            "enum": ["inf", "estimate"],
+            "default": "inf",
+            "description": "inf: multinomial null; estimate: Dirichlet-multinomial scale fitted by maximum likelihood."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "required": ["dataset"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Keys: method, fdr_threshold, n_barcodes, n_called, lower_rna_used, lower_atac_used, niter_rna, niter_atac, seed. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "cell-calling.multiome_cell_calling",
+      "reads": ["layers/counts", "layers/atac_peaks"],
+      "writes": [
+        "obs/nucleus_call_multiome",
+        "obs/nucleus_fdr_multiome",
+        "obs/nucleus_fdr_rna",
+        "obs/nucleus_fdr_atac",
+        "uns/nucleus_ambient_profile_rna",
+        "uns/nucleus_ambient_profile_atac",
+        "uns/nucleus_call_params_multiome"
+      ],
+      "devices": ["cpu", "cuda"],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "model-based",
+      "docs": "tasks/cell-calling/multiome_cell_calling.md"
+    }
+  }
+}

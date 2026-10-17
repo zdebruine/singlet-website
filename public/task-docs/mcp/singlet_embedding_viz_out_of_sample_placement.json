@@ -1,0 +1,242 @@
+{
+  "name": "singlet_embedding_viz_out_of_sample_placement",
+  "title": "Place new cells on a fixed 2D map",
+  "description": "Places query cells on an existing 2D reference map without re-optimising the reference. Use the default umap_transform unless a comparison needs another method. Needs reference and query PCs in one feature space, fixed reference 2D coordinates and a query flag. Writes query 2D coordinates, an optional 2D kNN label vote and an out-of-reference score. Do not use it to build a joint embedding, or to call a cell novel from its 2D position alone.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path, URI or workspace handle."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "umap_transform",
+          "opentsne_transform",
+          "ingest",
+          "parametric_umap",
+          "pca_project",
+          "seurat_projectumap"
+        ],
+        "default": "umap_transform",
+        "description": "Placement method. Use umap_transform unless a comparison requires another."
+      },
+      "reference_embedding": {
+        "type": "string",
+        "default": "X_ref_2d",
+        "description": "obsm member with fixed 2D reference coordinates; query rows ignored."
+      },
+      "query_key": {
+        "type": "string",
+        "default": "is_query",
+        "description": "obs column true for query cells; all other cells are reference."
+      },
+      "seed": {
+        "type": "integer",
+        "minimum": 0,
+        "default": 42,
+        "description": "Seed for stochastic steps."
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto prefers CUDA when memory allows."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return an estimate only; write nothing."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      },
+      "umap_transform": {
+        "type": "object",
+        "description": "Options for umap_transform.",
+        "properties": {
+          "n_epochs": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 100,
+            "description": "Fixed epoch count, so placement does not depend on batch size."
+          }
+        },
+        "additionalProperties": false
+      },
+      "opentsne_transform": {
+        "type": "object",
+        "description": "Options for opentsne_transform.",
+        "properties": {
+          "perplexity": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 5,
+            "description": "Perplexity of affinities to reference neighbours."
+          },
+          "k": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 25,
+            "description": "Reference neighbours for initial affinities."
+          },
+          "learning_rate": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 0.1,
+            "description": "Numeric rate; not auto, which is avoided for transform."
+          },
+          "n_iter": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 250,
+            "description": "Optimisation iterations."
+          },
+          "initialization": {
+            "type": "string",
+            "default": "median",
+            "description": "Initial placement of each new point."
+          }
+        },
+        "additionalProperties": false
+      },
+      "seurat_projectumap": {
+        "type": "object",
+        "description": "Options for seurat_projectumap.",
+        "properties": {
+          "k": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 30,
+            "description": "Reference neighbours per query cell."
+          }
+        },
+        "additionalProperties": false
+      },
+      "scoring": {
+        "type": "object",
+        "description": "Label vote and out-of-reference score settings, applied to every method.",
+        "properties": {
+          "label_key": {
+            "type": "string",
+            "description": "Reference label column; omit to skip the label vote."
+          },
+          "label_k": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 15,
+            "description": "Reference neighbours in the 2D label vote."
+          },
+          "ood_k": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 30,
+            "description": "Neighbours in the PCA-space out-of-reference score."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "dataset"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: placed and wrote members; dry_run: estimate only; queued: long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written; empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Compact summary for completed calls: method, query count, label and score settings, seed.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "embedding-viz.out_of_sample_placement",
+      "reads": [
+        "obsm/X_pca",
+        "obsm/<reference_embedding>",
+        "obs/<query_key>",
+        "obs/<label_key>",
+        "models/<method>"
+      ],
+      "writes": [
+        "obsm/<method>_query_2d",
+        "obs/<method>_label_knn",
+        "obs/<method>_ood_score",
+        "uns/<method>_placement_report"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": true,
+      "paradigm": "hybrid",
+      "docs": "tasks/embedding-viz/out_of_sample_placement.md"
+    }
+  }
+}

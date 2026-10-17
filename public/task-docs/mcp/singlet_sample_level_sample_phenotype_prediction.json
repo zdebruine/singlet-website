@@ -1,0 +1,212 @@
+{
+  "name": "singlet_sample_level_sample_phenotype_prediction",
+  "title": "Sample-level phenotype prediction",
+  "description": "Predicts a binary label for each donor from that donor's cells and reports donor-held-out AUROC, calibration and a donor-level permutation null. Use it to predict a donor-level label for donors unseen in fitting; the default is a penalised logistic model on donor pseudobulk. Writes predictions, metrics, null tables, cell-type importance and a fitted model. Do not use it for cell-level labels, unsupervised stratification or continuous outcomes.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "method": {
+        "type": "string",
+        "enum": ["pseudobulk_enet", "celltype_proportion_rf"],
+        "default": "pseudobulk_enet",
+        "description": "Donor model: pseudobulk_enet (default) or a forest on donor cell-type composition only."
+      },
+      "sample_key": {
+        "type": "string",
+        "description": "obs column with the sample ID of each cell."
+      },
+      "label_key": {
+        "type": "string",
+        "description": "obs column or uns/sample_table column with a binary label (0 or 1), constant within each donor."
+      },
+      "design": {
+        "type": "object",
+        "description": "Donor identity, cohort, cell-type and validation settings shared by all methods.",
+        "properties": {
+          "donor_key": {
+            "type": "string",
+            "description": "obs column with the donor ID; defaults to sample_key."
+          },
+          "cohort_key": {
+            "type": "string",
+            "description": "obs column with cohort or study ID; enables leave-cohort-out and stratified permutation."
+          },
+          "cell_type_key": {
+            "type": "string",
+            "description": "obs column with cell-type labels for per-type pseudobulk and composition features."
+          },
+          "cv": {
+            "type": "string",
+            "enum": ["grouped_kfold", "leave_one_donor_out", "leave_one_cohort_out"],
+            "default": "grouped_kfold",
+            "description": "Outer validation scheme; all splits are grouped by donor."
+          },
+          "n_folds": {
+            "type": "integer",
+            "minimum": 2,
+            "default": 5,
+            "description": "Outer folds for grouped cross-validation."
+          },
+          "n_perm": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 1000,
+            "description": "Donor-level label permutations within cohort strata for the null."
+          },
+          "n_hvg": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 2000,
+            "description": "Highly variable genes, selected inside training folds only."
+          }
+        },
+        "additionalProperties": false
+      },
+      "pseudobulk_enet": {
+        "type": "object",
+        "description": "Options for the penalised logistic model on donor pseudobulk.",
+        "properties": {
+          "min_cells": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 10,
+            "description": "Minimum cells per donor pseudobulk (decoupler default)."
+          },
+          "min_counts": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 1000,
+            "description": "Minimum total counts per donor pseudobulk (decoupler default)."
+          },
+          "alpha": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.5,
+            "description": "Starting elastic-net mixing (1 is lasso); inner grouped CV also searches alpha."
+          }
+        },
+        "additionalProperties": false
+      },
+      "celltype_proportion_rf": {
+        "type": "object",
+        "description": "Options for the forest on donor cell-type composition.",
+        "properties": {
+          "n_trees": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 500,
+            "description": "Trees in the forest (proposed default)."
+          },
+          "pseudocount": {
+            "type": "number",
+            "minimum": 0,
+            "default": 0.5,
+            "description": "Pseudocount added before the centred log-ratio of proportions."
+          }
+        },
+        "additionalProperties": false
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu", "cuda"],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without fitting."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Random seed for donor splits, permutations and model initialisation."
+      }
+    },
+    "required": ["dataset", "sample_key", "label_key"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: fitted and wrote members; dry_run: estimate only; queued: long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written, for example uns/phenotype_predictions. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "For completed runs: n_donors, n_cases, n_controls, auroc, auroc_ci, balanced_accuracy, brier, ece, perm_p, top_cell_types.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Provenance record id (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "sample-level.sample_phenotype_prediction",
+      "reads": [
+        "layers/counts",
+        "obs/<sample_key>",
+        "obs/<donor_key>",
+        "obs/<label_key>",
+        "obs/<cell_type_key>",
+        "obs/<cohort_key>",
+        "uns/sample_table"
+      ],
+      "writes": [
+        "uns/phenotype_predictions",
+        "uns/phenotype_metrics",
+        "uns/phenotype_null",
+        "uns/phenotype_celltype_scores",
+        "uns/phenotype_provenance",
+        "models/phenotype"
+      ],
+      "devices": ["cpu", "cuda"],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": true,
+      "paradigm": "model-based",
+      "docs": "tasks/sample-level/sample_phenotype_prediction.md"
+    }
+  }
+}

@@ -1,0 +1,141 @@
+{
+  "name": "singlet_communication_lr_resource_curation",
+  "title": "Harmonise ligand-receptor resources",
+  "description": "Builds one directed, complex-aware ligand-receptor table from pinned resource snapshots, with per-row resource counts and provenance, and writes it to uns/lr_resource. Use once per species and snapshot, before any communication scoring. It reads no expression matrix and tests no communication, so do not use it to score interactions.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the .singlet dataset that receives uns/lr_resource. Expression is not read."
+      },
+      "species": {
+        "type": "string",
+        "enum": ["homo_sapiens", "mus_musculus"],
+        "default": "homo_sapiens",
+        "description": "Organism of the output table; mus_musculus maps human rows through orthology."
+      },
+      "resources": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "enum": ["consensus", "cellchatdb", "cellphonedb", "celltalkdb", "connectomedb2020", "ramilowski2015"]
+        },
+        "minItems": 1,
+        "uniqueItems": true,
+        "default": ["cellchatdb", "cellphonedb", "celltalkdb", "connectomedb2020"],
+        "description": "Resources to combine. consensus must be used alone, since it already contains its constituents."
+      },
+      "min_resources": {
+        "type": "integer",
+        "minimum": 1,
+        "default": 1,
+        "description": "Keep pairs supported by at least this many resources; 1 keeps the full union with counts."
+      },
+      "snapshot": {
+        "type": "string",
+        "description": "Pinned snapshot identifier, commit or file hash, recorded in metadata. Always set it for comparable outputs."
+      },
+      "restrict_to_features": {
+        "type": "boolean",
+        "default": false,
+        "description": "Keep only pairs whose subunits appear in var/feature_symbol of the dataset."
+      },
+      "orthology": {
+        "type": "object",
+        "description": "Used only when species is mus_musculus.",
+        "properties": {
+          "min_evidence": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 3,
+            "description": "Minimum number of HCOP sources supporting an orthologue."
+          },
+          "one_to_many": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 1,
+            "description": "Maximum orthologues per subunit; subunits with more are treated as missing."
+          }
+        },
+        "additionalProperties": false
+      },
+      "device": {
+        "type": "string",
+        "enum": ["cpu"],
+        "default": "cpu",
+        "description": "Always cpu; table operations have no GPU path."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return the estimate and row counts without writing."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing uns/lr_resource and metadata instead of failing."
+      }
+    },
+    "required": ["dataset"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: wrote uns/lr_resource; dry_run: estimate only; queued: long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "additionalProperties": true,
+        "description": "Completed runs: n_pairs_ordered, n_pairs_unordered, n_complex_rows, n_resources_histogram, dropped_below_min_resources, snapshot, table_sha256, orthology_dropped (mouse only)."
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "additionalProperties": true,
+        "description": "Present for dry_run: seconds, peak_memory_gb, device."
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "communication.lr_resource_curation",
+      "reads": ["uns/lr_resource_sources", "uns/orthology_map", "var/feature_symbol"],
+      "writes": ["uns/lr_resource", "uns/lr_resource_meta"],
+      "devices": ["cpu"],
+      "stochastic": false,
+      "long_running": false,
+      "streaming": false,
+      "paradigm": "heuristic",
+      "docs": "tasks/communication/lr_resource_curation.md"
+    }
+  }
+}

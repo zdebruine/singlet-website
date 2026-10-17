@@ -1,0 +1,343 @@
+{
+  "name": "singlet_ambient_contamination_fraction",
+  "title": "Estimate ambient contamination fraction",
+  "description": "Estimates the fraction of each cell barcode's UMIs that is ambient (cell-free) RNA, plus a per-sample summary with a plausibility flag. The default method decontx needs only layers/counts; soupx needs cluster_key and raw/counts; cellbender and scar need raw/counts and may run as queued jobs. Writes obs/ambient_frac_<method>, uns/ambient_summary_<method> and, for cellbender and scar, model weights; it never changes counts. Do not use it to remove counts (use ambient.count_removal) or with soupx, cellbender or scar on data without empty barcodes.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: .singlet path, URI (s3://, r2://, https://) or workspace handle. Needs layers/counts; raw/counts for soupx, cellbender, scar."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "decontx",
+          "soupx",
+          "cellbender",
+          "scar"
+        ],
+        "default": "decontx",
+        "description": "decontx (default, per cell), soupx (per sample, needs cluster_key), cellbender (deep model, includes barcode swapping), scar (deep model, fixed ambient profile)."
+      },
+      "cluster_key": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "default": null,
+        "description": "obs column with cluster labels. Required for soupx, optional for decontx (otherwise clustered internally), ignored by cellbender and scar."
+      },
+      "sample_key": {
+        "type": "string",
+        "default": "sample",
+        "description": "obs column identifying the channel or sample; estimation and the per-sample summary are grouped by it."
+      },
+      "seed": {
+        "type": "integer",
+        "minimum": 0,
+        "default": 12345,
+        "description": "Random seed for decontx initialisation, cellbender and scar. Ignored by soupx, which is deterministic."
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA for cellbender and scar training when a device with enough memory is available, otherwise CPU."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing ambient_frac and ambient_summary members of the same method instead of failing."
+      },
+      "soupx": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options used only when method is soupx.",
+        "properties": {
+          "contamination_range": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "minItems": 2,
+            "maxItems": 2,
+            "default": [
+              0.01,
+              0.8
+            ],
+            "description": "Lower and upper bound of the channel estimate; the upper bound also sets the non-expression test."
+          },
+          "tfidf_min": {
+            "type": "number",
+            "default": 1.0,
+            "description": "Minimum tf-idf for a marker gene.",
+            "minimum": 0
+          },
+          "soup_quantile": {
+            "type": "number",
+            "default": 0.9,
+            "description": "Soup abundance quantile above which genes become marker candidates.",
+            "exclusiveMinimum": 0,
+            "exclusiveMaximum": 1
+          },
+          "max_markers": {
+            "type": "integer",
+            "default": 100,
+            "description": "Maximum number of marker genes used.",
+            "minimum": 1
+          },
+          "non_expression_fdr": {
+            "type": "number",
+            "default": 0.2,
+            "description": "False discovery rate of the test that excludes clusters expressing a marker.",
+            "exclusiveMinimum": 0,
+            "exclusiveMaximum": 1
+          },
+          "prior_rho": {
+            "type": "number",
+            "default": 0.05,
+            "description": "Prior mode of the contamination fraction.",
+            "exclusiveMinimum": 0,
+            "exclusiveMaximum": 1
+          },
+          "prior_rho_sd": {
+            "type": "number",
+            "default": 0.1,
+            "description": "Prior standard deviation of the contamination fraction; the Gamma shape is moment-matched to it.",
+            "exclusiveMinimum": 0
+          },
+          "force_accept": {
+            "type": "boolean",
+            "default": false,
+            "description": "Accept channel estimates above 0.5 instead of returning an error."
+          }
+        }
+      },
+      "decontx": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options used only when method is decontx.",
+        "properties": {
+          "delta": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "minItems": 2,
+            "maxItems": 2,
+            "default": [
+              10,
+              10
+            ],
+            "description": "Dirichlet pseudo-counts for native and contamination counts; initial values when estimate_delta is true."
+          },
+          "estimate_delta": {
+            "type": "boolean",
+            "default": true,
+            "description": "Refit the pseudo-counts from the barcodes at every EM iteration."
+          },
+          "max_iter": {
+            "type": "integer",
+            "default": 500,
+            "description": "Maximum number of EM iterations.",
+            "minimum": 1
+          },
+          "convergence": {
+            "type": "number",
+            "default": 0.001,
+            "description": "Stop when the largest change in any barcode's native share falls below this.",
+            "exclusiveMinimum": 0
+          },
+          "use_empty_droplets": {
+            "type": "boolean",
+            "default": false,
+            "description": "Use the empty-droplet profile from raw/counts as the contamination profile instead of one built from other clusters."
+          }
+        }
+      },
+      "cellbender": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options used only when method is cellbender.",
+        "properties": {
+          "model": {
+            "type": "string",
+            "enum": [
+              "full",
+              "ambient"
+            ],
+            "default": "full",
+            "description": "full models ambient RNA and barcode swapping; ambient models ambient RNA only."
+          },
+          "epochs": {
+            "type": "integer",
+            "default": 150,
+            "description": "Training epochs.",
+            "minimum": 1
+          },
+          "fpr": {
+            "type": "number",
+            "default": 0.01,
+            "description": "Target false positive rate: share of true signal counts removed; the reported fraction grows with it.",
+            "minimum": 0,
+            "exclusiveMaximum": 1
+          },
+          "learning_rate": {
+            "type": "number",
+            "default": 0.0001,
+            "description": "Base learning rate under a OneCycle schedule whose peak is ten times larger.",
+            "exclusiveMinimum": 0
+          },
+          "low_count_threshold": {
+            "type": "integer",
+            "default": 5,
+            "description": "Barcodes with fewer UMIs are excluded from the analysis.",
+            "minimum": 0
+          },
+          "expected_cells": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1,
+            "default": null,
+            "description": "Expected number of cells, within a factor of 2; null uses CellBender's heuristic prior. Recommended."
+          }
+        }
+      },
+      "scar": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options used only when method is scar.",
+        "properties": {
+          "n_hidden": {
+            "type": "integer",
+            "default": 150,
+            "description": "Hidden units per layer.",
+            "minimum": 1
+          },
+          "n_latent": {
+            "type": "integer",
+            "default": 15,
+            "description": "Latent dimension.",
+            "minimum": 1
+          },
+          "ambient_prob": {
+            "type": "number",
+            "default": 0.995,
+            "description": "Probability cut that selects cell-free droplets for the ambient profile; at least 50 droplets must pass.",
+            "exclusiveMinimum": 0,
+            "exclusiveMaximum": 1
+          }
+        }
+      }
+    },
+    "required": [
+      "dataset"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. obs/ambient_frac_decontx and uns/ambient_summary_decontx. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Completed runs only: method, sample_key and per_sample entries (sample, n_cells, median, mean, iqr, frac_above_0.1, frac_above_0.3, flag). The flag is ok, warning (sample median above 0.3) or failure (above 0.5). soupx adds the channel estimate and bounds. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "ambient.contamination_fraction",
+      "reads": [
+        "raw/counts",
+        "layers/counts",
+        "obs/<cluster_key>",
+        "obs/<sample_key>"
+      ],
+      "writes": [
+        "obs/ambient_frac_<method>",
+        "obs/ambient_frac_lo_<method>",
+        "obs/ambient_frac_hi_<method>",
+        "uns/ambient_summary_<method>",
+        "models/<name>"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/ambient/contamination_fraction.md"
+    }
+  }
+}

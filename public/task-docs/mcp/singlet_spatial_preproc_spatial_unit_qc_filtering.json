@@ -1,0 +1,264 @@
+{
+  "name": "singlet_spatial_preproc_spatial_unit_qc_filtering",
+  "title": "Spatial unit quality filtering",
+  "description": "Scores each spatial unit (spot, bin or segmented cell) for technical quality and writes a keep flag, a continuous score and the discard reason. Inputs are library size, detected genes, mitochondrial fraction and, for imaging, negative-control rate and area. The default rule is mad; use spatial_local when artefacts are spatially clustered. Does not subset the matrix and does not filter transcripts; run in-tissue detection first when off-tissue units are present.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "method": {
+        "type": "string",
+        "enum": ["mad", "fixed", "miqc", "dropkick", "spatial_local"],
+        "default": "mad",
+        "description": "Unit rule. Default mad; spatial_local for spatially clustered artefacts; fixed is a comparator only."
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu", "cuda"],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA only for the neighbourhood product on large inputs."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without computing or writing members."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing obs/qc_* and uns/qc_* members instead of failing."
+      },
+      "batch_key": {
+        "type": ["string", "null"],
+        "default": null,
+        "description": "Obs column giving the batch for medians, MADs and mixtures; null treats the input as one batch."
+      },
+      "mito_prefix": {
+        "type": "string",
+        "default": "^MT-|^mt-",
+        "description": "Regular expression for mitochondrial gene names; mitochondrial rules need at least one match."
+      },
+      "fixed": {
+        "type": "object",
+        "description": "Hand-set bounds for the fixed-cutoff comparator; null disables a bound.",
+        "additionalProperties": false,
+        "properties": {
+          "min_counts": {
+            "type": ["integer", "null"],
+            "minimum": 0,
+            "default": null,
+            "description": "Minimum total counts per unit."
+          },
+          "min_genes": {
+            "type": ["integer", "null"],
+            "minimum": 0,
+            "default": null,
+            "description": "Minimum detected genes per unit."
+          },
+          "max_pct_mt": {
+            "type": ["number", "null"],
+            "minimum": 0,
+            "maximum": 100,
+            "default": null,
+            "description": "Maximum mitochondrial percentage of total counts."
+          }
+        }
+      },
+      "mad": {
+        "type": "object",
+        "description": "Options for the per-metric, per-batch robust outlier rule.",
+        "additionalProperties": false,
+        "properties": {
+          "nmads": {
+            "type": "number",
+            "minimum": 0,
+            "default": 3,
+            "description": "Scaled MADs from the batch median that define an outlier."
+          },
+          "min_diff": {
+            "type": ["number", "null"],
+            "minimum": 0,
+            "default": null,
+            "description": "Minimum distance from the median for an outlier; required when a batch MAD is zero."
+          },
+          "log_library": {
+            "type": "boolean",
+            "default": true,
+            "description": "Apply log2 to library-size and gene metrics before the MAD rule."
+          }
+        }
+      },
+      "miqc": {
+        "type": "object",
+        "description": "Options for the two-component mixture of mitochondrial fraction on detected genes.",
+        "additionalProperties": false,
+        "properties": {
+          "model_type": {
+            "type": "string",
+            "enum": ["linear", "spline", "polynomial", "one_dimensional"],
+            "default": "linear",
+            "description": "Regression form of mitochondrial fraction on detected genes."
+          },
+          "posterior_cutoff": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.75,
+            "description": "Keep a unit when its compromised-component posterior is at most this value."
+          },
+          "enforce_left_cutoff": {
+            "type": "boolean",
+            "default": true,
+            "description": "Prevent a U-shaped filter boundary, as in miQC's filterCells."
+          },
+          "seed": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 0,
+            "description": "Seed for mixture initialisation."
+          }
+        }
+      },
+      "dropkick": {
+        "type": "object",
+        "description": "Options for the penalised logistic classifier trained on heuristic labels.",
+        "additionalProperties": false,
+        "properties": {
+          "n_hvgs": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 2000,
+            "description": "Highly variable genes used as classifier features."
+          },
+          "alpha": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.1,
+            "description": "Elastic-net mixing: 0 is ridge, 1 is lasso."
+          },
+          "seed": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 0,
+            "description": "Seed for cross-validation folds."
+          }
+        }
+      },
+      "spatial_local": {
+        "type": "object",
+        "description": "Options for the neighbourhood robust z-score rule.",
+        "additionalProperties": false,
+        "properties": {
+          "n_neighbors": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 36,
+            "description": "Nearest spatial neighbours used as the local reference; the focal unit is excluded."
+          },
+          "direction": {
+            "type": "string",
+            "enum": ["lower", "higher", "both"],
+            "default": "lower",
+            "description": "Which tail of the local robust z-score flags a unit."
+          },
+          "cutoff": {
+            "type": "number",
+            "minimum": 0,
+            "default": 3,
+            "description": "Absolute robust z-score cutoff for an outlier."
+          },
+          "log": {
+            "type": "boolean",
+            "default": true,
+            "description": "Apply log1p to each metric before scoring."
+          }
+        }
+      }
+    },
+    "required": ["dataset"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written, e.g. obs/qc_keep. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Keys: n_units, n_kept, n_discarded, discarded_by_reason, thresholds, method. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "spatial-preproc.spatial_unit_qc_filtering",
+      "reads": [
+        "layers/counts",
+        "obs/in_tissue",
+        "obsm/spatial",
+        "obsp/spatial_connectivities",
+        "obs/section_id",
+        "obs/cell_area",
+        "obs/transcript_count",
+        "var/feature_type"
+      ],
+      "writes": [
+        "obs/qc_n_counts",
+        "obs/qc_n_genes",
+        "obs/qc_pct_mt",
+        "obs/qc_neg_probe_rate",
+        "obs/qc_area",
+        "obs/qc_score",
+        "obs/qc_keep",
+        "obs/qc_reason",
+        "uns/qc_thresholds",
+        "uns/qc_params",
+        "obsm/qc_metrics"
+      ],
+      "devices": ["cpu", "cuda"],
+      "stochastic": true,
+      "long_running": false,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/spatial-preproc/spatial_unit_qc_filtering.md"
+    }
+  }
+}

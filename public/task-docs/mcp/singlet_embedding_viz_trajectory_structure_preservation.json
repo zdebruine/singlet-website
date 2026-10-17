@@ -1,0 +1,161 @@
+{
+  "name": "singlet_embedding_viz_trajectory_structure_preservation",
+  "title": "Trajectory and branch preservation in a 2D layout",
+  "description": "Computes a 2D layout (PHATE by default, or diffusion map, UMAP with spectral or PAGA initialisation, or ForceAtlas2) and scores whether the layout's graph preserves a reference trajectory's geodesic order, branch sets and milestone topology. Requires reference members (uns/trajectory_graph, obsm/milestone_percentages) in the dataset; use it only for simulated or time-labelled trajectories. Do not use it to choose a layout without a reference, or to score neighbourhoods (use embedding-viz.local_neighborhood_preservation).",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "layout_method": {
+        "type": "string",
+        "enum": ["phate", "diffmap", "umap_spectral", "umap_paga", "draw_graph_fa"],
+        "default": "phate",
+        "description": "2D layout to evaluate. phate is the default and the only layout that builds its own kernel."
+      },
+      "input_pcs": {
+        "type": "integer",
+        "minimum": 2,
+        "default": 50,
+        "description": "Principal components of obsm/X_pca used as layout input (proposed default)."
+      },
+      "metrics": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "enum": ["cor_geodesic", "f1_branches", "him", "delayed_commitment_purity"]
+        },
+        "uniqueItems": true,
+        "default": ["cor_geodesic", "f1_branches", "him", "delayed_commitment_purity"],
+        "description": "Trajectory metrics to compute. Each metric needs its reference members; missing members are an error."
+      },
+      "phate": {
+        "type": "object",
+        "additionalProperties": false,
+        "default": {},
+        "description": "PHATE options, used only when layout_method is phate.",
+        "properties": {
+          "knn": {"type": "integer", "minimum": 1, "default": 5, "description": "Neighbours in the PHATE alpha-decay kernel."},
+          "decay": {"type": "number", "minimum": 0, "default": 40, "description": "Alpha-decay of the PHATE kernel."},
+          "n_landmark": {"type": ["integer", "null"], "minimum": 1, "default": 2000, "description": "Landmarks for MDS; null disables landmarking."},
+          "t": {"type": ["integer", "string"], "default": "auto", "description": "Diffusion time; auto chooses it from the data."},
+          "gamma": {"type": "number", "minimum": -1, "maximum": 1, "default": 1, "description": "Potential transform; 1 is the log potential, 0 the square root."}
+        }
+      },
+      "paga": {
+        "type": "object",
+        "additionalProperties": false,
+        "default": {},
+        "description": "PAGA options, used only when layout_method is umap_paga.",
+        "properties": {
+          "groups_key": {"type": "string", "default": "leiden", "description": "obs key of the PAGA groups; the key must exist before the call."}
+        }
+      },
+      "evaluation": {
+        "type": "object",
+        "additionalProperties": false,
+        "default": {},
+        "description": "Evaluation options shared by all layouts.",
+        "properties": {
+          "n_waypoints": {"type": "integer", "minimum": 10, "default": 100, "description": "Waypoint cells shared by reference and prediction."},
+          "purity_k": {"type": "integer", "minimum": 1, "default": 15, "description": "Neighbours in the 2D graph used for zone purity."},
+          "n_seeds": {"type": "integer", "minimum": 1, "default": 5, "description": "Number of seeds, counted from seed (proposed default)."},
+          "ceiling_control": {"type": "boolean", "default": true, "description": "Also score the same graph rule applied to PCA input."}
+        }
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu", "cuda"],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "First random seed for layouts and the k-means step of the graph rule."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": ["dataset"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written, e.g. obsm/X_trajectory_2d. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Compact summary for completed runs with keys layout_method, scores, predicted_branches and ceiling_scores. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "embedding-viz.trajectory_structure_preservation",
+      "reads": [
+        "obsm/X_pca",
+        "obsp/connectivities",
+        "obs/leiden",
+        "uns/trajectory_graph",
+        "obsm/milestone_percentages",
+        "obs/delayed_commitment_zone"
+      ],
+      "writes": [
+        "obsm/X_trajectory_2d",
+        "uns/trajectory_layout_eval"
+      ],
+      "devices": ["cpu", "cuda"],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/embedding-viz/trajectory_structure_preservation.md"
+    }
+  }
+}

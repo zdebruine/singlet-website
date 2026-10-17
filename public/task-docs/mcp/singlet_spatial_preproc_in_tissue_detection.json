@@ -1,0 +1,321 @@
+{
+  "name": "singlet_spatial_preproc_in_tissue_detection",
+  "title": "In-tissue spot and bin detection",
+  "description": "Flags each spot or bin as on tissue or background, with an optional probability and optional local-artifact flags. The default method spaceranger_flag validates and keeps the existing Space Ranger in_tissue column and reads no image. Use otsu, felzenszwalb or weka on the H&E image when that column is absent or must be checked. count_band is a total-UMI background proxy, not a tissue detector. Writes obs/in_tissue; does not subset the matrix or filter transcripts.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "method": {
+        "type": "string",
+        "enum": ["spaceranger_flag", "otsu", "felzenszwalb", "weka", "count_band"],
+        "default": "spaceranger_flag",
+        "description": "Detector. spaceranger_flag needs obs/in_tissue; image methods need an H&E image; count_band uses total UMI only."
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu", "cuda"],
+        "default": "auto",
+        "description": "Execution device; image methods and weka run on CPU, so auto selects CPU for them."
+      },
+      "seed": {
+        "type": "integer",
+        "minimum": 0,
+        "default": 0,
+        "description": "Random seed for weka and the artifact k-means; deterministic methods ignore it."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without computing or writing members."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing obs/in_tissue and related members instead of failing."
+      },
+      "artifact_flags": {
+        "type": "boolean",
+        "default": false,
+        "description": "Also write obs/artifact_local using the spotsweeper options; regional artifacts only, not folds or tears."
+      },
+      "image": {
+        "type": "object",
+        "description": "Options shared by the image methods otsu, felzenszwalb and weka.",
+        "additionalProperties": false,
+        "properties": {
+          "image_key": {
+            "type": "string",
+            "default": "hires",
+            "description": "Key of the H&E image under uns/spatial/<library_id>/images."
+          },
+          "library_id": {
+            "type": ["string", "null"],
+            "default": null,
+            "description": "Library to process; null uses the only library in the dataset and fails when there are several."
+          },
+          "corners_are_background": {
+            "type": "boolean",
+            "default": true,
+            "description": "Use the four image corners as background seeds and set the background polarity."
+          },
+          "corner_size_pct": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 1,
+            "default": 0.01,
+            "description": "Corner box size as a fraction of image height and width."
+          },
+          "border_margin_px": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 0,
+            "description": "Pixels excluded at every border to mask the fiducial frame; set explicitly on Visium images."
+          },
+          "min_specimen_area_frac": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.01,
+            "description": "Smallest kept tissue region as a fraction of the image area."
+          },
+          "close_holes_smaller_than_frac": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.0001,
+            "description": "Fill holes smaller than this fraction of the image area."
+          },
+          "auto_max_pixels": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 5000000,
+            "description": "Downscale the image to at most this many pixels before processing; the scale is reported."
+          }
+        }
+      },
+      "felzenszwalb": {
+        "type": "object",
+        "description": "Superpixel options for the felzenszwalb method.",
+        "additionalProperties": false,
+        "properties": {
+          "grid_rows": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 100,
+            "description": "Target superpixel grid rows."
+          },
+          "grid_cols": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 100,
+            "description": "Target superpixel grid columns."
+          },
+          "sigma_frac": {
+            "type": "number",
+            "minimum": 0,
+            "default": 0.008,
+            "description": "Gaussian blur as a fraction of the short image side, clipped to 1 to 5 pixels."
+          },
+          "scale_coef": {
+            "type": "number",
+            "minimum": 0,
+            "default": 0.25,
+            "description": "Felzenszwalb scale as a multiple of the target superpixel area."
+          },
+          "min_size_coef": {
+            "type": "number",
+            "minimum": 0,
+            "default": 0.2,
+            "description": "Minimum superpixel size as a multiple of the target superpixel area."
+          }
+        }
+      },
+      "weka": {
+        "type": "object",
+        "description": "Random-forest options for the weka method; requires corners_are_background true.",
+        "additionalProperties": false,
+        "properties": {
+          "sigma_min": {
+            "type": "number",
+            "minimum": 0,
+            "default": 1.0,
+            "description": "Smallest Gaussian scale of the multiscale pixel features."
+          },
+          "sigma_max": {
+            "type": "number",
+            "minimum": 0,
+            "default": 16.0,
+            "description": "Largest Gaussian scale of the multiscale pixel features."
+          },
+          "edges": {
+            "type": "boolean",
+            "default": true,
+            "description": "Include edge-filter responses among the pixel features."
+          },
+          "pseudo_tissue_percentile": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100,
+            "default": 90,
+            "description": "Percentile of distance-from-background above which non-corner pixels seed tissue."
+          },
+          "pseudo_min_pixels": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 50,
+            "description": "Minimum number of tissue seed pixels, taken from the largest distances when short."
+          },
+          "rf_estimators": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 100,
+            "description": "Number of trees in the random forest."
+          },
+          "rf_max_depth": {
+            "type": ["integer", "null"],
+            "minimum": 1,
+            "default": 10,
+            "description": "Maximum tree depth; null grows trees without a depth limit."
+          },
+          "rf_max_samples": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 1,
+            "default": 0.05,
+            "description": "Fraction of seed pixels drawn for each tree."
+          },
+          "refine_with_classifier": {
+            "type": "boolean",
+            "default": true,
+            "description": "Run a second-stage classifier that refines the first mask."
+          }
+        }
+      },
+      "count_band": {
+        "type": "object",
+        "description": "Total-UMI band for the count_band method; a background proxy only.",
+        "additionalProperties": false,
+        "properties": {
+          "layer": {
+            "type": "string",
+            "default": "counts",
+            "description": "Layer whose column sums give total UMI per unit."
+          },
+          "count_min": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 100,
+            "description": "Units with total UMI below this are called background."
+          },
+          "count_max": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 20000000,
+            "description": "Units with total UMI above this are excluded from tissue calls."
+          }
+        }
+      },
+      "spotsweeper": {
+        "type": "object",
+        "description": "Local-variance options used when artifact_flags is true.",
+        "additionalProperties": false,
+        "properties": {
+          "n_order": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 5,
+            "description": "Number of neighbourhood orders over which local variance is computed."
+          },
+          "shape": {
+            "type": "string",
+            "enum": ["hexagonal", "square"],
+            "default": "hexagonal",
+            "description": "Lattice neighbourhood shape; hexagonal matches Visium spot geometry."
+          },
+          "log": {
+            "type": "boolean",
+            "default": true,
+            "description": "Apply a log transform to the mitochondrial percentage before local variance."
+          }
+        }
+      }
+    },
+    "required": ["dataset"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written, e.g. obs/in_tissue. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Keys: n_units, n_in_tissue, method, scale, image_shape_px, n_artifact_local (null unless artifact_flags).",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "spatial-preproc.in_tissue_detection",
+      "reads": [
+        "obs/in_tissue",
+        "obsm/spatial",
+        "layers/counts",
+        "obs/pct_counts_mt",
+        "uns/spatial/<library_id>/images/hires"
+      ],
+      "writes": [
+        "obs/in_tissue",
+        "obs/in_tissue_prob",
+        "obs/artifact_local",
+        "uns/in_tissue",
+        "uns/spatial/<library_id>/tissue_mask",
+        "models/in_tissue_weka"
+      ],
+      "devices": ["cpu", "cuda"],
+      "stochastic": true,
+      "long_running": false,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/spatial-preproc/in_tissue_detection.md"
+    }
+  }
+}

@@ -1,0 +1,242 @@
+{
+  "name": "singlet_cell_state_cell_cycle_phase_assignment",
+  "title": "Assign cell-cycle phase (G1, S, G2M)",
+  "description": "Assigns each cell a discrete cell-cycle phase (G1, S, G2M, or Undecided) from its own transcriptome and writes the scores that produced the label. Use the default score_genes method on log-normalised data; cyclone_pairs needs raw counts and a pair table. Do not use it for continuous cycle position or to regress the cycle effect out of expression; those are separate tasks.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "score_genes",
+          "seurat_score",
+          "cyclone_pairs"
+        ],
+        "default": "score_genes",
+        "description": "Phase rule. score_genes is the default. seurat_score applies Seurat's tie rule. cyclone_pairs needs raw counts and a pair table."
+      },
+      "organism": {
+        "type": "string",
+        "enum": [
+          "human",
+          "mouse"
+        ],
+        "default": "human",
+        "description": "Selects the built-in gene panel. Mouse symbols are mapped by capitalisation, an approximation of orthology."
+      },
+      "gene_sets": {
+        "type": "string",
+        "default": "tirosh",
+        "description": "Built-in Tirosh S and G2M lists (tirosh), or a uns key holding custom S and G2M gene lists."
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "minimum": 0,
+        "default": 0,
+        "description": "Seed for control-gene sampling and cyclone permutations. Fix it for reproducible labels."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing cc_phase, score and cyclone members instead of failing."
+      },
+      "score_genes": {
+        "type": "object",
+        "description": "Options for method score_genes (scanpy rule). Ignored by other methods.",
+        "properties": {
+          "ctrl_size": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1,
+            "default": null,
+            "description": "Control genes per expression bin. Null uses the smaller of the two list lengths."
+          },
+          "n_bins": {
+            "type": "integer",
+            "minimum": 2,
+            "default": 25,
+            "description": "Number of expression bins for control-gene matching."
+          },
+          "ctrl_as_ref": {
+            "type": "boolean",
+            "default": true,
+            "description": "Draw controls from the full gene pool (ScanpyV1 preset); false follows ScanpyV2Preview."
+          }
+        },
+        "additionalProperties": false
+      },
+      "seurat_score": {
+        "type": "object",
+        "description": "Options for method seurat_score (Seurat tie rule).",
+        "properties": {
+          "n_bins": {
+            "type": "integer",
+            "minimum": 2,
+            "default": 24,
+            "description": "Expression bins for control matching, as in Seurat AddModuleScore."
+          },
+          "ctrl_size": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1,
+            "default": null,
+            "description": "Control genes per bin. Null uses the smaller of the two list lengths."
+          }
+        },
+        "additionalProperties": false
+      },
+      "cyclone_pairs": {
+        "type": "object",
+        "description": "Options for method cyclone_pairs (permutation-null pair classifier).",
+        "properties": {
+          "pairs": {
+            "type": "string",
+            "description": "Uns key holding phase pair tables for G1, S and G2M. Required for this method."
+          },
+          "iter": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 1000,
+            "description": "Permutation shuffles per cell and phase."
+          },
+          "min_iter": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 100,
+            "description": "Minimum valid shuffles needed for a cell score."
+          },
+          "min_pairs": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 50,
+            "description": "Minimum informative pairs per phase; below this the score is missing."
+          },
+          "s_threshold": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.5,
+            "description": "Both G1 and G2M scores below this value give phase S."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "dataset"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, for example obs/cc_phase. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Compact summary for completed runs: method, organism, n_cells, phase_counts (G1, S, G2M, Undecided) and undecided_fraction. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "cell-state.cell_cycle_phase_assignment",
+      "reads": [
+        "layers/counts",
+        "layers/lognorm",
+        "uns/cc_gene_sets"
+      ],
+      "writes": [
+        "obs/S_score",
+        "obs/G2M_score",
+        "obs/cyclone_G1",
+        "obs/cyclone_G2M",
+        "obs/cc_phase"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": true,
+      "paradigm": "hybrid",
+      "docs": "tasks/cell-state/cell_cycle_phase_assignment.md"
+    }
+  }
+}

@@ -1,0 +1,212 @@
+{
+  "name": "singlet_doublets_cross_species_multiplet_detection",
+  "title": "Cross-species multiplet detection",
+  "description": "Flags barcodes whose UMIs come from two species in a barnyard or xenograft mixture, and estimates the total multiplet rate from the cross-species count. Reads layers/counts and the species label of each feature; writes per-barcode species counts, the flag and the rate with its interval. The default is the two-component mixture; use cellranger_multigenome only as the published comparator. Do not use for same-species doublets or single-species data.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "species_key": {
+        "type": "string",
+        "default": "var/species",
+        "description": "Feature column giving the genome of each feature; must hold exactly two labels."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "two_component_em",
+          "cellranger_multigenome"
+        ],
+        "default": "two_component_em",
+        "description": "Caller. cellranger_multigenome applies fixed per-species percentile thresholds and is the published comparator."
+      },
+      "sensitivity_s": {
+        "type": "number",
+        "exclusiveMinimum": 0,
+        "maximum": 1,
+        "default": 1.0,
+        "description": "Detectable fraction of cross-species multiplets; 1 gives the uncorrected total. Supplied by the user."
+      },
+      "bootstraps": {
+        "type": "integer",
+        "minimum": 100,
+        "default": 1000,
+        "description": "Barcode resamples for the rate interval, used by both methods."
+      },
+      "cellranger": {
+        "type": "object",
+        "description": "Options for cellranger_multigenome.",
+        "additionalProperties": false,
+        "properties": {
+          "multiplet_percentile": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 0.5,
+            "default": 0.1,
+            "description": "Quantile of dominant-species counts that sets each per-species threshold."
+          },
+          "default_threshold_umi": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 10,
+            "description": "Threshold used when no barcode is dominated by one species."
+          },
+          "pure_fallback_min_umi": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 50,
+            "description": "Lower threshold below this value, with fold change above pure_fallback_fold, triggers pooled thresholds."
+          },
+          "pure_fallback_fold": {
+            "type": "number",
+            "minimum": 1,
+            "default": 25,
+            "description": "Fold-change trigger for the pooled-threshold fallback."
+          }
+        }
+      },
+      "em": {
+        "type": "object",
+        "description": "Options for two_component_em.",
+        "additionalProperties": false,
+        "properties": {
+          "max_iter": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 200,
+            "description": "Iteration cap for the EM fit."
+          },
+          "tol": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 1e-6,
+            "description": "Log-likelihood change that stops the EM fit."
+          }
+        }
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Seed for barcode resampling in the rate interval; the EM fit itself is deterministic."
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": [
+      "dataset"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. obs/cross_species_multiplet. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Compact summary: n_called, n_cross_species, rate_per_called with rate_ci, and the threshold or posterior cut. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "doublets.cross_species_multiplet_detection",
+      "reads": [
+        "layers/counts",
+        "var/species",
+        "obs/cellranger_gem_classification"
+      ],
+      "writes": [
+        "obs/species_genome0_umi",
+        "obs/species_genome1_umi",
+        "obs/species_label",
+        "obs/cross_species_multiplet",
+        "obs/cross_species_posterior",
+        "uns/cross_species_thresholds",
+        "uns/cross_species_rate"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": false,
+      "streaming": true,
+      "paradigm": "hybrid",
+      "docs": "tasks/doublets/cross_species_multiplet_detection.md"
+    }
+  }
+}

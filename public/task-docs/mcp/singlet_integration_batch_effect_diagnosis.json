@@ -1,0 +1,236 @@
+{
+  "name": "singlet_integration_batch_effect_diagnosis",
+  "title": "Batch-effect diagnosis of unintegrated data",
+  "description": "Quantifies how strongly batch labels structure an unintegrated PCA embedding, relative to cell type and other covariates. Reports kBET rejection, batch silhouette, PCR, iLISI and per-gene variance fractions as batch magnitudes (higher means more batch), plus per-cell flags. Use it before integration to decide whether correction is needed; it writes diagnostics only, applies no threshold and never changes expression. Do not use it to judge corrected embeddings; use singlet_integration_integration_quality_scoring for those.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "batch_key": {
+        "type": "string",
+        "default": "batch",
+        "description": "obs column with the batch label; at least two levels and no missing values."
+      },
+      "label_key": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "default": "cell_type",
+        "description": "obs column of cell-type labels for per-label scores and conditioning; null scores globally."
+      },
+      "covariates": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "default": [
+          "cell_type",
+          "donor",
+          "technology",
+          "sex"
+        ],
+        "description": "obs columns whose variance fraction is estimated; missing columns are dropped with a warning."
+      },
+      "n_pcs": {
+        "type": "integer",
+        "minimum": 1,
+        "default": 50,
+        "description": "Leading PCs of obsm/X_pca scored, and the number of components in the PCR regression."
+      },
+      "kbet": {
+        "type": "object",
+        "description": "Options for the kBET neighbourhood test.",
+        "properties": {
+          "graph_k": {
+            "type": "integer",
+            "minimum": 5,
+            "default": 50,
+            "description": "Neighbours in the kNN graph built on obsm/X_pca for the kBET test."
+          },
+          "k0": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 10,
+            "default": null,
+            "description": "Neighbourhood size per test; null applies the scIB per-label rule (quarter of mean batch size, clamped to 10-70)."
+          },
+          "alpha": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 1,
+            "default": 0.05,
+            "description": "Significance level of each neighbourhood test."
+          },
+          "n_repeat": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 100,
+            "description": "Repeated random test subsets used for the rejection rate."
+          }
+        },
+        "additionalProperties": false
+      },
+      "lisi": {
+        "type": "object",
+        "description": "Options for the local inverse Simpson index.",
+        "properties": {
+          "k0": {
+            "type": "integer",
+            "minimum": 3,
+            "default": 90,
+            "description": "Neighbours for iLISI; perplexity is set to one third of k0."
+          }
+        },
+        "additionalProperties": false
+      },
+      "variance": {
+        "type": "object",
+        "description": "Options for the variance fractions per covariate.",
+        "properties": {
+          "model": {
+            "type": "string",
+            "enum": [
+              "gaussian_lmm"
+            ],
+            "default": "gaussian_lmm",
+            "description": "Variance model: per-gene random effects on log-normalised expression; the only model in this release."
+          },
+          "n_genes": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 2000,
+            "description": "Highly variable genes (var/hvg_rank order) used by the per-gene variance model."
+          }
+        },
+        "additionalProperties": false
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "minimum": 0,
+        "default": 0,
+        "description": "Random seed for kBET test subsets and LMM initialisation; recorded in uns/batch_diagnosis."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running or writing."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing uns/batch_diagnosis and per-cell flags instead of failing."
+      }
+    },
+    "required": [
+      "dataset"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. uns/batch_diagnosis. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Batch magnitudes (higher means more batch), variance fraction medians per covariate, cell and batch counts, settings and warnings.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "integration.batch_effect_diagnosis",
+      "reads": [
+        "layers/log1p_norm",
+        "var/highly_variable",
+        "var/hvg_rank",
+        "obsm/X_pca",
+        "obs/<batch_key>",
+        "obs/<label_key>",
+        "obs/<covariates>"
+      ],
+      "writes": [
+        "uns/batch_diagnosis",
+        "obs/batch_lisi",
+        "obs/batch_kbet_rejected"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/integration/batch_effect_diagnosis.md"
+    }
+  }
+}

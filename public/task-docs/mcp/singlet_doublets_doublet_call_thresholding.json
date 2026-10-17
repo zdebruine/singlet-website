@@ -1,0 +1,234 @@
+{
+  "name": "singlet_doublets_doublet_call_thresholding",
+  "title": "Doublet score-to-call thresholding",
+  "description": "Turns per-barcode doublet scores from doublets.expression_doublet_scoring into singlet, doublet or ambiguous calls, using a named cut rule and an expected doublet rate. Writes the calls, the cut or count used and per-library implied rates; it never recomputes scores. Use after scoring. Do not use it to rank barcodes or to merge several detectors (use doublets.ensemble_doublet_calling).",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle (.singlet path or URI, or workspace handle) holding the scored barcodes."
+      },
+      "threshold_rule": {
+        "type": "string",
+        "enum": [
+          "scdblfinder_auto",
+          "scrublet_minimum",
+          "expected_k",
+          "scds_balanced",
+          "scds_fraction",
+          "solo_prob"
+        ],
+        "default": "scdblfinder_auto",
+        "description": "Cut rule. expected_k and scdblfinder_auto need a rate; solo_prob applies to solo scores only."
+      },
+      "score_method": {
+        "type": "string",
+        "enum": [
+          "scrublet",
+          "doubletfinder",
+          "scdblfinder",
+          "solo"
+        ],
+        "default": "scrublet",
+        "description": "Scoring output to read: obs/doublet_score_<method> and its simulated scores."
+      },
+      "sample_key": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "default": null,
+        "description": "obs column naming libraries; cuts are applied per library when set."
+      },
+      "expected_rate": {
+        "type": [
+          "number",
+          "null"
+        ],
+        "default": null,
+        "exclusiveMinimum": 0,
+        "exclusiveMaximum": 1,
+        "description": "Expected multiplet fraction of called barcodes; null uses the Poisson table rate for the library size."
+      },
+      "celltype_key": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "default": null,
+        "description": "obs column of cell-type labels; when set, rate-based cuts use the heterotypic rate."
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu"
+        ],
+        "default": "auto",
+        "description": "Execution device; the call step runs on CPU, so auto and cpu are equivalent."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace calls and diagnostics written by an earlier call with the same method."
+      },
+      "scdblfinder": {
+        "type": "object",
+        "description": "Options used only by scdblfinder_auto.",
+        "properties": {
+          "stringency": {
+            "type": "number",
+            "default": 0.5,
+            "exclusiveMinimum": 0,
+            "exclusiveMaximum": 1,
+            "description": "Weight between false-negative and false-positive terms in the cut cost."
+          },
+          "dbr_importance": {
+            "type": "number",
+            "default": 1,
+            "minimum": 0,
+            "description": "Weight of the count-deviation term relative to misclassification."
+          },
+          "expected_rate_sd": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "default": null,
+            "exclusiveMinimum": 0,
+            "description": "Spread of the expected rate; null uses max(0.02, 0.4 times the rate)."
+          }
+        },
+        "additionalProperties": false
+      },
+      "scrublet": {
+        "type": "object",
+        "description": "Options used only by scrublet_minimum.",
+        "properties": {
+          "ambiguous_z": {
+            "type": "number",
+            "default": 0,
+            "minimum": 0,
+            "description": "Calls with absolute z below this are labelled ambiguous; 0 disables the class."
+          }
+        },
+        "additionalProperties": false
+      },
+      "scds": {
+        "type": "object",
+        "description": "Options used only by scds_fraction.",
+        "properties": {
+          "miss_rate": {
+            "type": "number",
+            "enum": [
+              0.1,
+              0.01
+            ],
+            "default": 0.1,
+            "description": "Fraction of simulated doublets allowed below the cut."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "dataset"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: calls written; dry_run: estimate only; queued: long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, for example obs/doublet_call_scrublet. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "For completed runs: rule, threshold or k, libraries, n_barcodes, n_called, implied_rate, expected_rate_used, homotypic_adjusted.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Provenance record id (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "doublets.doublet_call_thresholding",
+      "reads": [
+        "obs/doublet_score_<method>",
+        "uns/doublet_sim_scores_<method>",
+        "obs/<sample_key>",
+        "obs/<celltype_key>",
+        "obs/n_cells_loaded"
+      ],
+      "writes": [
+        "obs/doublet_call_<method>",
+        "obs/doublet_zscore_scrublet",
+        "uns/doublet_threshold_<method>",
+        "uns/doublet_diag_<method>"
+      ],
+      "devices": [
+        "cpu"
+      ],
+      "stochastic": false,
+      "long_running": false,
+      "streaming": true,
+      "paradigm": "hybrid",
+      "docs": "tasks/doublets/doublet_call_thresholding.md"
+    }
+  }
+}

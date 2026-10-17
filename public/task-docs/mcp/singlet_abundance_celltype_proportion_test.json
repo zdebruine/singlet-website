@@ -1,0 +1,232 @@
+{
+  "name": "singlet_abundance_celltype_proportion_test",
+  "title": "Cell-type proportion differential abundance test",
+  "description": "Tests which predefined cell types change in relative abundance between conditions, with donors or libraries as replicates and all types modelled jointly. The default method sccoda fits a Bayesian Dirichlet-multinomial and calls types by expected FDR; propeller gives a per-type transformed-proportion test; tasccoda needs a cell-type tree. Reads sample, cell-type and covariate columns and writes per-type effects and calls; do not use it for neighbourhood-level or within-type expression changes.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "design": {
+        "type": "object",
+        "description": "Sample, cell-type and covariate keys that define the sample-by-type composition table.",
+        "properties": {
+          "sample_key": {
+            "type": "string",
+            "description": "obs column of the independent replicate (donor or library). Required."
+          },
+          "celltype_key": {
+            "type": "string",
+            "description": "obs column of predefined cell-type labels. Required."
+          },
+          "formula": {
+            "type": "string",
+            "description": "Sample-level design formula, for example 'condition' or 'condition + batch'. Required."
+          }
+        },
+        "required": ["sample_key", "celltype_key", "formula"],
+        "additionalProperties": false
+      },
+      "method": {
+        "type": "string",
+        "enum": ["sccoda", "tasccoda", "propeller"],
+        "default": "sccoda",
+        "description": "Test to run. sccoda is the default; tasccoda needs tasccoda.tree_key; propeller is the per-type check."
+      },
+      "fdr": {
+        "type": "number",
+        "exclusiveMinimum": 0,
+        "maximum": 1,
+        "default": 0.05,
+        "description": "Target FDR for calls: posterior expected FDR for sccoda and tasccoda, Benjamini-Hochberg for propeller."
+      },
+      "reference_cell_type": {
+        "type": "string",
+        "default": "automatic",
+        "description": "Cell type with zero effect, or automatic to let the method choose one. Ignored by propeller."
+      },
+      "sccoda": {
+        "type": "object",
+        "description": "Options for the sccoda method.",
+        "properties": {
+          "num_samples": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 10000,
+            "description": "NUTS draws after warmup."
+          },
+          "num_warmup": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 1000,
+            "description": "NUTS warmup iterations."
+          },
+          "absence_threshold": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.05,
+            "description": "Maximum zero fraction allowed for an automatically chosen reference."
+          },
+          "donor_key": {
+            "type": ["string", "null"],
+            "default": null,
+            "description": "Optional donor column adding a donor random intercept for donors with several libraries (proposed extension)."
+          }
+        },
+        "additionalProperties": false
+      },
+      "tasccoda": {
+        "type": "object",
+        "description": "Options for the tasccoda method.",
+        "properties": {
+          "tree_key": {
+            "type": ["string", "null"],
+            "default": null,
+            "description": "Name of the cell-type tree, such as a lineage or clustering hierarchy. Required when method is tasccoda."
+          },
+          "lambda_0": {
+            "type": "number",
+            "default": 50,
+            "description": "Spike-and-slab penalty lambda_0 of the tascCODA prior."
+          },
+          "lambda_1": {
+            "type": "number",
+            "default": 5,
+            "description": "Tree-aggregation penalty of the tascCODA prior."
+          },
+          "phi": {
+            "type": "number",
+            "default": 0,
+            "description": "Aggregation-bias parameter for tree-level effects."
+          },
+          "theta": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.5,
+            "description": "Global spike-and-slab mixing weight, held fixed rather than sampled."
+          }
+        },
+        "additionalProperties": false
+      },
+      "propeller": {
+        "type": "object",
+        "description": "Options for the propeller method.",
+        "properties": {
+          "transform": {
+            "type": "string",
+            "enum": ["logit", "asin"],
+            "default": "logit",
+            "description": "Variance-stabilising transform of per-sample cell-type proportions."
+          },
+          "robust": {
+            "type": "boolean",
+            "default": true,
+            "description": "Robust empirical-Bayes variance shrinkage in the limma fit."
+          },
+          "trend": {
+            "type": "boolean",
+            "default": false,
+            "description": "Fit a mean-variance trend before empirical-Bayes shrinkage."
+          }
+        },
+        "additionalProperties": false
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu", "cuda"],
+        "default": "auto",
+        "description": "Device for the JAX-based sccoda and tasccoda fits; propeller runs on CPU."
+      },
+      "seed": {
+        "type": "integer",
+        "minimum": 0,
+        "default": 0,
+        "description": "Random seed for NUTS initialisation and draws."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory, device and model size without fitting."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": ["dataset", "design"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written, for example uns/celltype_proportion/effects. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Method, reference, sample and type counts, calls, expected FDR, acceptance rate and warnings for completed runs. Never raw posterior draws.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "abundance.celltype_proportion_test",
+      "reads": [
+        "obs/<sample_key>",
+        "obs/<celltype_key>",
+        "obs/<covariate_keys>",
+        "uns/<sample_metadata>"
+      ],
+      "writes": [
+        "uns/celltype_proportion/counts",
+        "uns/celltype_proportion/effects",
+        "uns/celltype_proportion/params",
+        "models/celltype_proportion"
+      ],
+      "devices": ["cpu", "cuda"],
+      "stochastic": true,
+      "long_running": false,
+      "streaming": false,
+      "paradigm": "model-based",
+      "docs": "tasks/abundance/celltype_proportion_test.md"
+    }
+  }
+}

@@ -1,0 +1,296 @@
+{
+  "name": "singlet_annotation_cross_dataset_label_reconciliation",
+  "title": "Cross-dataset label reconciliation",
+  "description": "Reconciles author cell-type labels from two or more studies into pairwise relations (equivalent, one-to-many, many-to-one, novel) and one harmonised label and parent per cell. The default cellhint method needs no training and reports the thresholds it used; popv adds Cell Ontology votes given an OBO file, and metaneighbor only scores replicability. Requires a study column and a label column; writes uns/harmonisation/relations and obs/harmonised_label. Do not use it to label an unlabelled dataset; use reference label transfer for that.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "dataset_key": {
+        "type": "string",
+        "default": "dataset",
+        "description": "obs column giving the study of each cell; needs at least two distinct values."
+      },
+      "label_key": {
+        "type": "string",
+        "default": "cell_type",
+        "description": "obs column holding each cell's author label; missing labels stay unassigned."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "cellhint",
+          "metaneighbor",
+          "popv"
+        ],
+        "default": "cellhint",
+        "description": "Reconciliation method; cellhint gives relation types with thresholds."
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Random seed for the popv classifiers; the cellhint tree option uses cellhint.random_state. Default cellhint is deterministic."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      },
+      "cellhint": {
+        "type": "object",
+        "description": "Options for method cellhint; ignored by the other methods.",
+        "additionalProperties": false,
+        "properties": {
+          "use_rep": {
+            "type": "string",
+            "default": "auto",
+            "description": "Representation for distances: auto uses X_pca when present, otherwise X."
+          },
+          "distance_metric": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null,
+            "description": "Cell-to-type distance; null uses correlation on X and euclidean on embeddings."
+          },
+          "use_pct": {
+            "type": "boolean",
+            "default": false,
+            "description": "Use predictive clustering trees instead of direct distances."
+          },
+          "reorder_dataset": {
+            "type": "boolean",
+            "default": true,
+            "description": "Order studies by similarity before alignment; ignored when dataset_order is set."
+          },
+          "dataset_order": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "default": null,
+            "description": "Explicit study order; must list every study value."
+          },
+          "minimum_unique_percents": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "default": [
+              0.4,
+              0.5,
+              0.6,
+              0.7,
+              0.8
+            ],
+            "description": "Grid for the one-to-one threshold; the setting with fewest alignments is kept."
+          },
+          "minimum_divide_percents": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "default": [
+              0.1,
+              0.15,
+              0.2
+            ],
+            "description": "Grid for one-to-many and many-to-one thresholds."
+          },
+          "maximum_novel_percent": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.05,
+            "description": "Fraction below which a type is called novel."
+          },
+          "random_state": {
+            "type": "integer",
+            "default": 2,
+            "description": "Seed for the predictive clustering tree when use_pct is true."
+          },
+          "p_thres": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.05,
+            "description": "F-test p-value threshold for pruning predictive clustering trees."
+          }
+        }
+      },
+      "metaneighbor": {
+        "type": "object",
+        "description": "Options for method metaneighbor; ignored by the other methods.",
+        "additionalProperties": false,
+        "properties": {
+          "fast_version": {
+            "type": "boolean",
+            "default": false,
+            "description": "Use the alternative AUROC computation path of the reference implementation."
+          },
+          "node_degree_normalization": {
+            "type": "boolean",
+            "default": true,
+            "description": "Divide neighbour votes by node degree."
+          }
+        }
+      },
+      "popv": {
+        "type": "object",
+        "description": "Options for method popv; ignored by the other methods.",
+        "additionalProperties": false,
+        "properties": {
+          "methods": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "default": null,
+            "description": "Classifier names; null uses all algorithms of the reference implementation."
+          },
+          "cl_obo_file": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null,
+            "description": "Cell Ontology OBO file for ontology votes; null skips the ontology step."
+          },
+          "knn_scvi_n_neighbors": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 15,
+            "description": "Neighbours in the k-NN classifier on the scVI latent space."
+          }
+        }
+      }
+    },
+    "required": [
+      "dataset"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, for example uns/harmonisation/relations. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "For completed runs: method, dataset_order, relation counts by type, thresholds, unassigned_cells. Never raw tables.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "annotation.cross_dataset_label_reconciliation",
+      "reads": [
+        "layers/normalized",
+        "layers/counts",
+        "obs/<dataset_key>",
+        "obs/<label_key>",
+        "obsm/<use_rep>",
+        "var/<gene_id>",
+        "uns/cell_ontology"
+      ],
+      "writes": [
+        "uns/harmonisation/relations",
+        "uns/harmonisation/dataset_order",
+        "obs/harmonised_label",
+        "obs/harmonised_parent",
+        "obs/harmonised_relation_confidence",
+        "models/cellhint_pct_<dataset>"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/annotation/cross_dataset_label_reconciliation.md"
+    }
+  }
+}

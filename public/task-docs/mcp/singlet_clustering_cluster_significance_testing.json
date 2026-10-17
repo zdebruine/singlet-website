@@ -1,0 +1,248 @@
+{
+  "name": "singlet_clustering_cluster_significance_testing",
+  "title": "Validate clusters and splits against a single-population null",
+  "description": "Tests each split of a candidate partition against a null of one homogeneous population and returns a validated partition with unsupported splits removed or merged, plus a per-node table of raw and adjusted p-values. The default method countsplit re-derives fold-1 labels from the stored recipe and tests each node on held-out fold 2 with a count model. Use it before annotating clusters. Do not use it to set granularity or to judge biological distinctness, because large cell counts make trivial differences significant; de_merge is an uncalibrated heuristic kept as a comparator.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "partition_key": {
+        "type": "string",
+        "description": "obs column holding the candidate labels; the recipe in uns/<key>/params must exist."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "countsplit",
+          "choir",
+          "clusterde",
+          "de_merge"
+        ],
+        "default": "countsplit",
+        "description": "countsplit (default) is calibrated under its count model; de_merge is a heuristic comparator without calibration."
+      },
+      "alpha": {
+        "type": "number",
+        "default": 0.05,
+        "exclusiveMinimum": 0,
+        "exclusiveMaximum": 1,
+        "description": "Significance level for each node test; the threshold is adjusted by p_adjust."
+      },
+      "p_adjust": {
+        "type": "string",
+        "enum": [
+          "bonferroni",
+          "bh",
+          "none"
+        ],
+        "default": "bonferroni",
+        "description": "Adjustment across tree nodes; bonferroni controls the family-wise false split rate."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "minimum": 0,
+        "description": "Seed for fold assignment, permutations and null simulation."
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      },
+      "countsplit": {
+        "type": "object",
+        "description": "Options for method countsplit (binomial thinning into folds, Neufeld et al. semantics).",
+        "properties": {
+          "folds": {
+            "type": "integer",
+            "default": 2,
+            "minimum": 2,
+            "description": "Number of count-split folds; each fold gets an equal share of the counts."
+          },
+          "dispersion": {
+            "type": "string",
+            "enum": [
+              "nb",
+              "poisson"
+            ],
+            "default": "nb",
+            "description": "nb fits per-gene overdispersion; poisson assumes none and is exact only for Poisson counts."
+          }
+        },
+        "additionalProperties": false
+      },
+      "choir": {
+        "type": "object",
+        "description": "Options for method choir (random-forest permutation tests on sibling clusters).",
+        "properties": {
+          "n_iterations": {
+            "type": "integer",
+            "default": 100,
+            "minimum": 10,
+            "description": "Label permutations for the null; run time grows with this value."
+          },
+          "n_trees": {
+            "type": "integer",
+            "default": 50,
+            "minimum": 1,
+            "description": "Trees per random-forest classifier."
+          },
+          "feature_set": {
+            "type": "string",
+            "enum": [
+              "var",
+              "all"
+            ],
+            "default": "var",
+            "description": "Train classifiers on variable features (var) or on all features (all)."
+          },
+          "exclude_features": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [],
+            "description": "Feature names removed before classification, for example mitochondrial or ambient genes."
+          }
+        },
+        "additionalProperties": false
+      },
+      "clusterde": {
+        "type": "object",
+        "description": "Options for method clusterde (synthetic one-cluster null with contrast-based FDR).",
+        "properties": {
+          "null_family": {
+            "type": "string",
+            "default": "nb",
+            "description": "Count family of the synthetic one-cluster null; nb is the package default."
+          },
+          "n_pcs": {
+            "type": "integer",
+            "default": 200,
+            "minimum": 2,
+            "description": "Principal components used when building the synthetic null."
+          },
+          "fdr": {
+            "type": "number",
+            "default": 0.05,
+            "exclusiveMinimum": 0,
+            "exclusiveMaximum": 1,
+            "description": "False discovery rate used to call genes from the target-minus-null contrast."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "dataset",
+      "partition_key"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. obs/leiden_validated. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Keys: method, nodes_tested, splits_retained, clusters_before, clusters_after, alpha, p_adjust.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "clustering.cluster_significance_testing",
+      "reads": [
+        "layers/counts",
+        "obs/<partition_key>",
+        "uns/<partition_key>/params"
+      ],
+      "writes": [
+        "obs/<partition_key>_validated",
+        "uns/<partition_key>_validation/tests",
+        "uns/<partition_key>_validation/params",
+        "models/<partition_key>_null"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/clustering/cluster_significance_testing.md"
+    }
+  }
+}

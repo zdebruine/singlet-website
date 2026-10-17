@@ -1,0 +1,171 @@
+{
+  "name": "singlet_cross_species_ortholog_assignment",
+  "title": "Cross-species ortholog assignment",
+  "description": "Assigns orthologous gene pairs between species, labelled one-to-one, one-to-many or many-to-many, and writes orthogroups and per-gene partner indices. The default method compara_precomputed reads an exported Compara table; orthofinder runs a full all-versus-all analysis unless assign_only is set. Not for expression comparison: pair scores measure sequence-based orthology, so use cross-species.one_to_many_ortholog_harmonization for expression.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle with uns/proteomes per species, or a .singlet path or URI."
+      },
+      "species": {
+        "type": "array",
+        "items": {"type": "string"},
+        "minItems": 2,
+        "description": "Species keys in uns/proteomes to include; omit to use every species in the dataset."
+      },
+      "method": {
+        "type": "string",
+        "enum": ["compara_precomputed", "orthofinder", "omamer", "hcop_consensus"],
+        "default": "compara_precomputed",
+        "description": "Orthology route; compara_precomputed is the default and the published standard."
+      },
+      "one_to_many_max": {
+        "type": "integer",
+        "minimum": 1,
+        "default": 1,
+        "description": "Maximum partners per gene kept in the varm index; the pair table keeps every partner."
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu", "cuda"],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA only for MCL and batched pair scoring."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      },
+      "orthofinder": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options used when method is orthofinder.",
+        "properties": {
+          "mcl_inflation": {
+            "type": "number",
+            "exclusiveMinimum": 1,
+            "default": 1.2,
+            "description": "MCL inflation for graph clustering; higher values give finer orthogroups."
+          },
+          "assign_only": {
+            "type": "boolean",
+            "default": false,
+            "description": "Add genes to existing orthogroups by the SHOOT-based assign mode, without a full all-versus-all search."
+          }
+        }
+      },
+      "omamer": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["database"],
+        "description": "Options used when method is omamer.",
+        "properties": {
+          "database": {
+            "type": "string",
+            "description": "OMAmer reference database handle; required when method is omamer."
+          }
+        }
+      },
+      "hcop_consensus": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["min_evidence"],
+        "description": "Options used when method is hcop_consensus.",
+        "properties": {
+          "min_evidence": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Number of predictors that must agree to keep a pair; required for this method."
+          }
+        }
+      },
+      "compara_precomputed": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options used when method is compara_precomputed.",
+        "properties": {
+          "ensembl_release": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Ensembl release of the exported table; must match the proteome release."
+          }
+        }
+      }
+    },
+    "required": ["dataset"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: wrote members; dry_run: estimate only; queued: long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written, e.g. uns/orthology/pairs. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "For completed runs: pairs, types (one_to_one, one_to_many, many_to_many), orthogroups, unmatched_genes, method.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Provenance record id (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "cross-species.ortholog_assignment",
+      "reads": [
+        "uns/proteomes/<species>",
+        "uns/annotation/<species>",
+        "uns/orthology/precomputed"
+      ],
+      "writes": [
+        "uns/orthology/pairs",
+        "uns/orthology/orthogroups",
+        "varm/ortholog_<species>"
+      ],
+      "devices": ["cpu", "cuda"],
+      "stochastic": false,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/cross-species/ortholog_assignment.md"
+    }
+  }
+}

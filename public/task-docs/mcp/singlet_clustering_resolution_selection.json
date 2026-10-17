@@ -1,0 +1,303 @@
+{
+  "name": "singlet_clustering_resolution_selection",
+  "title": "Choose clustering resolution without labels",
+  "description": "Chooses one clustering resolution from a sweep over an existing kNN or SNN graph when no reference labels exist. The default rule, chooser_threshold, applies the chooseR subsample co-clustering robustness rule with a bootstrap silhouette threshold; max_silhouette and label_nmi (a comparator that uses labels) are alternatives, and report_only writes the sweep without selecting. Needs an obsp connectivity graph; writes one partition per grid value, the selected partition (except report_only), a per-resolution summary and the selection record. Do not use it to score a clustering against labels or to obtain a fixed cluster count (use clustering.cell_partitioning), and do not describe a selected resolution as biologically validated.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "graph_key": {
+        "type": "string",
+        "default": "neighbors",
+        "description": "Graph to sweep; reads obsp/<graph_key>_connectivities. The graph is not rebuilt."
+      },
+      "embedding_key": {
+        "type": "string",
+        "default": "X_pca",
+        "description": "Cell embedding in obsm, used by max_silhouette and recorded for the other rules."
+      },
+      "labels_key": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "default": null,
+        "description": "Obs column with reference labels. Required by label_nmi; otherwise only adds report-time NMI and ARI, never used for selection."
+      },
+      "output_key": {
+        "type": "string",
+        "default": "cluster_selected",
+        "pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$",
+        "description": "Prefix of the written members. Existing members with this prefix are replaced only when overwrite is true."
+      },
+      "resolutions": {
+        "type": "array",
+        "items": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "minItems": 1,
+        "default": [
+          0.2,
+          0.4,
+          0.6,
+          0.8,
+          1.0,
+          1.2,
+          1.4,
+          1.6,
+          1.8,
+          2.0
+        ],
+        "description": "Grid of resolution values, each greater than 0; the default is the scIB grid. The grid is reported with every result."
+      },
+      "selection_rule": {
+        "type": "string",
+        "enum": [
+          "chooser_threshold",
+          "max_silhouette",
+          "label_nmi",
+          "report_only"
+        ],
+        "default": "chooser_threshold",
+        "description": "Rule that picks one resolution: chooser_threshold, max_silhouette (mean silhouette on the embedding), label_nmi (uses labels; comparator only) or report_only (no selection)."
+      },
+      "chooser_threshold": {
+        "type": "object",
+        "description": "Options of the chooser_threshold rule; ignored by the other rules.",
+        "properties": {
+          "n_subsamples": {
+            "type": "integer",
+            "default": 100,
+            "minimum": 2,
+            "description": "Number of subsamples B. The cost is B times the number of grid values clustering calls."
+          },
+          "subsample_fraction": {
+            "type": "number",
+            "default": 0.8,
+            "exclusiveMinimum": 0,
+            "exclusiveMaximum": 1,
+            "description": "Fraction of cells in each subsample, drawn without replacement."
+          },
+          "bootstrap_reps": {
+            "type": "integer",
+            "default": 25000,
+            "minimum": 1000,
+            "description": "Bootstrap replicates for the BCa interval of the median cluster silhouette."
+          },
+          "ci_level": {
+            "type": "number",
+            "default": 0.95,
+            "exclusiveMinimum": 0,
+            "exclusiveMaximum": 1,
+            "description": "Coverage of the bootstrap interval."
+          }
+        },
+        "additionalProperties": false
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available. CUDA accelerates co-membership counting only."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "minimum": 0,
+        "description": "Random seed for subsampling and optimiser tie-breaking."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, peak memory and device without clustering."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members with the same output_key instead of failing."
+      }
+    },
+    "required": [
+      "dataset"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, for example obs/cluster_selected and obs/cluster_selected_res_0.8. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Compact summary for completed runs: chosen resolution, cluster count, rule, grid and one row per grid value. Never raw matrices.",
+        "properties": {
+          "chosen_resolution": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "Selected grid value; null for report_only."
+          },
+          "n_clusters": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Cluster count at the selected resolution; null for report_only."
+          },
+          "selection_rule": {
+            "type": "string"
+          },
+          "grid": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "per_resolution": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "resolution": {
+                  "type": "number"
+                },
+                "n_clusters": {
+                  "type": "integer"
+                },
+                "modularity": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "mean_silhouette": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "median_silhouette_coclust": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "ci_low": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "ci_high": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "chosen": {
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": true
+            }
+          },
+          "labels_used": {
+            "type": "boolean",
+            "description": "True when labels_key was set and read."
+          },
+          "seed": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "clustering.resolution_selection",
+      "reads": [
+        "obsm/<embedding_key>",
+        "obsp/<graph_key>_connectivities",
+        "obs/<labels_key>",
+        "uns/<graph_key>/params"
+      ],
+      "writes": [
+        "obs/<output_key>",
+        "obs/<output_key>_res_<r>",
+        "uns/<output_key>/resolution_summary",
+        "uns/<output_key>/selection",
+        "obsp/<output_key>_coclust"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/clustering/resolution_selection.md"
+    }
+  }
+}

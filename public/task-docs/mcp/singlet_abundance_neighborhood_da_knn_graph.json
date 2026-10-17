@@ -1,0 +1,276 @@
+{
+  "name": "singlet_abundance_neighborhood_da_knn_graph",
+  "title": "Neighbourhood differential abundance on a kNN graph",
+  "description": "Tests which neighbourhoods of a cell kNN graph change in abundance between conditions, using replicate samples as the unit, with a negative-binomial model per neighbourhood and graph-spatial FDR. The default solver is irls_lrt; use qlf to match miloR, or glmm for dependent samples with at least 60 samples. It needs an obsm embedding or obsp graph, a sample column and a design with positive residual degrees of freedom, and it writes membership, counts, results and per-cell logFC. Do not use it for cluster-level composition, per-cell scores, or when replicate samples are missing.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "design": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["formula"],
+        "description": "Sample-level design of the neighbourhood count model.",
+        "properties": {
+          "formula": {
+            "type": "string",
+            "description": "Design formula over obs columns, for example '~ batch + condition'; residual degrees of freedom must be positive."
+          },
+          "sample_key": {
+            "type": "string",
+            "default": "sample",
+            "description": "obs column with the biological replicate identifier; it must not be the condition column."
+          },
+          "contrast": {
+            "type": ["string", "null"],
+            "default": null,
+            "description": "Coefficient to test; null tests the last term of the formula."
+          }
+        }
+      },
+      "embedding": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Embedding and graph used to define neighbourhoods.",
+        "properties": {
+          "use_rep": {
+            "type": "string",
+            "default": "X_pca",
+            "description": "obsm key of the embedding; it must contain no missing values."
+          },
+          "n_dims": {
+            "type": "integer",
+            "default": 30,
+            "minimum": 2,
+            "description": "Leading embedding dimensions used for the graph and index placement."
+          },
+          "graph_key": {
+            "type": ["string", "null"],
+            "default": null,
+            "description": "Existing obsp connectivity key to reuse; null builds a kNN graph from use_rep."
+          },
+          "k_graph": {
+            "type": "integer",
+            "default": 10,
+            "minimum": 3,
+            "description": "Neighbours per cell when building the graph; 10 matches miloR's buildGraph default."
+          }
+        }
+      },
+      "nhoods": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Neighbourhood sampling.",
+        "properties": {
+          "prop": {
+            "type": "number",
+            "default": 0.1,
+            "exclusiveMinimum": 0,
+            "maximum": 1,
+            "description": "Fraction of cells sampled as index cells; 0.05 is suggested above about 30k cells."
+          },
+          "k": {
+            "type": "integer",
+            "default": 21,
+            "minimum": 3,
+            "description": "Neighbourhood size used by refined index placement."
+          },
+          "refined": {
+            "type": "boolean",
+            "default": true,
+            "description": "Move each index cell to the cell nearest the median position of its neighbourhood."
+          },
+          "min_median_cells_per_sample": {
+            "type": "number",
+            "default": 3,
+            "minimum": 0,
+            "description": "Warning threshold for the median neighbourhood cell count per sample; not a filter."
+          }
+        }
+      },
+      "test": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Test statistic and multiplicity correction.",
+        "properties": {
+          "solver": {
+            "type": "string",
+            "enum": ["irls_lrt", "qlf", "glmm"],
+            "default": "irls_lrt",
+            "description": "irls_lrt: NB GLM with likelihood-ratio test; qlf: edgeR quasi-likelihood F-test; glmm: NB GLMM."
+          },
+          "fdr_weighting": {
+            "type": "string",
+            "enum": ["k_distance", "none"],
+            "default": "k_distance",
+            "description": "k_distance: weight 1/k-distance; none: plain Benjamini-Hochberg over neighbourhoods."
+          },
+          "alpha": {
+            "type": "number",
+            "default": 0.1,
+            "exclusiveMinimum": 0,
+            "maximum": 1,
+            "description": "Significance level for SpatialFDR calls and summaries."
+          },
+          "min_mean": {
+            "type": "number",
+            "default": 0,
+            "minimum": 0,
+            "description": "Minimum mean neighbourhood count across samples before testing."
+          }
+        }
+      },
+      "glmm": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options for test.solver glmm (dependent samples).",
+        "properties": {
+          "reml": {
+            "type": "boolean",
+            "default": true,
+            "description": "Estimate variance components by REML."
+          },
+          "variance_solver": {
+            "type": "string",
+            "enum": ["Fisher", "HE", "HE-NNLS"],
+            "default": "Fisher",
+            "description": "Variance-component solver; Fisher falls back to non-negative HE on negative estimates."
+          },
+          "max_iter": {
+            "type": "integer",
+            "default": 50,
+            "minimum": 1,
+            "description": "Maximum iterations of the mixed-model fit."
+          },
+          "tol": {
+            "type": "number",
+            "default": 1e-5,
+            "exclusiveMinimum": 0,
+            "description": "Convergence tolerance of the mixed-model fit."
+          },
+          "force": {
+            "type": "boolean",
+            "default": false,
+            "description": "Allow fewer than 60 samples, where estimates may be unreliable."
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Names and optional annotation of the written members.",
+        "properties": {
+          "key": {
+            "type": "string",
+            "default": "nhood_da",
+            "pattern": "^[A-Za-z0-9_]{1,64}$",
+            "description": "Stem of the output members under obsm, uns, obs and models."
+          },
+          "annotation_key": {
+            "type": ["string", "null"],
+            "default": null,
+            "description": "obs labels summarised per significant neighbourhood: majority label at 75 percent, otherwise Mixed."
+          }
+        }
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu", "cuda"],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "minimum": 0,
+        "description": "Seed for index-cell sampling and mixed-model starting values."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": ["dataset", "design"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written, e.g. obs/nhood_da_nhood_logfc. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "additionalProperties": true,
+        "description": "Compact summary for completed runs: n_neighbourhoods, n_samples, median_cells_per_sample, n_fdr_le_alpha, n_spatial_fdr_le_alpha, solver, fdr_weighting, contrast, rule_met and warnings. Never raw matrices."
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device, neighbourhood count and design rank.",
+        "additionalProperties": true
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "abundance.neighborhood_da_knn_graph",
+      "reads": [
+        "obsm/<use_rep>",
+        "obsp/<graph_key>",
+        "obs/<sample_key>",
+        "obs/<design_column>",
+        "obs/<annotation_key>"
+      ],
+      "writes": [
+        "obsm/<output_key>_nhoods",
+        "uns/<output_key>_nhood_counts",
+        "uns/<output_key>_nhood_results",
+        "obs/<output_key>_nhood_logfc",
+        "obs/<output_key>_nhood_annotation",
+        "models/<output_key>_nhood_glm"
+      ],
+      "devices": ["cpu", "cuda"],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": true,
+      "paradigm": "model-based",
+      "docs": "tasks/abundance/neighborhood_da_knn_graph.md"
+    }
+  }
+}

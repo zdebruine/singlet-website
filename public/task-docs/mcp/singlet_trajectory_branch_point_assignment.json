@@ -1,0 +1,243 @@
+{
+  "name": "singlet_trajectory_branch_point_assignment",
+  "title": "Branch point and branch assignment",
+  "description": "Finds where lineages split along a trajectory and assigns each cell to a branch as hard labels, soft weights or fate probabilities. Needs an embedding, a graph or pseudotime, and a root cell. Default method is palantir; use scfates for a principal tree with per-gene fork tests. Writes obs/branch_label, obsm/branch_weights and uns/branch_points. Do not use without a root (use trajectory.root_identification first) or to order cells alone.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "method": {
+        "type": "string",
+        "enum": ["palantir", "scfates", "slingshot"],
+        "default": "palantir",
+        "description": "palantir: soft fate probabilities; scfates: principal tree with fork tests; slingshot: lineage curves and weights."
+      },
+      "embedding": {
+        "type": "string",
+        "default": "X_pca",
+        "description": "obsm key of the embedding used for the graph and branch geometry."
+      },
+      "root": {
+        "type": "string",
+        "description": "obs column with one TRUE start cell, or a cell identifier. Required; the tool never infers a root."
+      },
+      "terminal_key": {
+        "type": ["string", "null"],
+        "default": null,
+        "description": "uns key listing terminal states; null uses the method's own terminal-state step."
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu", "cuda"],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Seed for Palantir waypoint sampling and other stochastic steps."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      },
+      "palantir": {
+        "type": "object",
+        "description": "Options used when method is palantir.",
+        "additionalProperties": false,
+        "properties": {
+          "knn": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 30,
+            "description": "Neighbours in the kNN graph and the Markov chain."
+          },
+          "num_waypoints": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 1200,
+            "description": "Waypoints for the absorbing chain; raised if too small for the components."
+          },
+          "max_iterations": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 25,
+            "description": "Iterations for pseudotime refinement."
+          },
+          "scale_components": {
+            "type": "boolean",
+            "default": true,
+            "description": "Min-max scale diffusion components before pseudotime."
+          }
+        }
+      },
+      "scfates": {
+        "type": "object",
+        "description": "Options used when method is scfates.",
+        "additionalProperties": false,
+        "properties": {
+          "nodes": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Principal-tree node count; required when method is scfates."
+          },
+          "tree_method": {
+            "type": "string",
+            "enum": ["ppt", "epg"],
+            "default": "ppt",
+            "description": "ppt: principal tree fit; epg: ElPiGraph elastic graph."
+          },
+          "epg_lambda": {
+            "type": "number",
+            "minimum": 0,
+            "default": 0.01,
+            "description": "ElPiGraph stretching penalty; used when tree_method is epg."
+          },
+          "epg_mu": {
+            "type": "number",
+            "minimum": 0,
+            "default": 0.1,
+            "description": "ElPiGraph bending penalty; used when tree_method is epg."
+          },
+          "fork_fdr": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.05,
+            "description": "FDR cutoff for genes that differ between branches in fork tests."
+          }
+        }
+      },
+      "slingshot": {
+        "type": "object",
+        "description": "Options used when method is slingshot.",
+        "additionalProperties": false,
+        "properties": {
+          "cluster_key": {
+            "type": "string",
+            "default": "cluster",
+            "description": "obs column with cluster labels for the cluster-level minimum spanning tree."
+          },
+          "shrink": {
+            "type": "boolean",
+            "default": true,
+            "description": "Shrink branching lineages toward their average before the split."
+          },
+          "reweight": {
+            "type": "boolean",
+            "default": true,
+            "description": "Reweight cells shared between lineages during curve fitting."
+          },
+          "approx_points": {
+            "type": ["integer", "null"],
+            "default": null,
+            "description": "Points used to approximate each curve; null uses 150 when cells exceed 150."
+          },
+          "branch_threshold": {
+            "type": ["number", "null"],
+            "minimum": 0,
+            "maximum": 1,
+            "default": null,
+            "description": "Minimum soft weight for a hard label; null uses 1/L."
+          },
+          "omega": {
+            "type": "boolean",
+            "default": false,
+            "description": "Cap MST edge length using an artificial outgroup cluster."
+          },
+          "omega_scale": {
+            "type": "number",
+            "minimum": 0,
+            "default": 1.5,
+            "description": "Scale factor for omega when omega is true."
+          }
+        }
+      }
+    },
+    "required": ["dataset", "root"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: wrote members; dry_run: estimate only; queued: long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written, e.g. obs/branch_label. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "For completed fits: method, n_branches, n_branch_points, branch_points (node, pseudotime), effective_num_waypoints.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "trajectory.branch_point_assignment",
+      "reads": [
+        "layers/counts",
+        "obsm/X_pca",
+        "obsp/connectivities",
+        "uns/trajectory_graph",
+        "obs/root_flag",
+        "obs/cluster",
+        "uns/terminal_states"
+      ],
+      "writes": [
+        "obs/branch_label",
+        "obsm/branch_weights",
+        "obsm/fate_probabilities",
+        "obs/pseudotime_<lineage>",
+        "uns/branch_points",
+        "uns/fork_test_<pair>",
+        "models/principal_tree_<name>"
+      ],
+      "devices": ["cpu", "cuda"],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/trajectory/branch_point_assignment.md"
+    }
+  }
+}

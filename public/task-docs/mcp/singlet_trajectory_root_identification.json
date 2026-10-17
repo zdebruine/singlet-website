@@ -1,0 +1,228 @@
+{
+  "name": "singlet_trajectory_root_identification",
+  "title": "Root or start-state identification",
+  "description": "Chooses the root cell or cluster that sets the origin and direction of pseudotime and fate for a developmental process. The default method is manual: pass root_cell or root_cluster chosen from progenitor markers or the earliest timepoint. Automatic candidates from CytoTRACE-style potency, diffusion extremes and Palantir early-cell are ranked and cross-checked. Do not let it choose a root silently, because no benchmark validates automatic root choice.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "root_method": {
+        "type": "string",
+        "enum": [
+          "manual",
+          "dpt_extreme",
+          "palantir_early",
+          "cytotrace"
+        ],
+        "default": "manual",
+        "description": "Root method. manual anchors on root_cell or root_cluster; palantir_early needs root_cell; dpt_extreme and cytotrace choose from the data."
+      },
+      "root_cell": {
+        "type": "string",
+        "description": "Obs name of an anchor cell: the root for manual, the early cell for palantir_early."
+      },
+      "root_cluster": {
+        "type": "string",
+        "description": "Obs label of an anchor cluster; its medoid cell in PCA space becomes the root for manual."
+      },
+      "n_root_candidates": {
+        "type": "integer",
+        "minimum": 1,
+        "default": 5,
+        "description": "Number of ranked root candidates written to uns/root_candidates."
+      },
+      "cytotrace": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "CytoTRACE-style gene-count potency score, also computed as a cross-check for every method.",
+        "properties": {
+          "layer": {
+            "type": "string",
+            "default": "imputed",
+            "description": "Expression layer for the gene-correlation score; CellRank default."
+          },
+          "aggregation": {
+            "type": "string",
+            "enum": [
+              "mean",
+              "median",
+              "hmean",
+              "gmean"
+            ],
+            "default": "mean",
+            "description": "Aggregation over the top correlated genes."
+          },
+          "n_genes": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 200,
+            "description": "Number of top positively correlated genes averaged into the score."
+          }
+        }
+      },
+      "palantir": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Palantir early-cell options, used by palantir_early only.",
+        "properties": {
+          "use_early_cell_as_start": {
+            "type": "boolean",
+            "default": false,
+            "description": "Start from root_cell itself rather than the nearest boundary cell."
+          },
+          "max_iterations": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 25,
+            "description": "Maximum iterations of pseudotime refinement."
+          }
+        }
+      },
+      "dpt": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Diffusion-extreme options, used by dpt_extreme only.",
+        "properties": {
+          "component": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 1,
+            "description": "Diffusion component index used to pick the extreme cell; index 0 is trivial and excluded."
+          },
+          "extreme": {
+            "type": "string",
+            "enum": [
+              "min",
+              "max"
+            ],
+            "default": "min",
+            "description": "Take the minimum or maximum of the chosen component as the root."
+          }
+        }
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Seed for Palantir waypoint sampling; the other methods are deterministic."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": [
+      "dataset"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. uns/root. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "root_method, root_cell, root_cluster, candidates (score and cluster) and cluster_agreement. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "trajectory.root_identification",
+      "reads": [
+        "layers/counts",
+        "layers/imputed",
+        "obsm/X_pca",
+        "obsp/connectivities",
+        "obs/cluster"
+      ],
+      "writes": [
+        "obs/root_score",
+        "obs/potency_score",
+        "obs/root_flag",
+        "uns/root",
+        "uns/root_candidates"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": false,
+      "streaming": false,
+      "paradigm": "heuristic",
+      "docs": "tasks/trajectory/root_identification.md"
+    }
+  }
+}

@@ -1,0 +1,231 @@
+{
+  "name": "singlet_embedding_viz_embedding_stability",
+  "title": "Embedding stability across seeds and subsamples",
+  "description": "Measures how stable a two-dimensional embedding is under random seed changes, optional graph rebuilds and cell subsampling. Runs n_seeds replicate embeddings of the chosen method on the same components, aligns them by Procrustes, and reports the normalised disparity and the mean kNN overlap against its chance value. It also flags clusters of the cluster_key obs column by subsample Jaccard stability. Writes replicate maps, a summary to uns and a per-cell stable flag to obs. Do not use it to test fidelity to the data or whether a cluster is real; use singlet_embedding_viz_local_neighborhood_preservation or singlet_clustering_cluster_significance_testing instead.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "umap",
+          "opentsne",
+          "pacmap"
+        ],
+        "default": "umap",
+        "description": "Embedding whose stability is measured; umap is the proposed default."
+      },
+      "representation": {
+        "type": "string",
+        "minLength": 1,
+        "default": "X_pca",
+        "description": "Key in obsm holding the components; the same matrix is used for every replicate."
+      },
+      "init": {
+        "type": "string",
+        "enum": [
+          "default",
+          "pca",
+          "spectral",
+          "random"
+        ],
+        "default": "default",
+        "description": "default is each method's library initialisation; spectral is valid for umap only."
+      },
+      "n_seeds": {
+        "type": "integer",
+        "minimum": 2,
+        "default": 5,
+        "description": "Number of replicate embeddings, each with its own seed derived from the base seed."
+      },
+      "seed": {
+        "type": "integer",
+        "minimum": 0,
+        "default": 0,
+        "description": "Base seed; replicate seeds are derived from it deterministically."
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device for one replicate and for the full run, without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing members written by this tool instead of failing."
+      },
+      "neighbour_overlap": {
+        "type": "object",
+        "description": "Options for the kNN overlap statistic.",
+        "properties": {
+          "k": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 15,
+            "description": "Neighbourhood size; must be below the number of scored cells minus one."
+          },
+          "recompute_graph_per_seed": {
+            "type": "boolean",
+            "default": false,
+            "description": "Rebuild the kNN graph for each replicate, so the score includes graph variability."
+          }
+        },
+        "additionalProperties": false
+      },
+      "procrustes": {
+        "type": "object",
+        "description": "Options for Procrustes disparity.",
+        "properties": {
+          "scale": {
+            "type": "boolean",
+            "default": true,
+            "description": "Allow an isotropic scale when aligning replicate maps."
+          },
+          "allow_reflection": {
+            "type": "boolean",
+            "default": false,
+            "description": "Allow orthogonal alignments that include reflections."
+          }
+        },
+        "additionalProperties": false
+      },
+      "scclusteval": {
+        "type": "object",
+        "description": "Options for subsample Jaccard cluster stability.",
+        "properties": {
+          "cluster_key": {
+            "type": "string",
+            "default": "leiden",
+            "description": "Obs key of the full-data clusters to score."
+          },
+          "subsample_fraction": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "exclusiveMaximum": 1,
+            "default": 0.8,
+            "description": "Fraction of cells per subsample, drawn without replacement."
+          },
+          "n_subsamples": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 20,
+            "description": "Number of subsample re-clusterings."
+          },
+          "jaccard_cutoff": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.6,
+            "description": "Clusters with median Jaccard below this value are flagged unstable."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "dataset"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: estimate only; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "For completed runs: n_seeds, n_subsamples, median_procrustes_disparity, mean_neighbour_overlap, chance_overlap, n_clusters_flagged.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "embedding-viz.embedding_stability",
+      "reads": [
+        "obsm/X_pca",
+        "obsp/connectivities",
+        "obs/leiden"
+      ],
+      "writes": [
+        "obsm/stability_rep<r>",
+        "uns/embedding_stability",
+        "obs/embedding_stable_cluster"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/embedding-viz/embedding_stability.md"
+    }
+  }
+}

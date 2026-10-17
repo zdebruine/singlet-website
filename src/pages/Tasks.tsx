@@ -109,7 +109,7 @@ const Tasks = () => {
               value={area}
               onChange={(e) => setArea(e.target.value)}
               aria-label="Area"
-              className="h-9 rounded border border-input bg-background px-2 text-[14px]"
+              className="h-9 w-full md:w-auto max-w-full rounded border border-input bg-background px-2 text-[14px]"
             >
               <option value="">All areas</option>
               {data?.areas.map((a) => (
@@ -122,7 +122,7 @@ const Tasks = () => {
               value={scope}
               onChange={(e) => setScope(e.target.value)}
               aria-label="Scope"
-              className="h-9 rounded border border-input bg-background px-2 text-[14px]"
+              className="h-9 w-full md:w-auto max-w-full rounded border border-input bg-background px-2 text-[14px]"
             >
               <option value="">Core and extended</option>
               <option value="core">Core (scRNA-seq, snRNA-seq)</option>
