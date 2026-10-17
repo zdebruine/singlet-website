@@ -1286,10 +1286,20 @@ export async function countStudies(ctx: Ctx, p: SearchParams): Promise<number> {
   return c?.n ?? 0;
 }
 
+/**
+ * The study query cut down to accession ids and the total. A text query starts with a WITH block and
+ * orders by a score column in its select list, so it is wrapped whole; a filter-only query has neither
+ * and keeps the cheaper rewrite of its select list.
+ */
+export function exportAccessionsSql(sql: string): string {
+  if (/^\s*WITH\b/i.test(sql)) return `SELECT gse_id, _total FROM (${sql})`;
+  return sql.replace(/SELECT\s+m\.gse_id,[\s\S]*?FROM gse_meta m/, "SELECT m.gse_id, COUNT(*) OVER () AS _total FROM gse_meta m");
+}
+
 /** Whole-result-set accession export (≤ MAX_EXPORT). */
 export async function exportStudyAccessions(ctx: Ctx, p: SearchParams): Promise<{ total: number; accessions: string[] }> {
   const plan = planStudyQuery({ ...p, page: 1, limit: MAX_EXPORT });
-  const sql = plan.sql.replace(/SELECT[\s\S]*?FROM gse_meta m/, "SELECT m.gse_id, COUNT(*) OVER () AS _total FROM gse_meta m");
+  const sql = exportAccessionsSql(plan.sql);
   const res = await ctx.db.prepare(sql).bind(...plan.params).all<{ gse_id: string; _total: number }>();
   return { total: res.results[0]?._total ?? 0, accessions: res.results.map((r) => r.gse_id) };
 }

@@ -5,6 +5,7 @@ import { fmtBytes, fmtCompact, fmtInt } from "@/lib/catalog-display";
 import { bundleUrl } from "@/integrations/api/client";
 import { apiClient, isApiError } from "@/integrations/api/client";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { Selection } from "./useSelection";
 
 type Tab = "python" | "r" | "curl";
@@ -55,6 +56,8 @@ export const SelectionBar = forwardRef<HTMLDivElement, Props>(function Selection
   const [expanded, setExpanded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
+  const [naming, setNaming] = useState(false);
+  const [cohortName, setCohortName] = useState("");
   const { user, openSignIn } = useAuth();
   const { items, totals, clear, toggle } = selection;
   if (!items.length) return null;
@@ -69,13 +72,18 @@ export const SelectionBar = forwardRef<HTMLDivElement, Props>(function Selection
       setTimeout(() => setCopied(false), 1400);
     });
   };
-  const saveCohort = async () => {
+  const startSave = () => {
     if (!user) { openSignIn(); return; }
-    const name = window.prompt("Cohort name", `Cohort of ${ids.length} studies`);
-    if (!name?.trim()) return;
+    setCohortName(`Cohort of ${ids.length} ${ids.length === 1 ? "study" : "studies"}`);
+    setNaming(true);
+  };
+  const saveCohort = async () => {
+    const name = cohortName.trim();
+    if (!name) return;
+    setNaming(false);
     setSaving(true); setSaveMessage("");
     try {
-      const result = await apiClient.product.saveCohort({ name: name.trim(), notes: "Saved from Browse", visibility: "private", public_gse_ids: ids, catalog_version: "2026.09" });
+      const result = await apiClient.product.saveCohort({ name, notes: "Saved from Browse", visibility: "private", public_gse_ids: ids, catalog_version: "2026.09" });
       const cohort = result.cohort as { id?: string } | undefined;
       setSaveMessage("Saved");
       if (cohort?.id) window.location.assign(`/c/${cohort.id}`);
@@ -126,7 +134,7 @@ export const SelectionBar = forwardRef<HTMLDivElement, Props>(function Selection
           </div>
 
           <div className="ml-auto flex items-center gap-2">
-            <button type="button" onClick={saveCohort} disabled={saving} className="btn-secondary btn-sm !bg-transparent !text-dark-foreground !border-dark-border hover:!bg-white/5">
+            <button type="button" onClick={startSave} disabled={saving} className="btn-secondary btn-sm !bg-transparent !text-dark-foreground !border-dark-border hover:!bg-white/5">
               {saving ? "Saving…" : "Save cohort"}
             </button>
             <button type="button" onClick={copy} className="btn-secondary btn-sm !bg-transparent !text-dark-foreground !border-dark-border hover:!bg-white/5">
@@ -170,6 +178,33 @@ export const SelectionBar = forwardRef<HTMLDivElement, Props>(function Selection
           </ul>
         )}
       </div>
+
+      <Dialog open={naming} onOpenChange={setNaming}>
+        <DialogContent className="max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>Save cohort</DialogTitle>
+            <DialogDescription>
+              {fmtInt(ids.length)} {ids.length === 1 ? "study" : "studies"}, pinned to catalogue 2026.09. Private until you share it.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={(e) => { e.preventDefault(); void saveCohort(); }} className="space-y-4">
+            <label className="block">
+              <span className="type-small text-muted-foreground">Name</span>
+              <input
+                className="input mt-1 w-full"
+                value={cohortName}
+                maxLength={100}
+                autoFocus
+                onChange={(e) => setCohortName(e.target.value)}
+              />
+            </label>
+            <div className="flex justify-end gap-2">
+              <button type="button" className="btn-secondary" onClick={() => setNaming(false)}>Cancel</button>
+              <button type="submit" className="btn-primary" disabled={!cohortName.trim()}>Save cohort</button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 });
