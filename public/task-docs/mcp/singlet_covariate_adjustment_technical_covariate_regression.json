@@ -1,0 +1,212 @@
+{
+  "name": "singlet_covariate_adjustment_technical_covariate_regression",
+  "title": "Technical covariate regression of expression",
+  "description": "Removes measured per-cell covariates such as total counts, detected genes or percent mitochondrial counts from expression and writes a residualized layer. The default pearson_analytic method removes depth through an analytic null model and takes no covariates; use nb_glm_residual or ols_log with an explicit covariates list for non-depth covariates. Not for batch or donor effects, which need batch covariate removal, and check covariate variance attribution before removing biology-linked covariates.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "pearson_analytic",
+          "nb_glm_residual",
+          "ols_log"
+        ],
+        "default": "pearson_analytic",
+        "description": "Residualization path. pearson_analytic removes depth only; nb_glm_residual and ols_log accept covariates."
+      },
+      "covariates": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "default": [],
+        "description": "obs columns to remove. Must be empty for pearson_analytic. Collinear covariates are flagged."
+      },
+      "protect": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "default": [],
+        "description": "obs columns kept in the joint fit so only the nuisance component is subtracted. Not used by pearson_analytic."
+      },
+      "layer": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "default": null,
+        "description": "Input layer. Null selects layers/counts for pearson_analytic and nb_glm_residual, and layers/log1p_norm for ols_log."
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without computing the residuals."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      },
+      "pearson_analytic": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "theta": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 100,
+            "description": "Shared overdispersion in the Pearson denominator, as in scanpy normalize_pearson_residuals."
+          },
+          "clip": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0,
+            "default": null,
+            "description": "Residual clip; null means sqrt(n_cells), the scanpy default."
+          }
+        }
+      },
+      "nb_glm_residual": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "clip": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0,
+            "default": null,
+            "description": "Residual clip; null means sqrt(n_cells/30), the SCTransform clip.range default."
+          }
+        }
+      },
+      "ols_log": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "batch_genes": {
+            "type": [
+              "integer",
+              "string",
+              "null"
+            ],
+            "default": null,
+            "description": "GPU genes per batch (integer or 'all'); null uses 100 above 100000 cells, else 'all'. Affects memory only."
+          }
+        }
+      }
+    },
+    "required": [
+      "dataset"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: residuals written inline; dry_run: only an estimate was computed; queued: long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. layers/residual. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "For completed calls: method, covariates, protect, clip, clipped_fraction, condition_number_ZtZ, n_genes. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "covariate-adjustment.technical_covariate_regression",
+      "reads": [
+        "layers/counts",
+        "layers/log1p_norm",
+        "obs/<covariate>",
+        "obs/<protect>"
+      ],
+      "writes": [
+        "layers/residual",
+        "varm/regression_coef",
+        "models/nb_glm",
+        "uns/covariate_regression"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": false,
+      "long_running": false,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/covariate-adjustment/technical_covariate_regression.md"
+    }
+  }
+}

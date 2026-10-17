@@ -1,0 +1,229 @@
+{
+  "name": "singlet_programs_program_usage_estimation",
+  "title": "Per-cell program usage estimation",
+  "description": "Estimates non-negative usage of fixed gene programs for each cell from a stored loading set, writing raw usages, row-normalised composition, per-cell coverage and residuals. The default nnls_frobenius refit matches the cNMF refit; schpf_project and expimap_encode need stored model state under models/. Use it to project discovery or query cells onto programs fitted elsewhere; do not use it to learn new programs or to assign cells to clusters or labels.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "loadings": {
+        "type": "string",
+        "description": "Stored loading set: varm/<name> for nnls_frobenius; models/<name> for schpf_project and expimap_encode."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "nnls_frobenius",
+          "schpf_project",
+          "expimap_encode"
+        ],
+        "default": "nnls_frobenius",
+        "description": "Usage estimator. nnls_frobenius is the cNMF-compatible default; schpf_project returns posterior means with spread."
+      },
+      "name": {
+        "type": "string",
+        "default": "program",
+        "description": "Prefix for written members, for example obsm/program_usage and obsm/program_usage_norm."
+      },
+      "missing_gene_policy": {
+        "type": "string",
+        "enum": [
+          "error",
+          "restrict"
+        ],
+        "default": "error",
+        "description": "error refuses when reference genes are absent; restrict refits on shared genes only and reports coverage."
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Seed for the random initialisation of the scHPF projection; other methods are deterministic."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without writing anything."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      },
+      "nnls_frobenius": {
+        "type": "object",
+        "description": "Options for the least-squares refit; ignored by other methods.",
+        "properties": {
+          "alpha_usage": {
+            "type": "number",
+            "minimum": 0,
+            "default": 0,
+            "description": "L2 penalty on usages; 0 gives plain non-negative least squares."
+          },
+          "tol": {
+            "type": "number",
+            "minimum": 0,
+            "default": 0.0001,
+            "description": "Solver tolerance for the coordinate-descent refit."
+          },
+          "max_iter": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 1000,
+            "description": "Maximum solver iterations per cell batch."
+          }
+        },
+        "additionalProperties": false
+      },
+      "schpf_project": {
+        "type": "object",
+        "description": "Options for the Gamma-Poisson projection; ignored by other methods.",
+        "properties": {
+          "min_iter": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 2,
+            "description": "Minimum variational iterations before convergence checks."
+          },
+          "max_iter": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 50,
+            "description": "Maximum variational iterations."
+          },
+          "check_freq": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 2,
+            "description": "Iterations between convergence checks."
+          }
+        },
+        "additionalProperties": false
+      },
+      "expimap_encode": {
+        "type": "object",
+        "description": "Options for the expiMap encoder; ignored by other methods.",
+        "properties": {
+          "rectify": {
+            "type": "boolean",
+            "default": true,
+            "description": "Clip negative latent means at zero to give non-negative usages."
+          },
+          "only_active": {
+            "type": "boolean",
+            "default": true,
+            "description": "Return only program terms not deactivated by the group lasso."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "dataset",
+      "loadings"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, for example obsm/program_usage. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Compact summary for completed runs: method, n_cells, n_programs, missing_reference_genes, zero_usage_rows, median_relative_residual. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "programs.program_usage_estimation",
+      "reads": [
+        "layers/counts",
+        "varm/<loadings>",
+        "uns/<loadings>_meta",
+        "models/<loadings>"
+      ],
+      "writes": [
+        "obsm/<name>_usage",
+        "obsm/<name>_usage_norm",
+        "obs/<name>_coverage",
+        "obs/<name>_recon_err",
+        "uns/<name>_refit"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": true,
+      "paradigm": "model-based",
+      "docs": "tasks/programs/program_usage_estimation.md"
+    }
+  }
+}

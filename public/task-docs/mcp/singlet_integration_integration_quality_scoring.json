@@ -1,0 +1,458 @@
+{
+  "name": "singlet_integration_integration_quality_scoring",
+  "title": "Score integration quality",
+  "description": "Scores existing integrations (embeddings, kNN graphs or corrected matrices) with the 14 scIB metrics of batch removal and biological conservation, optional ciLISI, kSIM and an experimental model-based batch score, plus a min-max aggregate. Needs batch and cell-type labels in obs and an unintegrated baseline embedding (obsm/X_pca); writes one record per output and the aggregate to uns/integration_quality. It does not integrate or fit an integration. Never rank on batch scores alone, label-aware outputs are favoured by label-based metrics, and min-max aggregates are only comparable within one call.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: .singlet path, URI (s3://, r2://, https://) or workspace handle."
+      },
+      "integrated_keys": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "pattern": "^(obsm/[^/]+|obsp/[^/]+_connectivities|layers/[^/]+)$"
+        },
+        "minItems": 1,
+        "maxItems": 16,
+        "uniqueItems": true,
+        "description": "Outputs to score: obsm/<key> embedding, obsp/<prefix>_connectivities graph (needs _distances), layers/<key> features."
+      },
+      "baseline_key": {
+        "type": "string",
+        "pattern": "^obsm/[^/]+$",
+        "default": "obsm/X_pca",
+        "description": "Unintegrated embedding; the before state of pcr."
+      },
+      "batch_key": {
+        "type": "string",
+        "default": "batch",
+        "description": "obs column of batch labels (at least two levels)."
+      },
+      "label_key": {
+        "type": "string",
+        "default": "cell_type",
+        "description": "obs column of cell-type labels (at least two levels)."
+      },
+      "metrics": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "enum": [
+            "kbet",
+            "ilisi",
+            "clisi",
+            "asw_batch",
+            "asw_label",
+            "graph_connectivity",
+            "pcr",
+            "cell_cycle",
+            "trajectory",
+            "isolated_label_f1",
+            "isolated_label_asw",
+            "nmi",
+            "ari",
+            "hvg_overlap",
+            "cilisi",
+            "ksim",
+            "batch_predictability"
+          ]
+        },
+        "minItems": 1,
+        "uniqueItems": true,
+        "default": [
+          "kbet",
+          "ilisi",
+          "graph_connectivity",
+          "pcr",
+          "asw_batch",
+          "clisi",
+          "asw_label",
+          "isolated_label_f1",
+          "isolated_label_asw",
+          "nmi",
+          "ari",
+          "hvg_overlap",
+          "trajectory",
+          "cell_cycle"
+        ],
+        "description": "Metrics to compute; default is the 14 scIB metrics. batch_predictability is experimental."
+      },
+      "per_cell": {
+        "type": "boolean",
+        "default": false,
+        "description": "Also write per-cell silhouettes and iLISI/cLISI as obs columns."
+      },
+      "options": {
+        "type": "object",
+        "description": "Metric-specific settings; omitted objects take their defaults.",
+        "properties": {
+          "graph": {
+            "type": "object",
+            "description": "kNN graph for embedding and feature outputs.",
+            "properties": {
+              "k": {
+                "type": "integer",
+                "description": "Neighbours; ignored for supplied graphs.",
+                "default": 15,
+                "minimum": 2
+              }
+            },
+            "additionalProperties": false
+          },
+          "kbet": {
+            "type": "object",
+            "description": "kBET settings.",
+            "properties": {
+              "k": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 2,
+                "default": null,
+                "description": "Neighbourhood size; null uses the scIB rule per label."
+              },
+              "test_fraction": {
+                "type": "number",
+                "description": "Fraction of cells per test set (at least 25 cells).",
+                "default": 0.1,
+                "exclusiveMinimum": 0,
+                "maximum": 1
+              },
+              "alpha": {
+                "type": "number",
+                "description": "Significance level of the chi-squared test.",
+                "default": 0.05,
+                "exclusiveMinimum": 0,
+                "exclusiveMaximum": 1
+              }
+            },
+            "additionalProperties": false
+          },
+          "lisi": {
+            "type": "object",
+            "description": "iLISI and cLISI settings.",
+            "properties": {
+              "k": {
+                "type": "integer",
+                "description": "Neighbours; perplexity is floor(k / 3).",
+                "default": 90,
+                "minimum": 3
+              },
+              "subsample": {
+                "type": "number",
+                "description": "Fraction of cells scored.",
+                "default": 1.0,
+                "exclusiveMinimum": 0,
+                "maximum": 1
+              }
+            },
+            "additionalProperties": false
+          },
+          "cilisi": {
+            "type": "object",
+            "description": "ciLISI settings.",
+            "properties": {
+              "k": {
+                "type": "integer",
+                "description": "Euclidean neighbours.",
+                "default": 30,
+                "minimum": 2
+              }
+            },
+            "additionalProperties": false
+          },
+          "ksim": {
+            "type": "object",
+            "description": "kSIM settings.",
+            "properties": {
+              "k": {
+                "type": "integer",
+                "description": "Neighbours including the cell; capped at floor(sqrt(N)).",
+                "default": 25,
+                "minimum": 2
+              },
+              "min_rate": {
+                "type": "number",
+                "description": "Purity threshold of the acceptance rate.",
+                "default": 0.9,
+                "exclusiveMinimum": 0,
+                "maximum": 1
+              }
+            },
+            "additionalProperties": false
+          },
+          "pcr": {
+            "type": "object",
+            "description": "PCR settings.",
+            "properties": {
+              "n_comps": {
+                "type": "integer",
+                "description": "Principal components; also used to reduce feature outputs.",
+                "default": 50,
+                "minimum": 2
+              }
+            },
+            "additionalProperties": false
+          },
+          "hvg_overlap": {
+            "type": "object",
+            "description": "HVG overlap settings.",
+            "properties": {
+              "n_hvg": {
+                "type": "integer",
+                "description": "Highly variable genes per batch, capped at half the genes.",
+                "default": 500,
+                "minimum": 50
+              }
+            },
+            "additionalProperties": false
+          },
+          "clustering": {
+            "type": "object",
+            "description": "Leiden settings.",
+            "properties": {
+              "resolutions": {
+                "type": "array",
+                "items": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "minItems": 1,
+                "default": [
+                  0.2,
+                  0.4,
+                  0.6,
+                  0.8,
+                  1.0,
+                  1.2,
+                  1.4,
+                  1.6,
+                  1.8,
+                  2.0
+                ],
+                "description": "Resolution grid for nmi, ari and isolated_label_f1."
+              }
+            },
+            "additionalProperties": false
+          },
+          "isolated_label": {
+            "type": "object",
+            "description": "Isolated-label settings.",
+            "properties": {
+              "n_isolated": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 1,
+                "default": null,
+                "description": "Maximum batches per isolated label; null uses the minimum over labels."
+              }
+            },
+            "additionalProperties": false
+          },
+          "trajectory": {
+            "type": "object",
+            "description": "Trajectory settings.",
+            "properties": {
+              "pseudotime_key": {
+                "type": "string",
+                "default": "dpt_pseudotime",
+                "description": "obs column of pre-integration pseudotime."
+              }
+            },
+            "additionalProperties": false
+          },
+          "batch_predictability": {
+            "type": "object",
+            "description": "M1 settings.",
+            "properties": {
+              "folds": {
+                "type": "integer",
+                "description": "Cross-validation folds.",
+                "default": 5,
+                "minimum": 2
+              }
+            },
+            "additionalProperties": false
+          },
+          "aggregate": {
+            "type": "object",
+            "description": "Aggregate settings.",
+            "properties": {
+              "weights": {
+                "type": "object",
+                "properties": {
+                  "batch": {
+                    "type": "number",
+                    "minimum": 0,
+                    "description": "Weight of the batch group."
+                  },
+                  "bio": {
+                    "type": "number",
+                    "minimum": 0,
+                    "description": "Weight of the biological group."
+                  }
+                },
+                "required": [
+                  "batch",
+                  "bio"
+                ],
+                "additionalProperties": false,
+                "default": {
+                  "batch": 0.4,
+                  "bio": 0.6
+                },
+                "description": "Batch and bio weights; must sum to 1."
+              },
+              "scaling": {
+                "type": "string",
+                "enum": [
+                  "minmax",
+                  "raw"
+                ],
+                "default": "minmax",
+                "description": "minmax scales across outputs; raw averages unscaled values."
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "seed": {
+        "type": "integer",
+        "minimum": 0,
+        "default": 0,
+        "description": "Seed for kBET test sets, Leiden and cross-validation folds."
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto prefers CUDA when memory suffices."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without computing."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing records instead of failing."
+      }
+    },
+    "required": [
+      "dataset",
+      "integrated_keys"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. uns/integration_quality/X_integrated_harmony and uns/integration_quality/aggregate. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Compact summary for completed calls: cell, batch and label counts; per output its kind, scores, not_applicable list and fallbacks; the aggregate with scaling, overall scores, group means. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "integration.integration_quality_scoring",
+      "reads": [
+        "obsm/X_pca",
+        "obsm/X_integrated_<method>",
+        "obsp/<graph>_connectivities",
+        "obsp/<graph>_distances",
+        "layers/integrated_expr",
+        "layers/log1p_norm",
+        "obs/<batch_key>",
+        "obs/<label_key>",
+        "obs/S_score",
+        "obs/G2M_score",
+        "obs/<pseudotime_key>"
+      ],
+      "writes": [
+        "uns/integration_quality/<name>",
+        "uns/integration_quality/aggregate",
+        "obs/<name>_silhouette_batch",
+        "obs/<name>_silhouette_label",
+        "obs/<name>_ilisi",
+        "obs/<name>_clisi"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/integration/integration_quality_scoring.md"
+    }
+  }
+}

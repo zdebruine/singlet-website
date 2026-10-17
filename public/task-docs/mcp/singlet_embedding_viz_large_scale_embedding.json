@@ -1,0 +1,330 @@
+{
+  "name": "singlet_embedding_viz_large_scale_embedding",
+  "title": "Large-scale two-dimensional embedding",
+  "description": "Computes a two-dimensional map of 10^5 to 10^7 cells from a PCA representation: openTSNE FFT or Barnes-Hut t-SNE, UMAP, or placement of all cells onto a subsample map. Writes coordinates, the neighbour graph and stage timings. Use it when a full map must fit a memory budget. Do not use it to score map fidelity; use the local neighbourhood preservation task for that.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "representation": {
+        "type": "string",
+        "default": "X_pca",
+        "description": "obsm key of the input representation, normally 50 principal components of normalised expression."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "opentsne_fft",
+          "opentsne_bh",
+          "umap_cpu",
+          "subsample_project"
+        ],
+        "default": "opentsne_fft",
+        "description": "Embedding method. opentsne_fft is the default; opentsne_bh suits small inputs; umap_cpu computes UMAP; subsample_project places cells on a subsample map."
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Random seed for subsampling, approximate neighbour construction and negative sampling."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      },
+      "knn": {
+        "type": "object",
+        "description": "Neighbour graph settings shared by all methods; omit for method defaults.",
+        "properties": {
+          "backend": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "exact",
+              "annoy",
+              "pynndescent"
+            ],
+            "default": "auto",
+            "description": "auto: exact below 1,000 cells (t-SNE) or 4,096 (UMAP), otherwise Annoy (t-SNE) or pynndescent (UMAP)."
+          },
+          "k": {
+            "type": "integer",
+            "minimum": 2,
+            "description": "Neighbours per cell; default is 3 x perplexity for t-SNE and 15 for UMAP."
+          },
+          "annoy_n_trees": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 50,
+            "description": "Trees in the Annoy forest; more trees raise recall and memory."
+          }
+        },
+        "additionalProperties": false
+      },
+      "opentsne": {
+        "type": "object",
+        "description": "t-SNE optimisation settings for opentsne_fft, opentsne_bh and subsample_project.",
+        "properties": {
+          "perplexity": {
+            "type": "number",
+            "minimum": 1,
+            "default": 30,
+            "description": "Effective neighbours for the input affinity; neighbour count k is 3 x perplexity."
+          },
+          "learning_rate": {
+            "type": [
+              "number",
+              "string"
+            ],
+            "default": "auto",
+            "description": "Gradient step size; auto is N divided by exaggeration, which equals N by default."
+          },
+          "early_exaggeration": {
+            "type": "number",
+            "minimum": 1,
+            "default": 12,
+            "description": "Attraction multiplier during the early phase."
+          },
+          "early_exaggeration_iter": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 250,
+            "description": "Iterations in the early exaggeration phase."
+          },
+          "n_iter": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 750,
+            "description": "Iterations after the early phase; 750 matches the openTSNE benchmark schedule."
+          },
+          "theta": {
+            "type": "number",
+            "minimum": 0,
+            "default": 0.5,
+            "description": "Barnes-Hut opening angle; used only by opentsne_bh."
+          },
+          "n_interpolation_points": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 3,
+            "description": "Lagrange nodes per grid interval; used only by opentsne_fft."
+          },
+          "min_num_intervals": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 50,
+            "description": "Minimum number of grid intervals; used only by opentsne_fft."
+          },
+          "dof": {
+            "type": "number",
+            "minimum": 0.1,
+            "default": 1,
+            "description": "Degrees of freedom of the Student-t map kernel."
+          },
+          "initialization": {
+            "type": "string",
+            "enum": [
+              "pca",
+              "random"
+            ],
+            "default": "pca",
+            "description": "Initial map coordinates."
+          }
+        },
+        "additionalProperties": false
+      },
+      "umap": {
+        "type": "object",
+        "description": "UMAP settings for umap_cpu.",
+        "properties": {
+          "min_dist": {
+            "type": "number",
+            "minimum": 0,
+            "default": 0.1,
+            "description": "Minimum distance in the map; 0.1 is the umap-learn default and differs from some wrappers."
+          },
+          "spread": {
+            "type": "number",
+            "minimum": 0,
+            "default": 1,
+            "description": "Scale of the map kernel, fitted together with min_dist."
+          },
+          "n_epochs": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1,
+            "default": null,
+            "description": "Optimisation epochs; null uses 500 for N up to 10,000, otherwise 200."
+          },
+          "negative_sample_rate": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 5,
+            "description": "Negative samples per positive edge."
+          },
+          "init": {
+            "type": "string",
+            "enum": [
+              "spectral",
+              "random"
+            ],
+            "default": "spectral",
+            "description": "Initial map coordinates."
+          }
+        },
+        "additionalProperties": false
+      },
+      "subsample": {
+        "type": "object",
+        "description": "subsample_project embeds a subsample with opentsne_fft, then places all other cells on that map.",
+        "properties": {
+          "n": {
+            "type": "integer",
+            "minimum": 1000,
+            "default": 50000,
+            "description": "Cells embedded with the full method before placing the rest; a design choice."
+          },
+          "transform_perplexity": {
+            "type": "number",
+            "minimum": 1,
+            "default": 5,
+            "description": "Perplexity used when placing each cell on the fixed map."
+          },
+          "transform_k": {
+            "type": "integer",
+            "minimum": 2,
+            "default": 25,
+            "description": "Reference neighbours used when placing each cell."
+          },
+          "transform_n_iter": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 250,
+            "description": "Optimisation iterations when placing each cell."
+          }
+        },
+        "additionalProperties": false
+      },
+      "memory_budget_gb": {
+        "type": [
+          "number",
+          "null"
+        ],
+        "minimum": 0,
+        "default": null,
+        "description": "Fail before any work if the estimated peak memory exceeds this many GB; null disables the check."
+      }
+    },
+    "required": [
+      "dataset"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, for example obsm/X_opentsne_fft. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Compact summary for completed runs with keys n_cells, method, knn_backend, k, seconds_knn, seconds_gradient, seconds_total, peak_rss_gb, nnz_P, knn_recall_sample and, for t-SNE, kl_approx. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "embedding-viz.large_scale_embedding",
+      "reads": [
+        "obsm/<representation>"
+      ],
+      "writes": [
+        "obsm/X_<method>",
+        "obsp/knn_<backend>_k<k>",
+        "uns/emb_<method>/params",
+        "uns/emb_<method>/timing",
+        "uns/emb_<method>/kl_approx"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/embedding-viz/large_scale_embedding.md"
+    }
+  }
+}

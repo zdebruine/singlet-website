@@ -1,0 +1,211 @@
+{
+  "name": "singlet_covariate_adjustment_covariate_variance_attribution",
+  "title": "Covariate variance attribution and confounding check",
+  "description": "Estimates how much gene-level and principal-component variance each named covariate explains beyond the protected design, and flags covariates confounded with that design. Use before removing any covariate. The default pseudobulk_lmm method works on donor-by-cell-type pseudobulk. The tool writes shares and flags only, never a corrected matrix, so do not use it to correct expression.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "design": {
+        "type": "string",
+        "description": "Protected biological design as a formula, for example ~ condition + cell_type. Always conditioned on."
+      },
+      "covariates": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "minItems": 1,
+        "description": "obs columns to attribute, for example pct_counts_mt, cc_score, batch, donor."
+      },
+      "layer": {
+        "type": "string",
+        "default": "counts",
+        "description": "Count layer summed to pseudobulk for the mixed-model and association steps."
+      },
+      "pseudobulk_by": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "default": [
+          "donor",
+          "cell_type"
+        ],
+        "description": "obs columns defining one pseudobulk sample, the replicate unit for variance shares."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "pseudobulk_lmm",
+          "pcr",
+          "ols"
+        ],
+        "default": "pseudobulk_lmm",
+        "description": "pseudobulk_lmm: per-gene mixed model (default); pcr: PC-level share; ols: per-gene regression share."
+      },
+      "confounding_alpha": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1,
+        "default": 0.05,
+        "description": "Nominal level of the donor-level covariate-design association test used for flags."
+      },
+      "pseudobulk_lmm": {
+        "type": "object",
+        "description": "Options for method pseudobulk_lmm.",
+        "properties": {
+          "min_cells": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 5,
+            "description": "Minimum cells per donor-by-cell-type sample."
+          },
+          "min_samples": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 4,
+            "description": "Minimum samples per gene after filtering."
+          },
+          "min_levels_per_random_effect": {
+            "type": "integer",
+            "minimum": 2,
+            "default": 2,
+            "description": "Minimum levels a random grouping needs before its variance is estimated."
+          }
+        },
+        "additionalProperties": false
+      },
+      "pcr": {
+        "type": "object",
+        "description": "Options for method pcr.",
+        "properties": {
+          "n_pcs": {
+            "type": "integer",
+            "minimum": 2,
+            "default": 50,
+            "description": "Number of leading principal components used for the PC share."
+          }
+        },
+        "additionalProperties": false
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": [
+      "dataset",
+      "design",
+      "covariates"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. varm/<covariate>_vf. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Keys: method, n_samples, n_genes_tested, median_partial_share per covariate, flagged_covariates, n_singular_fits.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "covariate-adjustment.covariate_variance_attribution",
+      "reads": [
+        "layers/counts",
+        "obs/<covariate>",
+        "obs/<design>",
+        "obsm/X_pca"
+      ],
+      "writes": [
+        "uns/covariate_variance_attribution",
+        "varm/<covariate>_vf",
+        "uns/confounding_flags"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": false,
+      "long_running": true,
+      "streaming": true,
+      "paradigm": "hybrid",
+      "docs": "tasks/covariate-adjustment/covariate_variance_attribution.md"
+    }
+  }
+}

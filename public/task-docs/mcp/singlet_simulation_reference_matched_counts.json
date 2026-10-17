@@ -1,0 +1,260 @@
+{
+  "name": "singlet_simulation_reference_matched_counts",
+  "title": "Reference-matched count simulation and fidelity check",
+  "description": "Fits a reference-matched count simulator to a labelled raw-count dataset and samples a synthetic .singlet of the requested size, with cell-type labels and a fidelity record. The default scdesign2 fits per-cell-type Poisson, negative binomial or zero-inflated marginals with a Gaussian copula; splatter, symsim and scdesign3_nb are comparators. Needs raw counts in layers/counts and writes only to the new output dataset. Its fidelity record measures summary realism and classifier separability, not fitness for a downstream analysis.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Reference dataset handle: a .singlet path or URI with raw UMI counts in layers/counts."
+      },
+      "output": {
+        "type": "string",
+        "description": "Destination handle for the synthetic .singlet dataset; the input dataset is never modified."
+      },
+      "simulator": {
+        "type": "string",
+        "enum": [
+          "scdesign2",
+          "scdesign3_nb",
+          "splatter",
+          "symsim"
+        ],
+        "default": "scdesign2",
+        "description": "Fitter and sampler; scdesign2 is the proposed default, the others are comparators."
+      },
+      "target": {
+        "type": "object",
+        "description": "Size of the synthetic matrix.",
+        "properties": {
+          "n_cells": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1,
+            "default": null,
+            "description": "Synthetic cells; null uses the reference size."
+          },
+          "n_genes": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1,
+            "default": null,
+            "description": "Genes drawn at random, seeded, among those with nonzero total count; null keeps all."
+          }
+        },
+        "additionalProperties": false
+      },
+      "cell_type_key": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "default": "cell_type",
+        "description": "obs column with cell-type labels; the fit is stratified by it. Null fits one population."
+      },
+      "holdout": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "default": null,
+        "description": "Held-out level excluded from the fit and used as the realism reference.",
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "obs column naming the held-out unit, such as study or donor."
+          },
+          "level": {
+            "type": "string",
+            "description": "Value of key that is held out."
+          }
+        },
+        "required": [
+          "key",
+          "level"
+        ],
+        "additionalProperties": false
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "description": "Random seed for gene draws, fitting and sampling; required for reproducibility."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without fitting or writing."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members in the output dataset instead of failing."
+      },
+      "scdesign2": {
+        "type": "object",
+        "description": "Options for the scdesign2 fitter; rejected unless simulator is scdesign2.",
+        "properties": {
+          "marginal": {
+            "type": "string",
+            "enum": [
+              "auto_choose",
+              "zinb",
+              "nb",
+              "poisson"
+            ],
+            "default": "auto_choose",
+            "description": "Per-gene marginal family; auto_choose selects by likelihood-ratio tests."
+          },
+          "pval_cutoff": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 1,
+            "default": 0.05,
+            "description": "Significance level for choosing zero inflation over the non-inflated family."
+          },
+          "epsilon": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 1e-05,
+            "description": "Clamp keeping randomised quantiles away from 0 and 1."
+          },
+          "jitter": {
+            "type": "boolean",
+            "default": true,
+            "description": "Randomise discrete counts before the probability integral transform."
+          }
+        },
+        "additionalProperties": false
+      },
+      "splatter": {
+        "type": "object",
+        "description": "Options for the splatter comparator; rejected unless simulator is splatter.",
+        "properties": {
+          "estimate": {
+            "type": "boolean",
+            "default": true,
+            "description": "Estimate means, library sizes and BCV from the reference; false uses package defaults, which are not reference-matched."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "dataset",
+      "output",
+      "seed"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the reference dataset that was read; never modified."
+      },
+      "synthetic_dataset": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Handle of the synthetic dataset; null for dry_run and queued."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: fitted and sampled inline; dry_run: estimate only; queued: long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written to the synthetic dataset. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "For completed runs: simulator, n_cells, n_genes, copula_genes, ks_statistics (T values), null_position per statistic and c2st_accuracy per classifier (both only when holdout is set).",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Provenance record appended to the synthetic dataset; null unless completed."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "simulation.reference_matched_counts",
+      "reads": [
+        "layers/counts",
+        "obs/<cell_type_key>",
+        "obs/<holdout_key>",
+        "var/<gene_id>"
+      ],
+      "writes": [
+        "layers/counts",
+        "obs/sim_celltype",
+        "models/<name>",
+        "uns/<name>_fidelity",
+        "uns/<name>_provenance"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": true,
+      "paradigm": "hybrid",
+      "docs": "tasks/simulation/reference_matched_counts.md"
+    }
+  }
+}

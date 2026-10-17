@@ -1,0 +1,253 @@
+{
+  "name": "singlet_velocity_latent_time_inference",
+  "title": "Latent time from splicing kinetics",
+  "description": "Estimates a per-cell latent time, a shared scalar clock that orders cells along a splicing-kinetic process, from spliced and unspliced counts and a required root cell. Writes obs/latent_time, a method-specific copy, a confidence column and gene-wise fitted times. Use after kinetic fitting and root identification; do not use without a defined start state, and do not read the values as absolute time because the scale is a convention.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "method": {
+        "type": "string",
+        "enum": ["velovae", "scvelo_dynamical", "unitvelo", "velovi", "velocity_pseudotime"],
+        "default": "velovae",
+        "description": "velovae is the model-based default; scvelo_dynamical is the published heuristic standard and the fallback."
+      },
+      "root": {
+        "type": "string",
+        "description": "obs column with one TRUE start cell, or a cell identifier. Required: the tool never infers a root."
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu", "cuda"],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Random seed for initialisation and minibatch order in the deep methods."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      },
+      "scvelo": {
+        "type": "object",
+        "description": "Options for scvelo_dynamical; ignored by other methods.",
+        "properties": {
+          "min_likelihood": {
+            "type": ["number", "null"],
+            "default": 0.1,
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Minimum gene fit likelihood for genes entering the shared-time step; null keeps all fitted genes."
+          },
+          "min_confidence": {
+            "type": "number",
+            "default": 0.75,
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Cells with confidence below this are replaced by neighbour sums during smoothing."
+          },
+          "t_max": {
+            "type": ["number", "null"],
+            "default": null,
+            "minimum": 0,
+            "description": "Overall duration that multiplies the [0,1] latent time; null keeps the [0,1] scale."
+          },
+          "weight_diffusion": {
+            "type": ["number", "null"],
+            "default": null,
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Weight w blending latent time with velocity pseudotime: (1 - w) latent + w pseudotime."
+          },
+          "min_corr_diffusion": {
+            "type": ["number", "null"],
+            "default": null,
+            "minimum": -1,
+            "maximum": 1,
+            "description": "Keep genes whose fitted time correlates with velocity pseudotime at or above this value."
+          },
+          "recover_max_iter": {
+            "type": "integer",
+            "default": 10,
+            "minimum": 1,
+            "description": "Maximum EM iterations in the dynamical-model fit."
+          },
+          "fit_time": {
+            "type": "boolean",
+            "default": true,
+            "description": "Fit switch times in the dynamical model."
+          },
+          "fit_scaling": {
+            "type": "boolean",
+            "default": true,
+            "description": "Fit unspliced and spliced scaling in the dynamical model."
+          },
+          "fit_steady_states": {
+            "type": "boolean",
+            "default": true,
+            "description": "Fit steady-state parameters in the dynamical model."
+          }
+        },
+        "additionalProperties": false
+      },
+      "unitvelo": {
+        "type": "object",
+        "description": "Options for unitvelo; ignored by other methods.",
+        "properties": {
+          "fit_option": {
+            "type": "string",
+            "default": "1",
+            "description": "'1' selects unified-time mode; '2' selects independent mode."
+          },
+          "max_iter": {
+            "type": "integer",
+            "default": 12000,
+            "minimum": 1,
+            "description": "Training iterations."
+          },
+          "learning_rate": {
+            "type": "number",
+            "default": 0.01,
+            "exclusiveMinimum": 0,
+            "description": "Optimiser learning rate."
+          },
+          "base_function": {
+            "type": "string",
+            "enum": ["Gaussian"],
+            "default": "Gaussian",
+            "description": "Base transcription function; Gaussian is the only form ported."
+          }
+        },
+        "additionalProperties": false
+      },
+      "velovae": {
+        "type": "object",
+        "description": "Options for velovae; ignored by other methods.",
+        "properties": {
+          "std_prior": {
+            "type": "number",
+            "default": 0.1,
+            "minimum": 0,
+            "description": "Standard deviation of the gene-mode Dirichlet prior."
+          },
+          "n_epochs": {
+            "type": ["integer", "null"],
+            "default": null,
+            "minimum": 1,
+            "description": "Training epochs; null uses the implementation default."
+          }
+        },
+        "additionalProperties": false
+      },
+      "velovi": {
+        "type": "object",
+        "description": "Options for velovi; ignored by other methods.",
+        "properties": {
+          "time_statistic": {
+            "type": "string",
+            "enum": ["mean", "max"],
+            "default": "mean",
+            "description": "mean: expected time over the state distribution; max: time of the most probable state."
+          },
+          "n_samples": {
+            "type": "integer",
+            "default": 1,
+            "minimum": 1,
+            "description": "Posterior samples used for the latent-time summary."
+          }
+        },
+        "additionalProperties": false
+      },
+      "velocity_pseudotime": {
+        "type": "object",
+        "description": "Options for velocity_pseudotime; ignored by other methods.",
+        "properties": {
+          "n_dcs": {
+            "type": "integer",
+            "default": 10,
+            "minimum": 1,
+            "description": "Diffusion components used for the pseudotime."
+          },
+          "use_velocity_graph": {
+            "type": "boolean",
+            "default": true,
+            "description": "Diffuse on the velocity graph (true) or on a similarity kernel (false)."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "required": ["dataset", "root"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written, e.g. obs/latent_time. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Compact summary: method, root, coverage, time_scale (minmax or t_max) and n_genes_used. Never per-cell arrays.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "velocity.latent_time_inference",
+      "reads": ["layers/spliced", "layers/unspliced", "obsp/connectivities", "obs/root_flag", "layers/fit_t"],
+      "writes": ["obs/latent_time", "obs/latent_time_<method>", "obs/latent_time_confidence", "layers/fit_t", "uns/latent_time_params", "models/latent_time_<method>"],
+      "devices": ["cpu", "cuda"],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/velocity/latent_time_inference.md"
+    }
+  }
+}

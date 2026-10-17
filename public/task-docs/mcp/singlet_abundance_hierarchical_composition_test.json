@@ -1,0 +1,256 @@
+{
+  "name": "singlet_abundance_hierarchical_composition_test",
+  "title": "Resolution-robust composition test on a cell-type hierarchy",
+  "description": "Tests which nodes of a cell-type hierarchy change in relative abundance between conditions, using a tree-aggregated Dirichlet-multinomial model by default. Needs sample and condition labels plus a cluster tree or ordered author labels; optional resolutions add a stability score. Writes node effects and calls, not cell labels. Use abundance.celltype_proportion_test instead when the question is only about predefined leaf types.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "design": {
+        "type": "object",
+        "description": "Sample-level keys that define the sample-by-leaf count table.",
+        "properties": {
+          "sample_key": {
+            "type": "string",
+            "description": "obs column of the independent replicate (donor or library). Required."
+          },
+          "condition_key": {
+            "type": "string",
+            "description": "obs column of the sample-level condition being tested. Required."
+          },
+          "batch_key": {
+            "type": ["string", "null"],
+            "default": null,
+            "description": "Optional obs column of a sample-level batch covariate."
+          }
+        },
+        "required": ["sample_key", "condition_key"],
+        "additionalProperties": false
+      },
+      "hierarchy": {
+        "type": "object",
+        "description": "Source of the cell-type hierarchy and of the resolutions used for stability.",
+        "properties": {
+          "source": {
+            "type": "string",
+            "enum": ["cluster_tree", "annotation_levels"],
+            "default": "cluster_tree",
+            "description": "Tree from clustering (tree_key) or from ordered author labels (annotation_keys)."
+          },
+          "tree_key": {
+            "type": ["string", "null"],
+            "default": null,
+            "description": "uns key of the cluster tree; required when source is cluster_tree."
+          },
+          "annotation_keys": {
+            "type": "array",
+            "items": {"type": "string"},
+            "default": [],
+            "description": "Coarse-to-fine obs columns, ordered; required when source is annotation_levels."
+          },
+          "resolutions": {
+            "type": "array",
+            "items": {"type": "number"},
+            "default": [],
+            "description": "Leiden resolutions in obs/leiden_res_<r>; at least two enable the stability output."
+          }
+        },
+        "additionalProperties": false
+      },
+      "method": {
+        "type": "string",
+        "enum": ["tasccoda", "sccoda", "propeller"],
+        "default": "tasccoda",
+        "description": "tasccoda on the hierarchy is the default; sccoda and propeller run on leaves as baselines."
+      },
+      "fdr": {
+        "type": "number",
+        "default": 0.05,
+        "minimum": 0,
+        "maximum": 1,
+        "description": "Target FDR: posterior expected FDR for tasccoda and sccoda, Benjamini-Hochberg for propeller."
+      },
+      "reference": {
+        "type": "object",
+        "description": "Reference cell type with zero effect; used by tasccoda and sccoda only.",
+        "properties": {
+          "cell_type": {
+            "type": "string",
+            "default": "automatic",
+            "description": "Leaf with zero effect, or automatic to choose one with a low zero fraction."
+          },
+          "absence_threshold": {
+            "type": "number",
+            "default": 0.05,
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Maximum zero fraction allowed for an automatically chosen reference."
+          }
+        },
+        "additionalProperties": false
+      },
+      "tasccoda": {
+        "type": "object",
+        "description": "Options for the tasccoda method.",
+        "properties": {
+          "num_samples": {
+            "type": "integer",
+            "default": 10000,
+            "minimum": 1,
+            "description": "NUTS draws after warmup."
+          },
+          "num_warmup": {
+            "type": "integer",
+            "default": 1000,
+            "minimum": 0,
+            "description": "NUTS warmup iterations."
+          },
+          "lambda_0": {
+            "type": "number",
+            "default": 50,
+            "description": "Spike penalty of the spike-and-slab LASSO prior on node effects."
+          },
+          "lambda_1": {
+            "type": "number",
+            "default": 5,
+            "description": "Slab penalty of the spike-and-slab LASSO prior on node effects."
+          },
+          "phi": {
+            "type": "number",
+            "default": 0,
+            "description": "Aggregation-bias parameter for tree-level effects."
+          },
+          "theta": {
+            "type": "number",
+            "default": 0.5,
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Global spike-and-slab mixing weight, held fixed rather than sampled."
+          },
+          "collapse_singular_nodes": {
+            "type": "boolean",
+            "default": true,
+            "description": "Collapse nodes with a single child before fitting."
+          }
+        },
+        "additionalProperties": false
+      },
+      "sccoda": {
+        "type": "object",
+        "description": "Options for the sccoda leaf-level baseline.",
+        "properties": {
+          "num_samples": {
+            "type": "integer",
+            "default": 10000,
+            "minimum": 1,
+            "description": "NUTS draws after warmup."
+          },
+          "num_warmup": {
+            "type": "integer",
+            "default": 1000,
+            "minimum": 0,
+            "description": "NUTS warmup iterations."
+          }
+        },
+        "additionalProperties": false
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu", "cuda"],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "minimum": 0,
+        "description": "Random seed for NUTS initialisation and draws."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without fitting."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": ["dataset", "design"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: ran inline and wrote members; dry_run: estimate only; queued: long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "For completed runs: method, n_leaves, n_nodes, reference, n_called, stability_mean, n_resolutions, warnings.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "abundance.hierarchical_composition_test",
+      "reads": [
+        "obs/<sample_key>",
+        "obs/<condition_key>",
+        "obs/<batch_key>",
+        "obs/leiden_res_<r>",
+        "obs/<annotation_keys>",
+        "uns/<tree_key>"
+      ],
+      "writes": [
+        "uns/hierarchical_composition/counts",
+        "uns/hierarchical_composition/nodes",
+        "uns/hierarchical_composition/stability",
+        "models/hierarchical_composition"
+      ],
+      "devices": ["cpu", "cuda"],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": true,
+      "paradigm": "model-based",
+      "docs": "tasks/abundance/hierarchical_composition_test.md"
+    }
+  }
+}

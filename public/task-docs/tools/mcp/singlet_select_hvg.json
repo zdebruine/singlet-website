@@ -1,0 +1,80 @@
+{
+  "name": "singlet_select_hvg",
+  "title": "Highly variable genes",
+  "description": "Select highly variable genes by the Seurat dispersion method from the streaming gene moments (matches Scanpy's top-n selection). Stores a mask used by pca and nmf_programs.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "name": {
+        "type": "string",
+        "description": "Dataset name."
+      },
+      "n_top": {
+        "type": "integer",
+        "description": "Number of genes to keep.",
+        "default": 2000,
+        "minimum": 10
+      },
+      "n_bins": {
+        "type": "integer",
+        "description": "Mean bins for the dispersion z-score.",
+        "default": 20
+      }
+    },
+    "required": [
+      "name"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "status": {
+        "type": "string",
+        "enum": [
+          "ok",
+          "error"
+        ]
+      },
+      "summary": {
+        "type": "string"
+      },
+      "metrics": {
+        "type": "object"
+      },
+      "figures": {
+        "type": "array"
+      },
+      "artifacts": {
+        "type": "array"
+      },
+      "warnings": {
+        "type": "array"
+      },
+      "next": {
+        "type": "array"
+      },
+      "timings": {
+        "type": "object"
+      }
+    },
+    "required": [
+      "status",
+      "summary"
+    ]
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "feature-selection.highly_variable_gene_selection",
+      "reads": [
+        "stats/*"
+      ],
+      "writes": [
+        "genes/hvg_mask",
+        "genes/hvg_score"
+      ],
+      "runtime": "local-cpu",
+      "streaming": true
+    }
+  }
+}

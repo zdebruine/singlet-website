@@ -1,0 +1,174 @@
+{
+  "name": "singlet_immune_repertoire_chain_pairing_dual_receptor_calling",
+  "title": "Chain pairing and dual-receptor calling",
+  "description": "Assigns each cell's receptor contigs to primary and secondary chains per locus family and labels its pairing class (single, dual, orphan, doublet suspect or ambiguous) with a keep flag. The default is the published scirpy receptor rule; top2_tpm and dandelion_dominance are alternatives. Input is a contig table from receptor_contig_assembly; writes per-cell obs labels. Do not use it to define clonotypes or to call doublets from expression.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: .singlet path or URI, or a workspace handle. Needs the contigs table from receptor_contig_assembly."
+      },
+      "method": {
+        "type": "string",
+        "enum": ["scirpy_chain_qc", "dandelion_dominance", "top2_tpm"],
+        "default": "scirpy_chain_qc",
+        "description": "scirpy_chain_qc is the default published rule; dandelion_dominance applies fold-change dominance; top2_tpm needs contigs/tpm."
+      },
+      "productive_only": {
+        "type": "boolean",
+        "default": true,
+        "description": "Drop non-productive contigs before ranking and multichain counting. Keep true unless the assembler already filters."
+      },
+      "require_high_confidence": {
+        "type": "boolean",
+        "default": true,
+        "description": "Keep only contigs with is_cell and high_confidence when those flags exist, as in 10x-derived tables."
+      },
+      "max_chains_per_family": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 4,
+        "default": 2,
+        "description": "Chains kept per locus family as primary and secondary; a cell with more is flagged multichain."
+      },
+      "min_umi_secondary": {
+        "type": "integer",
+        "minimum": 1,
+        "default": 1,
+        "description": "Minimum UMI count for a secondary contig to be kept; 1 disables it. The value 2 is proposed and needs benchmark B2."
+      },
+      "scirpy": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options used only when method is scirpy_chain_qc.",
+        "properties": {
+          "require_junction_aa": {
+            "type": "boolean",
+            "default": true,
+            "description": "Drop contigs without a CDR3 amino-acid sequence before ranking and counting."
+          }
+        }
+      },
+      "dandelion": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options used only when method is dandelion_dominance.",
+        "properties": {
+          "umi_foldchange_cutoff": {
+            "type": "number",
+            "minimum": 1,
+            "default": 2,
+            "description": "Fold change over the second contig that makes the top UMI contig dominant."
+          },
+          "consensus_foldchange_cutoff": {
+            "type": "number",
+            "minimum": 1,
+            "default": 5,
+            "description": "Consensus-count fold change used as the second dominance criterion."
+          },
+          "allow_exceptions": {
+            "type": "boolean",
+            "default": true,
+            "description": "Allow TRB with TRD and IGM with IGD to co-occur without marking ambiguity."
+          },
+          "ntop_vdj": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 1,
+            "description": "Number of productive VDJ contigs considered for dominance."
+          },
+          "ntop_vj": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 2,
+            "description": "Number of productive VJ contigs considered for dominance."
+          }
+        }
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu", "cuda"],
+        "default": "auto",
+        "description": "Execution device; auto uses CPU except for batch scans of very large contig tables."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing obs and uns members written by a previous call instead of failing."
+      }
+    },
+    "required": ["dataset"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: ran inline and wrote members; dry_run: estimate only; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written, for example obs/pairing_class. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Counts per pairing class, multichain and no-IR cells, and the rule used. Never per-contig rows.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "immune-repertoire.chain_pairing_dual_receptor_calling",
+      "reads": [
+        "contigs/cell_barcode", "contigs/chain", "contigs/locus_family", "contigs/productive", "contigs/junction_aa",
+        "contigs/umi_count", "contigs/duplicate_count", "contigs/consensus_count", "contigs/is_cell",
+        "contigs/high_confidence", "contigs/full_length", "contigs/tpm"
+      ],
+      "writes": [
+        "obs/receptor_type", "obs/chain_pairing", "obs/pairing_class", "obs/primary_vj_contig", "obs/primary_vdj_contig",
+        "obs/secondary_vj_contig", "obs/secondary_vdj_contig", "obs/keep_receptor", "obsm/chain_indices", "uns/chain_pairing_params"
+      ],
+      "devices": ["cpu", "cuda"],
+      "stochastic": false,
+      "long_running": false,
+      "streaming": true,
+      "paradigm": "hybrid",
+      "docs": "tasks/immune-repertoire/chain_pairing_dual_receptor_calling.md"
+    }
+  }
+}

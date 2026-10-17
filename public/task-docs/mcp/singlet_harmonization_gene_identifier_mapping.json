@@ -1,0 +1,173 @@
+{
+  "name": "singlet_harmonization_gene_identifier_mapping",
+  "title": "Gene identifier and symbol mapping",
+  "description": "Maps each feature name of a count matrix to one current gene in a pinned HGNC and Ensembl release, writing a stable Ensembl gene ID, the approved symbol and an explicit status (unique, renamed, ambiguous, unmapped). Collapses duplicate or versioned features with a logged conservation check. Use it before matching gene names to external resources. Do not use it to take an alias or first hit silently, or to map orthologs across species.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "species": {
+        "type": "string",
+        "enum": ["human"],
+        "description": "Organism whose release tables are used. Only human is implemented in this version."
+      },
+      "release_pin": {
+        "type": "string",
+        "description": "Reference release as HGNC snapshot date plus Ensembl release, for example hgnc-<date>+ensembl-<release>. Required; no default."
+      },
+      "feature_key": {
+        "type": "string",
+        "enum": ["var_names", "gene_id", "gene_name"],
+        "default": "var_names",
+        "description": "Column holding the input names: the feature index, or the var column gene_id or gene_name."
+      },
+      "method": {
+        "type": "string",
+        "enum": ["release_table", "name_suffix_only"],
+        "default": "release_table",
+        "description": "release_table resolves names against the pinned tables and is the default; name_suffix_only only makes display names unique."
+      },
+      "layer": {
+        "type": "string",
+        "default": "counts",
+        "description": "Count layer collapsed when duplicate_policy merges features; not read otherwise."
+      },
+      "device": {
+        "type": "string",
+        "enum": ["cpu"],
+        "default": "cpu",
+        "description": "Only cpu is implemented; lookups are hash operations and gain nothing from CUDA."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without writing members."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      },
+      "release_table": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options for method release_table.",
+        "properties": {
+          "strip_version": {
+            "type": "boolean",
+            "default": true,
+            "description": "Remove Ensembl version suffixes before lookup; the version is kept in var/ensembl_version."
+          },
+          "alias_policy": {
+            "type": "string",
+            "enum": ["approved_and_prev", "all"],
+            "default": "approved_and_prev",
+            "description": "all also resolves alias symbols; alias-only matches get status renamed and a log row, never unique."
+          },
+          "ambiguity_policy": {
+            "type": "string",
+            "enum": ["report", "drop", "pick_first"],
+            "default": "report",
+            "description": "report keeps ambiguous features with candidates; drop removes and logs them; pick_first takes the first candidate and logs it."
+          },
+          "unmapped_policy": {
+            "type": "string",
+            "enum": ["keep_and_flag", "drop_and_log"],
+            "default": "keep_and_flag",
+            "description": "keep_and_flag keeps unmapped features; drop_and_log removes them with a log row. Silent drops are not allowed."
+          },
+          "duplicate_policy": {
+            "type": "string",
+            "enum": ["sum", "mean", "keep_first", "suffix_id"],
+            "default": "sum",
+            "description": "sum for integer counts; mean for normalised or log values; keep_first; suffix_id keeps rows labelled name_ID."
+          }
+        }
+      },
+      "name_suffix_only": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options for method name_suffix_only.",
+        "properties": {
+          "join": {
+            "type": "string",
+            "default": "-",
+            "description": "Delimiter placed before the counter when a duplicated display name is made unique."
+          }
+        }
+      }
+    },
+    "required": ["dataset", "species", "release_pin"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "additionalProperties": true,
+        "description": "Counts per mapping status, resolution rate, collapsed and dropped features, conservation error."
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Id of the provenance record (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "additionalProperties": true,
+        "description": "Present for dry_run: seconds, peak_memory_gb, device."
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "harmonization.gene_identifier_mapping",
+      "reads": ["var_names", "var/gene_id", "var/gene_name", "layers/counts"],
+      "writes": [
+        "var/symbol_harmonized",
+        "var/ensembl_gene_id",
+        "var/ensembl_version",
+        "var/mapping_status",
+        "var/mapping_candidates",
+        "uns/gene_mapping_log",
+        "uns/gene_mapping_release",
+        "layers/counts_collapsed"
+      ],
+      "devices": ["cpu"],
+      "stochastic": false,
+      "long_running": false,
+      "streaming": true,
+      "paradigm": "heuristic",
+      "docs": "tasks/harmonization/gene_identifier_mapping.md"
+    }
+  }
+}

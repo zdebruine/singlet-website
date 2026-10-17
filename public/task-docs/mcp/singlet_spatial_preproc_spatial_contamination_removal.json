@@ -1,0 +1,179 @@
+{
+  "name": "singlet_spatial_preproc_spatial_contamination_removal",
+  "title": "Remove ambient and neighbour contamination from spatial units",
+  "description": "Removes ambient background and neighbour spot-swapping from spatial spot or bin counts, writing decontaminated counts and a per-unit contamination fraction. Use it on Visium or Visium HD style units with coordinates and background units; the default spotclean method fits a spatial bleed model and background_subtraction is a faster heuristic. Do not use it on segmented cells or transcripts (use transcript cell assignment) or on droplet data without coordinates.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "layer": {
+        "type": "string",
+        "default": "counts",
+        "description": "Raw UMI count layer to decontaminate, units by genes."
+      },
+      "method": {
+        "type": "string",
+        "enum": ["spotclean", "background_subtraction"],
+        "default": "spotclean",
+        "description": "spotclean fits the spatial bleed model (default for Visium and Visium HD); background_subtraction is the heuristic baseline."
+      },
+      "background_key": {
+        "type": "string",
+        "default": "is_background",
+        "description": "obs column marking background units (off-tissue or empty regions); falls back to not in_tissue when absent."
+      },
+      "negative_control_key": {
+        "type": ["string", "null"],
+        "default": null,
+        "description": "var column of negative-control features for imaging panels; background_subtraction only. Null uses background units."
+      },
+      "spotclean": {
+        "type": "object",
+        "description": "Options for method spotclean; ignored by background_subtraction.",
+        "properties": {
+          "candidate_radius": {
+            "type": "array",
+            "items": {"type": "number", "exclusiveMinimum": 0},
+            "minItems": 1,
+            "default": [5, 10, 15, 20, 25, 30],
+            "description": "Candidate bleed kernel radii in units of the spacing between adjacent spots; the radius with the smallest residual is kept."
+          },
+          "kernel": {
+            "type": "string",
+            "enum": ["gaussian", "linear", "laplace", "cauchy"],
+            "default": "gaussian",
+            "description": "Spatial kernel shape for bleed."
+          },
+          "maxit": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 30,
+            "description": "Maximum EM iterations."
+          },
+          "tol": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 1,
+            "description": "EM convergence tolerance."
+          },
+          "gene_cutoff": {
+            "type": "number",
+            "minimum": 0,
+            "default": 0.1,
+            "description": "Minimum average expression for a gene to be decontaminated."
+          },
+          "background_model": {
+            "type": "string",
+            "enum": ["off_tissue", "joint"],
+            "default": "off_tissue",
+            "description": "off_tissue takes the profile from background units; joint also fits it from tissue units (proposed)."
+          }
+        },
+        "additionalProperties": false
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu", "cuda"],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without writing."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": ["dataset"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Keys: method, radius, bleed_rate, distal_rate, median_contamination_fraction, arc_before, arc_after, n_background_units. Radius and rates are null under background_subtraction.",
+        "properties": {
+          "method": {"type": "string"},
+          "radius": {"type": ["number", "null"]},
+          "bleed_rate": {"type": ["number", "null"]},
+          "distal_rate": {"type": ["number", "null"]},
+          "median_contamination_fraction": {"type": "number"},
+          "arc_before": {"type": "number"},
+          "arc_after": {"type": "number"},
+          "n_background_units": {"type": "integer"}
+        },
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "spatial-preproc.spatial_contamination_removal",
+      "reads": [
+        "layers/counts",
+        "obsm/spatial",
+        "obs/in_tissue",
+        "obs/is_background",
+        "obs/qc_keep",
+        "var/is_negative_control"
+      ],
+      "writes": [
+        "layers/decontaminated_counts",
+        "obs/contamination_fraction",
+        "obsp/bleed_weights",
+        "uns/ambient_profile",
+        "uns/contamination_params",
+        "uns/contamination_diagnostics"
+      ],
+      "devices": ["cpu", "cuda"],
+      "stochastic": false,
+      "long_running": false,
+      "streaming": false,
+      "paradigm": "model-based",
+      "docs": "tasks/spatial-preproc/spatial_contamination_removal.md"
+    }
+  }
+}

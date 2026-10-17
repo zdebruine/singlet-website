@@ -1,0 +1,192 @@
+{
+  "name": "singlet_normalization_depth_confounding_diagnostic",
+  "title": "Residual depth-confounding diagnostic",
+  "description": "Tests whether a normalised matrix still carries sequencing-depth or detection-rate structure, per gene and per principal component, within strata and against a calibrated null. Depth and detection covariates are computed from raw counts, so the matrix under test cannot alter them. The default method pc_r2 accepts any matrix; nb_lrt needs raw counts and uses obs/size_factor as offset when present, otherwise library size. It writes var/depth_r2, var/depth_flag and uns/depth_diagnostic and never modifies expression; do not use it alone to choose a normalisation, or on depth recomputed from normalised values.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "counts_layer": {
+        "type": "string",
+        "default": "counts",
+        "description": "Raw count layer from which depth and detection covariates are computed."
+      },
+      "normalized_layer": {
+        "type": "string",
+        "default": "X",
+        "description": "Normalised matrix to diagnose: X or the name of a layer."
+      },
+      "method": {
+        "type": "string",
+        "enum": ["pc_r2", "nb_lrt", "pipecomp_gene_cor"],
+        "default": "pc_r2",
+        "description": "pc_r2: stratified PC R-squared for any matrix; nb_lrt: per-gene negative-binomial test on counts; pipecomp_gene_cor: pipeComp-style per-gene correlation."
+      },
+      "stratify_by": {
+        "type": ["string", "null"],
+        "default": null,
+        "description": "obs column defining strata, for example cell type; null treats all cells as one stratum."
+      },
+      "pc_r2": {
+        "type": "object",
+        "description": "Options for method pc_r2.",
+        "properties": {
+          "n_pcs": {
+            "type": "integer",
+            "default": 50,
+            "minimum": 2,
+            "maximum": 200,
+            "description": "Number of principal components of the matrix under test to evaluate."
+          },
+          "null_method": {
+            "type": "string",
+            "enum": ["beta", "permutation"],
+            "default": "permutation",
+            "description": "beta: closed-form null; permutation: depth and detection shuffled within strata, calibrated."
+          },
+          "n_permutations": {
+            "type": "integer",
+            "default": 1000,
+            "minimum": 10,
+            "description": "Permutation draws for the within-stratum null."
+          }
+        },
+        "additionalProperties": false
+      },
+      "nb_lrt": {
+        "type": "object",
+        "description": "Options for method nb_lrt.",
+        "properties": {
+          "spline_df": {
+            "type": "integer",
+            "default": 1,
+            "minimum": 1,
+            "maximum": 6,
+            "description": "Spline basis columns per covariate; 1 means linear."
+          },
+          "null_method": {
+            "type": "string",
+            "enum": ["chi_square", "permutation"],
+            "default": "chi_square",
+            "description": "chi_square: asymptotic likelihood-ratio test; permutation: within-stratum shuffles."
+          },
+          "n_permutations": {
+            "type": "integer",
+            "default": 100,
+            "minimum": 10,
+            "description": "Permutation draws, used only when null_method is permutation."
+          },
+          "fdr_threshold": {
+            "type": "number",
+            "default": 0.05,
+            "exclusiveMinimum": 0,
+            "exclusiveMaximum": 1,
+            "description": "Benjamini-Hochberg threshold for flagging depth-associated genes."
+          },
+          "min_cells_per_gene": {
+            "type": "integer",
+            "default": 10,
+            "minimum": 1,
+            "description": "Minimum detected cells for a gene to be tested."
+          }
+        },
+        "additionalProperties": false
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu", "cuda"],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Random seed for permutation nulls; a fixed seed gives identical results."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": ["dataset"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written, e.g. var/depth_flag. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "For completed runs: method, n_strata, score, n_components, null_method, n_permutations, p_value, n_flagged_genes. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "normalization.depth_confounding_diagnostic",
+      "reads": [
+        "layers/counts",
+        "layers/<normalized_layer>",
+        "obs/size_factor",
+        "obs/<stratify_by>"
+      ],
+      "writes": [
+        "var/depth_r2",
+        "var/depth_flag",
+        "uns/depth_diagnostic/pc_r2",
+        "uns/depth_diagnostic/score",
+        "uns/depth_diagnostic/params"
+      ],
+      "devices": ["cpu", "cuda"],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": true,
+      "paradigm": "hybrid",
+      "docs": "tasks/normalization/depth_confounding_diagnostic.md"
+    }
+  }
+}

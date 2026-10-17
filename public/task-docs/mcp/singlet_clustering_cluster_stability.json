@@ -1,0 +1,242 @@
+{
+  "name": "singlet_clustering_cluster_stability",
+  "title": "Cluster stability under cell resampling",
+  "description": "Scores how reproducibly each cluster of an existing partition is recovered when cells are resampled and the clustering is repeated, returning per-cluster and per-cell stability and replicate ARI. Requires raw counts and the partition column; it does not test whether a stable cluster is a real cell type and does not choose a resolution. Use dry_run first, because cost scales with n_resamples and the clustering pipeline; the default method is subsample_jaccard.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "cluster_key": {
+        "type": "string",
+        "description": "obs column holding the partition to test, for example a Leiden column at one resolution."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "subsample_jaccard",
+          "coclustering_robustness"
+        ],
+        "default": "subsample_jaccard",
+        "description": "Scoring rule. subsample_jaccard is the default (per-cluster best-match Jaccard); coclustering_robustness scores within-cluster pair retention."
+      },
+      "name": {
+        "type": "string",
+        "default": "stability",
+        "maxLength": 40,
+        "pattern": "^[A-Za-z][A-Za-z0-9_]{0,39}$",
+        "description": "Prefix for written members: stability gives obs/stability_score, uns/stability_clusters and uns/stability_replicate_ari."
+      },
+      "resampling": {
+        "type": "object",
+        "description": "Resampling law: number of resamples, fraction of cells per resample and replacement.",
+        "properties": {
+          "n_resamples": {
+            "type": "integer",
+            "default": 100,
+            "minimum": 2,
+            "description": "Number of cell resamples B; more gives a finer per-cluster distribution and smaller Monte Carlo error."
+          },
+          "subsample_fraction": {
+            "type": "number",
+            "default": 0.8,
+            "exclusiveMinimum": 0,
+            "exclusiveMaximum": 1,
+            "description": "Fraction r of cells per resample; scores are comparable only at a matched fraction."
+          },
+          "replace": {
+            "type": "boolean",
+            "default": false,
+            "description": "Draw cells with replacement; default is without replacement, as in scclusteval."
+          }
+        },
+        "additionalProperties": false
+      },
+      "pipeline": {
+        "type": "object",
+        "description": "Clustering pipeline re-applied to each resample: layer, resolution, PCs and feature recomputation.",
+        "properties": {
+          "layer": {
+            "type": "string",
+            "default": "counts",
+            "description": "Raw-count layer used when features are recomputed per resample."
+          },
+          "resolution": {
+            "type": "number",
+            "default": 0.8,
+            "exclusiveMinimum": 0,
+            "description": "Graph-clustering resolution applied to each resample."
+          },
+          "n_pcs": {
+            "type": "integer",
+            "default": 100,
+            "minimum": 2,
+            "description": "Principal components used for the neighbour graph in each resample."
+          },
+          "recompute_features": {
+            "type": "boolean",
+            "default": true,
+            "description": "Re-select variable features and recompute PCA per resample; false reuses the full-data embedding and understates variance."
+          }
+        },
+        "additionalProperties": false
+      },
+      "scoring": {
+        "type": "object",
+        "description": "Per-cluster thresholds and the rule that calls a cluster stable.",
+        "properties": {
+          "jaccard_cutoff": {
+            "type": "number",
+            "default": 0.6,
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Cutoff tau: a resample recovers a cluster when its score exceeds tau; 0.6 is the scclusteval default."
+          },
+          "stable_summary": {
+            "type": "string",
+            "enum": [
+              "median",
+              "mean",
+              "percent"
+            ],
+            "default": "median",
+            "description": "Stable rule: median or mean score above tau, or the fraction above tau exceeding percent_cutoff."
+          },
+          "percent_cutoff": {
+            "type": "number",
+            "default": 0.6,
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Fraction of resamples above tau required by the percent rule."
+          },
+          "min_cluster_size": {
+            "type": "integer",
+            "default": 0,
+            "minimum": 0,
+            "description": "Clusters with fewer cells are reported but not scored; 0 scores every cluster."
+          }
+        },
+        "additionalProperties": false
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Base seed; each resample is seeded from it, so identical inputs give identical outputs."
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": [
+      "dataset",
+      "cluster_key"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. obs/stability_score. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Keys: method, n_resamples, n_clusters, n_scored, n_stable, median_replicate_ari, jaccard_cutoff, stable_summary, recompute_features. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "clustering.cluster_stability",
+      "reads": [
+        "layers/counts",
+        "obsm/X_pca",
+        "obs/<cluster_key>"
+      ],
+      "writes": [
+        "obs/<name>_score",
+        "uns/<name>_clusters",
+        "uns/<name>_replicate_ari"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/clustering/cluster_stability.md"
+    }
+  }
+}

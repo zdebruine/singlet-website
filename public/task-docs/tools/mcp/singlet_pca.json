@@ -1,0 +1,117 @@
+{
+  "name": "singlet_pca",
+  "title": "Streaming PCA",
+  "description": "Block-Krylov PCA of log1p(CP10k) values streamed from disk, with Rayleigh-Ritz extraction after every pass and Ritz-residual stopping. Memory does not grow with cells. Stores scores, loadings and singular values.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "name": {
+        "type": "string",
+        "description": "Dataset name."
+      },
+      "n_components": {
+        "type": "integer",
+        "description": "Components to return.",
+        "default": 30,
+        "minimum": 2,
+        "maximum": 200
+      },
+      "max_passes": {
+        "type": "integer",
+        "description": "Maximum passes over the data.",
+        "default": 6
+      },
+      "tol": {
+        "type": "number",
+        "description": "Stop when the largest relative Ritz residual of the leading components is below this.",
+        "default": 0.001
+      },
+      "use_hvg": {
+        "type": "boolean",
+        "description": "Restrict to the genes chosen by select_hvg (runs it if needed).",
+        "default": true
+      },
+      "block": {
+        "type": "integer",
+        "description": "Krylov block width; default n_components+10."
+      },
+      "compute_scores": {
+        "type": "boolean",
+        "description": "Also write cell scores (one extra pass).",
+        "default": true
+      },
+      "precision": {
+        "type": "string",
+        "description": "Accumulator precision.",
+        "default": "float32",
+        "enum": [
+          "float32",
+          "float64"
+        ]
+      },
+      "seed": {
+        "type": "integer",
+        "description": "Random seed.",
+        "default": 0
+      }
+    },
+    "required": [
+      "name"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "status": {
+        "type": "string",
+        "enum": [
+          "ok",
+          "error"
+        ]
+      },
+      "summary": {
+        "type": "string"
+      },
+      "metrics": {
+        "type": "object"
+      },
+      "figures": {
+        "type": "array"
+      },
+      "artifacts": {
+        "type": "array"
+      },
+      "warnings": {
+        "type": "array"
+      },
+      "next": {
+        "type": "array"
+      },
+      "timings": {
+        "type": "object"
+      }
+    },
+    "required": [
+      "status",
+      "summary"
+    ]
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "dim-reduction.scalable_truncated_svd",
+      "reads": [
+        "counts",
+        "genes/hvg_mask"
+      ],
+      "writes": [
+        "pca/scores",
+        "pca/loadings",
+        "pca/sv",
+        "pca/mean"
+      ],
+      "runtime": "local-cpu",
+      "streaming": true
+    }
+  }
+}

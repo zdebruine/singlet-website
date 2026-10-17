@@ -1,0 +1,179 @@
+{
+  "name": "singlet_doublets_ensemble_doublet_calling",
+  "title": "Ensemble and consensus doublet calling",
+  "description": "Combines per-barcode doublet calls from several detectors into one consensus call, with per-barcode vote counts and a vote-share score. The default majority_vote needs no training labels and reads only obs/<tool>_call columns that detectors have already written. Use it after at least two detectors have run on the same count matrix (three for majority rules), not to create those calls and not to obtain calibrated probabilities. Writes obs/doublet_consensus, obs/doublet_score, obs/doublet_votes, obs/doublet_n_tools and uns/doublet_ensemble.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "majority_vote",
+          "at_least_half_vote",
+          "any_singlet_vote",
+          "any_doublet_vote",
+          "scds_hybrid_topk"
+        ],
+        "default": "majority_vote",
+        "description": "Combination rule. Vote methods read obs/<tool>_call; scds_hybrid_topk sums two scds scores and calls the top expected-rate fraction."
+      },
+      "tools": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "minItems": 2,
+        "description": "Detector names whose obs/<tool>_call columns are voted; majority rules need at least three answering tools."
+      },
+      "expected_doublet_rate": {
+        "type": [
+          "number",
+          "null"
+        ],
+        "minimum": 0,
+        "maximum": 0.5,
+        "default": null,
+        "description": "Required for scds_hybrid_topk: fraction of barcodes to call as doublets. Ignored by vote methods."
+      },
+      "truth_key": {
+        "type": "string",
+        "description": "Optional obs column of inter-sample labels, used only to report recall and precision; never changes calls."
+      },
+      "scds_hybrid": {
+        "type": "object",
+        "description": "Score columns for scds_hybrid_topk; defaults match the scds cxds and bcds outputs.",
+        "properties": {
+          "cxds_score_key": {
+            "type": "string",
+            "default": "scds_cxds_score",
+            "description": "obs column holding the cxds score."
+          },
+          "bcds_score_key": {
+            "type": "string",
+            "default": "scds_bcds_score",
+            "description": "obs column holding the bcds score."
+          }
+        },
+        "additionalProperties": false
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; the current rules are linear in barcodes times tools and run on CPU, so auto selects cpu."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing obs/doublet_* and uns/doublet_ensemble members instead of failing."
+      }
+    },
+    "required": [
+      "dataset"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. obs/doublet_consensus. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Keys: method, n_barcodes, n_doublet_calls, doublet_call_rate, n_partial_barcodes, and recall and precision when truth_key is set.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "doublets.ensemble_doublet_calling",
+      "reads": [
+        "obs/<tool>_call",
+        "obs/scds_cxds_score",
+        "obs/scds_bcds_score",
+        "obs/<truth_key>"
+      ],
+      "writes": [
+        "obs/doublet_consensus",
+        "obs/doublet_score",
+        "obs/doublet_votes",
+        "obs/doublet_n_tools",
+        "uns/doublet_ensemble"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": false,
+      "long_running": false,
+      "streaming": true,
+      "paradigm": "hybrid",
+      "docs": "tasks/doublets/ensemble_doublet_calling.md"
+    }
+  }
+}

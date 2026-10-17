@@ -1,0 +1,171 @@
+{
+  "name": "singlet_neighbors_approximate_knn_search",
+  "title": "Approximate kNN graph with exact-recall check",
+  "description": "Builds the cell neighbour graph from an obsm embedding (default X_pca): exact search below auto.exact_threshold_n cells, NN-descent above, with approximate indices tuned to a recall target measured against exact search on a random cell sample. Writes sparse distances and connectivities under obsp/<key> and a recall, timing and memory report under uns/<key>_recall_report. Run after an embedding exists and before clustering or UMAP. Do not use on raw counts, for batch-corrected graphs (neighbors.batch_aware_knn_graph), to choose the neighbour count (neighbors.neighbor_count_selection) or for non-Euclidean metrics.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "use_rep": {
+        "type": "string",
+        "default": "X_pca",
+        "description": "Key of the obsm embedding to search (cells by dimensions); must contain no missing values."
+      },
+      "key": {
+        "type": "string",
+        "default": "knn",
+        "pattern": "^[A-Za-z0-9_]{1,64}$",
+        "description": "Stem of the output members obsp/<key>_distances, obsp/<key>_connectivities, uns/<key> and uns/<key>_recall_report."
+      },
+      "n_neighbors": {
+        "type": "integer",
+        "default": 15,
+        "minimum": 1,
+        "description": "Neighbours per cell, self excluded; at most the number of cells minus one. Scanpy's default graph corresponds to 14."
+      },
+      "metric": {
+        "type": "string",
+        "enum": ["euclidean"],
+        "default": "euclidean",
+        "description": "Distance metric; only euclidean is supported in this release."
+      },
+      "backend": {
+        "type": "string",
+        "enum": ["auto", "brute", "nn_descent", "hnsw", "ivfflat"],
+        "default": "auto",
+        "description": "Index. auto picks brute below auto.exact_threshold_n, else nn_descent. brute is exact; the others are approximate and tuned to validation.target."
+      },
+      "auto": {
+        "type": "object",
+        "description": "Options of backend auto.",
+        "properties": {
+          "exact_threshold_n": {
+            "type": "integer",
+            "default": 4096,
+            "minimum": 1,
+            "description": "Cell count below which auto uses exact search."
+          }
+        },
+        "additionalProperties": false
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu", "cuda"],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available. nn_descent and hnsw always run on CPU."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "minimum": 0,
+        "description": "Random seed for the query sample, trees, quantiser and approximate-index randomness."
+      },
+      "validation": {
+        "type": "object",
+        "description": "Recall check against exact search and optional downstream agreement check.",
+        "properties": {
+          "sample_size": {
+            "type": "integer",
+            "default": 2000,
+            "minimum": 1,
+            "description": "Number of uniformly sampled query cells used to measure recall against exact search."
+          },
+          "target": {
+            "type": "number",
+            "default": 0.95,
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Mean recall an approximate backend must reach on the sample; its breadth parameter is raised until it does."
+          },
+          "downstream_ari": {
+            "type": "boolean",
+            "default": false,
+            "description": "Also run Leiden on the approximate and the exact graph and record their ARI against an exact seed control; adds clustering time."
+          },
+          "downstream_resolution": {
+            "type": "number",
+            "default": 1.0,
+            "exclusiveMinimum": 0,
+            "description": "Leiden resolution for the downstream check; used only when downstream_ari is true."
+          }
+        },
+        "additionalProperties": false
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members with the same key instead of failing."
+      }
+    },
+    "required": ["dataset"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. obsp/knn_distances. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Compact summary for completed runs: backend (requested and resolved), device, n_cells, n_dims, n_neighbors, seed, tuned parameters, recall (sample_size, mean_R_k, p05_cell_recall, target, target_met, mean_miss_depth, cells_with_ties), timing_s, peak_memory_gb, graph (n_connected_components) and downstream (null unless requested). Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device and the backend that would be used.",
+        "additionalProperties": true
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "neighbors.approximate_knn_search",
+      "reads": ["obsm/<use_rep>"],
+      "writes": ["obsp/<key>_distances", "obsp/<key>_connectivities", "uns/<key>", "uns/<key>_recall_report"],
+      "devices": ["cpu", "cuda"],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": true,
+      "paradigm": "heuristic",
+      "docs": "tasks/neighbors/approximate_knn_search.md"
+    }
+  }
+}

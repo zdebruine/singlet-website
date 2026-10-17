@@ -1,0 +1,211 @@
+{
+  "name": "singlet_grn_tf_activity_scoring",
+  "title": "TF activity scoring from a prior regulon network",
+  "description": "Scores transcription factor activity per cell or pseudobulk sample from a signed prior regulon table. The default method ulm fits each regulon's signed weights by univariate regression and returns t-values; mlm, viper, aucell, gsva, waggr_wmean and waggr_wsum are alternatives. Writes activity matrices, p-values where the method has them, and optional top-fraction calls. Do not use it to infer new TF-target edges, or with a regulon table from another species.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "layer": {
+        "type": "string",
+        "default": "lognorm",
+        "description": "Log-normalised layer, cells or pseudobulk samples by genes; raw counts must not be passed."
+      },
+      "prior": {
+        "type": "string",
+        "default": "collectri_human",
+        "description": "Name of a regulon table stored as uns/regulon_<prior>, such as collectri_human or dorothea_human."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "ulm",
+          "mlm",
+          "viper",
+          "aucell",
+          "gsva",
+          "waggr_wmean",
+          "waggr_wsum"
+        ],
+        "default": "ulm",
+        "description": "Scoring method. ulm is the default for signed weighted priors; aucell uses set membership only."
+      },
+      "tmin": {
+        "type": "integer",
+        "minimum": 1,
+        "default": 5,
+        "description": "Minimum prior targets present in the layer for a regulon to be scored."
+      },
+      "call_frac": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 0.5,
+        "default": 0.1,
+        "description": "Top fraction of TFs per observation written as binary calls; 0 writes no calls."
+      },
+      "viper": {
+        "type": "object",
+        "description": "Options for method viper (aREA with pleiotropy correction).",
+        "additionalProperties": false,
+        "properties": {
+          "pleiotropy": {
+            "type": "boolean",
+            "default": true,
+            "description": "Apply the shadow-regulon correction for targets shared with stronger regulators."
+          },
+          "reg_sign": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 1,
+            "default": 0.05,
+            "description": "Two-sided significance threshold for regulators in the pleiotropy correction."
+          },
+          "n_targets": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 10,
+            "description": "Minimum shared targets before a regulator pair enters the pleiotropy correction."
+          },
+          "penalty": {
+            "type": "number",
+            "minimum": 1,
+            "default": 20,
+            "description": "Penalty applied to shared targets in the pleiotropy correction."
+          }
+        }
+      },
+      "aucell": {
+        "type": "object",
+        "description": "Options for method aucell.",
+        "additionalProperties": false,
+        "properties": {
+          "n_up": {
+            "type": ["integer", "null"],
+            "minimum": 2,
+            "default": null,
+            "description": "Top-ranked features used by the recovery curve; null uses ceil(0.05 G) clipped to [2, G]."
+          }
+        }
+      },
+      "seed": {
+        "type": "integer",
+        "default": 42,
+        "description": "Seed for AUCell tie-break shuffles and waggr permutations; fixed for reproducibility."
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": [
+      "dataset"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. obsm/tf_activity_ulm. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Completed runs: method, prior, n_observations, n_regulons_scored, n_regulons_dropped_tmin, median_targets_matched, warnings. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "grn.tf_activity_scoring",
+      "reads": [
+        "layers/lognorm",
+        "uns/regulon_<prior>"
+      ],
+      "writes": [
+        "obsm/tf_activity_<method>",
+        "obsm/tf_activity_pvalue_<method>",
+        "obsm/tf_activity_call_<method>",
+        "uns/tf_activity_<method>_params"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": false,
+      "streaming": true,
+      "paradigm": "hybrid",
+      "docs": "tasks/grn/tf_activity_scoring.md"
+    }
+  }
+}

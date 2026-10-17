@@ -1,0 +1,242 @@
+{
+  "name": "singlet_multimodal_protein_imputation_from_rna",
+  "title": "Protein (ADT) imputation from RNA",
+  "description": "Predicts the surface-protein (ADT) profile of RNA-only query cells from a paired CITE-seq reference and writes it to obsm/adt_pred on the log_cp10k scale. The default method totalvi is a joint probabilistic model that can also return per-value posterior spread; sciPENN gives point predictions and knn is a neighbour-regression comparator. Use it when query cells lack protein measurements and share the reference protein panel. Do not use it to replace measured ADT in cells that have it, to call protein positivity (use multimodal.adt_positivity_calling), or to report proteins that RNA reflects weakly without checking per-protein scores.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle (.singlet path or URI, or workspace handle) with query RNA counts and, for scoring, held-out ADT."
+      },
+      "reference": {
+        "type": "string",
+        "description": "Optional handle of a paired RNA and ADT reference. If omitted, cells with obs/is_train true serve as reference."
+      },
+      "method": {
+        "type": "string",
+        "enum": ["totalvi", "sciPENN", "knn"],
+        "default": "totalvi",
+        "description": "totalvi is the default. sciPENN gives point predictions; knn is the heuristic comparator."
+      },
+      "target_normalization": {
+        "type": "string",
+        "enum": ["log_cp10k", "clr"],
+        "default": "log_cp10k",
+        "description": "Scale of the training target and scoring layer. Scores on different targets are not comparable."
+      },
+      "evaluation": {
+        "type": "object",
+        "description": "Options for scoring against held-out measured ADT.",
+        "properties": {
+          "split_key": {
+            "type": "string",
+            "default": "is_train",
+            "description": "obs column that marks reference cells; if absent, a quarter of batches is held out."
+          },
+          "split_seed": {
+            "type": "integer",
+            "default": 1,
+            "description": "Seed for the batch split and the held-out cell subsample."
+          },
+          "test_cell_cap": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 1000,
+            "description": "Maximum held-out cells scored, sampled with probability proportional to the square root of inverse cell-type frequency."
+          }
+        },
+        "additionalProperties": false
+      },
+      "totalvi": {
+        "type": "object",
+        "description": "Options for method totalvi.",
+        "properties": {
+          "n_latent": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 20,
+            "description": "Dimension of the shared latent space."
+          },
+          "n_hidden": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 256,
+            "description": "Hidden width of the encoder and decoder."
+          },
+          "n_layers_encoder": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 2,
+            "description": "Number of encoder layers."
+          },
+          "protein_dispersion": {
+            "type": "string",
+            "default": "protein",
+            "description": "Granularity of protein overdispersion."
+          },
+          "include_protein_background": {
+            "type": "boolean",
+            "default": true,
+            "description": "Add the background term so predictions match measured ADT; the library default is false."
+          },
+          "n_samples": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 25,
+            "description": "Monte Carlo draws per cell for the predictive mean."
+          },
+          "return_samples": {
+            "type": "boolean",
+            "default": false,
+            "description": "Also write per-value spread to obsm/adt_pred_sd and report 90 percent interval coverage."
+          },
+          "max_epochs": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 200,
+            "description": "Maximum training epochs for the reference model."
+          }
+        },
+        "additionalProperties": false
+      },
+      "sciPENN": {
+        "type": "object",
+        "description": "Options for method sciPENN.",
+        "properties": {
+          "n_epochs": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 10000,
+            "description": "Maximum training epochs; early stopping usually ends training sooner."
+          },
+          "batch_size": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 128,
+            "description": "Training batch size in cells."
+          }
+        },
+        "additionalProperties": false
+      },
+      "knn": {
+        "type": "object",
+        "description": "Options for method knn.",
+        "properties": {
+          "n_neighbors": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 100,
+            "description": "Reference neighbours averaged per query cell."
+          },
+          "n_pcs": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 50,
+            "description": "Principal components used as the distance space."
+          },
+          "distance_method": {
+            "type": "string",
+            "default": "minkowski",
+            "description": "Distance metric for the neighbour search."
+          }
+        },
+        "additionalProperties": false
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu", "cuda"],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Random seed for training, posterior sampling and the held-out subsample."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without training or predicting."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": ["dataset"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written, for example obsm/adt_pred. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "For completed runs: method, n_proteins, n_query_cells, n_test_cells, mean_pearson_per_cell, mean_spearman_per_cell, rmse, mae, mean_pearson_per_protein, median_protein_spearman and interval_coverage_90 (when return_samples is true). Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "multimodal.protein_imputation_from_rna",
+      "reads": [
+        "layers/counts",
+        "layers/normalized",
+        "obs/batch",
+        "obs/cell_type",
+        "obs/is_train",
+        "uns/normalization_id",
+        "obsm/X_pca"
+      ],
+      "writes": [
+        "obsm/adt_pred",
+        "obsm/adt_pred_sd",
+        "models/totalvi_adt",
+        "uns/adt_pred_metrics"
+      ],
+      "devices": ["cpu", "cuda"],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "model-based",
+      "docs": "tasks/multimodal/protein_imputation_from_rna.md"
+    }
+  }
+}

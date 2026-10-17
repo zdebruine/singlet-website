@@ -1,0 +1,340 @@
+{
+  "name": "singlet_neighbors_batch_aware_knn_graph",
+  "title": "Batch-aware kNN graph construction",
+  "description": "Builds a symmetric weighted cell neighbour graph whose neighbours come from several batches: per-batch neighbours (bbknn, the default), mutual-neighbour pairs (mnn), Seurat CCA anchors, or kNN on a Harmony, Scanorama or scVI corrected space. Writes connectivities, distances and the corrected space under a key. Use after dimensionality reduction when batches must mix in the graph used for clustering or embedding. Do not use for a single batch, to score integration (use integration.integration_quality_scoring) or to choose k (use neighbors.neighbor_count_selection).",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "method": {
+        "type": "string",
+        "enum": ["bbknn", "mnn", "seurat_anchors", "harmony_knn", "scanorama_knn", "scvi_knn", "uncorrected_knn"],
+        "default": "bbknn",
+        "description": "Graph method. bbknn (default) draws neighbours from each batch; uncorrected_knn is the baseline with no batch information."
+      },
+      "batch_key": {
+        "type": "string",
+        "default": "batch",
+        "description": "obs column with the batch covariate; at least two levels and no missing values."
+      },
+      "key": {
+        "type": "string",
+        "default": "batch_knn",
+        "pattern": "^[A-Za-z0-9_]{1,64}$",
+        "description": "Stem of the output members obsp/<key>_connectivities, obsp/<key>_distances, obsm/<key>_embedding and uns/<key>_params."
+      },
+      "n_neighbors": {
+        "type": "integer",
+        "default": 15,
+        "minimum": 1,
+        "description": "Neighbours per cell for kNN-type methods, self excluded. Ignored by bbknn, which uses options.bbknn.neighbors_within_batch."
+      },
+      "matching": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Matching space and features shared by all methods.",
+        "properties": {
+          "use_rep": {
+            "type": "string",
+            "default": "X_pca",
+            "description": "obsm embedding to match on (cells by dimensions); no missing values."
+          },
+          "n_pcs": {
+            "type": "integer",
+            "default": 50,
+            "minimum": 1,
+            "description": "Leading dimensions of use_rep used by bbknn, harmony_knn and uncorrected_knn."
+          },
+          "n_hvg": {
+            "type": "integer",
+            "default": 2000,
+            "minimum": 1,
+            "description": "Highly variable genes used by mnn, seurat_anchors and scanorama_knn."
+          }
+        }
+      },
+      "options": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Method options, one nested object per method family. Only the chosen method's object is read.",
+        "properties": {
+          "bbknn": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Options for method bbknn.",
+            "properties": {
+              "neighbors_within_batch": {
+                "type": "integer",
+                "default": 3,
+                "minimum": 1,
+                "description": "Neighbours taken from each batch; 25 is the scIB choice for atlases of at least 1e5 cells."
+              },
+              "trim": {
+                "type": ["integer", "null"],
+                "default": null,
+                "minimum": 0,
+                "description": "Edges kept per cell by weight; null uses 10 times the total neighbours; 0 disables trimming."
+              },
+              "annoy_n_trees": {
+                "type": "integer",
+                "default": 10,
+                "minimum": 1,
+                "description": "Trees in the annoy forest used for per-batch search."
+              },
+              "approx": {
+                "type": "boolean",
+                "default": true,
+                "description": "true uses annoy approximate search; false uses exact brute-force search."
+              }
+            }
+          },
+          "mnn": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Options for method mnn (mutual nearest neighbours, expression space).",
+            "properties": {
+              "k": {
+                "type": "integer",
+                "default": 20,
+                "minimum": 1,
+                "description": "Neighbours used to find mutual nearest-neighbour pairs between batches."
+              },
+              "sigma": {
+                "type": "number",
+                "default": 0.1,
+                "exclusiveMinimum": 0,
+                "description": "Gaussian bandwidth smoothing correction vectors, as a fraction of the cosine-normalised radius."
+              },
+              "cos_norm": {
+                "type": "boolean",
+                "default": true,
+                "description": "Cosine-normalise expression before pair search and correction."
+              }
+            }
+          },
+          "seurat": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Options for method seurat_anchors (CCA reduction only).",
+            "properties": {
+              "dims": {
+                "type": "integer",
+                "default": 30,
+                "minimum": 1,
+                "description": "CCA dimensions 1 to dims used to find anchors."
+              },
+              "k_anchor": {
+                "type": "integer",
+                "default": 5,
+                "minimum": 1,
+                "description": "Neighbours used to pick anchors."
+              },
+              "k_filter": {
+                "type": ["integer", "null"],
+                "default": 200,
+                "minimum": 1,
+                "description": "Neighbours for anchor filtering; null disables filtering."
+              },
+              "k_score": {
+                "type": "integer",
+                "default": 30,
+                "minimum": 1,
+                "description": "Neighbours used to score anchors."
+              }
+            }
+          },
+          "harmony": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Options for method harmony_knn.",
+            "properties": {
+              "theta": {
+                "type": "number",
+                "default": 2,
+                "minimum": 0,
+                "description": "Diversity penalty favouring clusters that contain several batches; 0 disables it."
+              },
+              "sigma": {
+                "type": "number",
+                "default": 0.1,
+                "exclusiveMinimum": 0,
+                "description": "Entropy penalty on soft cluster assignments."
+              },
+              "nclust": {
+                "type": ["integer", "null"],
+                "default": null,
+                "minimum": 1,
+                "description": "Number of soft clusters; null uses min(round(N/30), 100)."
+              },
+              "alpha": {
+                "type": "number",
+                "default": 0.2,
+                "exclusiveMinimum": 0,
+                "description": "Ridge scale used to estimate lambda when lambda is unset."
+              }
+            }
+          },
+          "scanorama": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Options for method scanorama_knn.",
+            "properties": {
+              "knn": {
+                "type": "integer",
+                "default": 20,
+                "minimum": 1,
+                "description": "Neighbours used for approximate mutual matching between batches."
+              },
+              "sigma": {
+                "type": "number",
+                "default": 15,
+                "exclusiveMinimum": 0,
+                "description": "Kernel bandwidth of the alignment weights."
+              },
+              "alpha": {
+                "type": "number",
+                "default": 0.1,
+                "minimum": 0,
+                "description": "Alignment penalty of the Scanorama matching."
+              },
+              "dimred": {
+                "type": "integer",
+                "default": 100,
+                "minimum": 1,
+                "description": "SVD dimensions used by the matching step."
+              },
+              "approx": {
+                "type": "boolean",
+                "default": true,
+                "description": "Use approximate neighbour search in the matching step."
+              },
+              "batch_size": {
+                "type": "integer",
+                "default": 5000,
+                "minimum": 1,
+                "description": "Cells per block in the alignment step."
+              }
+            }
+          },
+          "scvi": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Options for method scvi_knn (trains a model on counts).",
+            "properties": {
+              "n_latent": {
+                "type": "integer",
+                "default": 10,
+                "minimum": 1,
+                "description": "Latent dimension of the posterior mean used for the graph."
+              },
+              "n_hidden": {
+                "type": "integer",
+                "default": 128,
+                "minimum": 1,
+                "description": "Hidden units per layer."
+              },
+              "n_layers": {
+                "type": "integer",
+                "default": 1,
+                "minimum": 1,
+                "description": "Hidden layers in encoder and decoder."
+              },
+              "dropout_rate": {
+                "type": "number",
+                "default": 0.1,
+                "minimum": 0,
+                "maximum": 1,
+                "description": "Dropout rate in encoder and decoder."
+              }
+            }
+          }
+        }
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu", "cuda"],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "minimum": 0,
+        "description": "Random seed for stochastic methods (harmony_knn, scanorama_knn, scvi_knn) and subsampling."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": ["dataset"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: ran inline and wrote members; dry_run: estimate only; queued: long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written, e.g. obsp/batch_knn_connectivities. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Keys: method, n_cells, n_batches, mean_degree, cross_batch_weight_share, device, seed.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "neighbors.batch_aware_knn_graph",
+      "reads": ["layers/log1p_norm", "layers/counts", "var/highly_variable", "obsm/<use_rep>", "obs/<batch_key>"],
+      "writes": ["obsp/<key>_connectivities", "obsp/<key>_distances", "obsm/<key>_embedding", "uns/<key>_params"],
+      "devices": ["cpu", "cuda"],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/neighbors/batch_aware_knn_graph.md"
+    }
+  }
+}

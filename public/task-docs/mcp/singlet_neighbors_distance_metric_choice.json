@@ -1,0 +1,209 @@
+{
+  "name": "singlet_neighbors_distance_metric_choice",
+  "title": "Build kNN graphs under a chosen distance metric",
+  "description": "Builds a cell kNN graph under one distance metric (euclidean, cosine, pearson or spearman) on one representation. It can also build several metrics on that representation and report paired differences against Euclidean distance on the same representation, and score graphs against reference labels when label_key is given. Use the default euclidean on pca to match the Euclidean neighbour lists of Scanpy and Seurat; choose another metric only after comparing. Do not use it for approximate search at scale (neighbors.approximate_knn_search) or for batch-aware graphs (neighbors.batch_aware_knn_graph).",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu", "cuda"],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "minimum": 0,
+        "default": 0,
+        "description": "Seed for Leiden partitions, bootstrap resamples and any approximate search."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, peak memory, device and dense matrix size per metric without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members with the same key instead of failing."
+      },
+      "metric": {
+        "type": "string",
+        "enum": ["euclidean", "cosine", "pearson", "spearman"],
+        "default": "euclidean",
+        "description": "Dissimilarity for the graph. euclidean matches Scanpy and Seurat FindNeighbors; cosine equals euclidean on L2-normalised rows; pearson and spearman suit genes_hvg."
+      },
+      "representation": {
+        "type": "string",
+        "enum": ["pca", "pearson_residuals_pca", "genes_hvg"],
+        "default": "pca",
+        "description": "pca: obsm embedding named embedding.use_rep. pearson_residuals_pca: negative-binomial Pearson residuals, then PCA. genes_hvg: log-normalised highly variable genes."
+      },
+      "n_neighbors": {
+        "type": "integer",
+        "minimum": 3,
+        "default": 15,
+        "description": "Neighbour list length counting the cell itself (Scanpy convention); each cell has n_neighbors minus one others."
+      },
+      "embedding": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Embedding and PCA settings for representations pca and pearson_residuals_pca.",
+        "properties": {
+          "use_rep": {
+            "type": "string",
+            "default": "X_pca",
+            "description": "Key of the obsm embedding (cells by dimensions) used by representation pca; it may hold a latent embedding."
+          },
+          "n_pcs": {
+            "type": ["integer", "null"],
+            "minimum": 2,
+            "default": null,
+            "description": "Columns used for pca, or components computed for pearson_residuals_pca. Take it from dim-reduction.pc_number_selection; null keeps all pca columns."
+          }
+        }
+      },
+      "pearson_residuals": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Settings used only by representation pearson_residuals_pca.",
+        "properties": {
+          "theta": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 100,
+            "description": "Negative-binomial overdispersion of the Pearson residuals."
+          },
+          "clip": {
+            "type": ["number", "null"],
+            "minimum": 0,
+            "default": null,
+            "description": "Clipping of residuals; null sets the clip to the square root of the number of cells."
+          }
+        }
+      },
+      "comparison": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Optional comparison of metrics on one representation. An empty metrics list builds only the single metric.",
+        "properties": {
+          "metrics": {
+            "type": "array",
+            "maxItems": 4,
+            "default": [],
+            "items": {
+              "type": "string",
+              "enum": ["euclidean", "cosine", "pearson", "spearman"]
+            },
+            "description": "Metrics built on one representation. Euclidean is always added as the paired baseline when the list is non-empty."
+          }
+        }
+      },
+      "scoring": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Optional reference labels and clustering settings for the scores.",
+        "properties": {
+          "label_key": {
+            "type": ["string", "null"],
+            "default": null,
+            "description": "obs column of reference labels; without it only the graphs are built."
+          },
+          "fixed_resolution": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 1.0,
+            "description": "Leiden resolution for the fixed-resolution ARI and NMI."
+          },
+          "resolution_grid": {
+            "type": "array",
+            "maxItems": 40,
+            "default": [],
+            "items": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "description": "Leiden resolutions for the maximum-over-sweep score; empty uses 0.1 to 2.0 in 20 steps."
+          },
+          "n_bootstrap": {
+            "type": "integer",
+            "minimum": 100,
+            "default": 1000,
+            "description": "Cell-level bootstrap resamples for paired confidence intervals."
+          },
+          "ceiling_threshold": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.98,
+            "description": "Baseline macro purity at or above which a dataset is excluded from ranking."
+          }
+        }
+      }
+    },
+    "required": ["dataset"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written, e.g. obsp/distances_cosine. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "additionalProperties": true,
+        "description": "Keys: metric, representation, n_neighbors, n_cells, scores, difference_vs_baseline, device, seconds. Never raw matrices."
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "additionalProperties": true,
+        "description": "Present for dry_run: seconds, peak_memory_gb, device, dense_matrix_gb per metric."
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "neighbors.distance_metric_choice",
+      "reads": ["layers/counts", "X", "var/highly_variable", "obsm/<use_rep>", "obs/<label_key>"],
+      "writes": ["obsp/distances_<metric>", "obsp/connectivities_<metric>", "uns/neighbors_<metric>", "obs/purity_<metric>", "uns/metric_comparison"],
+      "devices": ["cpu", "cuda"],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "heuristic",
+      "docs": "tasks/neighbors/distance_metric_choice.md"
+    }
+  }
+}

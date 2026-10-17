@@ -1,0 +1,266 @@
+{
+  "name": "singlet_harmonization_count_matrix_state_detection",
+  "title": "Count-matrix processing-state detection",
+  "description": "Labels a stored expression matrix as raw_counts, normalized, log1p, scaled, zscored, pearson_residuals or nonnegative_noninteger, or unknown, from its values, and flags a conflict with the declared or required state. The default method full_scan reads every stored entry once and writes uns/state_report plus per-cell and per-gene summaries. Use it before count-model, size-factor or embedding steps. integrality_only is a fast refusal test for very large inputs and never returns raw_counts. Do not use it to decide normalization, and do not trust a raw_counts label on equal-depth data without the declared state.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "layer": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "default": null,
+        "description": "Matrix to test, named as layers/<name>; null tests X."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "full_scan",
+          "integrality_only"
+        ],
+        "default": "full_scan",
+        "description": "full_scan checks every stored entry (default). integrality_only applies the integer and sign test only and never returns raw_counts."
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "reconciliation": {
+        "type": "object",
+        "description": "Declared-state and required-state options for the conflict flag.",
+        "properties": {
+          "declared_state": {
+            "type": "string",
+            "enum": [
+              "raw_counts",
+              "normalized",
+              "log1p",
+              "scaled",
+              "zscored",
+              "pearson_residuals",
+              "nonnegative_noninteger",
+              "unknown"
+            ],
+            "default": "unknown",
+            "description": "State recorded by the producer or metadata; a determinate label that differs raises the conflict flag."
+          },
+          "required_state": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null,
+            "description": "State a downstream method needs, using the same labels; null skips the requirement check."
+          }
+        },
+        "additionalProperties": false
+      },
+      "integrity": {
+        "type": "object",
+        "description": "Integer-test options for full_scan and integrality_only.",
+        "properties": {
+          "integer_tolerance": {
+            "type": "number",
+            "minimum": 0,
+            "default": 0,
+            "description": "Absolute tolerance for integer-valued entries; 0 is exact."
+          }
+        },
+        "additionalProperties": false
+      },
+      "library_size": {
+        "type": "object",
+        "description": "Row-sum and log-inversion options for full_scan.",
+        "properties": {
+          "target_sum_candidates": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "default": [
+              10000,
+              100000,
+              1000000
+            ],
+            "description": "Library-size targets tested for a row-sum match."
+          },
+          "log_bases": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "e",
+                "2",
+                "10"
+              ]
+            },
+            "default": [
+              "e",
+              "2",
+              "10"
+            ],
+            "description": "Candidate log bases for inverting shifted logarithms."
+          },
+          "rowsum_cv_threshold": {
+            "type": "number",
+            "minimum": 0,
+            "default": 0.05,
+            "description": "Row-sum coefficient of variation above which rows count as depth-variable (proposal)."
+          },
+          "rowsum_rel_tol": {
+            "type": "number",
+            "minimum": 0,
+            "default": 0.0001,
+            "description": "Relative tolerance for a row sum equal to a candidate target (proposal)."
+          }
+        },
+        "additionalProperties": false
+      },
+      "mito": {
+        "type": "object",
+        "description": "Mitochondrial plausibility statistic; never changes the label.",
+        "properties": {
+          "prefixes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [
+              "MT-"
+            ],
+            "description": "Gene-name prefixes for mitochondrial genes; species-dependent."
+          },
+          "plausibility_max": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.2,
+            "description": "Upper bound on median mitochondrial fraction (proposal)."
+          }
+        },
+        "additionalProperties": false
+      },
+      "residual_clip_check": {
+        "type": "boolean",
+        "default": true,
+        "description": "Test for a clip bound at sqrt(n_cells) on a gene whose mean is not zero."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": [
+      "dataset"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "For completed runs: label, conflict, declared_state, integer_fraction, n_negative, min, max, row_sum_median, row_sum_cv, target_sum_match, log_base_match, mt_fraction_median. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "harmonization.count_matrix_state_detection",
+      "reads": [
+        "X or layers/<layer>",
+        "obs/total_counts",
+        "var/mt",
+        "uns/log1p",
+        "uns/normalization_id"
+      ],
+      "writes": [
+        "uns/state_report",
+        "obs/row_sum",
+        "var/col_mean",
+        "var/col_var"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": false,
+      "long_running": false,
+      "streaming": true,
+      "paradigm": "hybrid",
+      "docs": "tasks/harmonization/count_matrix_state_detection.md"
+    }
+  }
+}

@@ -1,0 +1,236 @@
+{
+  "name": "singlet_immune_repertoire_repertoire_diversity_expansion",
+  "title": "Repertoire diversity and clonal expansion",
+  "description": "Estimates per-group clonotype diversity and clonal expansion from a clonotype label per cell, standardising sampling depth so groups of different size compare fairly. The default hill_coverage method returns a Hill-number profile with bootstrap intervals; plugin_indices are depth-sensitive comparators. Writes uns/repertoire_diversity, uns/rarefaction_curves or obs/clonal_expansion depending on method. Do not use without a clonotype label per cell, or to compare groups whose clonotype definitions differ.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "method": {
+        "type": "string",
+        "enum": ["hill_coverage", "plugin_indices", "chao1", "rarefaction", "expansion_classes"],
+        "default": "hill_coverage",
+        "description": "Estimator. hill_coverage is the default; plugin_indices and chao1 are comparators; expansion_classes labels cells by clone size."
+      },
+      "grouping": {
+        "type": "object",
+        "description": "Column names and minimum group size. group_key may be composite, such as donor crossed with cell type.",
+        "properties": {
+          "clone_key": {
+            "type": "string",
+            "default": "clone_id",
+            "description": "Column with the clonotype label; missing values mean unassigned and are excluded."
+          },
+          "group_key": {
+            "type": "string",
+            "default": "donor_id",
+            "description": "Column defining the groups compared."
+          },
+          "copy_key": {
+            "type": ["string", "null"],
+            "default": null,
+            "description": "Optional integer UMI or copy count per cell used as clone-size weight; null counts each cell once."
+          },
+          "min_cells": {
+            "type": "integer",
+            "minimum": 2,
+            "default": 30,
+            "description": "Groups with fewer cells are reported as excluded, not dropped silently."
+          }
+        },
+        "additionalProperties": false
+      },
+      "depth": {
+        "type": "object",
+        "description": "Depth standardisation for hill_coverage and plugin_indices.",
+        "properties": {
+          "policy": {
+            "type": "string",
+            "enum": ["coverage", "uniform", "none"],
+            "default": "coverage",
+            "description": "coverage aligns sample coverage; uniform resamples groups to one size; none keeps raw values."
+          },
+          "size": {
+            "type": ["integer", "null"],
+            "minimum": 1,
+            "default": null,
+            "description": "Common resampling size for uniform; null uses the smallest group."
+          }
+        },
+        "additionalProperties": false
+      },
+      "hill_coverage": {
+        "type": "object",
+        "description": "Options for the Hill profile: q grid, bootstrap replicates and confidence level.",
+        "properties": {
+          "q_min": {
+            "type": "number",
+            "minimum": 0,
+            "default": 0,
+            "description": "Lowest Hill order q."
+          },
+          "q_max": {
+            "type": "number",
+            "minimum": 0,
+            "default": 4,
+            "description": "Highest Hill order q."
+          },
+          "q_step": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 0.1,
+            "description": "Spacing of the q grid; the default gives 41 orders."
+          },
+          "nboot": {
+            "type": "integer",
+            "minimum": 10,
+            "default": 200,
+            "description": "Bootstrap replicates for intervals; resampling uses the seed."
+          },
+          "ci": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 1,
+            "default": 0.95,
+            "description": "Confidence level for intervals."
+          }
+        },
+        "additionalProperties": false
+      },
+      "plugin_indices": {
+        "type": "object",
+        "description": "Options for plug-in indices computed on observed clone sizes.",
+        "properties": {
+          "indices": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": ["normalized_shannon", "d50", "gini_simpson", "inverse_simpson"]
+            },
+            "uniqueItems": true,
+            "minItems": 1,
+            "default": ["normalized_shannon", "d50", "gini_simpson", "inverse_simpson"],
+            "description": "Plug-in indices to report, chosen from the four listed values."
+          }
+        },
+        "additionalProperties": false
+      },
+      "rarefaction": {
+        "type": "object",
+        "description": "Options for the expected-richness curve.",
+        "properties": {
+          "steps": {
+            "type": "integer",
+            "minimum": 2,
+            "default": 50,
+            "description": "Number of sampling depths between 1 and the group size."
+          }
+        },
+        "additionalProperties": false
+      },
+      "expansion_classes": {
+        "type": "object",
+        "description": "Options for clone-size classes per cell.",
+        "properties": {
+          "breakpoints": {
+            "type": "array",
+            "items": {"type": "integer", "minimum": 1},
+            "minItems": 1,
+            "default": [1, 2],
+            "description": "Ascending clone-size class boundaries."
+          },
+          "count_within_group": {
+            "type": "boolean",
+            "default": true,
+            "description": "Count clone sizes within each group; false pools the dataset, as scirpy does by default."
+          }
+        },
+        "additionalProperties": false
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu", "cuda"],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Random seed for bootstrap resampling and uniform subsampling."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without computing."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": ["dataset"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: computed inline and wrote members; dry_run: estimate only; queued: long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written, for example uns/repertoire_diversity. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Compact summary for completed calls. Keys: method, n_groups, n_excluded_groups, n_undefined, target_coverage, q_levels. Never raw histograms.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "immune-repertoire.repertoire_diversity_expansion",
+      "reads": ["obs/clone_id", "obs/donor_id", "uns/clone_definition"],
+      "writes": ["uns/repertoire_diversity", "uns/rarefaction_curves", "obs/clonal_expansion"],
+      "devices": ["cpu", "cuda"],
+      "stochastic": true,
+      "long_running": false,
+      "streaming": true,
+      "paradigm": "hybrid",
+      "docs": "tasks/immune-repertoire/repertoire_diversity_expansion.md"
+    }
+  }
+}

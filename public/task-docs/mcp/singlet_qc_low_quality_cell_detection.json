@@ -1,0 +1,357 @@
+{
+  "name": "singlet_qc_low_quality_cell_detection",
+  "title": "Low-quality and damaged cell detection",
+  "description": "Flags low-quality or damaged cells from per-cell library size, detected genes, top-20 share and mitochondrial fraction, and writes a keep flag per cell with the metrics and thresholds behind it. Needs integer UMI counts in layers/counts after cell calling; set batch_key when libraries are merged so thresholds are per batch. The default mad is the best-practices MAD rule and needs no training; fixed applies hand-set bounds, miqc fits a per-sample mixture, dropkick fits a classifier on heuristic labels. Do not use it on empty droplets, for nuclear-fraction damage calls in nuclei, or without reading the per-type retention it reports.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "mad",
+          "fixed",
+          "miqc",
+          "dropkick"
+        ],
+        "default": "mad",
+        "description": "Decision rule: mad (robust MAD rules, default), fixed (hand-set bounds), miqc (per-sample mixture, gives lowq_prob), dropkick (classifier on heuristic labels, gives lowq_prob)."
+      },
+      "batch_key": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "default": null,
+        "description": "obs column naming batches or samples. MAD thresholds and miqc fits are computed per batch; null treats the dataset as one batch."
+      },
+      "cell_type_key": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "default": null,
+        "description": "obs column with cell-type labels; used only to report the retention of each type after filtering."
+      },
+      "mad": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options for method mad.",
+        "properties": {
+          "nmads_counts": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "default": 5,
+            "description": "MADs from the batch median on log1p total counts and log1p detected genes, both sides; null disables both rules.",
+            "exclusiveMinimum": 0
+          },
+          "nmads_top_genes": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "default": 5,
+            "description": "MADs from the batch median on the percentage of counts in the top 20 genes, both sides; null disables the rule.",
+            "exclusiveMinimum": 0
+          },
+          "nmads_mito": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "default": 3,
+            "description": "MADs above the batch median of the logit mitochondrial fraction; null leaves only mito_cutoff.",
+            "exclusiveMinimum": 0
+          },
+          "mito_cutoff": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "default": 0.08,
+            "description": "Mitochondrial fraction a cell must also exceed to be flagged (logical AND with nmads_mito); 0 disables.",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "min_flags": {
+            "type": "integer",
+            "default": 1,
+            "description": "Number of the four rules (counts, genes, top-20 share, mitochondrial) that must flag a cell for removal; 2 mimics pipeComp lenient.",
+            "minimum": 1,
+            "maximum": 4
+          },
+          "scale_mad": {
+            "type": "boolean",
+            "default": false,
+            "description": "Multiply each MAD by 1.4826 (scuttle convention) before applying the nmads multiples."
+          },
+          "share_mads": {
+            "type": "boolean",
+            "default": false,
+            "description": "Use one MAD pooled over batches while keeping per-batch medians."
+          },
+          "reference_batches": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "default": null,
+            "description": "Estimate medians and MADs from these batches only; other batches borrow the pooled estimate. Null estimates every batch from its own cells."
+          }
+        }
+      },
+      "fixed": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options for method fixed. A null bound is disabled.",
+        "properties": {
+          "min_genes": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "default": 200,
+            "description": "Keep a cell only if it has more detected genes than this.",
+            "minimum": 0
+          },
+          "max_genes": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "default": 2500,
+            "description": "Keep a cell only if it has fewer detected genes than this.",
+            "minimum": 0
+          },
+          "min_counts": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "default": null,
+            "description": "Keep a cell only if its total UMIs exceed this.",
+            "minimum": 0
+          },
+          "max_counts": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "default": null,
+            "description": "Keep a cell only if its total UMIs are below this.",
+            "minimum": 0
+          },
+          "mito_cutoff": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "default": 0.05,
+            "description": "Keep a cell only if its mitochondrial fraction is below this; the default is a PBMC convention.",
+            "minimum": 0,
+            "maximum": 1
+          }
+        }
+      },
+      "miqc": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options for method miqc.",
+        "properties": {
+          "posterior_cutoff": {
+            "type": "number",
+            "default": 0.75,
+            "description": "Cells with posterior probability of the compromised component above this are removed before the boundary rules.",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "model_type": {
+            "type": "string",
+            "enum": [
+              "linear",
+              "spline",
+              "polynomial",
+              "one_dimensional"
+            ],
+            "default": "linear",
+            "description": "Regression of mitochondrial percentage on detected genes in each component; one_dimensional models mitochondrial percentage alone."
+          },
+          "keep_all_below_boundary": {
+            "type": "boolean",
+            "default": true,
+            "description": "Keep cells whose mitochondrial percentage lies below the fitted intact line."
+          },
+          "enforce_left_cutoff": {
+            "type": "boolean",
+            "default": true,
+            "description": "Also remove cells with no more genes and no lower mitochondrial percentage than the least-mitochondrial removed cell."
+          }
+        }
+      },
+      "dropkick": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options for method dropkick.",
+        "properties": {
+          "min_genes": {
+            "type": "integer",
+            "default": 50,
+            "description": "Barcodes with fewer detected genes are excluded from training and receive score 0 and label false.",
+            "minimum": 1
+          },
+          "alpha": {
+            "type": "number",
+            "default": 0.1,
+            "description": "Elastic-net mixing parameter: 1 is the lasso, 0 the ridge.",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "n_hvgs": {
+            "type": "integer",
+            "default": 2000,
+            "description": "Number of highly variable genes used as classifier features.",
+            "minimum": 1
+          }
+        }
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Random seed for miqc EM starting values and dropkick cross-validation folds; other methods are deterministic."
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": [
+      "dataset"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. obs/keep_cell. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "additionalProperties": true,
+        "description": "Compact summary for completed runs. Keys: method, cells_in, cells_removed, fraction_removed, removed_by_rule (mad, fixed), batches, min_type_retention (null without cell_type_key), thresholds_location, samples_fit and samples_failed (miqc), removed_below_min_genes (dropkick). Never raw matrices."
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "additionalProperties": true,
+        "description": "Present for dry_run: seconds, peak_memory_gb, device."
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "qc.low_quality_cell_detection",
+      "reads": [
+        "layers/counts",
+        "var/mito",
+        "var/ribo",
+        "obs/<batch_key>",
+        "obs/<cell_type_key>"
+      ],
+      "writes": [
+        "obs/qc_total_counts",
+        "obs/qc_n_genes",
+        "obs/qc_pct_mito",
+        "obs/qc_pct_ribo",
+        "obs/qc_pct_top20",
+        "obs/qc_outlier_lib",
+        "obs/qc_outlier_genes",
+        "obs/qc_outlier_top20",
+        "obs/qc_outlier_mito",
+        "obs/keep_cell",
+        "obs/lowq_prob",
+        "uns/qc_thresholds",
+        "uns/qc_method_report",
+        "models/miqc",
+        "models/dropkick"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": true,
+      "paradigm": "hybrid",
+      "docs": "tasks/qc/low_quality_cell_detection.md"
+    }
+  }
+}

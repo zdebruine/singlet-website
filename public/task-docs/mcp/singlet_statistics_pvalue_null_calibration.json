@@ -1,0 +1,303 @@
+{
+  "name": "singlet_statistics_pvalue_null_calibration",
+  "title": "Type I error and p-value calibration under replicate-respecting nulls",
+  "description": "Measures whether single-cell differential expression tests keep their nominal false-positive rate and uniform p-values when no condition effect exists, using nulls that treat donors, not cells, as replicates: donor-label permutation among control donors, technical replicates, a cell-split check, or a fitted hierarchical simulator. Needs raw counts in layers/counts, donor, condition and cell-type columns in obs, and at least 8 control donors for the permutation null; writes per-method, per-cell-type false-positive rates, p-value uniformity, complete-null call rate and a verdict to uns/null_calibration/summary. Call with dry_run true first. Do not use it to find differentially expressed genes or to test a real contrast (use the replicate-aware condition DE tool), and do not rely on cell_split_within_donor, which cannot detect donor-level inflation.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle. Needs raw counts in layers/counts."
+      },
+      "donor_key": {
+        "type": "string",
+        "description": "obs column identifying the donor or sample, the unit of inference. Required."
+      },
+      "cell_type_key": {
+        "type": "string",
+        "default": "cell_type",
+        "description": "obs column defining the per-cell-type strata for calibration."
+      },
+      "null": {
+        "type": "object",
+        "description": "Null construction and its design.",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "donor_permutation",
+              "replicate_batch",
+              "cell_split_within_donor",
+              "fitted_null"
+            ],
+            "default": "donor_permutation",
+            "description": "donor_permutation relabels control donors; replicate_batch compares batches of one sample; cell_split_within_donor is a harness check; fitted_null uses a fitted generator."
+          },
+          "condition_key": {
+            "type": "string",
+            "default": "condition",
+            "description": "obs column with the condition; identifies control donors."
+          },
+          "control_condition": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null,
+            "description": "Level of condition_key marking control donors. Required for donor_permutation and cell_split_within_donor."
+          },
+          "batch_key": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null,
+            "description": "obs column with processing batch. Required for replicate_batch; otherwise only used to report batch balance."
+          },
+          "n_replicates": {
+            "type": "integer",
+            "minimum": 20,
+            "default": 20,
+            "description": "Number of null replicates. For donor_permutation, distinct balanced splits are used without repetition."
+          }
+        },
+        "additionalProperties": false
+      },
+      "methods": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "enum": [
+            "pseudobulk_nb",
+            "pseudobulk_deseq2",
+            "pseudobulk_limma_trend",
+            "pseudobulk_limma_voom",
+            "dreamlet",
+            "nebula",
+            "mast_donor",
+            "cell_wilcoxon",
+            "cell_ttest",
+            "mast_cell"
+          ]
+        },
+        "minItems": 1,
+        "uniqueItems": true,
+        "default": [
+          "pseudobulk_nb",
+          "cell_wilcoxon"
+        ],
+        "description": "Methods to evaluate. pseudobulk_nb is the proposed default; cell_* and mast_cell are inflating baselines without a donor term."
+      },
+      "calibration": {
+        "type": "object",
+        "description": "Reporting levels and verdict rule.",
+        "properties": {
+          "alpha_levels": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 1
+            },
+            "minItems": 1,
+            "default": [
+              0.001,
+              0.01,
+              0.05,
+              0.1
+            ],
+            "description": "Nominal thresholds at which false-positive rates are reported."
+          },
+          "fdr_q": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 1,
+            "default": 0.05,
+            "description": "Benjamini-Hochberg level for the complete-null call rate."
+          },
+          "inflation_factor": {
+            "type": "number",
+            "exclusiveMinimum": 1,
+            "default": 1.5,
+            "description": "Inflated when the lower 95% bound of the false-positive rate exceeds this factor times alpha. Proposed, not from the literature."
+          },
+          "conservative_factor": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 1,
+            "default": 0.5,
+            "description": "Conservative when the upper 95% bound is below this factor times alpha. Proposed, not from the literature."
+          },
+          "cell_types": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [],
+            "description": "Cell types to evaluate. Empty means every level of cell_type_key."
+          }
+        },
+        "additionalProperties": false
+      },
+      "pseudobulk": {
+        "type": "object",
+        "description": "Options for pseudobulk_* methods and dreamlet.",
+        "properties": {
+          "min_cells": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 10,
+            "description": "Minimum cells per donor and cell type for a pseudobulk to be kept."
+          },
+          "min_counts": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 1000,
+            "description": "Minimum total counts per pseudobulk."
+          },
+          "outlier_nmads": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 3,
+            "description": "Lower-tail library-size outlier threshold in median absolute deviations. Applies to pseudobulk_nb and pseudobulk_deseq2."
+          }
+        },
+        "additionalProperties": false
+      },
+      "nebula": {
+        "type": "object",
+        "description": "Options for the nebula method.",
+        "properties": {
+          "kappa": {
+            "type": "integer",
+            "minimum": 200,
+            "default": 800,
+            "description": "LN fits with estimated kappa below this value are refitted with HL. Values below 200 are refused."
+          }
+        },
+        "additionalProperties": false
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "minimum": 0,
+        "default": 0,
+        "description": "Random seed for split subsets, batch sampling and generator draws; exhaustive split enumeration is deterministic."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated seconds, peak memory, device and number of distinct splits without executing."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members for the requested methods instead of failing."
+      }
+    },
+    "required": [
+      "dataset",
+      "donor_key"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. uns/null_calibration/summary and varm/null_pvalues_pseudobulk_nb. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "additionalProperties": true,
+        "description": "Compact summary for completed runs: null_type, control_donors, splits_used, replicates_run, and a calibration list with one row per method and cell type (fpr per alpha, ks_distance, lambda_gc, complete_null_call_rate, testable_genes, verdict), warnings. Never raw matrices."
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device and distinct_splits.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "statistics.pvalue_null_calibration",
+      "reads": [
+        "layers/counts",
+        "obs/<donor_key>",
+        "obs/<condition_key>",
+        "obs/<cell_type_key>",
+        "obs/<batch_key>",
+        "obs/size_factor"
+      ],
+      "writes": [
+        "uns/null_calibration/summary",
+        "varm/null_pvalues_<method>",
+        "models/null_generator_<cell_type>"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": true,
+      "paradigm": "hybrid",
+      "docs": "tasks/statistics/pvalue_null_calibration.md"
+    }
+  }
+}

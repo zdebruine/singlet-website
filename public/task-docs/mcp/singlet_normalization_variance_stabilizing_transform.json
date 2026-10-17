@@ -1,0 +1,316 @@
+{
+  "name": "singlet_normalization_variance_stabilizing_transform",
+  "title": "Variance-stabilizing transform",
+  "description": "Transforms raw UMI counts into a variance-stabilised cells-by-genes matrix for PCA, neighbour graphs and clustering. The default method is shifted_log (scanpy rule: median target sum, then log1p); acosh is the closed-form gamma-Poisson delta-method transform, and analytic_pearson, sctransform_v2 and glmgampoi_pearson write Pearson residuals. Needs UMI integers in layers/counts and optionally obs/size_factors; writes layers/vst_* members, var/vst_overdispersion and uns/vst_settings, and never modifies counts. Do not use on read counts, on already normalised values, or to choose a method by agreement with labels that will score the result.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "shifted_log",
+          "shifted_log_overdispersion",
+          "acosh",
+          "analytic_pearson",
+          "sctransform_v2",
+          "glmgampoi_pearson"
+        ],
+        "default": "shifted_log",
+        "description": "Transform: shifted_log (default), shifted_log_overdispersion, acosh, or Pearson residuals via analytic_pearson, sctransform_v2 or glmgampoi_pearson. Outputs differ by method."
+      },
+      "overdispersion": {
+        "anyOf": [
+          {
+            "type": "number",
+            "minimum": 0
+          },
+          {
+            "type": "string",
+            "enum": [
+              "estimate"
+            ]
+          },
+          {
+            "type": "string",
+            "pattern": "^models/.+"
+          }
+        ],
+        "default": 0.05,
+        "description": "Overdispersion alpha for acosh, shifted_log_overdispersion and glmgampoi_pearson: a fixed value (0 gives Poisson), 'estimate' (per gene, shrunk), or a models/<name> prior."
+      },
+      "gene_subset": {
+        "type": [
+          "array",
+          "null"
+        ],
+        "items": {
+          "type": "string"
+        },
+        "default": null,
+        "description": "Genes to write, by name. Null writes all genes for sparse outputs and genes detected in at least min_cells cells for residual methods."
+      },
+      "shifted_log": {
+        "type": "object",
+        "description": "Options for shifted_log and shifted_log_overdispersion.",
+        "properties": {
+          "target_sum": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "exclusiveMinimum": 0,
+            "default": null,
+            "description": "Per-cell total that counts are scaled to when obs/size_factors is absent. Null uses the median of non-zero cell totals."
+          },
+          "pseudo_count": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 1,
+            "description": "Pseudo-count y0 of shifted_log, written as log(1 + x/y0) so that zeros stay zero. Ignored by shifted_log_overdispersion."
+          },
+          "divisor": {
+            "type": "integer",
+            "enum": [
+              2,
+              4
+            ],
+            "default": 4,
+            "description": "shifted_log_overdispersion only: pseudo-count is 1/(divisor*alpha). 4 reproduces transformGamPoi; 2 is the first-order asymptote of acosh."
+          }
+        },
+        "additionalProperties": false
+      },
+      "analytic_pearson": {
+        "type": "object",
+        "description": "Options for analytic_pearson.",
+        "properties": {
+          "theta": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 100,
+            "description": "Shared negative binomial size, so that alpha = 1/theta."
+          },
+          "clip": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "exclusiveMinimum": 0,
+            "default": null,
+            "description": "Symmetric clipping bound for residuals. Null means the square root of the number of cells."
+          },
+          "min_cells": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 5,
+            "description": "Genes detected in fewer cells than this are dropped from the residual output."
+          }
+        },
+        "additionalProperties": false
+      },
+      "sctransform_v2": {
+        "type": "object",
+        "description": "Options for sctransform_v2.",
+        "properties": {
+          "n_genes": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 2000,
+            "description": "Genes used to fit and regularise the per-gene parameters."
+          },
+          "n_cells": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 2000,
+            "description": "Cells subsampled (see seed) to fit the per-gene parameters."
+          },
+          "latent_var": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [
+              "log_umi"
+            ],
+            "description": "Obs columns used as depth covariates; log_umi is log10 of obs/total_counts, computed when absent."
+          },
+          "batch_var": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null,
+            "description": "Obs column used as batch covariate. Null means no batch term."
+          },
+          "clip": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "exclusiveMinimum": 0,
+            "default": null,
+            "description": "Symmetric clipping bound for residuals. Null means the square root of the number of cells."
+          },
+          "min_cells": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 5,
+            "description": "Genes detected in fewer cells than this are dropped from the residual output."
+          }
+        },
+        "additionalProperties": false
+      },
+      "glmgampoi_pearson": {
+        "type": "object",
+        "description": "Options for glmgampoi_pearson.",
+        "properties": {
+          "clip": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "exclusiveMinimum": 0,
+            "default": null,
+            "description": "Symmetric clipping bound for residuals. Null means the square root of the number of cells."
+          },
+          "min_cells": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 5,
+            "description": "Genes detected in fewer cells than this are dropped from the residual output."
+          }
+        },
+        "additionalProperties": false
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto selects CUDA only for methods whose CUDA output matches the CPU reference within the registry tolerance."
+      },
+      "seed": {
+        "type": "integer",
+        "minimum": 0,
+        "default": 0,
+        "description": "Random seed for the cell subsample of sctransform_v2; other methods are deterministic."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory, device and output size without writing."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace the output members this tool writes; never replaces the counts layer."
+      }
+    },
+    "required": [
+      "dataset"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, for example layers/vst_acosh or layers/pearson_residuals. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Compact summary for completed runs: method, overdispersion_mode and value, n_cells, n_genes_out, nnz_fraction_before, nnz_fraction_after, zero_mapped_to_zero, residual_variance_median and clipped_fraction (residual methods), size_factor_source, ignored_parameters, device_used. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device and, for dense outputs, output_bytes.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "normalization.variance_stabilizing_transform",
+      "reads": [
+        "layers/counts",
+        "obs/size_factors",
+        "obs/total_counts",
+        "obs/batch",
+        "var/gene_mean",
+        "models/<name>"
+      ],
+      "writes": [
+        "layers/vst_shifted_log",
+        "layers/vst_acosh",
+        "layers/pearson_residuals",
+        "var/vst_overdispersion",
+        "var/vst_residual_variance",
+        "uns/vst_settings",
+        "models/vst_sctransform_v2",
+        "models/vst_glmgampoi_pearson"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": true,
+      "paradigm": "hybrid",
+      "docs": "tasks/normalization/variance_stabilizing_transform.md"
+    }
+  }
+}

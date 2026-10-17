@@ -1,0 +1,77 @@
+{
+  "name": "singlet_report",
+  "title": "Assemble an analysis report",
+  "description": "Build a single HTML or Markdown report from the recorded steps of a dataset: every summary, metric table and figure, in order. Returns the file path.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "name": {
+        "type": "string",
+        "description": "Dataset name."
+      },
+      "format": {
+        "type": "string",
+        "description": "Output format.",
+        "default": "html",
+        "enum": [
+          "html",
+          "md"
+        ]
+      },
+      "path": {
+        "type": "string",
+        "description": "Output path (default inside the workspace)."
+      }
+    },
+    "required": [
+      "name"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "status": {
+        "type": "string",
+        "enum": [
+          "ok",
+          "error"
+        ]
+      },
+      "summary": {
+        "type": "string"
+      },
+      "metrics": {
+        "type": "object"
+      },
+      "figures": {
+        "type": "array"
+      },
+      "artifacts": {
+        "type": "array"
+      },
+      "warnings": {
+        "type": "array"
+      },
+      "next": {
+        "type": "array"
+      },
+      "timings": {
+        "type": "object"
+      }
+    },
+    "required": [
+      "status",
+      "summary"
+    ]
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "evaluation.cluster_validity_indices",
+      "reads": [],
+      "writes": [],
+      "runtime": "local-cpu",
+      "streaming": true
+    }
+  }
+}

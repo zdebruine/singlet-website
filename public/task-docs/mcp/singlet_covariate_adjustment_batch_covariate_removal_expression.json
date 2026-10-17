@@ -1,0 +1,198 @@
+{
+  "name": "singlet_covariate_adjustment_batch_covariate_removal_expression",
+  "title": "Batch and donor covariate removal on expression",
+  "description": "Removes known categorical batch or donor effects from expression with ComBat (log-scale empirical Bayes) or ComBat-seq (negative-binomial counts), keeps protected biological terms in the design, and writes the corrected layer with its per-gene parameters. Use it only when the batch label is correct and every biological variable that co-varies with batch is listed in protect. Do not use it for continuous technical covariates, as a differential expression input, or to correct an embedding.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "combat",
+          "combat_seq"
+        ],
+        "default": "combat",
+        "description": "combat: log-scale empirical Bayes. combat_seq: negative-binomial counts; needs raw counts."
+      },
+      "batch_key": {
+        "type": "string",
+        "default": "batch",
+        "description": "obs column with the categorical batch or donor label; each batch needs at least two cells."
+      },
+      "protect": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "default": [],
+        "description": "obs columns of biological variables kept in the design. Set the condition or cell-type column when present."
+      },
+      "layer": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "default": null,
+        "description": "Input layer. Null selects layers/log1p_norm for combat and layers/counts for combat_seq."
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without fitting."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      },
+      "combat": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "conv": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 0.0001,
+            "description": "Relative-change tolerance of the empirical-Bayes iteration."
+          },
+          "hvg_subset": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1,
+            "default": 2000,
+            "description": "Estimate batch parameters on this many highly variable genes, then apply to all genes; null uses all genes."
+          },
+          "chunk_cells": {
+            "type": "integer",
+            "minimum": 1000,
+            "default": 100000,
+            "description": "Cells per chunk in the streaming sweeps; bounds dense memory."
+          }
+        }
+      },
+      "combat_seq": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "ref_batch": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null,
+            "description": "Batch kept unchanged, to which others are adjusted; null maps every batch to the batch-free target."
+          }
+        }
+      }
+    },
+    "required": [
+      "dataset"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. layers/combat_corrected. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "For completed runs: method, protect, n_batches, min_batch_cells, eb_iterations, max_relative_change, hvg_subset. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "covariate-adjustment.batch_covariate_removal_expression",
+      "reads": [
+        "layers/counts",
+        "layers/log1p_norm",
+        "obs/<batch_key>",
+        "obs/<protect>"
+      ],
+      "writes": [
+        "layers/combat_corrected",
+        "layers/combat_seq_corrected",
+        "uns/batch_correction",
+        "models/batch_correction"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": false,
+      "long_running": true,
+      "streaming": true,
+      "paradigm": "model-based",
+      "docs": "tasks/covariate-adjustment/batch_covariate_removal_expression.md"
+    }
+  }
+}

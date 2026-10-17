@@ -1,0 +1,234 @@
+{
+  "name": "singlet_clustering_model_based_clustering",
+  "title": "Model-based probabilistic clustering",
+  "description": "Fits a probabilistic mixture model to raw counts or a latent space and returns per-cell membership probabilities, a hard label and the selected number of components. Use the default zinb_mixture_em when calibrated memberships matter; use a graph-based clustering tool for a plain partition. Requires layers/counts and obs/size_factor. Writes obs/mm_cluster, obs/mm_max_posterior, obsm/mm_posterior, uns/mm_fit and models/mm_model, plus uns/mm_calibration when label_key is set. Long fits may be queued.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "zinb_mixture_em",
+          "scvi_mixture",
+          "scdeepcluster"
+        ],
+        "default": "zinb_mixture_em",
+        "description": "Model; zinb_mixture_em is the default. scdeepcluster needs an integer n_components."
+      },
+      "n_components": {
+        "type": [
+          "integer",
+          "string"
+        ],
+        "default": "auto",
+        "description": "Fixed K, or 'auto' to select K in [2, k_max] by BIC or ELBO."
+      },
+      "k_max": {
+        "type": "integer",
+        "minimum": 2,
+        "default": 20,
+        "description": "Upper bound for automatic K selection."
+      },
+      "batch_key": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "default": null,
+        "description": "obs column of batch labels, used as a log offset or a decoder covariate."
+      },
+      "label_key": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "default": null,
+        "description": "obs column of reference labels, used for evaluation only."
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 42,
+        "description": "Random seed for initialisation and minibatches."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without fitting."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      },
+      "zinb_mixture_em": {
+        "type": "object",
+        "description": "Options for zinb_mixture_em only.",
+        "properties": {
+          "n_init": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 5,
+            "description": "Random k-means starts on PCs for EM initialisation."
+          },
+          "max_iter": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 200,
+            "description": "Maximum EM iterations for each K."
+          }
+        },
+        "additionalProperties": false
+      },
+      "scvi_mixture": {
+        "type": "object",
+        "description": "Options for scvi_mixture only.",
+        "properties": {
+          "n_latent": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 10,
+            "description": "Latent dimension of the variational autoencoder."
+          },
+          "n_hidden": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 128,
+            "description": "Hidden width of encoder and decoder."
+          },
+          "n_layers": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 1,
+            "description": "Hidden layers in encoder and decoder."
+          },
+          "dropout_rate": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.1,
+            "description": "Dropout rate in encoder and decoder."
+          },
+          "gene_likelihood": {
+            "type": "string",
+            "enum": [
+              "zinb",
+              "nb"
+            ],
+            "default": "zinb",
+            "description": "Count likelihood of the decoder."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "dataset"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: wrote members; dry_run: estimate only; queued: long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "For completed fits: K_selected, criterion (BIC or ELBO), membership_type, converged; calibration (ECE, Brier) when label_key is set.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Provenance record id (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "For dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "clustering.model_based_clustering",
+      "reads": [
+        "layers/counts",
+        "obs/size_factor",
+        "var/highly_variable",
+        "obsm/X_pca"
+      ],
+      "writes": [
+        "obs/mm_cluster",
+        "obs/mm_max_posterior",
+        "obsm/mm_posterior",
+        "uns/mm_fit",
+        "uns/mm_calibration",
+        "models/mm_model"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": true,
+      "paradigm": "model-based",
+      "docs": "tasks/clustering/model_based_clustering.md"
+    }
+  }
+}

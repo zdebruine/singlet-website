@@ -1,0 +1,213 @@
+{
+  "name": "singlet_genetics_cell_type_cis_eqtl_mapping",
+  "title": "Cell-type cis-eQTL mapping and cross-cell-type sharing",
+  "description": "Maps common variants in each gene's cis window to donor-level expression within each cell type, with permutation-calibrated gene-level q-values, then shares effects across cell types with mashr. Needs donor genotypes and donor-by-cell-type structure in the dataset. Do not use for cell-state interaction effects (use genetics.context_dependent_eqtl) or for cell-level mixed models, which are benchmark comparators only.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI with donor genotypes in uns/genotype_dosage."
+      },
+      "model": {
+        "type": "string",
+        "enum": ["pseudobulk_linear"],
+        "default": "pseudobulk_linear",
+        "description": "Test family; the donor-level linear model is the only model in this version."
+      },
+      "cis_scan": {
+        "type": "object",
+        "description": "Cis window and variant filter shared by all models.",
+        "properties": {
+          "window": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 1000000,
+            "description": "Cis window half-width around the TSS, in bases."
+          },
+          "maf_threshold": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 0.5,
+            "default": 0.05,
+            "description": "Minimum minor allele frequency of tested variants."
+          }
+        },
+        "additionalProperties": false
+      },
+      "covariates": {
+        "type": "array",
+        "items": {"type": "string"},
+        "default": ["genotype_pcs", "batch"],
+        "description": "Donor covariates from uns/donor_covariates; add cell_type_proportions if composition may depend on genotype."
+      },
+      "obs_keys": {
+        "type": "object",
+        "description": "Names of the obs columns for donor, cell type and batch.",
+        "properties": {
+          "donor": {"type": "string", "default": "donor_id", "description": "obs column holding donor identifiers."},
+          "cell_type": {"type": "string", "default": "cell_type", "description": "obs column holding cell-type labels."},
+          "batch": {"type": "string", "default": "batch", "description": "obs column holding technical batch."}
+        },
+        "additionalProperties": false
+      },
+      "min_donors_per_celltype": {
+        "type": ["integer", "null"],
+        "minimum": 2,
+        "default": null,
+        "description": "Skip cell types with fewer donors; null disables the gate. Set from a power analysis."
+      },
+      "pseudobulk_linear": {
+        "type": "object",
+        "description": "Options for the donor-level linear model.",
+        "properties": {
+          "permutations": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 10000,
+            "description": "Phenotype permutations for gene-level p-values."
+          },
+          "beta_approx": {
+            "type": "boolean",
+            "default": true,
+            "description": "Fit the beta approximation to the permutation maxima."
+          },
+          "fdr": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.05,
+            "description": "FDR target for gene-level q-values, per cell type."
+          },
+          "min_cells_per_donor_celltype": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 10,
+            "description": "Minimum cells needed to form a donor-by-cell-type pseudobulk."
+          }
+        },
+        "additionalProperties": false
+      },
+      "mashr": {
+        "type": "object",
+        "description": "Cross-cell-type sharing with mashr.",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "default": true,
+            "description": "Apply sharing when at least two cell types have results."
+          },
+          "lfsr_threshold": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.05,
+            "description": "Local false sign rate cut-off for sharing calls."
+          },
+          "covariances": {
+            "type": "string",
+            "enum": ["canonical", "data_driven", "both"],
+            "default": "both",
+            "description": "Covariance grid for the mashr prior."
+          }
+        },
+        "additionalProperties": false
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Random seed for permutation draws."
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu", "cuda"],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without computing results."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": ["dataset"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: computed inline and wrote members; dry_run: estimate only; queued: long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written, e.g. uns/cis_eqtl/<cell_type>. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Per cell type: n_donors, n_pairs_tested, n_egenes_q05, lambda_gc, skipped flag; mashr: n_shared and n_specific calls at lfsr_threshold. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "genetics.cell_type_cis_eqtl_mapping",
+      "reads": [
+        "layers/counts",
+        "obs/donor_id",
+        "obs/cell_type",
+        "obs/batch",
+        "obs/size_factor",
+        "uns/genotype_dosage",
+        "uns/genotype_variants",
+        "uns/donor_covariates"
+      ],
+      "writes": [
+        "uns/cis_eqtl/<cell_type>",
+        "uns/cis_eqtl_shared",
+        "models/mashr_<run>",
+        "uns/cis_eqtl_qc"
+      ],
+      "devices": ["cpu", "cuda"],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": true,
+      "paradigm": "model-based",
+      "docs": "tasks/genetics/cell_type_cis_eqtl_mapping.md"
+    }
+  }
+}

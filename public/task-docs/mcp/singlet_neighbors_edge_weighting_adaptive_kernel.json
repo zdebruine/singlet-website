@@ -1,0 +1,219 @@
+{
+  "name": "singlet_neighbors_edge_weighting_adaptive_kernel",
+  "title": "Weight kNN graph edges with adaptive kernels",
+  "description": "Converts the stored kNN graph into a symmetric edge-weight matrix (connectivities) with one of four weightings: umap, the default fuzzy simplicial set with per-cell calibrated scales; gauss_adaptive; jaccard, shared-neighbour overlap with pruning; or perplexity, t-SNE-style calibrated affinities. It reads obsp/<key>_distances written by neighbors.approximate_knn_search and writes obsp/<key>_connectivities, optionally a row-stochastic transition matrix, and per-cell scales. Do not use it to build the neighbour lists, choose the neighbour count, choose the clustering resolution or score results against labels; it needs no labels.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "weighting": {
+        "type": "string",
+        "enum": [
+          "umap",
+          "gauss_adaptive",
+          "jaccard",
+          "perplexity"
+        ],
+        "default": "umap",
+        "description": "Edge-weight family computed from the kNN lists; umap is the default, jaccard gives scale-free shared-neighbour weights."
+      },
+      "n_neighbors": {
+        "type": "integer",
+        "minimum": 3,
+        "default": 15,
+        "description": "Neighbour count k, Scanpy convention (the cell counts). Must not exceed the stored kNN list length plus one."
+      },
+      "symmetrisation": {
+        "type": "string",
+        "enum": [
+          "native",
+          "fuzzy_union",
+          "fuzzy_intersection",
+          "copy_union",
+          "average"
+        ],
+        "default": "native",
+        "description": "native uses the method's own rule (umap: fuzzy_union; gauss_adaptive: copy_union; perplexity: average); jaccard is already symmetric."
+      },
+      "row_normalise": {
+        "type": "boolean",
+        "default": false,
+        "description": "Also write obsp/<key>_transitions, the row-stochastic Markov matrix for diffusion or pseudotime."
+      },
+      "key": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9_]{1,40}$",
+        "default": "weighted",
+        "description": "Stem for the written members: obsp/<key>_connectivities, obs/<key>_scale and uns/<key>."
+      },
+      "umap": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options for weighting umap; ignored by other methods.",
+        "properties": {
+          "bandwidth": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 1.0,
+            "description": "Target scale b in the calibration sum equal to b times log2 k."
+          },
+          "local_connectivity": {
+            "type": "number",
+            "minimum": 0,
+            "default": 1.0,
+            "description": "Number of nearest non-zero neighbours assumed connected; sets rho_i."
+          },
+          "min_sigma_scale": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 0.001,
+            "description": "Floor for sigma_i as a fraction of the mean kNN distance."
+          }
+        }
+      },
+      "jaccard": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options for weighting jaccard; ignored by other methods.",
+        "properties": {
+          "prune": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.06666666666666667,
+            "description": "Edges with Jaccard weight below this value are dropped (Seurat default 1/15)."
+          }
+        }
+      },
+      "perplexity": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options for weighting perplexity; ignored by other methods.",
+        "properties": {
+          "target": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "default": null,
+            "description": "Target perplexity; null uses (n_neighbors-1)/3. Must lie in (1, n_neighbors-1)."
+          }
+        }
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": [
+      "dataset"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written; the transition matrix only when row_normalise is true. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "For completed runs: n_cells, n_edges, mean_degree, isolated_cells, weighting, symmetrisation and scale_quantiles. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "neighbors.edge_weighting_adaptive_kernel",
+      "reads": [
+        "obsp/<key>_distances"
+      ],
+      "writes": [
+        "obsp/<key>_connectivities",
+        "obsp/<key>_transitions",
+        "obs/<key>_scale",
+        "obs/<key>_rho",
+        "uns/<key>"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": false,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/neighbors/edge_weighting_adaptive_kernel.md"
+    }
+  }
+}

@@ -1,0 +1,197 @@
+{
+  "name": "singlet_annotation_annotation_confidence_calibration",
+  "title": "Calibrate annotation confidence and abstention",
+  "description": "Recalibrates an annotator's per-cell class probabilities on held-out donor or study groups and reports calibration error, Brier score, realised coverage and selective accuracy. Writes a calibrated confidence and an abstention flag, and optionally conformal label sets with a stated miscoverage level. Use it after reference label transfer or any probabilistic annotator when trusted labels exist on held-out groups; do not use it to assign labels, to detect cell types absent from the reference, or on in-distribution cells alone.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "annotator": {
+        "type": "string",
+        "description": "Annotator whose probabilities are calibrated; reads obsm/<annotator>_probs and optional uns/<annotator>_logits."
+      },
+      "truth_key": {
+        "type": "string",
+        "description": "obs column with trusted labels at the stated level; unlabelled cells are excluded and counted."
+      },
+      "split": {
+        "type": "object",
+        "description": "How cells are held out: whole groups only, so no group appears in both calibration and evaluation.",
+        "properties": {
+          "group_key": {
+            "type": "string",
+            "default": "donor",
+            "description": "obs column defining held-out groups, usually donor or study."
+          },
+          "cal_fraction": {
+            "type": "number",
+            "default": 0.5,
+            "minimum": 0.1,
+            "maximum": 0.9,
+            "description": "Fraction of groups used for calibration; the remaining groups are used for evaluation."
+          }
+        },
+        "additionalProperties": false
+      },
+      "method": {
+        "type": "string",
+        "enum": ["temperature", "platt", "isotonic", "raw"],
+        "default": "temperature",
+        "description": "Recalibration family; raw reports diagnostics on uncalibrated scores without writing a calibrated column."
+      },
+      "abstain_coverage": {
+        "type": "number",
+        "default": 0.9,
+        "exclusiveMinimum": 0,
+        "maximum": 1,
+        "description": "Target realised coverage used to fit the abstention threshold on calibration groups; the threshold is then frozen."
+      },
+      "conformal": {
+        "type": "object",
+        "description": "Conformal label sets with finite-sample coverage under exchangeability; written only when enabled.",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "default": false,
+            "description": "Write conformal label sets to obsm/<annotator>_conformal_sets."
+          },
+          "alpha": {
+            "type": "number",
+            "default": 0.1,
+            "exclusiveMinimum": 0,
+            "maximum": 0.5,
+            "description": "Miscoverage level; coverage is at least 1 minus alpha under exchangeability of calibration and test cells."
+          },
+          "class_conditional": {
+            "type": "boolean",
+            "default": false,
+            "description": "Use per-type (Mondrian) thresholds so coverage holds within each type, when enough calibration cells exist."
+          },
+          "min_class_cells": {
+            "type": "integer",
+            "default": 50,
+            "minimum": 1,
+            "description": "Minimum calibration cells for a type's own threshold; below it the marginal threshold is used and the type is flagged."
+          }
+        },
+        "additionalProperties": false
+      },
+      "diagnostics": {
+        "type": "object",
+        "description": "Binning for the calibration error and the reliability curve.",
+        "properties": {
+          "n_bins": {
+            "type": "integer",
+            "default": 15,
+            "minimum": 2,
+            "maximum": 100,
+            "description": "Equal-width confidence bins for expected calibration error and the reliability curve."
+          },
+          "min_bin_count": {
+            "type": "integer",
+            "default": 20,
+            "minimum": 1,
+            "description": "Bins with fewer cells are reported and flagged, and stay in the error sum."
+          }
+        },
+        "additionalProperties": false
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu", "cuda"],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Seed for the group split and any stochastic fit; repeated calls with the same seed are identical."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without fitting or writing anything."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace calibration members (obs, obsm, uns, models) written by an earlier call instead of failing."
+      }
+    },
+    "required": ["dataset", "annotator", "truth_key"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: wrote members; dry_run: estimate only; queued: long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written, for example obs/celltypist_best_conf_calibrated. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Compact summary for completed calls: method, temperature, ece_raw, ece_calibrated, brier_raw, brier_calibrated, accuracy, abstain_threshold, coverage_realised, n_calibration, flagged_types. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "annotation.annotation_confidence_calibration",
+      "reads": [
+        "obsm/<annotator>_probs",
+        "uns/<annotator>_logits",
+        "obs/<truth_key>",
+        "obs/<group_key>"
+      ],
+      "writes": [
+        "obs/<annotator>_conf_calibrated",
+        "obs/<annotator>_label_calibrated",
+        "obs/<annotator>_abstain",
+        "obsm/<annotator>_conformal_sets",
+        "uns/<annotator>_calibration",
+        "models/<annotator>_calibrator"
+      ],
+      "devices": ["cpu", "cuda"],
+      "stochastic": true,
+      "long_running": false,
+      "streaming": true,
+      "paradigm": "hybrid",
+      "docs": "tasks/annotation/annotation_confidence_calibration.md"
+    }
+  }
+}

@@ -1,0 +1,249 @@
+{
+  "name": "singlet_annotation_hierarchical_annotation",
+  "title": "Hierarchical cell-type annotation",
+  "description": "Assigns each query cell a root-to-leaf label path in a cell-type hierarchy, stopping at the deepest level the data support and reporting calibrated confidence per level. Use it when labels must agree across levels or when coarse calls should be kept under uncertainty. The default method, onclass, needs labelled reference cells and a pinned Cell Ontology release; for flat labels use singlet_annotation_reference_label_transfer, and for unlabelled clusters use singlet_annotation_cluster_label_assignment.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Query dataset handle: a .singlet path or URI, or a workspace handle."
+      },
+      "reference": {
+        "type": ["string", "null"],
+        "default": null,
+        "description": "Labelled reference handle or models/<name> with pretrained heads; needed to train onclass or cello."
+      },
+      "labels": {
+        "type": "object",
+        "description": "Reference label keys and the label graph they refer to.",
+        "additionalProperties": false,
+        "properties": {
+          "keys": {
+            "type": "array",
+            "items": {"type": "string"},
+            "minItems": 1,
+            "description": "Reference obs columns with labels, ordered coarse to fine; a cell may lack a level."
+          },
+          "graph": {
+            "type": "string",
+            "enum": ["cl", "custom"],
+            "default": "cl",
+            "description": "cl uses a pinned Cell Ontology release; custom uses the uns/<label_graph> edge list."
+          },
+          "cl_release": {
+            "type": ["string", "null"],
+            "default": null,
+            "description": "Pinned Cell Ontology release; required when graph is cl and recorded in outputs."
+          }
+        }
+      },
+      "method": {
+        "type": "string",
+        "enum": ["onclass", "cello", "garnett"],
+        "default": "onclass",
+        "description": "onclass is model-based and scores unseen types; garnett needs a marker tree; cello is the isotonic comparator."
+      },
+      "calibration": {
+        "type": "object",
+        "description": "Per-level thresholds and the reporting rule for the deepest supported level.",
+        "additionalProperties": false,
+        "properties": {
+          "tau_per_level": {
+            "type": ["array", "null"],
+            "items": {"type": "number", "minimum": 0, "maximum": 1},
+            "default": null,
+            "description": "Thresholds from coarse to fine; null applies 0.5 uncalibrated and flags the output."
+          },
+          "coarse_fallback": {
+            "type": "boolean",
+            "default": true,
+            "description": "true reports each cell at its deepest cleared level; false abstains unless the deepest level clears."
+          }
+        }
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu", "cuda"],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Random seed for head initialisation, cross-validation folds and minibatch order."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing hier_* members instead of failing."
+      },
+      "onclass": {
+        "type": "object",
+        "description": "Options used when method is onclass.",
+        "additionalProperties": false,
+        "properties": {
+          "nhidden": {
+            "type": "array",
+            "items": {"type": "integer", "minimum": 1},
+            "default": [1000],
+            "description": "Hidden layer widths of the bilinear network."
+          },
+          "l2": {
+            "type": "number",
+            "minimum": 0,
+            "default": 0.005,
+            "description": "L2 penalty on network weights."
+          },
+          "max_iter": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 50,
+            "description": "Training epochs."
+          },
+          "minibatch_size": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 128,
+            "description": "Cells per training minibatch."
+          }
+        }
+      },
+      "cello": {
+        "type": "object",
+        "description": "Options used when method is cello.",
+        "additionalProperties": false,
+        "properties": {
+          "algo": {
+            "type": "string",
+            "enum": ["IR", "CLR"],
+            "default": "IR",
+            "description": "IR projects scores onto the ancestor-monotone cone; CLR uses the cascaded alternative."
+          }
+        }
+      },
+      "garnett": {
+        "type": "object",
+        "description": "Options used when method is garnett.",
+        "additionalProperties": false,
+        "properties": {
+          "marker_tree": {
+            "type": "string",
+            "description": "uns key or file path of the marker tree: types, parent types and markers."
+          },
+          "rank_prob_ratio": {
+            "type": "number",
+            "minimum": 1,
+            "default": 1.5,
+            "description": "Odds-ratio threshold on normalised node probabilities for assignment."
+          },
+          "min_observations": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 8,
+            "description": "Minimum pseudo-labelled cells needed to train a node."
+          },
+          "max_training_samples": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 500,
+            "description": "Cap on pseudo-labelled training cells per type."
+          },
+          "elastic_net_alpha": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.3,
+            "description": "Mixing between L1 and L2 penalties in each node's multinomial fit."
+          },
+          "cv_folds": {
+            "type": "integer",
+            "minimum": 2,
+            "default": 3,
+            "description": "Folds for choosing the penalty strength by cross-validation."
+          }
+        }
+      }
+    },
+    "required": ["dataset"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written, such as obs/hier_label_path. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Keys: levels, method, cl_release, abstain_rate, consistency_violations. Never per-cell arrays.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "annotation.hierarchical_annotation",
+      "reads": [
+        "layers/counts",
+        "obs/<label_key>",
+        "uns/<label_graph>",
+        "uns/<marker_tree>",
+        "models/<hier_model>"
+      ],
+      "writes": [
+        "obs/hier_label_path",
+        "obs/hier_depth",
+        "obs/hier_label_L<k>",
+        "obs/hier_conf_L<k>",
+        "obs/hier_abstain",
+        "obsm/hier_node_probs",
+        "uns/hier_annotation_params",
+        "models/<name>"
+      ],
+      "devices": ["cpu", "cuda"],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": true,
+      "paradigm": "model-based",
+      "docs": "tasks/annotation/hierarchical_annotation.md"
+    }
+  }
+}

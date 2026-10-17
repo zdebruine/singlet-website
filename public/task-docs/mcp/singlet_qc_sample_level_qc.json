@@ -1,0 +1,279 @@
+{
+  "name": "singlet_qc_sample_level_qc",
+  "title": "Sample-level QC pass/fail",
+  "description": "Flags whole samples or libraries whose summary profile departs from the others, using the per-batch scaled-MAD rule on sample summaries (default) or the SampleQC joint Gaussian-mixture model, which also reports each sample's cell outlier fraction. Needs layers/counts and var/mito; set batch_key when samples are grouped by site or lane. Writes uns/sample_qc with a pass flag per sample and never removes cells or samples. Do not use it to call individual cells or to detect sample swaps or donor mixtures.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "sample_key": {
+        "type": "string",
+        "default": "sample_id",
+        "description": "obs column identifying each sample or library, the unit of the pass or fail decision."
+      },
+      "batch_key": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "default": null,
+        "description": "obs column grouping samples into batches for medians and MADs; null pools all samples into one group."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "mad_batch",
+          "sampleqc"
+        ],
+        "default": "mad_batch",
+        "description": "mad_batch gives the sample verdict; sampleqc adds cell outlier fractions and sample groups, with a verdict only after calibration."
+      },
+      "mad_batch": {
+        "type": "object",
+        "description": "Options for method mad_batch: scaled-MAD rule on sample summaries.",
+        "properties": {
+          "metrics": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "n_cells",
+                "median_total_counts",
+                "median_genes",
+                "median_mito_frac"
+              ]
+            },
+            "default": [
+              "n_cells",
+              "median_total_counts",
+              "median_genes",
+              "median_mito_frac"
+            ],
+            "description": "Per-sample summaries compared across samples within each batch."
+          },
+          "nmads": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 3,
+            "description": "Scaled MAD multiplier for the flag threshold."
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "both",
+              "lower",
+              "higher"
+            ],
+            "default": "both",
+            "description": "Tail direction in which a sample can be flagged."
+          },
+          "log": {
+            "type": "boolean",
+            "default": true,
+            "description": "Apply log2 to count-like summaries (n_cells, median_total_counts, median_genes); mito fraction stays linear."
+          },
+          "min_diff": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "default": null,
+            "description": "Minimum distance from the median before a sample is flagged; null disables the floor."
+          },
+          "min_flagged_metrics": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 4,
+            "default": 1,
+            "description": "Number of metrics that must flag a sample; 1 is the union rule, where any flagged metric fails the sample."
+          }
+        },
+        "additionalProperties": false
+      },
+      "sampleqc": {
+        "type": "object",
+        "description": "Options for method sampleqc: joint robust Gaussian mixture with MMD sample groups.",
+        "properties": {
+          "K": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 1,
+            "description": "Mixture components per sample group; start at 1 and check the rendered diagnostics."
+          },
+          "alpha": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "exclusiveMaximum": 1,
+            "default": 0.01,
+            "description": "Chi-square tail level for the cell outlier cutoff."
+          },
+          "em_iters": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 50,
+            "description": "Maximum EM iterations."
+          },
+          "mcd_alpha": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "exclusiveMaximum": 1,
+            "default": 0.5,
+            "description": "Trimming proportion for the robust MCD-type estimates."
+          },
+          "mcd_iters": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 50,
+            "description": "Iterations of the robust MCD-type estimator."
+          },
+          "subsample": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 100,
+            "description": "Cells per sample drawn for each MMD distance."
+          },
+          "n_times": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 20,
+            "description": "Number of subsampled MMD repetitions per sample pair."
+          },
+          "n_cores": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 4,
+            "description": "Parallel workers for the pairwise MMD computation."
+          }
+        },
+        "additionalProperties": false
+      },
+      "include_upstream": {
+        "type": "boolean",
+        "default": true,
+        "description": "Report Cell Ranger or MultiQC summaries from uns when present; they never change the verdict."
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; cuda applies only to the sampleqc EM kernel when available."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Random seed for MMD subsampling and MCD resampling in sampleqc."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": [
+      "dataset"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. uns/sample_qc. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Keys: n_samples, n_failed, failing_samples, method, per_sample (sample, n_cells, flagged metrics, cell outlier fraction), and groups for sampleqc.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "qc.sample_level_qc",
+      "reads": [
+        "layers/counts",
+        "var/mito",
+        "obs/<sample_key>",
+        "obs/<batch_key>",
+        "uns/cellranger_metrics"
+      ],
+      "writes": [
+        "uns/sample_qc",
+        "uns/sample_qc_params",
+        "obs/sample_qc_group",
+        "models/sampleqc"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": false,
+      "streaming": true,
+      "paradigm": "hybrid",
+      "docs": "tasks/qc/sample_level_qc.md"
+    }
+  }
+}

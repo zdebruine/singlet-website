@@ -1,0 +1,294 @@
+{
+  "name": "singlet_annotation_novel_cell_type_detection",
+  "title": "Novel cell type detection for query cells",
+  "description": "Scores each query cell for novelty against a labelled reference and flags cells outside its known types as Unknown, optionally clustering the flagged cells into candidate new types. Use it after reference label transfer when unassigned cells matter, and calibrate flags with calibration.mask and target_known_fpr. Do not use it to call biological novelty, because flags also reflect technical shift, low quality and rare known states. Scores are always written; flags need a threshold, a calibration or a method default.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Query dataset handle: a .singlet path or URI, or a workspace handle."
+      },
+      "reference": {
+        "type": "string",
+        "description": "Reference handle: a labelled .singlet dataset, or a saved reference model under models/ for model-based methods."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "scarches_knn",
+          "scanvi_uncertainty",
+          "symphony_mahalanobis",
+          "scpred",
+          "celltypist_prob",
+          "scmap_cluster",
+          "openset_head"
+        ],
+        "default": "scarches_knn",
+        "description": "Scoring method. scarches_knn is the published default; openset_head is the proposed model-based option, used only after benchmark B2."
+      },
+      "threshold": {
+        "type": [
+          "number",
+          "null"
+        ],
+        "default": null,
+        "description": "Flag threshold in the method's native scale; null applies the method default when no calibration is set."
+      },
+      "calibration": {
+        "type": "object",
+        "description": "Known-cell calibration: mask names known cells outside reference training; target_known_fpr sets their flagged fraction.",
+        "properties": {
+          "mask": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null,
+            "description": "obs column marking known-type cells from donors or studies not used to train the reference."
+          },
+          "target_known_fpr": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 0.5,
+            "default": null,
+            "description": "Target flagged fraction of calibration known cells; the proposed value is 0.05. Overrides threshold."
+          }
+        },
+        "additionalProperties": false
+      },
+      "keys": {
+        "type": "object",
+        "description": "Obs columns naming the reference labels and the batch structure of the query.",
+        "properties": {
+          "label": {
+            "type": "string",
+            "default": "cell_type",
+            "description": "Reference label column in obs."
+          },
+          "batch": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null,
+            "description": "Batch or donor column, used for batch-aware neighbours where the method supports it."
+          }
+        },
+        "additionalProperties": false
+      },
+      "cluster_novel": {
+        "type": "boolean",
+        "default": false,
+        "description": "Cluster flagged cells into candidate new types; clusters are not validated automatically."
+      },
+      "method_options": {
+        "type": "object",
+        "description": "Options nested under each method's name; entries for other methods are ignored.",
+        "properties": {
+          "scarches_knn": {
+            "type": "object",
+            "description": "Options for the kernel-weighted kNN posterior.",
+            "properties": {
+              "k_neighbors": {
+                "type": "integer",
+                "minimum": 1,
+                "default": 50,
+                "description": "Number of reference neighbours for the kernel-weighted posterior."
+              },
+              "embedding": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "default": null,
+                "description": "obsm key of the embedding used for distances; null uses the reference latent."
+              }
+            },
+            "additionalProperties": false
+          },
+          "scanvi_uncertainty": {
+            "type": "object",
+            "description": "Options for the scANVI classifier uncertainty.",
+            "properties": {
+              "unlabelled_category": {
+                "type": "string",
+                "default": "Unknown",
+                "description": "Label given to query cells during scANVI mapping; ignored if it is among the labels."
+              }
+            },
+            "additionalProperties": false
+          },
+          "symphony_mahalanobis": {
+            "type": "object",
+            "description": "Options for the Symphony per-cell Mahalanobis metric.",
+            "properties": {
+              "u": {
+                "type": "number",
+                "minimum": 0,
+                "default": 2,
+                "description": "Minimum cluster size in multiples of the embedding dimension for per-cluster scores."
+              },
+              "ridge": {
+                "type": "number",
+                "minimum": 0,
+                "default": 0,
+                "description": "Ridge added to covariance diagonals for numerical stability."
+              }
+            },
+            "additionalProperties": false
+          },
+          "openset_head": {
+            "type": "object",
+            "description": "Options for the proposed model-based open-set head (singlet design).",
+            "properties": {
+              "n_latent": {
+                "type": "integer",
+                "minimum": 1,
+                "default": 30,
+                "description": "Latent dimension of the encoder."
+              },
+              "withheld_fraction": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1,
+                "default": 0.2,
+                "description": "Fraction of reference types withheld as unknown in each training step."
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Random seed for model training and any subsampling."
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": [
+      "dataset",
+      "reference"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. obs/novelty_flag. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Compact summary: n_cells, n_flagged, fraction_flagged, method, threshold_used, observed_known_fpr, reference_types, shared_genes, novel_clusters. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "annotation.novel_cell_type_detection",
+      "reads": [
+        "layers/counts",
+        "layers/normalized",
+        "obs/<label_key>",
+        "obs/<batch_key>",
+        "obs/<calibration_mask>",
+        "obsm/<embedding_key>",
+        "models/<reference_model>"
+      ],
+      "writes": [
+        "obs/novelty_label",
+        "obs/novelty_score",
+        "obs/novelty_flag",
+        "obs/novelty_uncertainty",
+        "obs/novelty_cluster",
+        "obsm/novelty_latent",
+        "uns/novelty_report"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": true,
+      "paradigm": "hybrid",
+      "docs": "tasks/annotation/novel_cell_type_detection.md"
+    }
+  }
+}

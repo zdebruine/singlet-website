@@ -1,0 +1,217 @@
+{
+  "name": "singlet_annotation_llm_cluster_annotation",
+  "title": "LLM cluster annotation from marker genes",
+  "description": "Names each cluster from its ranked positive marker genes and an explicit tissue and species context, using one or more pinned large language models, and records vote proportion and entropy when several models answer. Use it for a first-pass cluster label that a reviewer checks against marker expression and reference annotations. It sends only gene symbols and the context string to the named model APIs and writes cluster-level labels and call provenance. Do not use it as a final annotation, for cell-level labels, or without pinned model snapshots.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "cluster_key": {
+        "type": "string",
+        "default": "leiden",
+        "description": "obs column holding the cluster partition; one label is returned per distinct cluster."
+      },
+      "marker_table": {
+        "type": "string",
+        "default": "rank_genes_groups",
+        "description": "uns key of a marker table with cluster, gene, score, logfc and pval_adj columns."
+      },
+      "top_k_markers": {
+        "type": "integer",
+        "default": 10,
+        "minimum": 1,
+        "maximum": 50,
+        "description": "Number of top-scoring positive markers per cluster sent to each model."
+      },
+      "context": {
+        "type": "object",
+        "description": "Tissue and species written into the prompt; supplied explicitly and never inferred from the data.",
+        "properties": {
+          "tissue": {
+            "type": "string",
+            "description": "Tissue name, for example lung or human PBMC."
+          },
+          "species": {
+            "type": "string",
+            "enum": ["human", "mouse"],
+            "description": "Species of the markers."
+          }
+        },
+        "required": ["tissue", "species"],
+        "additionalProperties": false
+      },
+      "method": {
+        "type": "string",
+        "enum": ["mllmcelltype", "gptcelltype"],
+        "default": "mllmcelltype",
+        "description": "mllmcelltype: multi-model vote with consensus. gptcelltype: one model names each cluster."
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu", "cuda"],
+        "default": "auto",
+        "description": "Device for local open-weight backends; hosted model APIs ignore it."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Seed sent to providers that accept one; hosted outputs can still vary between calls."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return the planned API call count, approximate prompt tokens and device without calling any model."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      },
+      "gptcelltype": {
+        "type": "object",
+        "description": "Options for method gptcelltype.",
+        "properties": {
+          "model": {
+            "type": "string",
+            "description": "Pinned model snapshot ID; required, because aliases move."
+          },
+          "temperature": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 2,
+            "default": 0,
+            "description": "Sampling temperature for each request."
+          },
+          "clusters_per_request": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 30,
+            "default": 30,
+            "description": "Clusters per request; the reference implementation batches 30."
+          },
+          "max_retries": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10,
+            "default": 3,
+            "description": "Re-queries when the reply line count differs from the cluster count."
+          }
+        },
+        "required": ["model"],
+        "additionalProperties": false
+      },
+      "mllmcelltype": {
+        "type": "object",
+        "description": "Options for method mllmcelltype.",
+        "properties": {
+          "models": {
+            "type": "array",
+            "minItems": 2,
+            "items": {"type": "string"},
+            "description": "At least two pinned model snapshot IDs; required, with no package default."
+          },
+          "temperature": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 2,
+            "default": 0,
+            "description": "Sampling temperature for every model; the manuscript used 0.7."
+          },
+          "max_discussion_rounds": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 3,
+            "default": 0,
+            "description": "Discussion rounds for clusters below threshold; the reference default is 3."
+          },
+          "controversy_threshold": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.7,
+            "description": "Minimum consensus proportion to accept a label (tau_CP)."
+          },
+          "entropy_threshold": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 4,
+            "default": 1.0,
+            "description": "Maximum vote entropy in bits to accept a label (tau_H)."
+          },
+          "max_retries": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10,
+            "default": 3,
+            "description": "Re-queries when a model's reply line count differs from the cluster count."
+          }
+        },
+        "required": ["models"],
+        "additionalProperties": false
+      }
+    },
+    "required": ["dataset", "context"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: labels written; dry_run: estimate only; queued: running as a job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written; empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "additionalProperties": true,
+        "description": "Keys: method, n_clusters, n_reached, mean_cp, n_unknown, n_api_calls."
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Provenance record id (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "additionalProperties": true,
+        "description": "For dry_run: api_calls, approx_prompt_tokens, device."
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false,
+    "openWorldHint": true
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "annotation.llm_cluster_annotation",
+      "reads": ["uns/<marker_table>", "obs/<cluster_key>"],
+      "writes": ["obs/llm_cluster_label", "obs/llm_cluster_cp", "obs/llm_cluster_entropy", "uns/llm_cluster_run"],
+      "devices": ["cpu", "cuda"],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/annotation/llm_cluster_annotation.md"
+    }
+  }
+}

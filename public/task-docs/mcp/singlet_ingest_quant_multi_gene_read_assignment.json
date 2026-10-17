@@ -1,0 +1,191 @@
+{
+  "name": "singlet_ingest_quant_multi_gene_read_assignment",
+  "title": "Multi-gene molecule allocation",
+  "description": "Assigns molecules compatible with several genes to genes within each cell, using the equivalence-class table from the UMI collapse step. The default em policy is a maximum-likelihood EM fit; discard, uniform, prop_unique and rescue are fixed rules kept for comparison. Writes allocated counts to layers/counts_allocated, unique-gene counts to layers/counts_unique and ambiguity fractions to obs and var. Do not use it to correct UMIs or collapse reads; that happens upstream.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "multi_gene_policy": {
+        "type": "string",
+        "enum": [
+          "discard",
+          "uniform",
+          "prop_unique",
+          "rescue",
+          "em"
+        ],
+        "default": "em",
+        "description": "Allocation rule for molecules compatible with several genes; em is the maximum-likelihood fit, discard keeps unique-gene molecules only."
+      },
+      "em": {
+        "type": "object",
+        "description": "Options for the em policy; ignored by the fixed rules.",
+        "properties": {
+          "max_iter": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10000,
+            "default": 1000,
+            "description": "Maximum EM iterations per cell (singlet default; the alevin-fry EM caps at 100)."
+          },
+          "tol": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 1e-6,
+            "description": "Stop when the largest absolute change in molecule counts between iterations falls below this."
+          },
+          "zero_floor": {
+            "type": "number",
+            "minimum": 0,
+            "default": 0,
+            "description": "Components below this are set to zero before each iteration; 0 gives exact EM, 0.01 reproduces STARsolo."
+          },
+          "n_bootstrap": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000,
+            "default": 0,
+            "description": "Molecule-resampling bootstrap refits per cell for intervals; 0 disables them."
+          }
+        },
+        "additionalProperties": false
+      },
+      "ec_granularity": {
+        "type": "string",
+        "enum": [
+          "gene",
+          "transcript"
+        ],
+        "default": "gene",
+        "description": "Equivalence classes over genes (default) or transcripts; must match the upstream table."
+      },
+      "report_tiers": {
+        "type": "boolean",
+        "default": true,
+        "description": "Write per-gene tier statistics (tiers 1 to 3) used by the split-half benchmark."
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Random seed for bootstrap replicates; ignored when em.n_bootstrap is 0."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": [
+      "dataset"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. layers/counts_allocated. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Compact summary for completed runs. Keys: policy, n_cells, n_molecules, ambiguous_fraction_median, em_converged_fraction, em_iterations_median, tiers (when report_tiers), bootstrap_replicates (when em.n_bootstrap > 0). Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "ingest-quant.multi_gene_read_assignment",
+      "reads": [
+        "uns/ec_gene_incidence",
+        "layers/ec_counts"
+      ],
+      "writes": [
+        "layers/counts_allocated",
+        "layers/counts_unique",
+        "obs/ambiguous_fraction",
+        "var/ambiguity_fraction",
+        "uns/em_diagnostics",
+        "layers/counts_bootstrap_sd"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": false,
+      "streaming": true,
+      "paradigm": "hybrid",
+      "docs": "tasks/ingest-quant/multi_gene_read_assignment.md"
+    }
+  }
+}

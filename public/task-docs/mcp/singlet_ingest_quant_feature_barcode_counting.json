@@ -1,0 +1,224 @@
+{
+  "name": "singlet_ingest_quant_feature_barcode_counting",
+  "title": "Count feature barcodes (ADT, hashtag, lipid-tag, guide) per cell",
+  "description": "Matches feature-library read sequences to a feature reference within a stated mismatch tolerance, collapses UMIs per cell and feature, and writes a cell-by-feature molecule count matrix. Use it on feature-library FASTQ after cell barcode correction, with a reference whose tags are pairwise separated. Do not use it for gene reads or to assign samples or guides; call the downstream demultiplexing or perturbation tools on its output.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle (.singlet path, URI or workspace handle) whose RNA cell index receives the feature modality."
+      },
+      "feature_reference": {
+        "type": "string",
+        "description": "Feature reference TSV: tag sequence, feature name and feature type. Sequences must share one length."
+      },
+      "fastq": {
+        "type": "string",
+        "description": "Feature-library FASTQ: R1 and R2 paths, or a directory containing them."
+      },
+      "whitelist": {
+        "type": "string",
+        "description": "Corrected cell barcode list from barcode whitelist correction; default is the RNA cell index."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "mismatch_index",
+          "kite",
+          "citeseq_count"
+        ],
+        "default": "mismatch_index",
+        "description": "Counting method. mismatch_index is the default; kite and citeseq_count are comparators."
+      },
+      "mismatch_index": {
+        "type": "object",
+        "description": "Options used only when method is mismatch_index.",
+        "properties": {
+          "max_mismatch": {
+            "type": "integer",
+            "default": 1,
+            "minimum": 0,
+            "maximum": 3,
+            "description": "Substitutions tolerated between a read's feature segment and a tag."
+          },
+          "tie_policy": {
+            "type": "string",
+            "enum": [
+              "unmapped",
+              "first_match",
+              "best_match"
+            ],
+            "default": "unmapped",
+            "description": "Handling of reads matching two or more tags: unmapped, first in list order, or minimum distance."
+          },
+          "read_model": {
+            "type": "string",
+            "enum": [
+              "hamming",
+              "quality_em"
+            ],
+            "default": "hamming",
+            "description": "hamming uses the index alone; quality_em adds a quality-aware likelihood with EM over tags."
+          }
+        },
+        "additionalProperties": false
+      },
+      "citeseq_count": {
+        "type": "object",
+        "description": "Options used only when method is citeseq_count.",
+        "properties": {
+          "max_errors": {
+            "type": "integer",
+            "default": 2,
+            "minimum": 0,
+            "maximum": 3,
+            "description": "Hamming error tolerance applied to each tag prefix."
+          },
+          "start_trim": {
+            "type": "integer",
+            "default": 0,
+            "minimum": 0,
+            "description": "Bases trimmed from the start of the feature read before matching."
+          },
+          "bc_collapsing_dist": {
+            "type": "integer",
+            "default": 1,
+            "minimum": 0,
+            "description": "Maximum Hamming distance for merging a cell barcode into a whitelist entry."
+          }
+        },
+        "additionalProperties": false
+      },
+      "umi_method": {
+        "type": "string",
+        "enum": [
+          "directional",
+          "adjacency",
+          "cluster",
+          "unique"
+        ],
+        "default": "directional",
+        "description": "UMI graph rule used to collapse reads into molecules per cell and feature."
+      },
+      "umi_threshold": {
+        "type": "integer",
+        "default": 1,
+        "minimum": 0,
+        "maximum": 3,
+        "description": "Maximum Hamming distance between UMIs merged by umi_method; 2 matches the CITE-seq-Count default."
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto uses CUDA only for batched tag lookup on large libraries."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without counting."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing feature members instead of failing."
+      }
+    },
+    "required": [
+      "dataset",
+      "feature_reference",
+      "fastq"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: counted and wrote members; dry_run: estimate only; queued: long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, for example feature/layers/counts. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Compact summary for completed runs: n_reads, unmapped_fraction, ambiguous_fraction, tag_pairs_below_separation, flagged_variants, umi_collapsed_fraction.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Provenance record id (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "ingest-quant.feature_barcode_counting",
+      "reads": [
+        "uns/ingest_geometry"
+      ],
+      "writes": [
+        "feature/layers/counts",
+        "obs/feature_total_umis",
+        "uns/feature_counting_qc"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": false,
+      "long_running": true,
+      "streaming": true,
+      "paradigm": "hybrid",
+      "docs": "tasks/ingest-quant/feature_barcode_counting.md"
+    }
+  }
+}

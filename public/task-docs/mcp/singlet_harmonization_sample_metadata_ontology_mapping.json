@@ -1,0 +1,192 @@
+{
+  "name": "singlet_harmonization_sample_metadata_ontology_mapping",
+  "title": "Map sample metadata fields to ontology terms",
+  "description": "Maps free-text sample field values (tissue, disease, organism, development stage, assay) to one term per field of a pinned ontology release that the target schema allows. Writes the term ID, label, match type, calibrated confidence and a curation flag for each field, and lists unresolved values for curator review. Use it before schema validation of sample metadata. Do not use it for cell type names (use singlet_annotation_cell_ontology_mapping) or for age and sex, which it does not map.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "fields": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "enum": ["tissue", "disease", "organism", "development_stage", "assay"]
+        },
+        "default": ["tissue", "disease", "organism", "development_stage", "assay"],
+        "description": "Sample fields to map. Each maps to the ontology named in ontology_release."
+      },
+      "target_schema": {
+        "type": "string",
+        "description": "Schema identifier whose allowed ranges give each field's ontology subtree. Required; no default."
+      },
+      "ontology_release": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Pinned release identifier for each ontology used. Required; no default.",
+        "properties": {
+          "UBERON": {"type": "string", "description": "Pinned UBERON release identifier and date."},
+          "MONDO": {"type": "string", "description": "Pinned MONDO release identifier and date."},
+          "EFO": {"type": "string", "description": "Pinned EFO release identifier and date."},
+          "NCBITaxon": {"type": "string", "description": "Pinned NCBITaxon release identifier and date."},
+          "HsapDv": {"type": "string", "description": "Pinned HsapDv release identifier and date."}
+        }
+      },
+      "method": {
+        "type": "string",
+        "enum": ["exact_then_fuzzy", "metasra_graph"],
+        "default": "exact_then_fuzzy",
+        "description": "exact_then_fuzzy is the default dictionary cascade. metasra_graph is the MetaSRA-style typed-graph comparator."
+      },
+      "policy": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Acceptance rules shared by all methods.",
+        "properties": {
+          "abstention_threshold": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.8,
+            "description": "Minimum calibrated posterior to accept a call; below it the value goes to curation."
+          },
+          "hierarchy_policy": {
+            "type": "string",
+            "enum": ["exact_only", "allow_ancestor"],
+            "default": "exact_only",
+            "description": "allow_ancestor accepts a broader parent when no exact term exists, and flags it."
+          },
+          "allow_obsolete": {
+            "type": "boolean",
+            "default": false,
+            "description": "Whether obsolete terms may be emitted. Keep false; obsolete IDs fail validation."
+          }
+        }
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu", "cuda"],
+        "default": "auto",
+        "description": "Execution device. Dictionary methods use cpu; cuda has no effect until an embedding stage is added."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without writing members."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      },
+      "exact_then_fuzzy": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options for exact_then_fuzzy: edit limits by value length.",
+        "properties": {
+          "short_length": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 8,
+            "description": "Values shorter than this many characters use max_edits_short."
+          },
+          "max_edits_short": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 1,
+            "description": "Maximum edit distance for values shorter than short_length."
+          },
+          "max_edits_long": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 2,
+            "description": "Maximum edit distance for values of short_length or more."
+          }
+        }
+      },
+      "metasra_graph": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options for metasra_graph. reference_dir is required with that method.",
+        "properties": {
+          "reference_dir": {
+            "type": "string",
+            "description": "Directory of MetaSRA-style reference synonym sets."
+          }
+        }
+      }
+    },
+    "required": ["dataset", "target_schema", "ontology_release"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "additionalProperties": true,
+        "description": "Per field: accepted and abstained pairs and counts by match_type; invalid_ids (must be zero); unresolved value count."
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Id of the provenance record (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "additionalProperties": true,
+        "description": "Present for dry_run: seconds, peak_memory_gb, device."
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "harmonization.sample_metadata_ontology_mapping",
+      "reads": [
+        "obs/<field>_raw",
+        "uns/ontology_release"
+      ],
+      "writes": [
+        "obs/<field>_term_id",
+        "obs/<field>_term_label",
+        "obs/<field>_match_type",
+        "obs/<field>_confidence",
+        "obs/<field>_needs_curation",
+        "uns/unmapped_values"
+      ],
+      "devices": ["cpu", "cuda"],
+      "stochastic": false,
+      "long_running": false,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/harmonization/sample_metadata_ontology_mapping.md"
+    }
+  }
+}

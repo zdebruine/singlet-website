@@ -1,0 +1,86 @@
+{
+  "name": "singlet_plot_histogram",
+  "title": "Histogram of a stored array",
+  "description": "Histogram of a stored array or column with quantiles and optional vertical threshold lines.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "name": {
+        "type": "string",
+        "description": "Dataset name."
+      },
+      "key": {
+        "type": "string",
+        "description": "Array key, optionally with a column index.",
+        "default": "qc/total"
+      },
+      "bins": {
+        "type": "integer",
+        "description": "Bins.",
+        "default": 40
+      },
+      "log_y": {
+        "type": "boolean",
+        "description": "Log counts axis.",
+        "default": false
+      },
+      "thresholds": {
+        "type": "array",
+        "description": "Vertical lines at these x values.",
+        "items": {
+          "type": "number"
+        }
+      }
+    },
+    "required": [
+      "name"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "status": {
+        "type": "string",
+        "enum": [
+          "ok",
+          "error"
+        ]
+      },
+      "summary": {
+        "type": "string"
+      },
+      "metrics": {
+        "type": "object"
+      },
+      "figures": {
+        "type": "array"
+      },
+      "artifacts": {
+        "type": "array"
+      },
+      "warnings": {
+        "type": "array"
+      },
+      "next": {
+        "type": "array"
+      },
+      "timings": {
+        "type": "object"
+      }
+    },
+    "required": [
+      "status",
+      "summary"
+    ]
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "qc.low_quality_cell_detection",
+      "reads": [],
+      "writes": [],
+      "runtime": "local-cpu",
+      "streaming": true
+    }
+  }
+}

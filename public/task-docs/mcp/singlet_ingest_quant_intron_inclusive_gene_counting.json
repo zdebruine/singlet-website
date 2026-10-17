@@ -1,0 +1,177 @@
+{
+  "name": "singlet_ingest_quant_intron_inclusive_gene_counting",
+  "title": "Intron-inclusive gene counting",
+  "description": "Counts intronic (pre-mRNA) molecules with a chosen engine and writes exonic, intronic and total gene matrices plus a per-barcode nuclear fraction. Use it for single-nucleus libraries, or for whole cells when intronic counts are wanted, with a reference built with intron sequence by singlet_ingest_quant_reference_annotation_build. It does not call cells or normalise counts, and it should not be used when exon-only counts answer the question, because inclusion changes the estimand.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI with raw or tagged reads, or a workspace handle."
+      },
+      "method": {
+        "type": "string",
+        "enum": ["starsolo", "kb_nac", "alevin_fry_usa"],
+        "default": "alevin_fry_usa",
+        "description": "Counting engine: starsolo (GeneFull family), kb_nac (nascent, mature, ambiguous) or alevin_fry_usa (splicing states)."
+      },
+      "feature": {
+        "type": "string",
+        "enum": ["auto", "exon", "gene_full", "gene_full_exon_over_intron", "gene_full_ex50pas"],
+        "default": "auto",
+        "description": "Counts that populate X. auto gives exon for whole cells and gene_full for nuclei; overlap variants need starsolo."
+      },
+      "reference": {
+        "type": "string",
+        "description": "Reference bundle handle from the build step; defaults to the dataset's uns/ref_build."
+      },
+      "starsolo": {
+        "type": "object",
+        "description": "Options used only when method is starsolo.",
+        "properties": {
+          "umi_dedup": {
+            "type": "string",
+            "enum": ["1MM_All", "1MM_Directional_UMItools", "1MM_Directional", "Exact", "NoDedup", "1MM_CR"],
+            "default": "1MM_All",
+            "description": "UMI collapsing rule; 1MM_All collapses UMIs one mismatch apart."
+          },
+          "cb_match": {
+            "type": "string",
+            "enum": ["Exact", "1MM", "1MM_multi", "1MM_multi_pseudocounts", "1MM_multi_Nbase_pseudocounts"],
+            "default": "1MM_multi",
+            "description": "Cell barcode matching to the whitelist, as documented by STARsolo."
+          },
+          "cell_filter": {
+            "type": "string",
+            "default": "CellRanger2.2 3000 0.99 10",
+            "description": "STARsolo cell filter string: filter type, then expected cells, percentile and ratio."
+          }
+        },
+        "additionalProperties": false
+      },
+      "kb": {
+        "type": "object",
+        "description": "Options used only when method is kb_nac.",
+        "properties": {
+          "nascent_matrices": {
+            "type": "boolean",
+            "default": true,
+            "description": "Return nascent, mature and ambiguous matrices from the nac index."
+          },
+          "intron_flank": {
+            "type": ["integer", "null"],
+            "default": null,
+            "description": "Bases of flank added to intron sequence; null applies the kb-python default."
+          }
+        },
+        "additionalProperties": false
+      },
+      "alevin_fry": {
+        "type": "object",
+        "description": "Options used only when method is alevin_fry_usa.",
+        "properties": {
+          "resolution": {
+            "type": "string",
+            "enum": ["cr-like", "cr-like-em"],
+            "default": "cr-like",
+            "description": "UMI resolution in USA mode; only these two strategies are available there."
+          }
+        },
+        "additionalProperties": false
+      },
+      "rho_model": {
+        "type": "object",
+        "description": "Options for the proposed hierarchical pre-mRNA ratio model; requires feature gene_full.",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "default": false,
+            "description": "Fit the hierarchical pre-mRNA ratio model and write models/rho_hierarchical."
+          }
+        },
+        "additionalProperties": false
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu", "cuda"],
+        "default": "auto",
+        "description": "Execution device; counting runs in the engine, and cuda serves the rho model and reductions."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Random seed for the rho model fit; ignored when rho_model.enabled is false."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": ["dataset"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written, e.g. layers/intronic. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Compact summary for completed runs: n_cells, median_genes_per_cell, median_nuclear_fraction, intronic_share, method, feature. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "ingest-quant.intron_inclusive_gene_counting",
+      "reads": ["uns/ingest_geometry", "uns/ref_build", "var/gene_id"],
+      "writes": ["layers/exonic", "layers/intronic", "layers/ambiguous", "X", "obs/n_counts_exonic", "obs/n_counts_intronic", "obs/nuclear_fraction", "obs/n_genes_detected", "obs/usable_read_fraction", "uns/intron_counting", "models/rho_hierarchical"],
+      "devices": ["cpu", "cuda"],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": true,
+      "paradigm": "hybrid",
+      "docs": "tasks/ingest-quant/intron_inclusive_gene_counting.md"
+    }
+  }
+}

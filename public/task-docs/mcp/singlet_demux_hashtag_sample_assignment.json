@@ -1,0 +1,164 @@
+{
+  "name": "singlet_demux_hashtag_sample_assignment",
+  "title": "Hashtag and lipid-tag sample assignment",
+  "description": "Assigns each droplet of a multiplexed pool to one sample, a cross-sample multiplet or negative, from hashtag, CellPlex or lipid-tag UMI counts, with a probability per call. Use the default singlet_mixture method once it is built; the other method values are published comparators run at their defaults. Do not use for pools without sample tags, or to find same-sample multiplets, which tags cannot detect. Writes sample, class, probability, posterior and parameter members.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "method": {
+        "type": "string",
+        "enum": ["singlet_mixture", "htodemux", "multiseq_quantile", "hashedDrops", "hashsolo", "demuxmix", "demultiplex2"],
+        "default": "singlet_mixture",
+        "description": "Caller. singlet_mixture is the proposed model; the other values are published comparators."
+      },
+      "tags": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Tag feature names; default is every feature listed in uns/tag_features. At least two are needed."
+      },
+      "normalisation": {
+        "type": "string",
+        "enum": ["raw", "clr"],
+        "default": "raw",
+        "description": "Input transform. clr applies only to HTODemux clustering."
+      },
+      "posterior_cut": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1,
+        "default": 0.5,
+        "description": "Posterior threshold for calling a tag present; used by singlet_mixture and demultiplex2."
+      },
+      "singlet_mixture": {
+        "type": "object",
+        "description": "Options for method singlet_mixture.",
+        "additionalProperties": false,
+        "properties": {
+          "em_max_iter": {"type": "integer", "minimum": 1, "default": 100, "description": "Maximum EM iterations."},
+          "ambient_term": {"type": "boolean", "default": true, "description": "Include the per-droplet ambient profile in the tag means."},
+          "rna_covariates": {"type": "boolean", "default": true, "description": "Regress tag means on log RNA library size."},
+          "calibration_fraction": {"type": "number", "exclusiveMinimum": 0, "maximum": 1, "default": 0.5, "description": "Droplet fraction used to fit the probability calibration map."}
+        }
+      },
+      "htodemux": {
+        "type": "object",
+        "description": "Options for method htodemux.",
+        "additionalProperties": false,
+        "properties": {
+          "positive_quantile": {"type": "number", "minimum": 0, "maximum": 1, "default": 0.99, "description": "Quantile of the fitted negative distribution that sets each tag threshold."},
+          "init_k": {"type": ["integer", "null"], "minimum": 1, "default": null, "description": "CLARA cluster count; null uses the number of tags plus one."},
+          "nsamples": {"type": "integer", "minimum": 1, "default": 100, "description": "Sample count passed to CLARA."}
+        }
+      },
+      "hashedDrops": {
+        "type": "object",
+        "description": "Options for method hashedDrops.",
+        "additionalProperties": false,
+        "properties": {
+          "min_prop": {"type": "number", "minimum": 0, "maximum": 1, "default": 0.05, "description": "Minimum proportion used when inferring the ambient profile."},
+          "pseudo_count": {"type": "number", "minimum": 0, "default": 5, "description": "Floor on the per-droplet pseudo-count used in log ratios."},
+          "doublet_nmads": {"type": "number", "minimum": 0, "default": 3, "description": "MAD multiplier for the doublet threshold on the second log ratio."},
+          "doublet_min": {"type": "number", "minimum": 0, "default": 2, "description": "Lower bound on the doublet threshold, in log2 units."},
+          "constant_ambient": {"type": "boolean", "default": false, "description": "Use one ambient baseline; required for doublet calls with two tags."}
+        }
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu", "cuda"],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA for singlet_mixture when memory suffices."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 42,
+        "description": "Random seed for EM initialisation and calibration splits."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without writing members."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": ["dataset"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: ran inline and wrote members; dry_run: estimate only; queued: long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written, e.g. obs/hashtag_sample. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Keys: n_droplets, class_counts (singlet, multiplet, negative), sample_counts, negative_fraction, multiplet_fraction, tag_thresholds, converged, iterations.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "demux.hashtag_sample_assignment",
+      "reads": [
+        "layers/counts",
+        "obs/total_counts",
+        "obs/n_genes_by_counts",
+        "uns/tag_features"
+      ],
+      "writes": [
+        "obs/hashtag_sample",
+        "obs/hashtag_class",
+        "obs/hashtag_prob",
+        "obsm/hashtag_posterior",
+        "uns/hashtag_params",
+        "models/hashtag_mixture"
+      ],
+      "devices": ["cpu", "cuda"],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": true,
+      "paradigm": "hybrid",
+      "docs": "tasks/demux/hashtag_sample_assignment.md"
+    }
+  }
+}

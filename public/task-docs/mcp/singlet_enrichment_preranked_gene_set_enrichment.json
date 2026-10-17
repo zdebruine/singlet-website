@@ -1,0 +1,204 @@
+{
+  "name": "singlet_enrichment_preranked_gene_set_enrichment",
+  "title": "Preranked gene set enrichment",
+  "description": "Tests whether gene-set members sit at the extremes of a ranked donor-level statistic for one cell type and contrast, returning running-sum enrichment scores with Benjamini-Hochberg q-values. The default method is fgsea; gsea_permutation gives a fixed-permutation reference. Reads a genes-by-contrasts statistic from pseudobulk DE and writes per-set ES, NES, p, FDR and leading-edge genes. Do not use it on per-cell scores, cell-level DE or thresholded gene lists; use over-representation for those.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "ranking": {
+        "type": "object",
+        "description": "The gene-level statistic that genes are ranked by.",
+        "properties": {
+          "de_name": {
+            "type": "string",
+            "description": "varm member holding the genes-by-contrasts statistic matrix from pseudobulk DE."
+          },
+          "contrast": {
+            "type": "string",
+            "description": "Column of the statistic matrix to rank genes by."
+          },
+          "statistic": {
+            "type": "string",
+            "enum": ["t", "logfc", "signed_neglog10p"],
+            "default": "t",
+            "description": "Moderated or mixed-model t is preferred; logfc is for comparison only."
+          }
+        },
+        "required": ["de_name", "contrast"],
+        "additionalProperties": false
+      },
+      "gene_sets": {
+        "type": "object",
+        "description": "Gene-set collection and size limits, applied within the ranked universe.",
+        "properties": {
+          "collection": {
+            "type": "string",
+            "description": "uns member holding gene sets as a name-to-members mapping."
+          },
+          "min_size": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 15,
+            "description": "Minimum set members present in the ranked universe."
+          },
+          "max_size": {
+            "type": "integer",
+            "minimum": 2,
+            "default": 500,
+            "description": "Maximum set members present in the ranked universe."
+          },
+          "symbol_key": {
+            "type": "string",
+            "default": "var_names",
+            "description": "var column matching set members; var_names uses the index."
+          }
+        },
+        "required": ["collection"],
+        "additionalProperties": false
+      },
+      "method": {
+        "type": "string",
+        "enum": ["fgsea", "gsea_permutation"],
+        "default": "fgsea",
+        "description": "fgsea: adaptive multilevel p-values (default). gsea_permutation: fixed-permutation reference."
+      },
+      "fgsea": {
+        "type": "object",
+        "description": "Options read only when method is fgsea.",
+        "properties": {
+          "eps": {
+            "type": "number",
+            "minimum": 0,
+            "default": 1e-50,
+            "description": "Lower bound on reported p-values in the multilevel estimator."
+          },
+          "score_type": {
+            "type": "string",
+            "enum": ["std", "pos", "neg"],
+            "default": "std",
+            "description": "std is two-sided; pos or neg only for a directional hypothesis."
+          },
+          "sample_size": {
+            "type": "integer",
+            "minimum": 2,
+            "default": 101,
+            "description": "Sample size of the multilevel estimator (fgsea sampleSize)."
+          },
+          "n_perm_simple": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 1000,
+            "description": "Simple permutations that seed the multilevel estimator."
+          }
+        },
+        "additionalProperties": false
+      },
+      "gsea_permutation": {
+        "type": "object",
+        "description": "Options read only when method is gsea_permutation.",
+        "properties": {
+          "n_perm": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 1000,
+            "description": "Membership permutations per set; p-values cannot resolve below about 2/n_perm."
+          }
+        },
+        "additionalProperties": false
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu", "cuda"],
+        "default": "auto",
+        "description": "fgsea runs on CPU; gsea_permutation uses CUDA when cuda is requested or auto finds enough memory."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 42,
+        "description": "Random seed for membership permutations and multilevel sampling."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": ["dataset", "ranking", "gene_sets"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written, e.g. uns/gsea/<de_name>/<contrast>. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Keys: n_gene_sets_tested, n_fdr_below_0_05, method, top_sets (up to 10 by absolute NES). Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "enrichment.preranked_gene_set_enrichment",
+      "reads": [
+        "varm/<de_name>",
+        "var/<symbol_key>",
+        "uns/<collection>",
+        "uns/<de_name>_meta"
+      ],
+      "writes": [
+        "uns/gsea/<de_name>/<contrast>",
+        "uns/gsea/<de_name>/<contrast>/params"
+      ],
+      "devices": ["cpu", "cuda"],
+      "stochastic": true,
+      "long_running": false,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/enrichment/preranked_gene_set_enrichment.md"
+    }
+  }
+}

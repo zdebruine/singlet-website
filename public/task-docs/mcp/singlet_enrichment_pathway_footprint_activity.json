@@ -1,0 +1,173 @@
+{
+  "name": "singlet_enrichment_pathway_footprint_activity",
+  "title": "Pathway activity from signed footprints",
+  "description": "Scores each cell or pseudobulk sample for signaling pathway activity from signed, weighted footprint genes, with PROGENy as the default. Needs log-normalised expression whose gene symbols match the organism; writes a signed activity matrix and p-values only for methods that produce them. Use for per-sample or per-cell pathway activity. Do not use it to test condition differences (use singlet_enrichment_differential_pathway_activity) or for unsigned gene-set membership scores (use singlet_enrichment_per_cell_gene_set_scoring).",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "layer": {
+        "type": "string",
+        "default": "lognorm",
+        "description": "Normalised expression layer. Raw counts are rejected for linear methods."
+      },
+      "organism": {
+        "type": "string",
+        "enum": ["human", "mouse"],
+        "default": "human",
+        "description": "Must match the gene symbols; mouse uses the PROGENy mouse model."
+      },
+      "method": {
+        "type": "string",
+        "enum": ["progeny", "ulm", "mlm", "waggr_wmean", "waggr_wsum", "viper", "gsva", "aucell", "consensus"],
+        "default": "progeny",
+        "description": "Scoring method. Keep progeny unless a comparison is requested; p-values come only from ulm, mlm, viper and waggr."
+      },
+      "top_n": {
+        "type": "integer",
+        "minimum": 1,
+        "default": 100,
+        "description": "Footprint genes per pathway, ranked by lowest PROGENy model p-value."
+      },
+      "tmin": {
+        "type": "integer",
+        "minimum": 1,
+        "default": 3,
+        "description": "Minimum footprint genes present per pathway; smaller pathways are returned as missing."
+      },
+      "progeny": {
+        "type": "object",
+        "description": "Options for method progeny.",
+        "properties": {
+          "scale": {
+            "type": "boolean",
+            "default": true,
+            "description": "Z-score each pathway across samples; comparable only within one analysed set."
+          },
+          "perm": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 1,
+            "description": "1 disables the permutation null; above 1 is the number of permutations."
+          }
+        },
+        "additionalProperties": false
+      },
+      "viper": {
+        "type": "object",
+        "description": "Options for method viper.",
+        "properties": {
+          "pleiotropy": {
+            "type": "boolean",
+            "default": true,
+            "description": "Apply the pleiotropy correction for regulators that share targets."
+          },
+          "reg_sign": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 1,
+            "default": 0.05,
+            "description": "p-value threshold for significant regulators under pleiotropy."
+          },
+          "n_targets": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 10,
+            "description": "Minimum shared targets for a pleiotropy comparison."
+          },
+          "penalty": {
+            "type": "number",
+            "minimum": 1,
+            "default": 20,
+            "description": "Pleiotropy penalty; 1 applies no penalty."
+          }
+        },
+        "additionalProperties": false
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu", "cuda"],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 42,
+        "description": "Seed for waggr and permutation runs."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": ["dataset"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written, e.g. obsm/pathway_activity_progeny. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Keys: method, organism, pathways (count scored), pathways_dropped (names below tmin), genes_per_pathway (mapping), options (resolved progeny or viper settings).",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "enrichment.pathway_footprint_activity",
+      "reads": ["layers/lognorm", "uns/footprint_<name>"],
+      "writes": ["obsm/pathway_activity_<method>", "obsm/pathway_pvalue_<method>", "uns/pathway_activity_<method>_params"],
+      "devices": ["cpu", "cuda"],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": true,
+      "paradigm": "hybrid",
+      "docs": "tasks/enrichment/pathway_footprint_activity.md"
+    }
+  }
+}

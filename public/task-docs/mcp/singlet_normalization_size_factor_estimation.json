@@ -1,0 +1,272 @@
+{
+  "name": "singlet_normalization_size_factor_estimation",
+  "title": "Per-cell size factor estimation",
+  "description": "Estimates one positive size factor per cell from raw counts and writes obs/size_factor (plus a log-scale standard error for nb_mle and learned_library); the default is pooled deconvolution and library_size is the fast fallback. Use it before log-normalization, count-based differential expression or any step that needs a per-cell scale; optional cluster labels in obs improve pooling. Do not use it on normalized or log-transformed matrices, to remove ambient RNA or to choose cells; for per-gene residuals use the variance-stabilizing transform task. Call with dry_run true first on large datasets.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "layer": {
+        "type": "string",
+        "default": "counts",
+        "description": "Count layer to read; must hold raw non-negative counts (cells by genes), not normalized or log-transformed values."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "library_size",
+          "pooled",
+          "median_ratio",
+          "nb_mle",
+          "learned_library"
+        ],
+        "default": "pooled",
+        "description": "library_size: total counts; pooled: pooled deconvolution (default); median_ratio: DESeq-style median of ratios; nb_mle: per-cell negative-binomial maximum likelihood (proposed); learned_library: scVI latent library size."
+      },
+      "scale_convention": {
+        "type": "string",
+        "enum": [
+          "median_one",
+          "mean_one",
+          "geomean_one",
+          "median_nonzero_total"
+        ],
+        "default": "median_one",
+        "description": "Global constant fixing the scale: median factor 1, mean over positive factors 1, mean log factor 0, or scanpy-style median non-zero total."
+      },
+      "clusters_key": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "default": null,
+        "description": "obs column of rough cluster labels for pooled and nb_mle; must not derive from the normalized output. Null lets pooled cluster internally."
+      },
+      "exclude_mask": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "default": null,
+        "description": "var column (boolean) of genes excluded from estimation for every method, for example highly expressed genes. Null uses all genes."
+      },
+      "pooled": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options for method pooled and the pooled initialisation of nb_mle; defaults follow scuttle.",
+        "properties": {
+          "sizes": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "minItems": 1,
+            "default": [
+              21,
+              26,
+              31,
+              36,
+              41,
+              46,
+              51,
+              56,
+              61,
+              66,
+              71,
+              76,
+              81,
+              86,
+              91,
+              96,
+              101
+            ],
+            "description": "Pool window sizes; each size adds one set of pool equations. The smallest window should be at least 20 for UMI data."
+          },
+          "max_cluster_size": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 3000,
+            "description": "Maximum cells per linear system; larger clusters are split before solving."
+          },
+          "min_mean": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0,
+            "default": null,
+            "description": "Minimum library-size-adjusted mean of genes used. Null picks 0.1 or 1 from the median library size."
+          },
+          "positive": {
+            "type": "boolean",
+            "default": true,
+            "description": "Replace non-positive estimates by values predicted from detected-gene counts and warn. When false, they raise an error."
+          },
+          "ref_cluster": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null,
+            "description": "Reference cluster for rescaling clusters to one another. Null uses the cluster with the most non-zero pseudo-cell entries."
+          },
+          "prescale_rounds": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 1,
+            "description": "Number of pooling rounds; each later round prescales by the previous factors. Round one prescales by library size."
+          },
+          "quickcluster_min_size": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 100,
+            "description": "Minimum cluster size for internal clustering when clusters_key is null."
+          },
+          "quickcluster_use_ranks": {
+            "type": "boolean",
+            "default": false,
+            "description": "Cluster on ranks instead of log-expression, which avoids circularity with the normalization being estimated."
+          }
+        }
+      },
+      "median_ratio": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options for method median_ratio.",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "ratio",
+              "poscounts"
+            ],
+            "default": "ratio",
+            "description": "ratio uses genes positive in every cell and errors if none exist; poscounts takes geometric means over positive counts."
+          }
+        }
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Random seed; used only by learned_library training."
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing size factor members instead of failing."
+      }
+    },
+    "required": [
+      "dataset"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. obs/size_factor. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Compact summary for completed runs: method, scale_convention, n_cells, size_factor_min, size_factor_median, size_factor_max, n_coerced_nonpositive, min_mean_applied, median_log_se, warnings. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "normalization.size_factor_estimation",
+      "reads": [
+        "layers/counts",
+        "obs/<clusters_key>",
+        "var/<exclude_mask>"
+      ],
+      "writes": [
+        "obs/size_factor",
+        "obs/size_factor_log_se",
+        "layers/size_factor_scaled",
+        "uns/size_factor",
+        "models/size_factor_nb"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": true,
+      "paradigm": "hybrid",
+      "docs": "tasks/normalization/size_factor_estimation.md"
+    }
+  }
+}

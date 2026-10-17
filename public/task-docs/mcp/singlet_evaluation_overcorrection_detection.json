@@ -1,0 +1,303 @@
+{
+  "name": "singlet_evaluation_overcorrection_detection",
+  "title": "Detect over-correction after batch or covariate removal",
+  "description": "Detects over-correction after batch correction, integration or covariate regression: whether condition-level differential expression, cell-type structure or marker separation present before correction was removed. Needs raw counts, donor, batch, condition and cell-type labels, the uncorrected embedding and the corrected output under test. The default condition_de_retention method needs at least four donors per condition. Writes summaries, reference and post-correction DE tables and a flag under uns/overcorrection; it never corrects or refits the data. Do not use it to score cell-level integration quality alone; use the integration quality scoring tool for that.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (s3://, r2://, https://) or a workspace handle."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "condition_de_retention",
+          "knn_purity",
+          "cilisi",
+          "scib_bio_conservation"
+        ],
+        "default": "condition_de_retention",
+        "description": "Readout to compute. Use knn_purity, cilisi or scib_bio_conservation for cell-type structure only."
+      },
+      "keys": {
+        "type": "object",
+        "description": "obs columns for batch, condition, donor and cell type, and an optional uns key of marker sets.",
+        "properties": {
+          "batch": {
+            "type": "string",
+            "default": "batch",
+            "description": "obs column of batch labels (at least two levels)."
+          },
+          "condition": {
+            "type": "string",
+            "default": "condition",
+            "description": "obs column of the protected condition (at least two levels)."
+          },
+          "donor": {
+            "type": "string",
+            "default": "donor",
+            "description": "obs column of biological replicates (donor or sample)."
+          },
+          "cell_type": {
+            "type": "string",
+            "default": "cell_type",
+            "description": "obs column of cell-type labels fixed before correction."
+          },
+          "marker_sets": {
+            "type": "string",
+            "description": "uns key of marker gene sets for AUROC retention; optional."
+          }
+        },
+        "additionalProperties": false
+      },
+      "representations": {
+        "type": "object",
+        "description": "Storage keys of the uncorrected and corrected representations under test.",
+        "properties": {
+          "counts": {
+            "type": "string",
+            "default": "layers/counts",
+            "description": "Raw count layer for the pre-correction negative-binomial reference."
+          },
+          "uncorrected_expression": {
+            "type": "string",
+            "default": "layers/log1p_norm",
+            "description": "Uncorrected log-scale layer for the matched linear baseline."
+          },
+          "corrected_expression": {
+            "type": "string",
+            "default": "layers/integrated_expr",
+            "description": "Corrected log-scale expression under test; required for retention."
+          },
+          "uncorrected_embedding": {
+            "type": "string",
+            "default": "obsm/X_pca",
+            "description": "Uncorrected embedding for the pre-correction neighbour graph."
+          },
+          "corrected_embedding": {
+            "type": "string",
+            "default": "obsm/X_integrated",
+            "description": "Corrected embedding under test for kSIM, CiLISI and silhouette."
+          }
+        },
+        "additionalProperties": false
+      },
+      "condition_de_retention": {
+        "type": "object",
+        "description": "Settings for the default retention readout.",
+        "properties": {
+          "fdr": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.05,
+            "description": "FDR threshold defining the reference and post-correction gene sets."
+          },
+          "min_abs_log_fc": {
+            "type": "number",
+            "minimum": 0,
+            "default": 0,
+            "description": "Minimum absolute effect in each test's own units; 0 applies no filter."
+          },
+          "min_donors_per_condition": {
+            "type": "integer",
+            "minimum": 2,
+            "default": 4,
+            "description": "Donors needed per condition within a cell type; below this the type is not evaluable."
+          },
+          "flag_threshold": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.2,
+            "description": "Flag when the over-correction score exceeds this; uncalibrated, for review."
+          }
+        },
+        "additionalProperties": false
+      },
+      "knn_purity": {
+        "type": "object",
+        "description": "Settings for the kSIM readout.",
+        "properties": {
+          "K": {
+            "type": "integer",
+            "minimum": 2,
+            "default": 25,
+            "description": "Neighbours per cell, including the query cell."
+          },
+          "min_rate": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.9,
+            "description": "Per-cell purity threshold for the acceptance rate."
+          }
+        },
+        "additionalProperties": false
+      },
+      "cilisi": {
+        "type": "object",
+        "description": "Settings for the cell-type-aware LISI readout.",
+        "properties": {
+          "min_cells_split": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 10,
+            "description": "Minimum cells per cell-type group for CiLISI."
+          },
+          "min_batches_per_group": {
+            "type": "integer",
+            "minimum": 2,
+            "default": 2,
+            "description": "Minimum distinct batches per group; CiLISI needs at least two batch labels per group."
+          }
+        },
+        "additionalProperties": false
+      },
+      "scib_bio_conservation": {
+        "type": "object",
+        "description": "Settings for the scIB bio-conservation group.",
+        "properties": {
+          "n_hvg": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 500,
+            "description": "Per-batch highly variable genes for HVG overlap, capped at half the genes."
+          },
+          "n_comps": {
+            "type": "integer",
+            "minimum": 2,
+            "default": 50,
+            "description": "Principal components for PCR and isolated-label silhouette."
+          }
+        },
+        "additionalProperties": false
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Random seed for approximate kNN construction and any subsampling."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": [
+      "dataset"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. uns/overcorrection/summary. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Keys: method, n_reference_genes, retention_matched, retention_nb, sign_concordance, over_correction_score, flag, knn_purity_mean, knn_purity_accept_rate, cilisi, scib_bio_conservation, marker_auroc_retention. Keys not computed are absent. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "evaluation.overcorrection_detection",
+      "reads": [
+        "layers/counts",
+        "layers/log1p_norm",
+        "layers/integrated_expr",
+        "obsm/X_pca",
+        "obsm/X_integrated",
+        "obs/<batch_key>",
+        "obs/<condition_key>",
+        "obs/<donor_key>",
+        "obs/<cell_type_key>"
+      ],
+      "writes": [
+        "uns/overcorrection/summary",
+        "obs/overcorrection_knn_purity",
+        "uns/overcorrection/de_reference",
+        "uns/overcorrection/de_post_<method>",
+        "uns/overcorrection/flag"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": false,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/evaluation/overcorrection_detection.md"
+    }
+  }
+}

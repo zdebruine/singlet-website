@@ -1,0 +1,259 @@
+{
+  "name": "singlet_grn_multiome_egrn_inference",
+  "title": "Multiome eRegulon inference (enhancer-driven GRN)",
+  "description": "Infers enhancer-to-gene links, TF-to-region motif assignments and signed eRegulons from paired RNA and ATAC cells, then scores per-cell eRegulon activity. Use method pando by default (per-gene interaction GLM with FDR-adjusted p-values); scenic_plus adds motif enrichment. Requires paired cells, a peak-by-cell ATAC layer and a versioned motif database. Writes uns/egrn members and obsm/egrn_activity; do not use on unpaired data or to infer causal regulation.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "pando",
+          "scenic_plus"
+        ],
+        "default": "pando",
+        "description": "eRegulon method: pando (interaction GLM, default) or scenic_plus (boosted importance with motif enrichment)."
+      },
+      "layer": {
+        "type": "string",
+        "default": "counts",
+        "description": "RNA count layer for expression; the method applies its own normalisation."
+      },
+      "atac_layer": {
+        "type": "string",
+        "default": "atac_counts",
+        "description": "Peak-by-cell accessibility layer over the same cells as the RNA layer."
+      },
+      "cell_type_key": {
+        "type": "string",
+        "default": "celltype",
+        "description": "obs key for cell-type labels; when present, fits run within each type."
+      },
+      "motif_db": {
+        "type": "string",
+        "description": "Versioned TF motif collection, for example a CIS-BP release. Required; sets the candidate TF-region pairs."
+      },
+      "pando": {
+        "type": "object",
+        "description": "Options used when method is pando.",
+        "additionalProperties": false,
+        "properties": {
+          "extend_bp": {
+            "type": "integer",
+            "default": 1000000,
+            "description": "Genomic window around each gene, in bp, within which candidate peaks are considered."
+          },
+          "peak_cor": {
+            "type": "number",
+            "default": 0,
+            "description": "Minimum absolute peak-gene correlation to keep a peak; zero keeps every nonzero correlation."
+          },
+          "tf_cor": {
+            "type": "number",
+            "default": 0.1,
+            "description": "Minimum absolute TF-gene correlation to keep a TF as a candidate regulator."
+          },
+          "rsq_thresh": {
+            "type": "number",
+            "default": 0.1,
+            "description": "R-squared threshold for keeping a gene module."
+          },
+          "min_genes_per_module": {
+            "type": "integer",
+            "default": 5,
+            "description": "Minimum number of genes per module."
+          },
+          "p_adjust": {
+            "type": "string",
+            "default": "fdr",
+            "description": "Multiple-testing adjustment for interaction p-values (p.adjust method)."
+          }
+        }
+      },
+      "scenic_plus": {
+        "type": "object",
+        "description": "Options used when method is scenic_plus.",
+        "additionalProperties": false,
+        "properties": {
+          "upstream_bp": {
+            "type": "integer",
+            "default": 1000,
+            "description": "Upstream bound of the region search space, in bp."
+          },
+          "downstream_bp": {
+            "type": "integer",
+            "default": 150000,
+            "description": "Downstream bound of the region search space, in bp."
+          },
+          "gbm_learning_rate": {
+            "type": "number",
+            "default": 0.01,
+            "description": "Learning rate of the boosted importance model."
+          },
+          "gbm_n_estimators": {
+            "type": "integer",
+            "default": 500,
+            "description": "Number of boosting stages in the importance model."
+          },
+          "gbm_max_features": {
+            "type": "number",
+            "default": 0.1,
+            "description": "Fraction of features considered per split in the importance model."
+          },
+          "ctx_auc_threshold": {
+            "type": "number",
+            "default": 0.005,
+            "description": "AUC threshold for motif enrichment."
+          },
+          "ctx_nes_threshold": {
+            "type": "number",
+            "default": 3.0,
+            "description": "NES threshold for keeping an enriched motif."
+          },
+          "ctx_rank_threshold": {
+            "type": "number",
+            "default": 0.05,
+            "description": "Top fraction of regions used in the recovery AUC."
+          },
+          "top_n_per_gene": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            },
+            "default": [
+              5,
+              10,
+              15
+            ],
+            "description": "Number of top region-gene links kept per gene for eRegulon building."
+          }
+        }
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Seed for the boosted importance model (scenic_plus only; the pando path is deterministic)."
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": [
+      "dataset",
+      "motif_db"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, for example uns/egrn/pando/eregulons. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Compact counts for completed runs: method, n_cell_types, n_region_gene_links, n_tf_region_pairs, n_eregulons. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "grn.multiome_egrn_inference",
+      "reads": [
+        "layers/<layer>",
+        "layers/<atac_layer>",
+        "uns/peaks",
+        "uns/motif_db",
+        "obs/<cell_type_key>"
+      ],
+      "writes": [
+        "uns/egrn/<method>/region_gene_links",
+        "uns/egrn/<method>/tf_region_motifs",
+        "uns/egrn/<method>/eregulons",
+        "obsm/egrn_activity",
+        "models/egrn_<method>"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/grn/multiome_egrn_inference.md"
+    }
+  }
+}

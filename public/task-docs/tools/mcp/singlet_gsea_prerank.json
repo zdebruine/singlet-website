@@ -1,0 +1,125 @@
+{
+  "name": "singlet_gsea_prerank",
+  "title": "Preranked gene-set enrichment",
+  "description": "Weighted-KS enrichment score for each gene set on a ranked gene list, with a size-matched permutation null (exact scores, Benjamini-Hochberg FDR). Provide the ranking inline or point at an NMF program.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "ranked": {
+        "type": "array",
+        "description": "List of [gene, score] pairs (higher = more positive).",
+        "items": {
+          "type": "array"
+        }
+      },
+      "from_program": {
+        "type": "object",
+        "description": "Alternative to ranked: {name, program} takes the loadings of an NMF program of a dataset.",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "program": {
+            "type": "integer"
+          }
+        }
+      },
+      "gene_sets": {
+        "type": "object",
+        "description": "Mapping set name -> list of genes.",
+        "additionalProperties": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "gmt_path": {
+        "type": "string",
+        "description": "Alternative: path to a GMT file."
+      },
+      "n_perm": {
+        "type": "integer",
+        "description": "Permutations per distinct set size.",
+        "default": 1000
+      },
+      "weight": {
+        "type": "number",
+        "description": "Weight exponent of the score.",
+        "default": 1.0
+      },
+      "min_size": {
+        "type": "integer",
+        "description": "Smallest set size kept.",
+        "default": 5
+      },
+      "max_size": {
+        "type": "integer",
+        "description": "Largest set size kept.",
+        "default": 500
+      },
+      "seed": {
+        "type": "integer",
+        "description": "Random seed.",
+        "default": 1
+      },
+      "top": {
+        "type": "integer",
+        "description": "Rows returned.",
+        "default": 20
+      },
+      "dataset": {
+        "type": "string",
+        "description": "Dataset for figure files (optional)."
+      }
+    },
+    "required": [],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "status": {
+        "type": "string",
+        "enum": [
+          "ok",
+          "error"
+        ]
+      },
+      "summary": {
+        "type": "string"
+      },
+      "metrics": {
+        "type": "object"
+      },
+      "figures": {
+        "type": "array"
+      },
+      "artifacts": {
+        "type": "array"
+      },
+      "warnings": {
+        "type": "array"
+      },
+      "next": {
+        "type": "array"
+      },
+      "timings": {
+        "type": "object"
+      }
+    },
+    "required": [
+      "status",
+      "summary"
+    ]
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "enrichment.preranked_gene_set_enrichment",
+      "reads": [],
+      "writes": [],
+      "runtime": "local-cpu",
+      "streaming": true
+    }
+  }
+}

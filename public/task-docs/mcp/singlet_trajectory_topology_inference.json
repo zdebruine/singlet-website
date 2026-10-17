@@ -1,0 +1,305 @@
+{
+  "name": "singlet_trajectory_topology_inference",
+  "title": "Trajectory topology inference",
+  "description": "Infers the graph (milestone network) that cells trace in a low-dimensional embedding and assigns each cell soft milestone percentages. Use it to ask what graph shape a population has: linear, bifurcating, tree, cyclic or disconnected. It needs an embedding such as obsm/X_pca; cluster-based methods also need obs/cluster. It writes uns/trajectory_graph, obsm/milestone_percentages and obs/milestone, and models/principal_graph for principal-graph methods. Do not use it to order cells by pseudotime or to assign fates; use trajectory.pseudotime_ordering or trajectory.fate_probability. Run trajectory.trajectory_presence_test first when a continuum is in doubt.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "singlet_pgraph",
+          "monocle2_ddrtree",
+          "slingshot",
+          "paga",
+          "tscan",
+          "scfates"
+        ],
+        "default": "singlet_pgraph",
+        "description": "Topology method. singlet_pgraph is the proposed default; slingshot, tscan and paga need cluster_key."
+      },
+      "embedding": {
+        "type": "object",
+        "description": "Embedding the graph is fitted on.",
+        "properties": {
+          "key": {
+            "type": "string",
+            "default": "X_pca",
+            "description": "obsm key of the embedding, for example X_pca or X_diffmap."
+          },
+          "n_dims": {
+            "type": "integer",
+            "minimum": 2,
+            "default": 50,
+            "description": "Leading embedding dimensions used for fitting; the default is a singlet choice."
+          }
+        },
+        "additionalProperties": false
+      },
+      "cluster_key": {
+        "type": "string",
+        "default": "cluster",
+        "description": "obs column of cluster labels used by slingshot, tscan and paga."
+      },
+      "root": {
+        "type": "string",
+        "description": "Start cell id or cluster label. slingshot uses it as the start cluster; other methods ignore it."
+      },
+      "n_nodes": {
+        "type": [
+          "integer",
+          "null"
+        ],
+        "minimum": 2,
+        "default": null,
+        "description": "Node or cluster count. Null lets the method's selection criterion choose it."
+      },
+      "stability": {
+        "type": "object",
+        "description": "Subsampling stability report.",
+        "properties": {
+          "n_bootstrap": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 0,
+            "description": "Number of subsampled refits. Zero disables the stability report."
+          },
+          "bootstrap_frac": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 1,
+            "default": 0.95,
+            "description": "Fraction of cells and features kept in each subsample."
+          }
+        },
+        "additionalProperties": false
+      },
+      "options": {
+        "type": "object",
+        "description": "Method-specific options, nested by method name. Each applies only to its own method.",
+        "properties": {
+          "singlet_pgraph": {
+            "type": "object",
+            "properties": {
+              "sigma": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "default": 0.1,
+                "description": "Responsibility bandwidth in units of the embedding's overall standard deviation (proposed)."
+              },
+              "penalty": {
+                "type": "number",
+                "minimum": 0,
+                "default": 1,
+                "description": "Graph penalty weight; larger values give fewer nodes and edges."
+              },
+              "node_selection": {
+                "type": "string",
+                "enum": [
+                  "bic",
+                  "icl",
+                  "fixed"
+                ],
+                "default": "bic",
+                "description": "Criterion for the node count; fixed uses n_nodes."
+              },
+              "max_iter": {
+                "type": "integer",
+                "minimum": 1,
+                "default": 100,
+                "description": "Maximum number of EM iterations."
+              }
+            },
+            "additionalProperties": false,
+            "description": "Options for singlet_pgraph, the proposed principal-graph default."
+          },
+          "scfates": {
+            "type": "object",
+            "properties": {
+              "tree_method": {
+                "type": "string",
+                "enum": [
+                  "ppt",
+                  "epg"
+                ],
+                "default": "ppt",
+                "description": "ppt fits a principal tree; epg fits an elastic principal graph."
+              },
+              "ppt_lambda": {
+                "type": "number",
+                "minimum": 0,
+                "default": 1,
+                "description": "Tree penalty weight for the ppt fit."
+              },
+              "ppt_sigma": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "default": 0.1,
+                "description": "Responsibility smoothing scale for the ppt fit."
+              },
+              "epg_lambda": {
+                "type": "number",
+                "minimum": 0,
+                "default": 0.01,
+                "description": "Stretching penalty for the epg fit."
+              },
+              "epg_mu": {
+                "type": "number",
+                "minimum": 0,
+                "default": 0.1,
+                "description": "Bending penalty for the epg fit."
+              }
+            },
+            "additionalProperties": false,
+            "description": "Options for scfates principal tree or elastic graph fitting."
+          },
+          "slingshot": {
+            "type": "object",
+            "properties": {
+              "omega": {
+                "type": "boolean",
+                "default": false,
+                "description": "Cap MST edge lengths at omega_scale times the median unsupervised MST edge length."
+              },
+              "omega_scale": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "default": 1.5,
+                "description": "Scaling factor for the omega cap; used only when omega is true."
+              },
+              "stretch": {
+                "type": "number",
+                "minimum": 0,
+                "default": 2,
+                "description": "Factor by which lineage curves are extended beyond their ends."
+              }
+            },
+            "additionalProperties": false,
+            "description": "Options for slingshot lineage and curve fitting."
+          }
+        },
+        "additionalProperties": false
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Seed for the stochastic initialisation of principal-graph fits."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": [
+      "dataset"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: wrote members; dry_run: estimate only; queued: long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "For completed fits: method, n_nodes, n_edges, n_branch_points, n_endpoints, selected_by, and stability_median_him when n_bootstrap is above zero.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Provenance record id (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "trajectory.topology_inference",
+      "reads": [
+        "obsm/X_pca",
+        "obs/cluster"
+      ],
+      "writes": [
+        "uns/trajectory_graph",
+        "obsm/milestone_percentages",
+        "obs/milestone",
+        "models/principal_graph"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/trajectory/topology_inference.md"
+    }
+  }
+}

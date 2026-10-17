@@ -1,0 +1,251 @@
+{
+  "name": "singlet_clustering_cell_partitioning",
+  "title": "Partition cells into clusters at fixed granularity",
+  "description": "Assigns each cell of a .singlet dataset one hard cluster label, by default with Leiden modularity optimisation on a kNN graph built from obsm/<embedding_key> or a precomputed graph in obsp/<graph_key>; louvain and kmeans (fixed K) are alternatives. Needs an embedding such as X_pca (run dimensionality reduction first). Writes obs/<cluster_key> plus uns/<cluster_key> with parameters, modularity and, only when evaluation.label_key is given, agreement metrics. Do not use it to choose the resolution or number of clusters without labels (use clustering.resolution_selection), to test cluster stability, or to tune the resolution on the labels that score the result unless evaluation.tune_resolution is set deliberately and the output is reported as label-tuned.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "leiden",
+          "louvain",
+          "kmeans"
+        ],
+        "default": "leiden",
+        "description": "leiden: default, graph method with modularity or CPM. louvain: graph method, modularity only, published comparator. kmeans: fixed K on the embedding."
+      },
+      "resolution": {
+        "type": "number",
+        "exclusiveMinimum": 0,
+        "default": 1.0,
+        "description": "Granularity gamma for leiden and louvain; larger values tend to give more clusters. Ignored by kmeans. Defaults differ between tools."
+      },
+      "n_clusters": {
+        "type": [
+          "integer",
+          "null"
+        ],
+        "minimum": 2,
+        "default": null,
+        "description": "Target number of clusters K. Required for kmeans; ignored by leiden and louvain."
+      },
+      "input": {
+        "type": "object",
+        "description": "Where cells and graph come from.",
+        "properties": {
+          "embedding_key": {
+            "type": "string",
+            "default": "X_pca",
+            "description": "obsm key with the embedding; builds the graph when graph_key is null and is used directly by kmeans."
+          },
+          "graph_key": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null,
+            "description": "obsp key with a precomputed weighted graph; null builds a kNN graph from embedding_key. Refused for kmeans."
+          },
+          "n_pcs": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 30,
+            "description": "Leading embedding columns used; set to the k chosen by dim-reduction.pc_number_selection when available."
+          },
+          "n_neighbors": {
+            "type": "integer",
+            "minimum": 2,
+            "default": 15,
+            "description": "Neighbours per cell for the in-call kNN graph; ignored when graph_key is set."
+          }
+        },
+        "additionalProperties": false
+      },
+      "leiden": {
+        "type": "object",
+        "description": "Options used only when method is leiden.",
+        "properties": {
+          "n_iterations": {
+            "type": "integer",
+            "minimum": -1,
+            "default": -1,
+            "description": "Iteration limit; -1 iterates until no node moves, a positive value caps the iterations; 0 is invalid."
+          },
+          "objective": {
+            "type": "string",
+            "enum": [
+              "modularity",
+              "CPM"
+            ],
+            "default": "modularity",
+            "description": "Quality function: modularity with resolution gamma, or the constant Potts model."
+          }
+        },
+        "additionalProperties": false
+      },
+      "evaluation": {
+        "type": "object",
+        "description": "Agreement with reference labels; labels never influence the partition unless tune_resolution is true.",
+        "properties": {
+          "label_key": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null,
+            "description": "obs column with reference labels; when set, metrics and the contingency table are written."
+          },
+          "tune_resolution": {
+            "type": "boolean",
+            "default": false,
+            "description": "Choose resolution as the NMI-maximising grid value against label_key. Label-circular: output is flagged tuned_on_labels. Graph methods only."
+          },
+          "resolution_grid": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "minItems": 2,
+            "default": null,
+            "description": "Resolutions searched when tune_resolution is true; null uses 0.2, 0.4, ..., 2.0 (scIB grid)."
+          }
+        },
+        "additionalProperties": false
+      },
+      "cluster_key": {
+        "type": "string",
+        "pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$",
+        "default": "partition",
+        "description": "Output name: writes obs/<cluster_key> and uns/<cluster_key>. Existing members are replaced only when overwrite is true."
+      },
+      "seed": {
+        "type": "integer",
+        "minimum": 0,
+        "default": 0,
+        "description": "Random seed for local-move order and k-means seeding."
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated seconds, peak memory and device without writing anything."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing obs/<cluster_key> and uns/<cluster_key> members instead of failing."
+      }
+    },
+    "required": [
+      "dataset"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. obs/partition, uns/partition/params. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Compact summary for completed runs: method, n_clusters, resolution, modularity, smallest_cluster, disconnected_clusters, tuned_on_labels and, when label_key is set, a metrics object with ari, nmi, ami, homogeneity, completeness, purity, matched_f1_macro and n_reference_classes. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "clustering.cell_partitioning",
+      "reads": [
+        "obsm/<embedding_key>",
+        "obsp/<graph_key>",
+        "obs/<label_key>"
+      ],
+      "writes": [
+        "obs/<cluster_key>",
+        "uns/<cluster_key>/params",
+        "uns/<cluster_key>/modularity",
+        "uns/<cluster_key>/metrics",
+        "uns/<cluster_key>/contingency"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "heuristic",
+      "docs": "tasks/clustering/cell_partitioning.md"
+    }
+  }
+}

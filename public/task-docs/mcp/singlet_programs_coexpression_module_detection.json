@@ -1,0 +1,126 @@
+{
+  "name": "singlet_programs_coexpression_module_detection",
+  "title": "Gene-gene co-expression module detection",
+  "description": "Detects gene modules from gene-gene co-expression within one cell type and returns gene-to-module assignments, a module eigengene per analysed unit, and kME membership scores. The default method model_pairs fits depth-adjusted covariances with per-pair tests and clusters the significant pairs with Leiden; wgcna, hdwgcna and leiden_gene_graph are heuristic comparators. Writes varm, obsm, uns and models members. Do not use it to infer directed regulators or to pool several cell types; use the grn or programs tasks for those.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "method": {
+        "type": "string",
+        "enum": ["model_pairs", "wgcna", "hdwgcna", "leiden_gene_graph"],
+        "default": "model_pairs",
+        "description": "model_pairs is the default; the other three are heuristic comparators."
+      },
+      "subset": {
+        "type": "object",
+        "description": "Cells to analyse, selected by an obs key. model_pairs needs exactly one cell type.",
+        "properties": {
+          "key": {"type": "string", "default": "cell_type", "description": "obs column that labels cell types or groups."},
+          "value": {"type": ["string", "null"], "default": null, "description": "Level of the key to analyse; required for model_pairs."}
+        },
+        "additionalProperties": false
+      },
+      "input": {
+        "type": "object",
+        "description": "Expression layer, gene filter and optional split key for preservation.",
+        "properties": {
+          "layer": {"type": "string", "default": "counts", "description": "Layer to read; model_pairs needs counts, other methods a log-normalised layer."},
+          "gene_select": {"type": "string", "enum": ["variable", "expressed"], "default": "variable", "description": "Gene filter: variable genes, or genes passing the expressed-fraction threshold."},
+          "min_expressed_fraction": {"type": "number", "minimum": 0, "maximum": 1, "default": 0.05, "description": "Minimum share of cells expressing a gene, applied before the gene filter."},
+          "split_key": {"type": ["string", "null"], "default": null, "description": "obs key of donors or studies for preservation splits; null skips preservation."}
+        },
+        "additionalProperties": false
+      },
+      "model_pairs": {
+        "type": "object",
+        "description": "Options for the default pair-covariance method.",
+        "properties": {
+          "irls_n_iter": {"type": "integer", "minimum": 1, "default": 10, "description": "Maximum IRLS iterations per moment regression (CS-CORE default)."},
+          "irls_eps": {"type": "number", "minimum": 0, "default": 0.05, "description": "IRLS convergence threshold (CS-CORE default)."},
+          "fdr": {"type": "number", "minimum": 0, "maximum": 1, "default": 0.05, "description": "Benjamini-Hochberg level for keeping gene pairs before clustering (proposed)."},
+          "resolution": {"type": "number", "minimum": 0, "default": 1.0, "description": "Leiden modularity resolution on the significant-pair graph."}
+        },
+        "additionalProperties": false
+      },
+      "wgcna": {
+        "type": "object",
+        "description": "Options for the WGCNA comparator (heuristic).",
+        "properties": {
+          "network_type": {"type": "string", "enum": ["unsigned", "signed"], "default": "unsigned", "description": "Sign handling in the soft-threshold adjacency."},
+          "soft_power": {"type": ["integer", "string"], "default": "auto", "description": "Soft power, or auto for the smallest power reaching rsquared_cut."},
+          "rsquared_cut": {"type": "number", "minimum": 0, "maximum": 1, "default": 0.85, "description": "Scale-free fit threshold used by automatic soft-power selection."},
+          "deep_split": {"type": "integer", "minimum": 0, "maximum": 4, "default": 2, "description": "Dynamic tree cut sensitivity; higher gives more, smaller modules."},
+          "min_module_size": {"type": "integer", "minimum": 1, "default": 20, "description": "Smallest module kept; capped at half the gene count, as in WGCNA."},
+          "merge_cut_height": {"type": "number", "minimum": 0, "default": 0.15, "description": "Height below which similar modules are merged."}
+        },
+        "additionalProperties": false
+      },
+      "hdwgcna": {
+        "type": "object",
+        "description": "Options for the hdWGCNA comparator (metacell-based, signed networks, heuristic).",
+        "properties": {
+          "metacell_k": {"type": "integer", "minimum": 1, "default": 25, "description": "Neighbours used to aggregate metacells."},
+          "target_metacells": {"type": "integer", "minimum": 1, "default": 1000, "description": "Target number of metacells."},
+          "soft_power": {"type": ["integer", "string"], "default": "auto", "description": "Soft power, or auto over the hdWGCNA power grid."},
+          "deep_split": {"type": "integer", "minimum": 0, "maximum": 4, "default": 4, "description": "Dynamic tree cut sensitivity; the hdWGCNA default is 4."},
+          "min_module_size": {"type": "integer", "minimum": 1, "default": 50, "description": "Smallest module kept, as in hdWGCNA."},
+          "merge_cut_height": {"type": "number", "minimum": 0, "default": 0.2, "description": "Merge height below which modules are combined, as in hdWGCNA."}
+        },
+        "additionalProperties": false
+      },
+      "leiden_gene_graph": {
+        "type": "object",
+        "description": "Options for the Leiden gene-graph comparator (heuristic).",
+        "properties": {
+          "k": {"type": "integer", "minimum": 1, "default": 15, "description": "Neighbours per gene in the kNN graph (proposed default)."},
+          "similarity": {"type": "string", "enum": ["pearson", "spearman"], "default": "pearson", "description": "Gene-gene similarity used for graph edges."},
+          "resolution": {"type": "number", "minimum": 0, "default": 1.0, "description": "Leiden modularity resolution; the leidenalg default is 1.0."}
+        },
+        "additionalProperties": false
+      },
+      "seed": {"type": "integer", "default": 0, "description": "Random seed for Leiden clustering and metacell sampling."},
+      "device": {"type": "string", "enum": ["auto", "cpu", "cuda"], "default": "auto", "description": "Execution device; auto picks CUDA when a device with enough memory is available."},
+      "dry_run": {"type": "boolean", "default": false, "description": "Return estimated time, memory and device without computing."},
+      "overwrite": {"type": "boolean", "default": false, "description": "Replace existing output members instead of failing."}
+    },
+    "required": ["dataset"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {"type": "string", "description": "Handle of the dataset that was (or would be) updated."},
+      "status": {"type": "string", "enum": ["completed", "dry_run", "queued"], "description": "completed: ran inline and wrote members; dry_run: estimate only; queued: long job (see job_id)."},
+      "wrote": {"type": "array", "items": {"type": "string"}, "description": "Members written, e.g. varm/coexpr_module. Empty for dry_run and queued."},
+      "summary": {"type": "object", "description": "Compact summary for completed calls: method, n_genes_tested, n_modules, n_unassigned, n_significant_pairs (model_pairs), soft_power (wgcna, hdwgcna), median_module_size.", "additionalProperties": true},
+      "provenance_id": {"type": ["string", "null"], "description": "Id of the provenance record appended to the dataset (null unless completed)."},
+      "job_id": {"type": ["string", "null"], "description": "Set when status is queued."},
+      "estimate": {"type": ["object", "null"], "description": "Present for dry_run: seconds, peak_memory_gb, device.", "additionalProperties": true}
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "programs.coexpression_module_detection",
+      "reads": ["layers/counts", "layers/log1p_norm", "obs/<subset.key>", "obs/<input.split_key>", "obsp/neighbors"],
+      "writes": ["varm/coexpr_module", "varm/coexpr_kME", "obsm/coexpr_eigengene", "uns/coexpr/modules", "uns/coexpr/preservation", "models/coexpr", "obsp/coexpr"],
+      "devices": ["cpu", "cuda"],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/programs/coexpression_module_detection.md"
+    }
+  }
+}

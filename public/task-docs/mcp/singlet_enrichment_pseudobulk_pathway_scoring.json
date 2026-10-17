@@ -1,0 +1,158 @@
+{
+  "name": "singlet_enrichment_pseudobulk_pathway_scoring",
+  "title": "Sample-level pathway activity scoring",
+  "description": "Scores each sample or pseudobulk group for each gene set from a normalized sample-by-gene layer and writes a sample-by-set matrix with per-set member coverage. The default ulm method scores each sample without reference to the cohort; gsva is cohort-relative and must be compared only within one input. Do not use on raw counts or single cells; use enrichment.per_cell_gene_set_scoring for cell-level activity.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle (.singlet path, URI or workspace handle) holding the normalized sample-by-gene layer."
+      },
+      "method": {
+        "type": "string",
+        "enum": ["ulm", "gsva", "singscore", "aucell", "ucell", "zscore_rokai"],
+        "default": "ulm",
+        "description": "Scoring method. ulm is the default and is cohort-independent; gsva is cohort-relative."
+      },
+      "gene_set_key": {
+        "type": "string",
+        "description": "Name of the gene-set collection under uns; members may carry signs or weights."
+      },
+      "layer": {
+        "type": "string",
+        "default": "log1p_cpm",
+        "description": "Normalized layer to score. Layers whose values are all non-negative integers are refused."
+      },
+      "sample_key": {
+        "type": "string",
+        "default": "sample",
+        "description": "obs column that identifies each sample or pseudobulk group."
+      },
+      "min_set_size": {
+        "type": "integer",
+        "minimum": 2,
+        "default": 10,
+        "description": "Smallest number of set members present in the layer; smaller sets are dropped and listed in metadata."
+      },
+      "max_set_size": {
+        "type": "integer",
+        "minimum": 2,
+        "default": 500,
+        "description": "Largest number of set members present in the layer; larger sets are dropped and listed in metadata."
+      },
+      "gsva": {
+        "type": "object",
+        "description": "GSVA options, used only when method is gsva.",
+        "properties": {
+          "kcdf": {
+            "type": "string",
+            "enum": ["gaussian", "none"],
+            "default": "gaussian",
+            "description": "Density transform: gaussian kernel across samples, or none for the empirical CDF."
+          },
+          "tau": {
+            "type": "number",
+            "default": 1,
+            "description": "Exponent on the rank statistic in the random walk."
+          },
+          "maxdiff": {
+            "type": "boolean",
+            "default": true,
+            "description": "Use the sum of the largest positive and negative deviations."
+          }
+        },
+        "additionalProperties": false
+      },
+      "singscore": {
+        "type": "object",
+        "description": "singscore options, used only when method is singscore.",
+        "properties": {
+          "stable_reference": {
+            "type": ["array", "null"],
+            "items": {"type": "string"},
+            "default": null,
+            "description": "Stable reference genes for the normalisation-robust variant; null uses global ranks."
+          }
+        },
+        "additionalProperties": false
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu", "cuda"],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": ["dataset", "gene_set_key"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written, e.g. obsm/pathway_score_ulm. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Keys: n_samples, n_sets_scored, n_sets_dropped, set_coverage_median, cohort_relative, method. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "enrichment.pseudobulk_pathway_scoring",
+      "reads": ["layers/<layer>", "obs/<sample_key>", "uns/<gene_set_key>"],
+      "writes": ["obsm/pathway_score_<method>", "uns/pathway_score_<method>_meta"],
+      "devices": ["cpu", "cuda"],
+      "stochastic": false,
+      "long_running": false,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/enrichment/pseudobulk_pathway_scoring.md"
+    }
+  }
+}

@@ -1,0 +1,339 @@
+{
+  "name": "singlet_ingest_quant_read_to_gene_mapping",
+  "title": "Read-to-gene mapping engine",
+  "description": "Maps the cDNA reads of one single-cell or single-nucleus library to genes with a chosen engine (alevin_fry by default; starsolo or kb_kallisto_bustools; cellranger_import only imports an existing Cell Ranger matrix) and writes an unfiltered barcode-by-gene UMI matrix to layers/counts with mapping diagnostics and a run record. It needs the parse stream after barcode correction, both FASTQ files and a reference index from ingest-quant.reference_annotation_build; pass reference_type splici_intronic for nuclei and a multi_gene_policy the mapper supports. Use dry_run first. Do not use it to call cells, remove ambient RNA or doublets, or re-resolve an existing matrix (use the multi-gene assignment task).",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "inputs": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Files and library properties the engine reads. Not .singlet members.",
+        "properties": {
+          "parse_stream": {
+            "type": "string",
+            "description": "Parse stream after whitelist correction: read_id, corrected barcode, UMI, cdna_read_id, parse status. Path or URI."
+          },
+          "fastq_r1": {
+            "type": "string",
+            "description": "R1 FASTQ holding the cell barcode and UMI. Path or URI."
+          },
+          "fastq_r2": {
+            "type": "string",
+            "description": "R2 FASTQ holding the cDNA. Path or URI."
+          },
+          "reference_index": {
+            "type": "string",
+            "description": "Genome directory, kallisto index, Salmon index or splici FASTA from reference_annotation_build; must match reference_type and mapper."
+          },
+          "reference_type": {
+            "type": "string",
+            "description": "Sequence set the reads are mapped against. Use splici_intronic for nuclei; starsolo uses genome_gtf.",
+            "enum": [
+              "genome_gtf",
+              "spliced_transcriptome",
+              "splici_intronic"
+            ],
+            "default": "spliced_transcriptome"
+          },
+          "strandedness": {
+            "type": "string",
+            "description": "Read orientation relative to transcripts. Sent explicitly to every engine and recorded.",
+            "enum": [
+              "unstranded",
+              "forward",
+              "reverse"
+            ],
+            "default": "forward"
+          },
+          "imported_matrix": {
+            "type": "string",
+            "description": "Only for cellranger_import: path to a Cell Ranger raw_feature_bc_matrix directory, used instead of the FASTQ files."
+          }
+        }
+      },
+      "mapper": {
+        "type": "string",
+        "description": "Engine. cellranger_import maps nothing: it reads a matrix produced by the user's own licensed Cell Ranger installation.",
+        "enum": [
+          "alevin_fry",
+          "starsolo",
+          "kb_kallisto_bustools",
+          "cellranger_import"
+        ],
+        "default": "alevin_fry"
+      },
+      "multi_gene_policy": {
+        "type": "string",
+        "description": "Multi-gene resolution. starsolo: discard, uniform, prop_unique, rescue, em. kb: discard, em. alevin_fry: cr_like*, trivial, parsimony*, singlet_em. Invalid pairs are rejected.",
+        "enum": [
+          "discard",
+          "uniform",
+          "prop_unique",
+          "rescue",
+          "em",
+          "cr_like",
+          "cr_like_em",
+          "trivial",
+          "parsimony",
+          "parsimony_em",
+          "parsimony_gene",
+          "parsimony_gene_em",
+          "singlet_em"
+        ],
+        "default": "cr_like_em"
+      },
+      "threads": {
+        "type": "integer",
+        "description": "Worker threads for the engine stages.",
+        "default": 8,
+        "minimum": 1,
+        "maximum": 256
+      },
+      "alevin_fry": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options used only when mapper is alevin_fry.",
+        "properties": {
+          "mapping_mode": {
+            "type": "string",
+            "description": "Salmon mapping stage: selective alignment, or sketch (pseudoalignment without per-placement scores).",
+            "enum": [
+              "selective_alignment",
+              "sketch"
+            ],
+            "default": "selective_alignment"
+          },
+          "small_thresh": {
+            "type": "integer",
+            "description": "Cells with fewer reads use cr-like semantics whatever the policy; 0 resolves every cell with the requested policy. Engine default 100.",
+            "default": 0,
+            "minimum": 0
+          },
+          "umi_edit_distance": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 1,
+            "default": null,
+            "description": "Hamming radius for merging UMIs; null uses the engine default (0 for cr_like*, trivial; 1 for parsimony*)."
+          },
+          "large_graph_thresh": {
+            "type": "integer",
+            "description": "Parsimony graph order above which a faster strategy applies; parsimony policies only.",
+            "default": 1000,
+            "minimum": 1
+          }
+        }
+      },
+      "starsolo": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options used only when mapper is starsolo.",
+        "properties": {
+          "features": {
+            "type": "string",
+            "description": "soloFeatures: Gene counts reads matching transcripts; GeneFull variants also count intronic reads (pre-mRNA).",
+            "enum": [
+              "Gene",
+              "GeneFull",
+              "GeneFull_ExonOverIntron",
+              "GeneFull_Ex50pAS"
+            ],
+            "default": "Gene"
+          },
+          "umi_dedup": {
+            "type": "string",
+            "description": "soloUMIdedup: UMI collapsing rule.",
+            "enum": [
+              "1MM_All",
+              "1MM_Directional_UMItools",
+              "1MM_Directional",
+              "1MM_CR",
+              "Exact",
+              "NoDedup"
+            ],
+            "default": "1MM_All"
+          },
+          "cell_filter": {
+            "type": "string",
+            "description": "soloCellFilter string. None writes the matrix without engine cell filtering; engine default is CellRanger2.2 3000 0.99 10.",
+            "default": "None"
+          },
+          "max_multimap": {
+            "type": "integer",
+            "description": "outFilterMultimapNmax: maximum loci a read may map to before it is treated as unmapped.",
+            "default": 10,
+            "minimum": 1
+          }
+        }
+      },
+      "kb_kallisto_bustools": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options used only when mapper is kb_kallisto_bustools.",
+        "properties": {
+          "union": {
+            "type": "boolean",
+            "default": false,
+            "description": "Use the union instead of the intersection of k-mer target sets in pseudoalignment."
+          },
+          "no_jump": {
+            "type": "boolean",
+            "default": false,
+            "description": "Disable k-mer jumping in pseudoalignment."
+          }
+        }
+      },
+      "em": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options for EM policies (em, cr_like_em, parsimony_em, singlet_em).",
+        "properties": {
+          "bootstraps": {
+            "type": "integer",
+            "description": "Bootstrap replicates of the class counts for per-gene uncertainty; 0 disables. Not valid for starsolo or kb.",
+            "default": 0,
+            "minimum": 0
+          },
+          "seed": {
+            "type": "integer",
+            "description": "Random seed for bootstrap resampling in singlet_em.",
+            "default": 0
+          },
+          "max_iterations": {
+            "type": "integer",
+            "description": "Maximum EM iterations for singlet_em (proposed default).",
+            "default": 1000,
+            "minimum": 1
+          },
+          "tolerance": {
+            "type": "number",
+            "default": 1e-06,
+            "exclusiveMinimum": 0,
+            "description": "Relative change of the log-likelihood below which singlet_em stops (proposed default)."
+          }
+        }
+      },
+      "device": {
+        "type": "string",
+        "description": "Execution device for singlet_em and bootstrap; engine stages run on the CPU. auto picks CUDA when a device with enough memory exists.",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto"
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": [
+      "dataset"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id).",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ]
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. layers/counts. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Compact summary for completed runs: mapper, mapper_version, reference_type, reference_hash, multi_gene_policy, barcodes_with_umi, genes_detected, median_mapped_fraction, median_multigene_umi_fraction, em_converged, wall_clock_s, peak_rss_gb. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "ingest-quant.read_to_gene_mapping",
+      "reads": [
+        "uns/ingest_geometry"
+      ],
+      "writes": [
+        "layers/counts",
+        "obs/mapped_fraction",
+        "obs/multigene_umi_fraction",
+        "obs/frac_intronic_reads",
+        "uns/mapping_run",
+        "uns/ec_incidence",
+        "models/mapping_em"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": true,
+      "paradigm": "hybrid",
+      "docs": "tasks/ingest-quant/read_to_gene_mapping.md"
+    }
+  }
+}

@@ -1,0 +1,319 @@
+{
+  "name": "singlet_clustering_subclustering",
+  "title": "Subcluster one parent cluster",
+  "description": "Splits the cells of one parent cluster into nested subclusters labelled <parent>.<k>. The default re-selects highly variable genes, denoises the PCA and rebuilds a graph on the subset; alternatives restrict the parent graph, run a permutation-tested split, or target a fixed count. It writes obs/<output_key> for the parent cells only. Do not use it to set dataset-wide granularity or to name cell types, and treat each subcluster as a hypothesis until a null check passes.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "parent": {
+        "type": [
+          "string",
+          "array"
+        ],
+        "items": {
+          "type": "string"
+        },
+        "description": "Parent cluster label or list of labels to subcluster; each must occur in obs/<parent_key>."
+      },
+      "parent_key": {
+        "type": "string",
+        "default": "partition",
+        "description": "obs column holding the parent labels; the default matches clustering.cell_partitioning."
+      },
+      "output_key": {
+        "type": "string",
+        "default": "subcluster",
+        "description": "Name of the output: writes obs/<output_key> and uns/<output_key>; replaced only when overwrite is true."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "recompute_features",
+          "graph_subset",
+          "choir_permutation",
+          "target_count"
+        ],
+        "default": "recompute_features",
+        "description": "recompute_features re-selects genes and rebuilds the graph (default); graph_subset restricts the parent graph; choir_permutation tests splits; target_count fixes K."
+      },
+      "layer": {
+        "type": "string",
+        "default": "counts",
+        "description": "Raw counts layer; required by recompute_features and choir_permutation, unused by graph_subset and target_count."
+      },
+      "min_cells": {
+        "type": "integer",
+        "default": 50,
+        "minimum": 2,
+        "description": "Parents with fewer cells keep their label; subclusters smaller than this return to the parent label."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "minimum": 0,
+        "description": "Random seed for graph clustering and permutation tests."
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      },
+      "recompute_features": {
+        "type": "object",
+        "description": "Options for method recompute_features (scran quickSubCluster semantics).",
+        "properties": {
+          "n_top_features": {
+            "type": "integer",
+            "default": 2000,
+            "minimum": 50,
+            "description": "Genes re-selected on the subset; scran uses the larger of 500 genes and 10 percent of genes, CHOIR 2000."
+          },
+          "n_pcs": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "default": null,
+            "minimum": 1,
+            "description": "Principal components on the subset; null uses dim-reduction.pc_number_selection if present, else 30."
+          },
+          "k_neighbors": {
+            "type": "integer",
+            "default": 15,
+            "minimum": 2,
+            "description": "Neighbours per cell in the subset graph."
+          },
+          "denoise_pca": {
+            "type": "boolean",
+            "default": true,
+            "description": "Denoise the subset PCA with the mean-variance trend, which assumes a homogeneous parent."
+          },
+          "objective": {
+            "type": "string",
+            "enum": [
+              "modularity",
+              "CPM"
+            ],
+            "default": "modularity",
+            "description": "Leiden quality function; CPM needs a resolution on the edge-weight scale (Section 3)."
+          },
+          "resolution": {
+            "type": "number",
+            "default": 1.0,
+            "exclusiveMinimum": 0,
+            "description": "Leiden resolution; its meaning depends on the objective and on the subset size (Section 3)."
+          }
+        },
+        "additionalProperties": false
+      },
+      "graph_subset": {
+        "type": "object",
+        "description": "Options for method graph_subset (Seurat FindSubCluster and scanpy restrict_to semantics).",
+        "properties": {
+          "graph_key": {
+            "type": "string",
+            "default": "neighbors",
+            "description": "obsp key of the parent graph; must contain every parent cell."
+          },
+          "objective": {
+            "type": "string",
+            "enum": [
+              "modularity",
+              "CPM"
+            ],
+            "default": "modularity",
+            "description": "Leiden quality function; CPM needs a resolution on the edge-weight scale (Section 3)."
+          },
+          "resolution": {
+            "type": "number",
+            "default": 1.0,
+            "exclusiveMinimum": 0,
+            "description": "Leiden resolution on the restricted graph; not comparable with the parent setting."
+          }
+        },
+        "additionalProperties": false
+      },
+      "choir_permutation": {
+        "type": "object",
+        "description": "Options for method choir_permutation (CHOIR subtree semantics).",
+        "properties": {
+          "alpha": {
+            "type": "number",
+            "default": 0.05,
+            "exclusiveMinimum": 0,
+            "maximum": 1,
+            "description": "Split significance level; adjusted per subtree as alpha/(4K) when p_adjust is bonferroni."
+          },
+          "n_iterations": {
+            "type": "integer",
+            "default": 100,
+            "minimum": 10,
+            "description": "Label permutations per split comparison; run time grows with this value."
+          },
+          "n_trees": {
+            "type": "integer",
+            "default": 50,
+            "minimum": 1,
+            "description": "Trees per random-forest classifier in the split test."
+          },
+          "p_adjust": {
+            "type": "string",
+            "enum": [
+              "bonferroni",
+              "none"
+            ],
+            "default": "bonferroni",
+            "description": "bonferroni applies the subtree adjustment; none uses alpha unchanged."
+          },
+          "use_variance": {
+            "type": "boolean",
+            "default": true,
+            "description": "Also require the permutation variance test to pass (CHOIR default)."
+          },
+          "countsplit": {
+            "type": "boolean",
+            "default": false,
+            "description": "Split cells into two count halves so that feature selection and the test use disjoint data."
+          },
+          "batch_key": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null,
+            "description": "obs column with a batch covariate for the subset embedding; null disables it."
+          }
+        },
+        "additionalProperties": false
+      },
+      "target_count": {
+        "type": "object",
+        "description": "Options for method target_count (pegasus split_one_cluster semantics).",
+        "properties": {
+          "n_subclusters": {
+            "type": "integer",
+            "default": 2,
+            "minimum": 2,
+            "description": "Requested number of subclusters; the output reports the realised count."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "dataset",
+      "parent"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. obs/subcluster. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Completed runs only. Keys: method, parents_processed, parents_split, subclusters_per_parent (parent label to count), returned_to_parent, objective, resolution.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "clustering.subclustering",
+      "reads": [
+        "layers/counts",
+        "obs/<parent_key>",
+        "obsm/X_pca",
+        "obsp/<graph_key>",
+        "obs/<batch_key>"
+      ],
+      "writes": [
+        "obs/<output_key>",
+        "uns/<output_key>/params",
+        "uns/<output_key>/tests",
+        "uns/<output_key>/features",
+        "obsm/<output_key>_embedding"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "heuristic",
+      "docs": "tasks/clustering/subclustering.md"
+    }
+  }
+}

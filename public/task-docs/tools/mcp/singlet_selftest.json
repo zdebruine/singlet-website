@@ -1,0 +1,63 @@
+{
+  "name": "singlet_selftest",
+  "title": "Engine self-test and timing",
+  "description": "Run correctness checks against NumPy references and short timings on a small simulated dataset (a few seconds). Run it after building on a new machine or cluster node, before trusting large runs.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "n_cells": {
+        "type": "integer",
+        "description": "Cells in the test dataset.",
+        "default": 6000
+      }
+    },
+    "required": [],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "status": {
+        "type": "string",
+        "enum": [
+          "ok",
+          "error"
+        ]
+      },
+      "summary": {
+        "type": "string"
+      },
+      "metrics": {
+        "type": "object"
+      },
+      "figures": {
+        "type": "array"
+      },
+      "artifacts": {
+        "type": "array"
+      },
+      "warnings": {
+        "type": "array"
+      },
+      "next": {
+        "type": "array"
+      },
+      "timings": {
+        "type": "object"
+      }
+    },
+    "required": [
+      "status",
+      "summary"
+    ]
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "harmonization.object_integrity_checks",
+      "reads": [],
+      "writes": [],
+      "runtime": "local-cpu",
+      "streaming": true
+    }
+  }
+}

@@ -1,0 +1,264 @@
+{
+  "name": "singlet_spatial_domains_cell_niche_identification",
+  "title": "Identify cellular niches from spatial neighbourhoods",
+  "description": "Assigns each cell to a recurring multicellular niche from the labels or embeddings of its spatial neighbours at one or more scales. Methods: composition (default; neighbour-label profiles clustered with Leiden, with enrichment) and cellcharter (multi-hop ring features with a full-covariance Gaussian mixture and soft memberships). Needs obsm/spatial, a cell-type label for composition, and a normalised layer or use_rep for cellcharter; writes obs/niche_label and related members. Do NOT use it to assign cell types, to match niches across sections, or to claim that niches add information beyond labels without a non-spatial baseline.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "composition",
+          "cellcharter"
+        ],
+        "default": "composition",
+        "description": "composition: neighbour-label profiles and Leiden (published standard, default). cellcharter: ring features and Gaussian mixture with soft memberships."
+      },
+      "graph": {
+        "type": "object",
+        "description": "Spatial graph and neighbourhood size shared by all methods.",
+        "properties": {
+          "graph_type": {
+            "type": "string",
+            "enum": [
+              "knn",
+              "delaunay"
+            ],
+            "default": "knn",
+            "description": "knn: k nearest neighbours; delaunay: triangulation of the coordinates."
+          },
+          "n_neighbors": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 15,
+            "description": "Neighbours k for the spatial graph and the Leiden kNN; 15 is the squidpy default."
+          }
+        },
+        "additionalProperties": false
+      },
+      "resolutions": {
+        "type": "array",
+        "items": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "minItems": 1,
+        "default": [
+          0.5
+        ],
+        "description": "Leiden resolutions for composition; one label column per value. cellcharter ignores it."
+      },
+      "library_key": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "default": null,
+        "description": "obs column naming each section or sample; niches are then fitted per library and are not comparable across libraries."
+      },
+      "min_niche_size": {
+        "type": [
+          "integer",
+          "null"
+        ],
+        "minimum": 1,
+        "default": null,
+        "description": "Niches with fewer cells are relabelled not_a_niche; null keeps every niche."
+      },
+      "composition": {
+        "type": "object",
+        "description": "Options for method composition.",
+        "properties": {
+          "label_key": {
+            "type": "string",
+            "default": "cell_type",
+            "description": "obs column with the cell-type or state label used for neighbour counts."
+          },
+          "hops": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 1,
+            "description": "Neighbour hops d aggregated into the profile; 1 uses direct contacts."
+          },
+          "scale": {
+            "type": "boolean",
+            "default": true,
+            "description": "Z-score each label column before clustering."
+          },
+          "abs_nhood": {
+            "type": "boolean",
+            "default": false,
+            "description": "Use neighbour counts instead of frequencies; mixes local density into the profile."
+          },
+          "n_perms": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 1000,
+            "description": "Label permutations for the neighbourhood enrichment z-score."
+          }
+        },
+        "additionalProperties": false
+      },
+      "cellcharter": {
+        "type": "object",
+        "description": "Options for method cellcharter.",
+        "properties": {
+          "hops": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 3,
+            "description": "Maximum graph hop D; the embedding has D+1 blocks, each of width n_pca_components or the latent width."
+          },
+          "n_clusters": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 2,
+            "default": 10,
+            "description": "Mixture components K; null selects K by BIC over 2 to 20 (proposed rule, tested in B1)."
+          },
+          "n_pca_components": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 10,
+            "description": "PCA components of layers/log1p_norm when use_rep is null."
+          },
+          "use_rep": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null,
+            "description": "obsm key of a precomputed embedding such as an scVI latent; preferred over PCA."
+          }
+        },
+        "additionalProperties": false
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Random seed for mixture initialisation and Leiden; the same seed, inputs and parameters give the same labels."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": [
+      "dataset"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. obs/niche_label_res0.5. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Compact summary: method, n_niches per resolution column, graph sizes; mean_max_probability for cellcharter. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "spatial-domains.cell_niche_identification",
+      "reads": [
+        "obsm/spatial",
+        "obs/<label_key>",
+        "layers/log1p_norm",
+        "obsm/<use_rep>"
+      ],
+      "writes": [
+        "obs/niche_label",
+        "obsm/niche_prob",
+        "obsm/niche_embedding",
+        "obsm/niche_composition",
+        "uns/niche_enrichment",
+        "uns/niche_params"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/spatial-domains/cell_niche_identification.md"
+    }
+  }
+}

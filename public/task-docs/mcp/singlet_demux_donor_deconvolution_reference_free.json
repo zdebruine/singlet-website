@@ -1,0 +1,257 @@
+{
+  "name": "singlet_demux_donor_deconvolution_reference_free",
+  "title": "Reference-free donor deconvolution",
+  "description": "Assigns the droplets of a pooled sample to anonymous donors when no donor genotypes are available, from alt and total counts at informative variants. The default method, vireo, returns donor posteriors and cross-donor doublet probabilities; souporcell and freemuxlet are alternatives. Requires k. Use demux.donor_assignment_reference_genotypes when reference genotypes exist. Writes anonymous labels, not individual identities.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI, or a workspace handle."
+      },
+      "method": {
+        "type": "string",
+        "enum": ["vireo", "souporcell", "freemuxlet"],
+        "default": "vireo",
+        "description": "Donor deconvolution method. vireo is the default; the others are alternatives."
+      },
+      "k": {
+        "type": "integer",
+        "minimum": 1,
+        "description": "Number of donors in the pool. Required: all three methods take it as input."
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu", "cuda"],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Random seed for restarts and initialisations; reproduces labels on one device."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      },
+      "vireo": {
+        "type": "object",
+        "description": "Options used only when method is vireo.",
+        "additionalProperties": false,
+        "properties": {
+          "n_init": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 50,
+            "description": "Random initialisations when learning donor genotype states."
+          },
+          "n_extra_donor": {
+            "type": ["integer", "null"],
+            "minimum": 1,
+            "default": null,
+            "description": "Extra donors in the initial search; null uses round(sqrt(k))."
+          },
+          "check_doublet": {
+            "type": "boolean",
+            "default": true,
+            "description": "Score cross-donor doublets with the pair model."
+          },
+          "check_ambient": {
+            "type": "boolean",
+            "default": false,
+            "description": "Detect ambient RNA per droplet with the ambient-profile EM."
+          },
+          "doublet_rate_prior": {
+            "type": ["number", "null"],
+            "exclusiveMinimum": 0,
+            "exclusiveMaximum": 1,
+            "default": null,
+            "description": "Prior doublet rate; null uses min(0.5, droplets / 100000)."
+          },
+          "doublet_threshold": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.9,
+            "description": "Posterior at or above which a droplet is called doublet."
+          },
+          "unassigned_threshold": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.9,
+            "description": "Droplets whose maximum donor posterior is below this are unassigned."
+          },
+          "min_variants": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 10,
+            "description": "Droplets covering fewer informative variants are unassigned."
+          }
+        }
+      },
+      "souporcell": {
+        "type": "object",
+        "description": "Options used only when method is souporcell.",
+        "additionalProperties": false,
+        "properties": {
+          "restarts": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 100,
+            "description": "Random restarts of clustering; the repository advises more above 12 clusters."
+          },
+          "clustering_method": {
+            "type": "string",
+            "enum": ["em", "khm"],
+            "default": "em",
+            "description": "EM or k-harmonic means clustering."
+          },
+          "souporcell3": {
+            "type": "boolean",
+            "default": false,
+            "description": "High-donor iterated mode; the repository advises it above 16 donors."
+          },
+          "ploidy": {
+            "type": "integer",
+            "enum": [1, 2],
+            "default": 2,
+            "description": "Donor ploidy, 1 or 2."
+          },
+          "min_alt": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 10,
+            "description": "Minimum alt UMIs at a locus for it to be used."
+          },
+          "min_ref": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 10,
+            "description": "Minimum reference UMIs at a locus for it to be used."
+          },
+          "max_loci": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 2048,
+            "description": "Maximum informative loci per droplet; larger values cost more time."
+          },
+          "doublet_threshold": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.9,
+            "description": "Troublet posterior at or above which a cross-cluster doublet is called."
+          }
+        }
+      },
+      "freemuxlet": {
+        "type": "object",
+        "description": "Options used only when method is freemuxlet.",
+        "additionalProperties": false,
+        "properties": {
+          "doublet_prior": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "exclusiveMaximum": 1,
+            "default": 0.5,
+            "description": "Prior doublet fraction in the singlet and doublet hypotheses."
+          },
+          "min_base_quality": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 13,
+            "description": "Minimum base quality in the pileup step (dsc-pileup)."
+          },
+          "min_mapping_quality": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 20,
+            "description": "Minimum mapping quality in the pileup step (dsc-pileup)."
+          }
+        }
+      }
+    },
+    "required": ["dataset", "k"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written, e.g. obs/donor_cluster. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Method, k, singlet, unassigned and doublet fractions; elbo for vireo. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "demux.donor_deconvolution_reference_free",
+      "reads": [
+        "layers/alt",
+        "layers/total",
+        "varm/variant_sites",
+        "obs/barcode",
+        "uns/alignment_path"
+      ],
+      "writes": [
+        "obs/donor_cluster",
+        "obs/donor_prob_max",
+        "obs/cross_donor_doublet_prob",
+        "obsm/donor_posterior",
+        "uns/donor_count",
+        "uns/ambient_fraction",
+        "models/donor_fit"
+      ],
+      "devices": ["cpu", "cuda"],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "model-based",
+      "docs": "tasks/demux/donor_deconvolution_reference_free.md"
+    }
+  }
+}

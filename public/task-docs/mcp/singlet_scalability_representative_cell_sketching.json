@@ -1,0 +1,195 @@
+{
+  "name": "singlet_scalability_representative_cell_sketching",
+  "title": "Representative cell sketching",
+  "description": "Selects a fixed-size subset of N cells that covers the cell embedding and keeps rare populations, writes design weights where the method defines them, and maps every cell to its nearest sketch cell for label or embedding transfer. The default method is geometric (geosketch gs_gap) on 50 embedding components; uniform is the baseline. Requires obsm/X_pca. Population totals need weights, and leverage, kmeanspp and uclab write none.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "method": {
+        "type": "string",
+        "enum": ["geometric", "leverage", "uniform", "kmeanspp", "uclab"],
+        "default": "geometric",
+        "description": "Sampling design; geometric is the published default, uniform the baseline."
+      },
+      "n_sketch": {
+        "type": "integer",
+        "minimum": 1,
+        "default": 5000,
+        "description": "Cells in the sketch; every cell is returned when this is at least the cell count."
+      },
+      "n_dims": {
+        "type": "integer",
+        "minimum": 2,
+        "maximum": 200,
+        "default": 50,
+        "description": "Embedding components used for sampling and nearest-sketch assignment."
+      },
+      "batch": {
+        "type": "object",
+        "description": "Batch options applying to every method.",
+        "properties": {
+          "key": {
+            "type": ["string", "null"],
+            "default": null,
+            "description": "obs column defining batches; required when per_batch_sizing is true."
+          },
+          "per_batch_sizing": {
+            "type": "boolean",
+            "default": false,
+            "description": "Allocate n_sketch per batch, as Seurat does per layer, instead of globally."
+          }
+        },
+        "additionalProperties": false
+      },
+      "seed": {
+        "type": "integer",
+        "default": 123,
+        "description": "Seed for the sampler's own generator; a fixed seed and dataset reproduce the mask."
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu", "cuda"],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without writing."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      },
+      "geometric": {
+        "type": "object",
+        "description": "Options for method geometric.",
+        "properties": {
+          "alpha": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 0.1,
+            "description": "Bisection tolerance on the occupied-box count, relative to n_sketch."
+          },
+          "max_iter": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 200,
+            "description": "Maximum bisection iterations; a warning is written when reached."
+          }
+        },
+        "additionalProperties": false
+      },
+      "leverage": {
+        "type": "object",
+        "description": "Options for method leverage.",
+        "properties": {
+          "nsketch": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 5000,
+            "description": "CountSketch rows; raised to 1.1 times the feature count when smaller."
+          },
+          "eps": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 1,
+            "default": 0.5,
+            "description": "Johnson-Lindenstrauss error tolerance; smaller values give wider projections."
+          },
+          "max_features": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 5000,
+            "description": "Feature-count guard; larger feature sets are refused."
+          }
+        },
+        "additionalProperties": false
+      },
+      "uclab": {
+        "type": "object",
+        "description": "Options for method uclab.",
+        "properties": {
+          "alpha": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 50,
+            "description": "Exponent of the inverse-distance potential; very large values overflow."
+          },
+          "random_split": {
+            "type": ["integer", "null"],
+            "minimum": 1,
+            "default": null,
+            "description": "Independent chunks for speed; null means one chunk."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "required": ["dataset"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written: obs/sketch_mask, obs/sketch_weight, obs/sketch_nearest, uns/sketch_params. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "For completed runs: method, n_cells, n_sketch, dims_used, weight_kind (exact or none), occupied_boxes and bisection_iterations (geometric), max_min_distance and q99_min_distance in embedding units.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "scalability.representative_cell_sketching",
+      "reads": ["layers/log1p_norm", "var/highly_variable", "obsm/X_pca", "obs/batch"],
+      "writes": ["obs/sketch_mask", "obs/sketch_weight", "obs/sketch_nearest", "uns/sketch_params"],
+      "devices": ["cpu", "cuda"],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/scalability/representative_cell_sketching.md"
+    }
+  }
+}

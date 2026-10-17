@@ -1,0 +1,256 @@
+{
+  "name": "singlet_spatial_domains_multi_slice_domains",
+  "title": "Multi-slice joint spatial domains",
+  "description": "Assigns one domain label per spot or cell in a label space shared by several spatial slices (serial sections, replicates or donors), after batch correction. The default method bass fits a joint Bayesian model with a Potts-type spatial prior; cellcharter, banksy_concat and banksy_harmony are faster comparators. Requires layers/counts, obsm/spatial and obs/sample_id, and n_domains must be given. Writes obs/domain_joint and, for probabilistic methods, obsm/domain_joint_prob. Do NOT use for one section (use the single-slice task), to choose the number of domains (use the domain-number task) or to align slices into one coordinate frame (use the registration tasks).",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle holding all slices."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "bass",
+          "cellcharter",
+          "banksy_concat",
+          "banksy_harmony"
+        ],
+        "default": "bass",
+        "description": "bass: joint Bayesian model (default). cellcharter: pooled Gaussian mixture. banksy_concat: neighbourhood features computed per section, then concatenated. banksy_harmony: Harmony over slices."
+      },
+      "n_domains": {
+        "type": [
+          "integer",
+          "null"
+        ],
+        "minimum": 2,
+        "description": "Shared number of domains K across all slices. Required. Choose it with the domain-number task, not from annotation."
+      },
+      "batch_key": {
+        "type": "string",
+        "default": "sample_id",
+        "description": "obs column identifying the slice; set the donor column as well when donors differ."
+      },
+      "n_pcs": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 200,
+        "default": 20,
+        "description": "Principal components used by all methods; capped by the components available in obsm/X_pca."
+      },
+      "bass": {
+        "type": "object",
+        "description": "Options for method bass.",
+        "properties": {
+          "n_cell_types": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1,
+            "default": null,
+            "description": "Number of jointly clustered cell-type groups C. Required when method is bass."
+          },
+          "burnin": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 2000,
+            "description": "MCMC burn-in iterations discarded before summarising."
+          },
+          "nsample": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 5000,
+            "description": "Posterior samples retained after burn-in."
+          }
+        },
+        "additionalProperties": false,
+        "default": {}
+      },
+      "cellcharter": {
+        "type": "object",
+        "description": "Options for method cellcharter.",
+        "properties": {
+          "n_layers": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1,
+            "default": null,
+            "description": "Number of neighbourhood layers aggregated. Required when method is cellcharter."
+          },
+          "aggregations": {
+            "type": [
+              "string",
+              "array"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "default": "mean",
+            "description": "Aggregation applied to each neighbourhood layer."
+          }
+        },
+        "additionalProperties": false,
+        "default": {}
+      },
+      "banksy": {
+        "type": "object",
+        "description": "Options for methods banksy_concat and banksy_harmony.",
+        "properties": {
+          "lambda_spatial": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.2,
+            "description": "Weight of the spatial neighbour average against own expression."
+          },
+          "k_geom": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 18,
+            "description": "Spatial neighbours per unit, within its slice. The reference Harmony script uses 18 and the reference concatenation script uses 6."
+          },
+          "harmony_theta": {
+            "type": "number",
+            "minimum": 0,
+            "default": 2,
+            "description": "Diversity penalty for slice mixing in Harmony; used by banksy_harmony only."
+          },
+          "harmony_sigma": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 0.1,
+            "description": "Cluster width in Harmony; used by banksy_harmony only."
+          }
+        },
+        "additionalProperties": false,
+        "default": {}
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when the method has a CUDA path and enough memory is free."
+      },
+      "seed": {
+        "type": "integer",
+        "minimum": 0,
+        "default": 0,
+        "description": "Seed for initialisation, MCMC, mixture fitting and Harmony clustering. Record it."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without computing labels."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing domain_joint members instead of failing."
+      }
+    },
+    "required": [
+      "dataset",
+      "n_domains"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, for example obs/domain_joint. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Summary for completed runs. Keys: method, n_domains, n_sections, section_mixing, and mean_max_probability for probabilistic methods. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device, and MCMC iterations for bass.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "spatial-domains.multi_slice_domains",
+      "reads": [
+        "layers/counts",
+        "obsm/spatial",
+        "obs/sample_id",
+        "obsm/X_pca"
+      ],
+      "writes": [
+        "obs/domain_joint",
+        "obsm/domain_joint_prob",
+        "obsm/joint_embedding",
+        "uns/domain_joint/params",
+        "models/multi_slice_domains"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/spatial-domains/multi_slice_domains.md"
+    }
+  }
+}

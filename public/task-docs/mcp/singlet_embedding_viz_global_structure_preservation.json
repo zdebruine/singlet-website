@@ -1,0 +1,242 @@
+{
+  "name": "singlet_embedding_viz_global_structure_preservation",
+  "title": "Global structure preservation of a 2D map",
+  "description": "Scores how well a two-dimensional embedding keeps the arrangement of annotated groups, the distances between waypoint cells and group centroids, and random triplet orderings, against a high-dimensional reference (default normalised layer). Writes per-embedding scores to uns and, when paired maps are given, initialisation effects. Use it to compare maps and initialisations. Do not use it for local neighbourhoods (use the local-neighbourhood tool) or to read cluster sizes or spacing as biology.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "embedding": {
+        "type": "string",
+        "minLength": 1,
+        "description": "Key in obsm of the two-dimensional map to score."
+      },
+      "paired_embeddings": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "uniqueItems": true,
+        "default": [],
+        "description": "Other obsm maps of the same cells that differ only in initialisation; adds paired differences."
+      },
+      "label_key": {
+        "type": "string",
+        "default": "cell_type",
+        "description": "Obs column of author annotations defining groups; fixed before the map was computed."
+      },
+      "reference": {
+        "type": "object",
+        "description": "High-dimensional reference geometry against which distances and orderings are compared.",
+        "properties": {
+          "space": {
+            "type": "string",
+            "enum": [
+              "normalized",
+              "pca50",
+              "spectral"
+            ],
+            "default": "normalized",
+            "description": "normalized: log-normalised genes; pca50: leading PCs; spectral: UMAP spectral layout of waypoints, seeded."
+          },
+          "n_components": {
+            "type": "integer",
+            "minimum": 2,
+            "default": 50,
+            "description": "Leading principal components used when space is pca50."
+          }
+        },
+        "additionalProperties": false
+      },
+      "scores": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "enum": [
+            "label_distance",
+            "centroid_distance",
+            "waypoint_distance",
+            "triplet_centroid",
+            "triplet_random"
+          ]
+        },
+        "minItems": 1,
+        "uniqueItems": true,
+        "default": [
+          "label_distance",
+          "triplet_random"
+        ],
+        "description": "Score families to compute; label and centroid scores need label_key; triplet_random needs no labels."
+      },
+      "distance_correlation": {
+        "type": "object",
+        "description": "Options for waypoint, centroid and label distance correlations.",
+        "properties": {
+          "correlation": {
+            "type": "string",
+            "enum": [
+              "spearman",
+              "pearson"
+            ],
+            "default": "spearman",
+            "description": "Spearman as in OpenProblems; Pearson as in cellstruct. Reported separately."
+          },
+          "upper_triangle_only": {
+            "type": "boolean",
+            "default": true,
+            "description": "Use unique pairs only; false reproduces the OpenProblems flattened full matrix."
+          },
+          "max_waypoints": {
+            "type": "integer",
+            "minimum": 2,
+            "default": 50000,
+            "description": "Waypoint cap; larger datasets are subsampled with the seed."
+          }
+        },
+        "additionalProperties": false
+      },
+      "triplets": {
+        "type": "object",
+        "description": "Options for random-anchor and centroid triplet accuracy.",
+        "properties": {
+          "n_per_point": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 20,
+            "description": "Random anchor draws per point."
+          },
+          "margin": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.2,
+            "description": "Relative margin of the tolerant variant; 0 gives the strict variant only."
+          }
+        },
+        "additionalProperties": false
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Seed for waypoint sampling and triplet anchors."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory, device and waypoint count without computing scores."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": [
+      "dataset",
+      "embedding"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, for example uns/global_structure/X_umap. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Per embedding: scores with intervals, label and waypoint counts, correlation type, paired initialisation differences, timing_s and peak_memory_gb. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device, n_waypoints.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "embedding-viz.global_structure_preservation",
+      "reads": [
+        "layers/normalized",
+        "obsm/X_pca",
+        "obs/<label_key>",
+        "obsm/<embedding>",
+        "uns/<embedding>_init"
+      ],
+      "writes": [
+        "uns/global_structure/<embedding>",
+        "uns/global_structure/init_effect",
+        "obs/is_waypoint"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": true,
+      "paradigm": "hybrid",
+      "docs": "tasks/embedding-viz/global_structure_preservation.md"
+    }
+  }
+}

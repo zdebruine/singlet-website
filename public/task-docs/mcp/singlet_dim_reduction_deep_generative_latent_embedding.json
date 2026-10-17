@@ -1,0 +1,255 @@
+{
+  "name": "singlet_dim_reduction_deep_generative_latent_embedding",
+  "title": "Deep generative latent embedding of cells",
+  "description": "Fits a nonlinear count latent model to raw UMI counts and writes an n-by-d cell embedding (posterior mean, with variance for variational models). The default method is scvi, a scVI-type VAE with a negative-binomial head; linear_scvi, scanvi and dca are alternatives. Use it to compare count-likelihood embeddings with covariates at matched dimension; use dim-reduction.normalized_cell_embedding (PCA) for the default embedding. Stochastic and long-running; dry_run returns time and memory estimates without fitting.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "scvi",
+          "linear_scvi",
+          "scanvi",
+          "dca"
+        ],
+        "default": "scvi",
+        "description": "Model: scvi (default), linear_scvi (linear decoder), scanvi (needs labels_key), or dca (count autoencoder)."
+      },
+      "n_latent": {
+        "type": "integer",
+        "minimum": 2,
+        "default": 30,
+        "description": "Latent dimension d, the bottleneck width for dca. Use the same d for every method compared."
+      },
+      "batch_key": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "default": null,
+        "description": "obs column of study or batch covariates for scvi, linear_scvi and scanvi; null for none."
+      },
+      "labels_key": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "default": null,
+        "description": "obs column of partial labels with a reserved unlabelled value; required for scanvi, null otherwise."
+      },
+      "use_hvg": {
+        "type": "boolean",
+        "default": true,
+        "description": "Fit only var/highly_variable genes; false fits all genes and is slower."
+      },
+      "scvi": {
+        "type": "object",
+        "description": "Options for scvi, linear_scvi and scanvi; rejected when method is dca.",
+        "properties": {
+          "n_hidden": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 128,
+            "description": "Hidden width of encoder and decoder networks."
+          },
+          "n_layers": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 2,
+            "description": "Hidden layers in encoder and decoder; 2 matches the OpenProblems configuration."
+          },
+          "dropout_rate": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.1,
+            "description": "Dropout inside encoder and decoder networks."
+          },
+          "gene_likelihood": {
+            "type": "string",
+            "enum": [
+              "nb",
+              "zinb"
+            ],
+            "default": "nb",
+            "description": "Count likelihood: nb, or zinb to add a per cell-gene dropout probability."
+          },
+          "max_epochs": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1,
+            "default": null,
+            "description": "Training epochs; null uses the library epoch rule, which shortens as cell count grows."
+          }
+        },
+        "additionalProperties": false
+      },
+      "dca": {
+        "type": "object",
+        "description": "Options for dca; rejected when method is not dca.",
+        "properties": {
+          "ae_type": {
+            "type": "string",
+            "enum": [
+              "nb-conddisp",
+              "nb",
+              "zinb",
+              "zinb-conddisp"
+            ],
+            "default": "nb-conddisp",
+            "description": "Output likelihood head of the count autoencoder."
+          },
+          "hidden_size": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "default": [
+              64
+            ],
+            "description": "Encoder and decoder widths around the bottleneck of width n_latent. The upstream default (64, 32, 64) corresponds to [64] here, with its 32-unit bottleneck replaced by n_latent."
+          },
+          "epochs": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 300,
+            "description": "Maximum training epochs."
+          },
+          "batch_size": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 32,
+            "description": "Minibatch size."
+          }
+        },
+        "additionalProperties": false
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Random seed for initialisation, minibatch order and the KL schedule."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": [
+      "dataset"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. obsm/X_deep_latent. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Compact summary for completed runs: method, embedding_key, n_latent, gene_likelihood, epochs_trained, final_train_loss, device_used. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "dim-reduction.deep_generative_latent_embedding",
+      "reads": [
+        "layers/counts",
+        "var/highly_variable",
+        "obs/<batch_key>",
+        "obs/<labels_key>"
+      ],
+      "writes": [
+        "obsm/X_deep_latent",
+        "obsm/X_deep_latent_var",
+        "models/deep_generative_latent",
+        "uns/deep_generative_latent"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "model-based",
+      "docs": "tasks/dim-reduction/deep_generative_latent_embedding.md"
+    }
+  }
+}

@@ -1,0 +1,238 @@
+{
+  "name": "singlet_deconvolution_bulk_celltype_specific_expression",
+  "title": "Cell-type-specific expression per bulk sample",
+  "description": "Estimates, for each bulk sample, the expression profile of every cell type or cell state and the fraction each contributes, using a BayesPrism-style Bayesian allocation model against a labelled single-cell reference. Use it when per-sample, per-type expression is needed; for fractions alone use the proportion task. Requires raw non-negative counts for bulk and reference, with no scaling. Writes posterior fractions, their standard deviations and per-type profiles; stochastic through seed.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Bulk dataset handle (.singlet path or URI) with raw counts in bulk/layers/counts, genes by samples."
+      },
+      "reference": {
+        "type": "object",
+        "description": "Labelled single-cell reference: its dataset handle and label keys.",
+        "properties": {
+          "dataset": {
+            "type": "string",
+            "description": "Reference dataset handle with raw counts in layers/counts."
+          },
+          "cell_type_key": {
+            "type": "string",
+            "default": "cell_type",
+            "description": "obs column with cell-type labels; undefined and mixed labels are dropped."
+          },
+          "cell_state_key": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null,
+            "description": "Optional obs column with cell-state labels; null uses cell types only."
+          }
+        },
+        "required": [
+          "dataset"
+        ],
+        "additionalProperties": false
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "bayesprism"
+        ],
+        "default": "bayesprism",
+        "description": "Estimation method. bayesprism is the only value offered, and it is the default."
+      },
+      "report_min_fraction": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1,
+        "default": 0.05,
+        "description": "Report per-type profiles only for types whose estimated fraction is at least this value."
+      },
+      "bayesprism": {
+        "type": "object",
+        "description": "Options for the bayesprism method: Gibbs sampling and reference update.",
+        "properties": {
+          "chain_length": {
+            "type": "integer",
+            "minimum": 2,
+            "default": 1000,
+            "description": "Gibbs chain length C; retained draws T = ceil((C - burn_in) / thinning)."
+          },
+          "burn_in": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 500,
+            "description": "Initial Gibbs draws discarded; must be below chain_length."
+          },
+          "thinning": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 2,
+            "description": "Keep every thinning-th draw after burn-in."
+          },
+          "alpha": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 1,
+            "description": "Dirichlet prior on fractions; raised to at least 1 when pseudo_min is 0."
+          },
+          "pseudo_min": {
+            "type": "number",
+            "minimum": 0,
+            "default": 1e-08,
+            "description": "Floor added to reference profile probabilities in rows containing zeros."
+          },
+          "optimizer": {
+            "type": "string",
+            "enum": [
+              "MAP",
+              "MLE"
+            ],
+            "default": "MAP",
+            "description": "Optimiser for the reference update: MAP with log-normal prior, or MLE."
+          },
+          "sigma": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 2,
+            "description": "Hyper-parameter of the MAP log-normal prior; ignored by MLE."
+          },
+          "maxit": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 100000,
+            "description": "Maximum optimiser iterations for the reference update."
+          },
+          "update_reference": {
+            "type": "boolean",
+            "default": true,
+            "description": "Update the reference and repeat sampling; profiles still come from the initial posterior."
+          }
+        },
+        "additionalProperties": false
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 123,
+        "description": "Random seed for Gibbs draws; identical inputs and seed reproduce outputs."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without computing profiles."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": [
+      "dataset",
+      "reference"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. uns/<name>/theta_mean. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "For completed runs: n_samples, n_types, shared_genes, retained_draws, types_reported, reference_updated, dropped_labels.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "deconvolution-bulk.celltype_specific_expression",
+      "reads": [
+        "bulk/layers/counts",
+        "reference/layers/counts",
+        "reference/obs/cell_type",
+        "reference/obs/cell_state"
+      ],
+      "writes": [
+        "uns/<name>/theta_mean",
+        "uns/<name>/theta_sd",
+        "uns/<name>/expr/<type>",
+        "models/<name>"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": true,
+      "paradigm": "model-based",
+      "docs": "tasks/deconvolution-bulk/celltype_specific_expression.md"
+    }
+  }
+}

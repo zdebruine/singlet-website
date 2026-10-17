@@ -1,0 +1,208 @@
+{
+  "name": "singlet_clustering_hierarchical_cluster_tree",
+  "title": "Hierarchical tree of cell clusters",
+  "description": "Builds a tree over the groups of an existing obs column from centroid distances in an embedding, then writes the linkage, a Newick tree, centroid distances and cut labels at chosen cluster counts. Use it to describe how populations split and merge; it does not show that a split is real or a lineage. Needs an obs group column and an obsm embedding. Cell-level trees are not supported in this version.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "groupby": {
+        "type": "string",
+        "description": "obs column whose categories are the tree leaves; use an unsupervised partition when labels will be scored."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "ward_centroid",
+          "complete_correlation",
+          "complete_euclidean"
+        ],
+        "default": "ward_centroid",
+        "description": "Centroid distance and linkage: Ward (default), correlation with complete linkage, or Euclidean with complete linkage."
+      },
+      "use_rep": {
+        "type": "string",
+        "default": "X_pca",
+        "description": "obsm key of the embedding from which group centroids are computed."
+      },
+      "n_pcs": {
+        "type": [
+          "integer",
+          "null"
+        ],
+        "minimum": 1,
+        "default": null,
+        "description": "Leading components of use_rep to use; null uses all of them."
+      },
+      "cut_ks": {
+        "type": "array",
+        "items": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "minItems": 1,
+        "default": [
+          5,
+          10,
+          20
+        ],
+        "description": "Cluster counts for cut labels; pass the expert-label count when a reference exists."
+      },
+      "name": {
+        "type": "string",
+        "default": "hierarchy",
+        "maxLength": 40,
+        "pattern": "^[A-Za-z][A-Za-z0-9_]{0,39}$",
+        "description": "Prefix for written members, for example uns/hierarchy/linkage."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Random seed for persistence subsamples; unused when persistence.n_bootstrap is 0."
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA only for large distance matrices or persistence."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      },
+      "persistence": {
+        "type": "object",
+        "description": "Split persistence under cell subsampling; disabled by default.",
+        "properties": {
+          "n_bootstrap": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 0,
+            "description": "Number of subsample trees; 0 disables persistence."
+          },
+          "subsample_fraction": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "exclusiveMaximum": 1,
+            "default": 0.5,
+            "description": "Fraction of cells per subsample, drawn without replacement."
+          },
+          "threshold": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.8,
+            "description": "Fraction of subsample trees in which a clade must appear to count as persistent."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "dataset",
+      "groupby"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: tree and labels written; dry_run: estimate only; queued: persistence running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, for example uns/hierarchy/linkage and obs/hierarchy_cut_10. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Keys: method, n_leaves, monotone (merge heights non-decreasing), cut_sizes, and persistence when requested.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "clustering.hierarchical_cluster_tree",
+      "reads": [
+        "obsm/X_pca",
+        "obs/<groupby>"
+      ],
+      "writes": [
+        "uns/<name>/linkage",
+        "uns/<name>/newick",
+        "uns/<name>/distance",
+        "obs/<name>_cut_<k>",
+        "uns/<name>/persistence"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": true,
+      "paradigm": "hybrid",
+      "docs": "tasks/clustering/hierarchical_cluster_tree.md"
+    }
+  }
+}

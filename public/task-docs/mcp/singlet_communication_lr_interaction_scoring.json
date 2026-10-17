@@ -1,0 +1,247 @@
+{
+  "name": "singlet_communication_lr_interaction_scoring",
+  "title": "Sender-receiver ligand-receptor interaction scoring",
+  "description": "Scores ligand-receptor pairs for every ordered pair of annotated cell groups from a normalised expression layer, with label-permutation p-values and FDR. The default method is cellphonedb (mean score); other methods are published alternatives selected by method. Use it for steady-state communication between groups; do not use it to compare conditions (use the differential communication task) or for spatial neighbourhoods.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "groupby": {
+        "type": "string",
+        "description": "obs column holding the sender and receiver group labels, for example cell_type or leiden."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "cellphonedb",
+          "natmi",
+          "singlecellsignalr",
+          "cellchat",
+          "squidpy_ligrec"
+        ],
+        "default": "cellphonedb",
+        "description": "Scoring method; cellphonedb is the default mean-score standard, the others are published alternatives."
+      },
+      "resource": {
+        "type": "string",
+        "default": "consensus",
+        "description": "Ligand-receptor resource: a name in uns or a built-in name; consensus is the LIANA default."
+      },
+      "filters": {
+        "type": "object",
+        "description": "Group and expression filters for the LIANA-implemented methods.",
+        "properties": {
+          "min_cells": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 5,
+            "description": "Minimum cells per group; smaller groups are dropped."
+          },
+          "expr_prop": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.05,
+            "description": "Minimum fraction of a group's cells expressing a partner for the tuple to be scored."
+          }
+        },
+        "additionalProperties": false
+      },
+      "n_perms": {
+        "type": "integer",
+        "minimum": 1,
+        "default": 1000,
+        "description": "Label permutations for cellphonedb and squidpy_ligrec; cellchat uses cellchat.nboot."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 1337,
+        "description": "Random seed for label permutations; fixes the null draws."
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without executing."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      },
+      "cellchat": {
+        "type": "object",
+        "description": "CellChat options, used only when method is cellchat.",
+        "properties": {
+          "nboot": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 100,
+            "description": "Label permutations for the CellChat null."
+          },
+          "trim": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 0.25,
+            "default": 0.1,
+            "description": "Trim fraction, used only by truncatedMean and thresholdedMean; ignored for triMean."
+          },
+          "Kh": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 0.5,
+            "description": "Hill half-saturation constant applied to the product."
+          },
+          "n": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 1,
+            "description": "Hill exponent."
+          }
+        },
+        "additionalProperties": false
+      },
+      "squidpy_ligrec": {
+        "type": "object",
+        "description": "squidpy ligrec options, used only when method is squidpy_ligrec.",
+        "properties": {
+          "threshold": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.01,
+            "description": "Minimum fraction of cells expressing each partner in a cluster for the pair to be tested."
+          },
+          "complex_policy": {
+            "type": "string",
+            "enum": [
+              "min",
+              "all"
+            ],
+            "default": "min",
+            "description": "How complex subunits are combined, following squidpy's policy."
+          },
+          "corr_method": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null,
+            "description": "Multiple-testing correction name; null returns raw permutation p-values."
+          },
+          "alpha": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.05,
+            "description": "Significance level for the significant flag."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "dataset",
+      "groupby"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: finished inline and wrote members; dry_run: only an estimate was computed; queued: continues as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. uns/lr_interactions. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Compact summary for completed calls: method, n_tuples_tested, n_fdr_below_alpha and the top 20 interactions. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "communication.lr_interaction_scoring",
+      "reads": [
+        "X",
+        "obs/<groupby>",
+        "uns/<resource>"
+      ],
+      "writes": [
+        "uns/lr_interactions",
+        "uns/lr_interactions_params"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/communication/lr_interaction_scoring.md"
+    }
+  }
+}

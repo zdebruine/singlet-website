@@ -1,0 +1,256 @@
+{
+  "name": "singlet_feature_selection_number_of_features",
+  "title": "Choose how many features to keep",
+  "description": "Chooses how many top-ranked genes N to keep for PCA, neighbour graphs and integration. The default keeps a fixed N of 2000, a convention rather than an optimum; rule plateau scores each N on a declared grid against author labels and returns the smallest N within tolerance of the best. It writes the kept set, its rank and the score curve, and leaves counts unchanged. Do not use it to choose cluster numbers or clustering resolution, and report a plateau N chosen on labels that also score it as in-sample.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "selection_method": {
+        "type": "string",
+        "enum": [
+          "pearson_residuals",
+          "seurat_v3",
+          "seurat",
+          "cell_ranger",
+          "sctransform",
+          "poisson_zero_enrichment",
+          "hvg_batch"
+        ],
+        "default": "pearson_residuals",
+        "description": "Ranking statistic. Count input: pearson_residuals, seurat_v3, sctransform, poisson_zero_enrichment. Log input: seurat, cell_ranger. hvg_batch needs batch_key."
+      },
+      "rule": {
+        "type": "string",
+        "enum": [
+          "fixed",
+          "plateau",
+          "residual_variance_threshold"
+        ],
+        "default": "fixed",
+        "description": "fixed keeps n_features; plateau chooses N from plateau.grid; residual_variance_threshold applies only to sctransform."
+      },
+      "n_features": {
+        "type": [
+          "integer",
+          "null"
+        ],
+        "minimum": 1,
+        "default": 2000,
+        "description": "Genes N for rule fixed, clipped to the feature count. Null is valid only with residual_variance_threshold."
+      },
+      "batch_key": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "default": null,
+        "description": "obs column with batch labels. Null treats the data as one batch; required by hvg_batch."
+      },
+      "plateau": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options for rule plateau; ignored by other rules.",
+        "properties": {
+          "task": {
+            "type": "string",
+            "enum": [
+              "integration",
+              "mapping",
+              "classification",
+              "unseen"
+            ],
+            "default": "integration",
+            "description": "Metric family scored at each N; integration uses batch-mixing and biology metrics."
+          },
+          "label_key": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null,
+            "description": "obs column with author labels; required for plateau. Used only to score N, never to rank genes."
+          },
+          "split_key": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null,
+            "description": "obs column marking query cells; required for tasks mapping and unseen."
+          },
+          "grid": {
+            "type": "array",
+            "items": {
+              "type": [
+                "integer",
+                "string"
+              ]
+            },
+            "default": [
+              100,
+              200,
+              500,
+              1000,
+              2000,
+              5000,
+              10000,
+              15000,
+              "all"
+            ],
+            "description": "Candidate N values; \"all\" and values above the feature count mean all features."
+          },
+          "tolerance": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 0.01,
+            "description": "Tolerance delta in scaled-score units; PROPOSED default, not from the literature."
+          },
+          "seeds": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            },
+            "minItems": 1,
+            "default": [
+              1,
+              2,
+              3
+            ],
+            "description": "Integration seeds averaged at each N; three or more proposed (Zappia et al. used one)."
+          }
+        }
+      },
+      "sctransform": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options for selection_method sctransform; ignored by other methods.",
+        "properties": {
+          "residual_variance_threshold": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 1.3,
+            "description": "Residual-variance cut-off used when n_features is null (Seurat default)."
+          }
+        }
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without writing any member."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing feature_count members instead of failing."
+      }
+    },
+    "required": [
+      "dataset"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. var/feature_count_selected. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Keys for completed calls: selection_method, rule, chosen_n, effective_n, score_at_chosen_n, curve_member, warnings. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "feature-selection.number_of_features",
+      "reads": [
+        "layers/counts",
+        "layers/log1p_norm",
+        "obs/<batch_key>",
+        "obs/<label_key>",
+        "obs/<split_key>"
+      ],
+      "writes": [
+        "var/feature_count_selected",
+        "var/feature_count_rank",
+        "uns/feature_count_curve",
+        "uns/feature_count_n"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": false,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/feature-selection/number_of_features.md"
+    }
+  }
+}

@@ -1,0 +1,255 @@
+{
+  "name": "singlet_trajectory_pseudotime_ordering",
+  "title": "Pseudotime ordering along a lineage",
+  "description": "Orders cells along one lineage by a scalar pseudotime oriented from a required root cell. Default method dpt (diffusion pseudotime) on obsm/X_pca; palantir adds fixed-point refinement; slingshot returns per-lineage arc length. Writes obs/pseudotime_<method> and an orientation record. Does not infer topology, fate probabilities or calibrated time; do not use without a correct root.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "root": {
+        "type": "string",
+        "description": "Root cell id, or the name of a boolean obs column marking start cells. Sets origin and sign; required."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "dpt",
+          "palantir",
+          "slingshot"
+        ],
+        "default": "dpt",
+        "description": "Ordering method. Use dpt unless lineage-specific values (slingshot) or refinement (palantir) are needed."
+      },
+      "representation": {
+        "type": "string",
+        "default": "obsm/X_pca",
+        "description": "Embedding used for distances and curve fitting, with one row per cell."
+      },
+      "orientation_markers": {
+        "type": "object",
+        "default": {},
+        "additionalProperties": {
+          "type": "integer",
+          "enum": [
+            -1,
+            1
+          ]
+        },
+        "description": "Gene to expected sign with progression (+1 rising, -1 falling). Used only for the orientation record."
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Waypoint sampling seed for palantir; dpt and slingshot are deterministic."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      },
+      "dpt": {
+        "type": "object",
+        "description": "Options for method dpt.",
+        "properties": {
+          "n_dcs": {
+            "type": "integer",
+            "default": 10,
+            "minimum": 2,
+            "description": "Number of diffusion components used in the distance."
+          },
+          "n_neighbors": {
+            "type": "integer",
+            "default": 15,
+            "minimum": 2,
+            "description": "kNN size for the graph when obsp/connectivities is absent."
+          }
+        },
+        "additionalProperties": false
+      },
+      "palantir": {
+        "type": "object",
+        "description": "Options for method palantir.",
+        "properties": {
+          "knn": {
+            "type": "integer",
+            "default": 30,
+            "minimum": 2,
+            "description": "kNN size for the geodesic graph."
+          },
+          "num_waypoints": {
+            "type": "integer",
+            "default": 1200,
+            "minimum": 50,
+            "description": "Number of waypoints from max-min sampling."
+          },
+          "max_iterations": {
+            "type": "integer",
+            "default": 25,
+            "minimum": 1,
+            "description": "Maximum fixed-point refinement iterations."
+          }
+        },
+        "additionalProperties": false
+      },
+      "slingshot": {
+        "type": "object",
+        "description": "Options for method slingshot.",
+        "properties": {
+          "cluster_key": {
+            "type": "string",
+            "default": "cluster",
+            "description": "obs column of cluster labels that defines the lineage scaffold."
+          },
+          "start_cluster": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null,
+            "description": "Start cluster for orientation; null uses the cluster containing the root."
+          },
+          "approx_points": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "default": null,
+            "description": "Points approximating each curve; null gives 150 when n exceeds 150."
+          },
+          "stretch": {
+            "type": "number",
+            "default": 2,
+            "minimum": 0,
+            "description": "Factor by which curves may extend beyond endpoint clusters."
+          },
+          "thresh": {
+            "type": "number",
+            "default": 0.001,
+            "minimum": 0,
+            "description": "Convergence threshold on percent change in projection distance."
+          },
+          "maxit": {
+            "type": "integer",
+            "default": 15,
+            "minimum": 1,
+            "description": "Maximum curve-fitting iterations."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "dataset",
+      "root"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. obs/pseudotime_dpt. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Compact summary for completed runs: method, root_cell, n_cells, n_unreachable, n_lineages, orientation_rho.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "trajectory.pseudotime_ordering",
+      "reads": [
+        "obsm/X_pca",
+        "obsp/connectivities",
+        "obs/root_flag",
+        "obs/cluster"
+      ],
+      "writes": [
+        "obs/pseudotime_<method>",
+        "obs/pseudotime_<method>_lineage_<k>",
+        "obsm/<method>_curve_coords",
+        "uns/pseudotime_<method>_params",
+        "uns/pseudotime_<method>_orientation"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/trajectory/pseudotime_ordering.md"
+    }
+  }
+}

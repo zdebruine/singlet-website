@@ -1,0 +1,163 @@
+{
+  "name": "singlet_enrichment_per_cell_gene_set_scoring",
+  "title": "Per-cell gene set scoring",
+  "description": "Scores each cell for each predefined gene set, optionally signed with up and down members, and writes a cells-by-sets matrix to obsm/gene_set_score. The default method ucell reads raw counts; module-style methods need a log-normalised layer. Use it for per-cell activity; use enrichment.pseudobulk_pathway_scoring for sample-level scores and enrichment.differential_pathway_activity for contrasts. Do not compare scores across different gene universes.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "layer": {
+        "type": "string",
+        "default": "counts",
+        "description": "Input layer: counts for ucell and aucell; lognorm for module_score, score_genes and zscore."
+      },
+      "gene_sets": {
+        "type": "string",
+        "default": "uns/gene_sets",
+        "description": "uns key of the gene-set collection, or a GMT file path; each set has up and down member lists."
+      },
+      "method": {
+        "type": "string",
+        "enum": ["ucell", "module_score", "score_genes", "aucell", "zscore"],
+        "default": "ucell",
+        "description": "Scoring method. ucell is the default; the others exist for comparison and transfer checks."
+      },
+      "set_size": {
+        "type": "object",
+        "default": {"min": 10, "max": 500},
+        "description": "Set size limits, counted on members present in the data.",
+        "properties": {
+          "min": {
+            "type": "integer",
+            "minimum": 2,
+            "default": 10,
+            "description": "Drop sets with fewer present members than this."
+          },
+          "max": {
+            "type": "integer",
+            "minimum": 2,
+            "default": 500,
+            "description": "Drop sets with more present members than this."
+          }
+        },
+        "additionalProperties": false
+      },
+      "threshold": {
+        "type": ["number", "null"],
+        "default": null,
+        "description": "Write obs/<set>_active where a score exceeds this value; null writes no calls."
+      },
+      "null_n_sets": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 1000,
+        "default": 0,
+        "description": "Matched random sets for an empirical null z-score (proposed); 0 disables it."
+      },
+      "ucell": {
+        "type": "object",
+        "default": {"max_rank": 1500, "ties": "average"},
+        "description": "Options for method ucell.",
+        "properties": {
+          "max_rank": {
+            "type": "integer",
+            "minimum": 10,
+            "default": 1500,
+            "description": "Rank cap for the Mann-Whitney statistic; members ranked beyond it count as maxRank."
+          },
+          "ties": {
+            "type": "string",
+            "enum": ["average", "min", "ordinal"],
+            "default": "average",
+            "description": "Tie handling when ranking genes within each cell."
+          }
+        },
+        "additionalProperties": false
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu", "cuda"],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Seed for null-set sampling and module-style control sampling."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": ["dataset"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "For completed runs: method, sets_scored, sets_dropped, dropped_sets, null_calibrated. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Id of the provenance record (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "enrichment.per_cell_gene_set_scoring",
+      "reads": ["layers/counts", "layers/lognorm", "uns/gene_sets"],
+      "writes": ["obsm/gene_set_score", "uns/gene_set_score_names", "obs/<set>_active", "obsm/gene_set_null_z", "uns/gene_set_score_params"],
+      "devices": ["cpu", "cuda"],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": true,
+      "paradigm": "hybrid",
+      "docs": "tasks/enrichment/per_cell_gene_set_scoring.md"
+    }
+  }
+}

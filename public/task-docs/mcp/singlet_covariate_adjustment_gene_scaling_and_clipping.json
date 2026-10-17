@@ -1,0 +1,169 @@
+{
+  "name": "singlet_covariate_adjustment_gene_scaling_and_clipping",
+  "title": "Gene scaling and clipping before PCA",
+  "description": "Prepares the matrix that PCA and the neighbour graph consume. Method none (default) writes no matrix and leaves PCA on the unscaled values; zscore centres and scales each gene over cells with optional clipping; pearson_residuals clips residuals already written by normalization.variance_stabilizing_transform. Reads a log-normalised layer (zscore) or the residual layer, optionally var/highly_variable, and writes layers/scaled with per-gene scale parameters when scaling is on. Do not use it for batch correction, which belongs to the integration tools, or on raw counts.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "layer": {
+        "type": "string",
+        "default": "log1p_norm",
+        "description": "Normalised layer under layers/ that method zscore scales; ignored by the other methods."
+      },
+      "method": {
+        "type": "string",
+        "enum": ["none", "zscore", "pearson_residuals"],
+        "default": "none",
+        "description": "none leaves PCA on unscaled values (default); zscore standardises each gene; pearson_residuals clips existing residuals."
+      },
+      "features": {
+        "type": "string",
+        "enum": ["highly_variable", "all"],
+        "default": "highly_variable",
+        "description": "Genes to scale. highly_variable needs var/highly_variable and fails if absent; other genes are written as zero."
+      },
+      "zscore": {
+        "type": "object",
+        "description": "Options for method zscore.",
+        "properties": {
+          "zero_center": {
+            "type": "boolean",
+            "default": true,
+            "description": "Subtract the per-gene mean. False keeps sparse input sparse."
+          },
+          "max_value": {
+            "type": ["number", "null"],
+            "exclusiveMinimum": 0,
+            "default": 10,
+            "description": "Clip magnitude after scaling; null disables clipping."
+          },
+          "clip_mode": {
+            "type": "string",
+            "enum": ["two_sided", "upper_only"],
+            "default": "two_sided",
+            "description": "two_sided clips both tails; upper_only clips the upper tail only, as in some implementations."
+          },
+          "ddof": {
+            "type": "integer",
+            "enum": [0, 1],
+            "default": 1,
+            "description": "Degrees of freedom for the per-gene standard deviation."
+          },
+          "batch_key": {
+            "type": ["string", "null"],
+            "default": null,
+            "description": "Obs column; when set, each batch is scaled separately."
+          }
+        },
+        "additionalProperties": false
+      },
+      "pearson_residuals": {
+        "type": "object",
+        "description": "Options for method pearson_residuals.",
+        "properties": {
+          "residual_layer": {
+            "type": "string",
+            "default": "pearson_residuals",
+            "description": "Residual layer under layers/ written by normalization.variance_stabilizing_transform."
+          },
+          "clip": {
+            "type": ["number", "string"],
+            "default": "sqrt_n",
+            "description": "Symmetric residual clip: a positive number, or sqrt_n for the square root of the number of cells."
+          }
+        },
+        "additionalProperties": false
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu", "cuda"],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": ["dataset"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written. For method none only uns/scale_params; empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "For completed calls: method, features, n_cells, n_genes_scaled, clipped_fraction, max_value, clip_mode, zero_center, ddof, batch_key. Never matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "covariate-adjustment.gene_scaling_and_clipping",
+      "reads": [
+        "layers/log1p_norm",
+        "layers/pearson_residuals",
+        "var/highly_variable",
+        "obs/<batch_key>"
+      ],
+      "writes": [
+        "layers/scaled",
+        "varm/scale_mean",
+        "varm/scale_std",
+        "uns/scale_params"
+      ],
+      "devices": ["cpu", "cuda"],
+      "stochastic": false,
+      "long_running": false,
+      "streaming": true,
+      "paradigm": "heuristic",
+      "docs": "tasks/covariate-adjustment/gene_scaling_and_clipping.md"
+    }
+  }
+}

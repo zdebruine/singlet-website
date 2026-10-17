@@ -1,0 +1,94 @@
+{
+  "name": "singlet_standard_workflow",
+  "title": "Standard workflow in one call",
+  "description": "QC, HVG, PCA, neighbour graph, clustering and 2-D embedding in a single call (each step is one compiled streaming pass or kernel), then a report. Use it for a first look; use the individual tools to tune.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "name": {
+        "type": "string",
+        "description": "Dataset name."
+      },
+      "n_hvg": {
+        "type": "integer",
+        "description": "Highly variable genes.",
+        "default": 2000
+      },
+      "n_pcs": {
+        "type": "integer",
+        "description": "Principal components.",
+        "default": 30
+      },
+      "k": {
+        "type": "integer",
+        "description": "Neighbours.",
+        "default": 15
+      },
+      "resolution": {
+        "type": "number",
+        "description": "Cluster resolution.",
+        "default": 1.0
+      },
+      "umap": {
+        "type": "boolean",
+        "description": "Compute the 2-D embedding.",
+        "default": true
+      },
+      "make_report": {
+        "type": "boolean",
+        "description": "Write an HTML report.",
+        "default": true
+      }
+    },
+    "required": [
+      "name"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "status": {
+        "type": "string",
+        "enum": [
+          "ok",
+          "error"
+        ]
+      },
+      "summary": {
+        "type": "string"
+      },
+      "metrics": {
+        "type": "object"
+      },
+      "figures": {
+        "type": "array"
+      },
+      "artifacts": {
+        "type": "array"
+      },
+      "warnings": {
+        "type": "array"
+      },
+      "next": {
+        "type": "array"
+      },
+      "timings": {
+        "type": "object"
+      }
+    },
+    "required": [
+      "status",
+      "summary"
+    ]
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "clustering.cell_partitioning",
+      "reads": [],
+      "writes": [],
+      "runtime": "local-cpu",
+      "streaming": true
+    }
+  }
+}

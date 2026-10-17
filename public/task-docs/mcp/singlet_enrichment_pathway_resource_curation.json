@@ -1,0 +1,225 @@
+{
+  "name": "singlet_enrichment_pathway_resource_curation",
+  "title": "Curated pathway resource construction and recovery",
+  "description": "Builds one harmonised signed pathway resource from PROGENy, Hallmark or OmniPath sources, filters sets by size and overlap, and optionally ranks resources by recovery of held-out perturbations. Needs gene symbols matching the organism and, for recovery, a normalised layer with source and study labels. Writes the resource table, set statistics and provenance, never cell scores. Use singlet_enrichment_pathway_footprint_activity to score cells or samples, and singlet_enrichment_over_representation_analysis to test a gene list.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "name": {
+        "type": "string",
+        "pattern": "^[a-zA-Z0-9_-]{1,64}$",
+        "description": "Resource name under uns/pathway_resource; defaults to the source names joined by plus signs."
+      },
+      "organism": {
+        "type": "string",
+        "enum": ["human", "mouse"],
+        "default": "human",
+        "description": "Organism of the resource and data; mouse maps by orthology."
+      },
+      "sources": {
+        "type": "array",
+        "minItems": 1,
+        "uniqueItems": true,
+        "items": {"type": "string", "enum": ["progeny", "hallmark", "omnipath"]},
+        "default": ["progeny"],
+        "description": "Resources to combine; hallmark and omnipath read snapshots from uns/pathway_sources."
+      },
+      "context_label": {
+        "type": "string",
+        "description": "Optional obs column naming the cell-type or tissue context; recorded per row and used to stratify recovery."
+      },
+      "curation": {
+        "type": "object",
+        "description": "Size and overlap filters applied before the table is written.",
+        "properties": {
+          "min_set_size": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 10,
+            "description": "Smallest allowed set; 10 is the lower bound of the usual 10 to 15 range."
+          },
+          "max_set_size": {
+            "type": "integer",
+            "minimum": 2,
+            "default": 500,
+            "description": "Largest allowed set, so that broad generic sets cannot dominate."
+          },
+          "overlap_measure": {
+            "type": "string",
+            "enum": ["jaccard", "overlap_coefficient"],
+            "default": "jaccard",
+            "description": "Overlap measure for pruning; overlap_coefficient also flags small sets nested in large ones."
+          },
+          "overlap_threshold": {
+            "type": ["number", "null"],
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.5,
+            "description": "Prune the smaller of two sets above this overlap; null disables pruning."
+          }
+        },
+        "additionalProperties": false
+      },
+      "progeny": {
+        "type": "object",
+        "description": "PROGENy footprint options; defaults reproduce the R net.",
+        "properties": {
+          "top_per_pathway": {
+            "type": ["integer", "null"],
+            "minimum": 1,
+            "default": 100,
+            "description": "Genes kept per pathway by model p-value; null keeps all genes when padj_threshold is also null."
+          },
+          "padj_threshold": {
+            "type": ["number", "null"],
+            "exclusiveMinimum": 0,
+            "maximum": 1,
+            "default": null,
+            "description": "Adjusted p-value cut applied before the top-N step; null disables it."
+          }
+        },
+        "additionalProperties": false
+      },
+      "omnipath": {
+        "type": "object",
+        "description": "OmniPath subset options.",
+        "properties": {
+          "license": {
+            "type": "string",
+            "enum": ["academic", "commercial", "nonprofit"],
+            "default": "academic",
+            "description": "Subset class; the default retrieves all interactions, so set commercial or nonprofit for restricted use."
+          }
+        },
+        "additionalProperties": false
+      },
+      "recovery": {
+        "type": "object",
+        "description": "Optional recovery scoring of each resource on a perturbation compendium; omit to skip.",
+        "properties": {
+          "source_key": {
+            "type": "string",
+            "description": "obs column giving the perturbed source of each sample or cell; required when recovery is requested."
+          },
+          "study_key": {
+            "type": "string",
+            "default": "study",
+            "description": "obs column giving the study label used for leave-study-out splits."
+          },
+          "statistic": {
+            "type": "string",
+            "enum": ["ulm", "ora", "gsea"],
+            "default": "ulm",
+            "description": "Statistic applied to every resource in the call; ulm is the default."
+          },
+          "layer": {
+            "type": "string",
+            "default": "lognorm",
+            "description": "Normalised expression layer; raw counts are rejected."
+          },
+          "seed": {
+            "type": "integer",
+            "default": 42,
+            "description": "Permutation seed, used only by the gsea statistic."
+          }
+        },
+        "required": ["source_key"],
+        "additionalProperties": false
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu", "cuda"],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without computing."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing resource members of the same name instead of failing."
+      }
+    },
+    "required": ["dataset"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written, e.g. uns/pathway_resource/<name>/table. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Keys: sources, sets_total, sets_retained, mean_pairwise_jaccard, statistic (when recovery ran).",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "enrichment.pathway_resource_curation",
+      "reads": [
+        "layers/lognorm",
+        "obs/<context_label>",
+        "obs/<source_key>",
+        "obs/<study_key>",
+        "uns/pathway_sources/<source>"
+      ],
+      "writes": [
+        "uns/pathway_resource/<name>/table",
+        "uns/pathway_resource/<name>/set_stats",
+        "uns/pathway_resource/<name>/recovery",
+        "uns/pathway_resource/<name>/provenance"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": true,
+      "paradigm": "hybrid",
+      "docs": "tasks/enrichment/pathway_resource_curation.md"
+    }
+  }
+}

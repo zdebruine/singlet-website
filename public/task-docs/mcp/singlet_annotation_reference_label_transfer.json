@@ -1,0 +1,296 @@
+{
+  "name": "singlet_annotation_reference_label_transfer",
+  "title": "Reference-based cell label transfer",
+  "description": "Assigns each cell of a query dataset a cell-type label from a labelled reference dataset or a saved reference model, with a score and an unassigned flag per cell and optional coarser label levels. Reference and query must share gene identifiers; most methods read log-normalised values in layers/normalized, while scanvi and scarches need raw counts in layers/counts and may queue a training job. Returns method, layer_used, cell and gene counts, unassigned_fraction, score_median, levels_written, top_labels, warnings and, for celltypist_probmatch, n_multi_label_cells in summary. Do not use it to name clusters from marker genes, to discover cell types absent from the reference, or to tune thresholds on the query; it never changes counts.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Query dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle. Outputs are written here only."
+      },
+      "reference": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "source"
+        ],
+        "description": "Labelled reference. Read-only; nothing is downloaded.",
+        "properties": {
+          "source": {
+            "type": "string",
+            "description": "Reference dataset handle, saved reference model models/<name>, or CellTypist model file."
+          },
+          "label_keys": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "maxItems": 4,
+            "description": "Reference obs columns to predict, finest first; the first is the main label. Required when source is a dataset."
+          }
+        }
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "celltypist_best",
+          "celltypist_probmatch",
+          "linear_openset",
+          "knn_pca",
+          "singler",
+          "seurat_transfer",
+          "scmap_cluster",
+          "scmap_cell",
+          "scanvi",
+          "scarches",
+          "symphony"
+        ],
+        "default": "celltypist_best",
+        "description": "Transfer method. celltypist_best is the default; linear_openset is the singlet multinomial classifier with a threshold calibrated on held-out studies."
+      },
+      "batch_key": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "default": null,
+        "description": "Obs column naming study, donor or platform in reference and query. Used by scanvi, scarches, symphony and linear_openset; ignored by the others."
+      },
+      "unassigned_threshold": {
+        "type": [
+          "number",
+          "null"
+        ],
+        "default": null,
+        "minimum": 0,
+        "maximum": 1,
+        "description": "Score below which a cell is unassigned. Null keeps the method default: calibrated for linear_openset, none for argmax-only methods."
+      },
+      "features": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Gene selection for feature-based methods; celltypist methods and singler use all shared genes.",
+        "properties": {
+          "key": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null,
+            "description": "Boolean var column present in reference and query that selects genes; overrides n_top."
+          },
+          "n_top": {
+            "type": "integer",
+            "default": 2000,
+            "minimum": 50,
+            "description": "Number of highly variable genes ranked on the reference only."
+          }
+        }
+      },
+      "celltypist": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options used only when method is celltypist_best or celltypist_probmatch.",
+        "properties": {
+          "majority_voting": {
+            "type": "boolean",
+            "default": false,
+            "description": "Replace each label by the dominant label of its over-cluster in cluster_key."
+          },
+          "cluster_key": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null,
+            "description": "Query obs column of over-clusters; required when majority_voting is true."
+          },
+          "min_prop": {
+            "type": "number",
+            "default": 0,
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Minimum dominant fraction of a cluster; below it the cluster label is Heterogeneous."
+          }
+        }
+      },
+      "scvi": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options used only when method is scanvi or scarches. Null takes the per-method default.",
+        "properties": {
+          "n_latent": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "default": null,
+            "minimum": 2,
+            "description": "Latent dimension; null gives 10 for scanvi and 30 for scarches."
+          },
+          "n_hidden": {
+            "type": "integer",
+            "default": 128,
+            "minimum": 8,
+            "description": "Hidden units per layer."
+          },
+          "n_layers": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "default": null,
+            "minimum": 1,
+            "description": "Hidden layers; null gives 1 for scanvi and 2 for scarches."
+          },
+          "dropout_rate": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "default": null,
+            "minimum": 0,
+            "exclusiveMaximum": 1,
+            "description": "Dropout rate; null gives 0.1 for scanvi and 0.2 for scarches."
+          },
+          "max_epochs": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "default": null,
+            "minimum": 1,
+            "description": "Maximum epochs; null gives the scvi-tools epoch heuristic for scanvi and 200 with early stopping for scarches."
+          }
+        }
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Random seed for scanvi, scarches, symphony and the linear_openset folds and initialisation; recorded in uns/transfer_params_<method>."
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available. scanvi and scarches training needs CUDA at atlas scale."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing members of the same method instead of failing."
+      }
+    },
+    "required": [
+      "dataset",
+      "reference"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. obs/transfer_label_celltypist_best. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Compact summary for completed calls: method, layer_used, n_query_cells, n_reference_cells, n_types, n_shared_genes, n_genes_missing, levels_written, unassigned_fraction, score_median, top_labels, warnings, n_multi_label_cells. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "annotation.reference_label_transfer",
+      "reads": [
+        "layers/counts",
+        "layers/normalized",
+        "obs/<label_key>",
+        "obs/<batch_key>",
+        "obs/<cluster_key>",
+        "var/<gene_id>",
+        "var/<feature_key>",
+        "models/<name>"
+      ],
+      "writes": [
+        "obs/transfer_label_<method>",
+        "obs/transfer_label_<method>_<level>",
+        "obs/transfer_score_<method>",
+        "obs/transfer_unassigned_<method>",
+        "obsm/transfer_latent_<method>",
+        "uns/transfer_params_<method>"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": true,
+      "paradigm": "hybrid",
+      "docs": "tasks/annotation/reference_label_transfer.md"
+    }
+  }
+}

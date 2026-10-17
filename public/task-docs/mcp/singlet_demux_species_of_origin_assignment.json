@@ -1,0 +1,259 @@
+{
+  "name": "singlet_demux_species_of_origin_assignment",
+  "title": "Species-of-origin assignment of barcodes and read pairs",
+  "description": "Assigns each barcode of a two-species library (xenograft or barnyard) to species A, species B, mixed or ambiguous from genome-specific UMI counts, with a posterior for the mixed class. Use the default mixture method for barcode labels. Use disambiguate or xenocell only when read-level inputs are available. Do not use on single-species data, where it would invent a second species.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle with per-genome layers/counts and var/genome: a .singlet path or URI, or a workspace handle."
+      },
+      "genome_a_label": {
+        "type": "string",
+        "description": "Value of var/genome for the first genome, for example human. The other genome is species B."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "mixture",
+          "cellranger_style",
+          "xenocell",
+          "disambiguate"
+        ],
+        "default": "mixture",
+        "description": "Barcode mixture model (default) or a comparator rule; xenocell and disambiguate are read-level."
+      },
+      "min_umis_per_barcode": {
+        "type": "integer",
+        "minimum": 1,
+        "default": 10,
+        "description": "Barcodes with fewer genome-specific UMIs are reported as ambiguous."
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Random seed for EM initialisation (mixture) and bootstraps (cellranger_style)."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without writing members."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing species members instead of failing."
+      },
+      "mixture": {
+        "type": "object",
+        "description": "Options for the barcode mixture model.",
+        "additionalProperties": false,
+        "properties": {
+          "max_iterations": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 200,
+            "description": "Upper bound on EM iterations (proposed)."
+          },
+          "tolerance": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 1e-06,
+            "description": "Stop when the log-likelihood change falls below this value."
+          }
+        }
+      },
+      "cellranger_style": {
+        "type": "object",
+        "description": "Options for the Cell Ranger comparator; guard values fixed as in its source.",
+        "additionalProperties": false,
+        "properties": {
+          "multiplet_percentile": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.1,
+            "description": "Percentile for per-genome multiplet thresholds."
+          },
+          "n_bootstrap": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 1000,
+            "description": "Bootstrap samples for the multiplet estimator."
+          }
+        }
+      },
+      "xenocell": {
+        "type": "object",
+        "description": "Options for the XenoCell comparator; needs read-level input.",
+        "additionalProperties": false,
+        "properties": {
+          "fastq_in": {
+            "type": "string",
+            "description": "Paired FASTQ input to Xenome classification (path or URI)."
+          },
+          "xenome_index": {
+            "type": "string",
+            "description": "Xenome index prefix built for both genomes."
+          },
+          "xenome_k": {
+            "type": "integer",
+            "default": 25,
+            "description": "k-mer length of the Xenome index."
+          },
+          "host_fraction_lower": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Inclusive lower bound of the host-fraction window."
+          },
+          "host_fraction_upper": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Inclusive upper bound of the host-fraction window."
+          }
+        },
+        "required": [
+          "fastq_in",
+          "xenome_index",
+          "host_fraction_lower",
+          "host_fraction_upper"
+        ]
+      },
+      "disambiguate": {
+        "type": "object",
+        "description": "Options for the disambiguate comparator; needs read-level input.",
+        "additionalProperties": false,
+        "properties": {
+          "bam_genome_a": {
+            "type": "string",
+            "description": "Name-sorted BAM aligned to genome A."
+          },
+          "bam_genome_b": {
+            "type": "string",
+            "description": "Name-sorted BAM aligned to genome B."
+          },
+          "tag_order": {
+            "type": "string",
+            "enum": [
+              "AS_NM",
+              "XO_NM_NH"
+            ],
+            "default": "AS_NM",
+            "description": "AS_NM for BWA and STAR alignments; XO_NM_NH for TopHat-style tags."
+          }
+        },
+        "required": [
+          "bam_genome_a",
+          "bam_genome_b"
+        ]
+      }
+    },
+    "required": [
+      "dataset",
+      "genome_a_label"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was, or would be, updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: members written inline; dry_run: estimate only; queued: long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, for example obs/species_call. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Method, class_counts (A, B, mixed, ambiguous, empty), mu and converged for completed calls.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Provenance record id (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "demux.species_of_origin_assignment",
+      "reads": [
+        "layers/counts",
+        "var/genome",
+        "obs"
+      ],
+      "writes": [
+        "obs/species_call",
+        "obs/species_fraction_A",
+        "obsm/species_umi",
+        "uns/species_assign",
+        "models/species_mixture"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": true,
+      "paradigm": "hybrid",
+      "docs": "tasks/demux/species_of_origin_assignment.md"
+    }
+  }
+}

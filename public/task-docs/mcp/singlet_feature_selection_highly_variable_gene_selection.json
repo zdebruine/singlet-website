@@ -1,0 +1,237 @@
+{
+  "name": "singlet_feature_selection_highly_variable_gene_selection",
+  "title": "Select highly variable genes",
+  "description": "Selects the top N highly variable genes of one single-cell dataset for PCA, neighbour graphs and clustering, scoring each gene against a technical null chosen by flavor (default pearson_residuals, the variance of analytic Pearson residuals of raw counts). Reads raw counts for count flavors, or a log-normalised layer for seurat, cell_ranger and scran_model_gene_var, and writes var/highly_variable, var/hvg_score, var/hvg_rank, var/means, var/variances and uns/hvg. Do not use it to choose genes with cell-type labels, to pick genes shared across batches for integration (use the batch-aware selection task), or to decide how many genes to keep (use the number-of-features task).",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "layer": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "default": null,
+        "description": "Layer to score. Null selects layers/counts for count flavors and layers/log1p_norm for log flavors; fails if absent or in the wrong state."
+      },
+      "flavor": {
+        "type": "string",
+        "enum": [
+          "pearson_residuals",
+          "binomial_deviance",
+          "seurat_v3",
+          "seurat",
+          "cell_ranger",
+          "scran_model_gene_var"
+        ],
+        "default": "pearson_residuals",
+        "description": "Selection statistic. Count input: pearson_residuals (default), binomial_deviance, seurat_v3. Log-normalised input: seurat, cell_ranger, scran_model_gene_var."
+      },
+      "n_top_genes": {
+        "type": "integer",
+        "minimum": 1,
+        "default": 2000,
+        "description": "Number of genes to keep (N). Always returns N genes; cutoff-based selection is not offered."
+      },
+      "batch_key": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "default": null,
+        "description": "obs column with batch labels. Null treats the dataset as one batch; otherwise statistics are computed per batch and combined by a flavor-specific rule."
+      },
+      "seurat_v3": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options for flavor seurat_v3; ignored by other flavors.",
+        "properties": {
+          "span": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 1,
+            "default": 0.3,
+            "description": "Loess span of the variance trend."
+          },
+          "clip": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "exclusiveMinimum": 0,
+            "default": null,
+            "description": "Fitted standard deviations above the mean at which counts are clipped. Null uses sqrt(n_cells) per batch."
+          }
+        }
+      },
+      "pearson_residuals": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options for flavor pearson_residuals; ignored by other flavors.",
+        "properties": {
+          "theta": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 100,
+            "description": "Shared negative-binomial size parameter of the residual model."
+          },
+          "clip": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "exclusiveMinimum": 0,
+            "default": null,
+            "description": "Absolute bound on residuals. Null uses sqrt(n_cells) per batch."
+          }
+        }
+      },
+      "binomial_deviance": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options for flavor binomial_deviance; ignored by other flavors.",
+        "properties": {
+          "family": {
+            "type": "string",
+            "enum": [
+              "binomial",
+              "poisson"
+            ],
+            "default": "binomial",
+            "description": "Approximating family of the multinomial deviance; poisson may be faster and is often very similar."
+          }
+        }
+      },
+      "seurat": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options for flavor seurat; ignored by other flavors.",
+        "properties": {
+          "n_bins": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 20,
+            "description": "Number of equal-width mean bins for dispersion normalisation."
+          }
+        }
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without writing any member."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing highly-variable-gene members instead of failing."
+      }
+    },
+    "required": [
+      "dataset"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. var/highly_variable. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Compact summary for completed runs: flavor, layer, n_genes_selected, n_batches, score_at_N, top_genes (first 20 symbols) and warnings. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "feature-selection.highly_variable_gene_selection",
+      "reads": [
+        "layers/counts",
+        "layers/log1p_norm",
+        "obs/<batch_key>"
+      ],
+      "writes": [
+        "var/highly_variable",
+        "var/hvg_score",
+        "var/hvg_rank",
+        "var/means",
+        "var/variances",
+        "uns/hvg"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": false,
+      "long_running": false,
+      "streaming": true,
+      "paradigm": "hybrid",
+      "docs": "tasks/feature-selection/highly_variable_gene_selection.md"
+    }
+  }
+}

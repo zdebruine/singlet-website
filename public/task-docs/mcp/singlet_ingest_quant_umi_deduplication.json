@@ -1,0 +1,213 @@
+{
+  "name": "singlet_ingest_quant_umi_deduplication",
+  "title": "UMI deduplication and molecule collapsing",
+  "description": "Collapses UMI-tagged reads into molecule counts per cell and feature, merging sequencing-error UMIs into their parent molecule and keeping distinct molecules apart. Use it after read-to-gene mapping and whitelist correction, when a read table with corrected barcodes, UMIs and class ids exists; the default directional_umitools method suits single-gene groups, and cr_like_em or parsimony_em resolve multi-gene classes. Do not use it to assign ambiguous reads to genes, or to re-collapse counts that an engine already collapsed unless the purpose is comparing collapse rules.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "parse_stream": {
+        "type": "string",
+        "description": "Read table path or URI with one row per read: corrected cell barcode, packed UMI, class id and read count."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "nodedup",
+          "cr_1mm",
+          "directional_strict",
+          "directional_umitools",
+          "cr_like",
+          "cr_like_em",
+          "parsimony",
+          "parsimony_em"
+        ],
+        "default": "directional_umitools",
+        "description": "Collapse rule. directional_umitools is the default for single-gene groups; the -em modes resolve multi-gene classes."
+      },
+      "umi_length": {
+        "type": [
+          "integer",
+          "null"
+        ],
+        "minimum": 4,
+        "maximum": 32,
+        "default": null,
+        "description": "UMI length in bases; null reads it from uns/ingest_geometry."
+      },
+      "umi_edit_distance": {
+        "type": [
+          "integer",
+          "null"
+        ],
+        "minimum": 0,
+        "maximum": 2,
+        "default": null,
+        "description": "Maximum UMI Hamming distance; null uses the method default (0 for cr_like modes, 1 otherwise). Ignored by nodedup."
+      },
+      "write_read_to_molecule": {
+        "type": "boolean",
+        "default": false,
+        "description": "Also write per-read molecule assignments to uns/umi_read_to_molecule; large, so off by default."
+      },
+      "directional": {
+        "type": "object",
+        "description": "Options for directional_umitools and directional_strict.",
+        "properties": {
+          "count_ratio_factor": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 4,
+            "default": 2.0,
+            "description": "Parent-to-child count ratio kappa; the offset is fixed by method (1 for UMI-tools, 0 for strict)."
+          }
+        },
+        "additionalProperties": false
+      },
+      "alevin_fry": {
+        "type": "object",
+        "description": "Options for the alevin-fry modes cr_like, cr_like_em, parsimony and parsimony_em.",
+        "properties": {
+          "large_graph_threshold": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0,
+            "default": null,
+            "description": "Node count above which parsimony modes switch strategy; null uses 1000 for parsimony modes."
+          },
+          "em_max_iter": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 1000,
+            "description": "Maximum EM iterations for the -em modes (singlet-proposed default)."
+          },
+          "em_tolerance": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 1e-06,
+            "description": "EM convergence tolerance on the change in molecule counts (singlet-proposed default)."
+          }
+        },
+        "additionalProperties": false
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": [
+      "dataset",
+      "parse_stream"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. layers/counts_molecules. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Compact summary for completed runs. Keys: method, umi_length, n_cells, n_molecules, reads_per_molecule_median, merged_umi_fraction. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "ingest-quant.umi_deduplication",
+      "reads": [
+        "uns/ingest_geometry",
+        "uns/ec_incidence"
+      ],
+      "writes": [
+        "layers/counts_molecules",
+        "obs/umi_distinct_raw",
+        "obs/umi_dedup_rate",
+        "uns/umi_dedup_run",
+        "uns/umi_read_to_molecule"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": false,
+      "long_running": true,
+      "streaming": true,
+      "paradigm": "hybrid",
+      "docs": "tasks/ingest-quant/umi_deduplication.md"
+    }
+  }
+}

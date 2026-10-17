@@ -1,0 +1,112 @@
+{
+  "name": "singlet_nmf_programs",
+  "title": "Gene programs by NMF",
+  "description": "Streaming alternating-least-squares NMF of log1p(CP10k): one pass per iteration, state independent of the number of cells. Returns the top genes of each program and the loss curve.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "name": {
+        "type": "string",
+        "description": "Dataset name."
+      },
+      "k": {
+        "type": "integer",
+        "description": "Number of programs (max 64).",
+        "default": 12,
+        "minimum": 2,
+        "maximum": 64
+      },
+      "max_iter": {
+        "type": "integer",
+        "description": "Maximum iterations.",
+        "default": 15
+      },
+      "tol": {
+        "type": "number",
+        "description": "Stop when the relative loss change is below this.",
+        "default": 0.001
+      },
+      "use_hvg": {
+        "type": "boolean",
+        "description": "Restrict to highly variable genes.",
+        "default": true
+      },
+      "l1": {
+        "type": "number",
+        "description": "L1 penalty on the cell factor.",
+        "default": 0.0
+      },
+      "compute_usage": {
+        "type": "boolean",
+        "description": "Also write per-cell program usage.",
+        "default": true
+      },
+      "seed": {
+        "type": "integer",
+        "description": "Random seed.",
+        "default": 0
+      },
+      "top_genes": {
+        "type": "integer",
+        "description": "Genes listed per program.",
+        "default": 10
+      }
+    },
+    "required": [
+      "name"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "status": {
+        "type": "string",
+        "enum": [
+          "ok",
+          "error"
+        ]
+      },
+      "summary": {
+        "type": "string"
+      },
+      "metrics": {
+        "type": "object"
+      },
+      "figures": {
+        "type": "array"
+      },
+      "artifacts": {
+        "type": "array"
+      },
+      "warnings": {
+        "type": "array"
+      },
+      "next": {
+        "type": "array"
+      },
+      "timings": {
+        "type": "object"
+      }
+    },
+    "required": [
+      "status",
+      "summary"
+    ]
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "programs.denovo_program_decomposition",
+      "reads": [
+        "counts",
+        "genes/hvg_mask"
+      ],
+      "writes": [
+        "nmf/H",
+        "nmf/usage"
+      ],
+      "runtime": "local-cpu",
+      "streaming": true
+    }
+  }
+}

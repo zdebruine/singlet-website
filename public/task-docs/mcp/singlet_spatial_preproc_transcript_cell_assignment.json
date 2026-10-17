@@ -1,0 +1,255 @@
+{
+  "name": "singlet_spatial_preproc_transcript_cell_assignment",
+  "title": "Transcript-to-cell assignment",
+  "description": "Assigns each transcript in an imaging spatial section to a cell or to background, and writes per-transcript labels, cell polygons and a cell-by-gene count matrix. The default baysor_mixture uses a nucleus or stain-derived prior when one is given; proseg always requires one. Use it on transcript tables with x, y and gene; do not use it on spot or bin data, or to score an existing segmentation.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI with a points table of x, y and gene."
+      },
+      "method": {
+        "type": "string",
+        "enum": ["baysor_mixture", "proseg", "segger"],
+        "default": "baysor_mixture",
+        "description": "Assignment model; baysor_mixture is the proposed default. segger needs a morphology image for its default initialisation."
+      },
+      "prior_source": {
+        "type": "string",
+        "enum": ["nucleus_labels", "stain_cell_mask", "none"],
+        "default": "nucleus_labels",
+        "description": "Prior raster from labels/. Vendor cell IDs are never accepted; proseg requires a prior."
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu", "cuda"],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "minimum": 0,
+        "default": 0,
+        "description": "Seed for the stochastic E-step of baysor_mixture. The proseg source has no seed option, so its repeated executions are reported as a spread."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without fitting."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      },
+      "baysor": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options for method baysor_mixture; other methods ignore them.",
+        "properties": {
+          "scale": {
+            "type": "number",
+            "default": -1.0,
+            "description": "Cell radius in microns; -1 estimates it from the prior and needs prior_source other than none."
+          },
+          "scale_std": {
+            "type": "string",
+            "default": "25%",
+            "description": "Spread of scale across cells, absolute or percentage."
+          },
+          "min_molecules_per_cell": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 50,
+            "description": "Minimum molecules for a cell call; must be positive."
+          },
+          "prior_segmentation_confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.2,
+            "description": "Confidence in the prior segmentation, from 0 to 1."
+          },
+          "n_clusters": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 4,
+            "description": "Number of composition clusters for the mrf method."
+          },
+          "force_2d": {
+            "type": "boolean",
+            "default": true,
+            "description": "Ignore the z column, as the benchmark wrapper does."
+          }
+        }
+      },
+      "proseg": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options for method proseg; other methods ignore them.",
+        "properties": {
+          "voxel_size_um": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 1.0,
+            "description": "Voxel size in x and y, in microns."
+          },
+          "burnin_voxel_size_um": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 2.0,
+            "description": "Burn-in voxel size in microns; an integer multiple of voxel_size_um."
+          },
+          "voxel_layers": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 4,
+            "description": "Number of z layers in the voxel lattice."
+          },
+          "burnin_samples": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 200,
+            "description": "Samples taken at the burn-in voxel size."
+          },
+          "samples": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 200,
+            "description": "Samples taken after burn-in."
+          },
+          "hillclimb": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 50,
+            "description": "Final hill-climb iterations."
+          },
+          "ncomponents": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 10,
+            "description": "Negative-binomial mixture components for cell expression."
+          },
+          "cell_compactness": {
+            "type": "number",
+            "minimum": 0,
+            "default": 0.04,
+            "description": "Compactness prior; smaller values give rounder cells."
+          },
+          "diffusion_probability": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.2,
+            "description": "Prior probability that a transcript is diffused and repositioned."
+          },
+          "diffusion_sigma_near_um": {
+            "type": "number",
+            "minimum": 0,
+            "default": 1.0,
+            "description": "Repositioning SD for non-diffused transcripts, in microns."
+          },
+          "diffusion_sigma_far_um": {
+            "type": "number",
+            "minimum": 0,
+            "default": 4.0,
+            "description": "Repositioning SD for diffused transcripts, in microns."
+          },
+          "nuclear_reassignment_prob": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.2,
+            "description": "Prior probability that the initial nuclear assignment is wrong."
+          }
+        }
+      },
+      "segger": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options for method segger; other methods ignore them.",
+        "properties": {
+          "n_epochs": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 20,
+            "description": "Training epochs for the link predictor."
+          },
+          "prediction_expansion_ratio": {
+            "type": "number",
+            "minimum": 0,
+            "default": 0.5,
+            "description": "Fraction of each polygon's equivalent radius used to expand it for prediction."
+          },
+          "init_segmentation": {
+            "type": "string",
+            "enum": ["cellpose", "auto"],
+            "default": "cellpose",
+            "description": "Initial boundaries: cellpose from morphology, or auto, which uses the vendor cell ID when present."
+          }
+        }
+      }
+    },
+    "required": ["dataset"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: ran inline and wrote members; dry_run: estimate only; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written, for example points/transcript_cell_id. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "For completed runs: method, n_transcripts, n_cells, call_rate, background_fraction, prior_source and the effective parameters.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": true,
+    "idempotentHint": false,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "spatial-preproc.transcript_cell_assignment",
+      "reads": ["points/<name>", "labels/<name>", "images/<name>", "uns/platform_units"],
+      "writes": ["points/transcript_cell_id", "points/transcript_cell_confidence", "uns/cell_polygons", "layers/counts", "obs/n_transcripts", "obs/cell_area", "obsm/spatial", "uns/<method>_run"],
+      "devices": ["cpu", "cuda"],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "model-based",
+      "docs": "tasks/spatial-preproc/transcript_cell_assignment.md"
+    }
+  }
+}

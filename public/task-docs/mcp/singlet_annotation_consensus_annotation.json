@@ -1,0 +1,210 @@
+{
+  "name": "singlet_annotation_consensus_annotation",
+  "title": "Consensus annotation across annotators",
+  "description": "Combines two or more existing annotator label columns into one consensus label per cell, with an agreement proportion, vote entropy and an agree, disagree or unassigned flag. The default method majority is a plurality vote behind an acceptance gate; cluster_majority adds a cluster-level modal label. Writes only obs/consensus_* members and uns/consensus_params. Do not use with a single annotator or to generate labels; run the annotator tasks first.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "majority",
+          "cluster_majority"
+        ],
+        "default": "majority",
+        "description": "majority: per-cell plurality with acceptance gate. cluster_majority: also gives each cluster its modal label."
+      },
+      "annotators": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "minItems": 2,
+        "description": "Two or more annotator label columns in obs to combine, as named in the dataset."
+      },
+      "unassigned_policy": {
+        "type": "string",
+        "enum": [
+          "abstain",
+          "count_as_vote"
+        ],
+        "default": "abstain",
+        "description": "abstain drops unassigned calls from the vote; count_as_vote makes unassigned a vote class."
+      },
+      "score_threshold": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1,
+        "default": 0.55,
+        "description": "Per-annotator probability below which a call is unassigned, for annotators with a _score column."
+      },
+      "majority": {
+        "type": "object",
+        "description": "Options for method majority.",
+        "properties": {
+          "min_agreement": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.7,
+            "description": "Minimum consensus proportion to accept a label; below it the flag is disagree."
+          },
+          "max_entropy": {
+            "type": "number",
+            "minimum": 0,
+            "default": 1.0,
+            "description": "Maximum vote entropy in bits to accept a label."
+          },
+          "weights": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "number",
+              "minimum": 0
+            },
+            "description": "Per-annotator vote weights keyed by annotator name; uniform when absent."
+          }
+        },
+        "additionalProperties": false
+      },
+      "cluster_majority": {
+        "type": "object",
+        "description": "Options for method cluster_majority.",
+        "properties": {
+          "cluster_key": {
+            "type": "string",
+            "description": "obs column with cluster labels; the modal label is broadcast to its cells."
+          },
+          "min_prop": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0,
+            "description": "Dominant-fraction threshold; clusters below it are Heterogeneous. Zero matches CellTypist."
+          }
+        },
+        "required": [
+          "cluster_key"
+        ],
+        "additionalProperties": false
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": [
+      "dataset"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. obs/consensus_label. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Keys: n_annotators, coverage, flag_fraction; cluster_majority adds n_heterogeneous_clusters. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "annotation.consensus_annotation",
+      "reads": [
+        "obs/<annotator>",
+        "obs/<annotator>_score",
+        "obs/<cluster_key>",
+        "uns/cl_label_map"
+      ],
+      "writes": [
+        "obs/consensus_label",
+        "obs/consensus_agreement",
+        "obs/consensus_entropy",
+        "obs/consensus_flag",
+        "uns/consensus_params"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": false,
+      "long_running": false,
+      "streaming": true,
+      "paradigm": "hybrid",
+      "docs": "tasks/annotation/consensus_annotation.md"
+    }
+  }
+}

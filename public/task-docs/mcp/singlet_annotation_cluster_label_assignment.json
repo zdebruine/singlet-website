@@ -1,0 +1,207 @@
+{
+  "name": "singlet_annotation_cluster_label_assignment",
+  "title": "Cluster-level cell type label assignment",
+  "description": "Assigns one cell-type label, a score and a called or unknown flag to each cluster of an existing partition, using a tissue marker table or a reference. Defaults to scType; scCATCH, singler_cluster and scmap_cluster are comparators. Writes a per-cell broadcast label and a per-cluster table of ranked alternatives; it does not create the clustering. Do not use for per-cell labels or unclustered cells; use singlet_annotation_reference_label_transfer for cell-level transfer.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "cluster_key": {
+        "type": "string",
+        "default": "leiden",
+        "description": "obs column holding the cluster partition to label; each cluster receives one label."
+      },
+      "method": {
+        "type": "string",
+        "enum": ["scType", "scCATCH", "singler_cluster", "scmap_cluster"],
+        "default": "scType",
+        "description": "Labelling method; scType is the default, the others are comparators for benchmarking."
+      },
+      "tissue": {
+        "type": ["string", "null"],
+        "default": null,
+        "description": "Tissue matched against the marker table; required for scType and scCATCH with the shipped table."
+      },
+      "marker_table": {
+        "type": ["string", "null"],
+        "default": null,
+        "description": "uns key of the marker table with type, gene, sign, tissue and species columns; null uses the method's shipped table."
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu", "cuda"],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      },
+      "scType": {
+        "type": "object",
+        "description": "Options for method scType.",
+        "properties": {
+          "unknown_mean_score": {
+            "type": "number",
+            "minimum": 0,
+            "default": 0.25,
+            "description": "Mean per-cell score below which a cluster is Unknown; scale-free form of the n/4 rule."
+          }
+        },
+        "additionalProperties": false
+      },
+      "scCATCH": {
+        "type": "object",
+        "description": "Options for method scCATCH.",
+        "properties": {
+          "cell_min_pct": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.25,
+            "description": "Minimum fraction of cluster cells expressing a marker."
+          },
+          "logfc": {
+            "type": "number",
+            "minimum": 0,
+            "default": 0.25,
+            "description": "Minimum cluster-versus-rest log fold change."
+          },
+          "pvalue": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.05,
+            "description": "Marker p-value cutoff."
+          },
+          "pvalue_adjust": {
+            "type": "string",
+            "enum": ["none", "bh"],
+            "default": "none",
+            "description": "none reproduces scCATCH; bh applies Benjamini-Hochberg across genes."
+          }
+        },
+        "additionalProperties": false
+      },
+      "singler_cluster": {
+        "type": "object",
+        "description": "Options for method singler_cluster.",
+        "properties": {
+          "reference": {
+            "type": "string",
+            "description": "Reference handle with labelled profiles; required for this method."
+          },
+          "quantile_use": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.8,
+            "description": "Quantile used to aggregate reference correlations for each cluster."
+          },
+          "fine_tune_thres": {
+            "type": "number",
+            "minimum": 0,
+            "default": 0.05,
+            "description": "Score gap for keeping labels in the fine-tuning round."
+          },
+          "aggregation": {
+            "type": "string",
+            "enum": ["mean_normalised", "sum_counts"],
+            "default": "mean_normalised",
+            "description": "sum_counts reproduces legacy SingleR cluster mode; mean_normalised is the singlet default."
+          }
+        },
+        "required": ["reference"],
+        "additionalProperties": false
+      },
+      "scmap_cluster": {
+        "type": "object",
+        "description": "Options for method scmap_cluster.",
+        "properties": {
+          "reference": {
+            "type": "string",
+            "description": "Reference handle with an scmap cluster index; required for this method."
+          },
+          "threshold": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.7,
+            "description": "Similarity below which a cluster is unassigned."
+          }
+        },
+        "required": ["reference"],
+        "additionalProperties": false
+      }
+    },
+    "required": ["dataset"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written, e.g. obs/cluster_label. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Keys: method, n_clusters, n_called, n_unknown, median_margin. Completed runs only; never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "annotation.cluster_label_assignment",
+      "reads": ["layers/counts", "X", "obs/<cluster_key>", "uns/<marker_table>"],
+      "writes": ["obs/cluster_label", "obs/cluster_label_score", "obs/cluster_label_flag", "uns/cluster_label_clusters", "uns/cluster_label_params"],
+      "devices": ["cpu", "cuda"],
+      "stochastic": false,
+      "long_running": false,
+      "streaming": true,
+      "paradigm": "heuristic",
+      "docs": "tasks/annotation/cluster_label_assignment.md"
+    }
+  }
+}

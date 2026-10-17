@@ -1,0 +1,217 @@
+{
+  "name": "singlet_statistics_post_clustering_inference",
+  "title": "Post-clustering differential expression with valid p-values",
+  "description": "Tests each gene for a difference between clusters whose labels were computed from the same counts, correcting for that double dipping. The default countsplit_nb splits counts under a negative binomial model; labels must be learned on fold 1 only, which the tool checks against provenance. Writes per-gene p-values (clusterde writes empirical q-values) and BH q-values per cluster contrast. naive_wilcoxon is an uncorrected benchmark baseline; do not use it for inference.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "cluster_key": {
+        "type": "string",
+        "description": "obs column with cluster labels, learned only on fold-1 or estimation-half cells for splitting and tn_test."
+      },
+      "method": {
+        "type": "string",
+        "enum": ["countsplit_nb", "countsplit_poisson", "tn_test", "clusterde", "naive_wilcoxon"],
+        "default": "countsplit_nb",
+        "description": "Test to run. countsplit_nb is the model-based default; naive_wilcoxon is a baseline only."
+      },
+      "alpha": {
+        "type": "number",
+        "exclusiveMinimum": 0,
+        "maximum": 1,
+        "default": 0.05,
+        "description": "BH false discovery rate level per contrast; also the clusterde FDR level."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Random seed for the fold assignment and the TN split."
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu", "cuda"],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      },
+      "countsplit": {
+        "type": "object",
+        "description": "Options for countsplit_poisson and countsplit_nb.",
+        "properties": {
+          "epsilon": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "exclusiveMaximum": 1,
+            "default": 0.5,
+            "description": "Share of each count given to fold 1 (clustering); the test uses the rest."
+          },
+          "overdispersion_key": {
+            "type": "string",
+            "default": "overdisp_b",
+            "description": "var column with known per-gene negative binomial size; required by countsplit_nb, ignored by countsplit_poisson."
+          }
+        },
+        "additionalProperties": false
+      },
+      "tn_test": {
+        "type": "object",
+        "description": "Options for tn_test.",
+        "properties": {
+          "split_prop": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "exclusiveMaximum": 1,
+            "default": 0.5,
+            "description": "Fraction of cells used to fit the separating hyperplane."
+          },
+          "svm_C": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 100,
+            "description": "Penalty C passed to the linear SVM that fits the hyperplane."
+          },
+          "use_tdist": {
+            "type": "boolean",
+            "default": false,
+            "description": "Use a t reference with n_y+n_z-2 degrees of freedom instead of normal."
+          }
+        },
+        "additionalProperties": false
+      },
+      "clusterde": {
+        "type": "object",
+        "description": "Options for clusterde null generation and calibration.",
+        "properties": {
+          "null_family": {
+            "type": "string",
+            "enum": ["nb"],
+            "default": "nb",
+            "description": "Per-gene family for the single-population null; nb is the recommended family for UMI counts."
+          },
+          "corr_cut": {
+            "type": "number",
+            "default": 0.1,
+            "description": "Correlation cutoff used by the null generator."
+          },
+          "n_pcs": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 200,
+            "description": "Number of principal components used in null generation."
+          },
+          "n_rep": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 1,
+            "description": "Number of single-population null replicates generated."
+          }
+        },
+        "additionalProperties": false
+      },
+      "naive_wilcoxon": {
+        "type": "object",
+        "description": "Pre-filters for the naive Wilcoxon baseline.",
+        "properties": {
+          "min_pct": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.01,
+            "description": "Minimum fraction of cells expressing the gene in either group."
+          },
+          "logfc_threshold": {
+            "type": "number",
+            "minimum": 0,
+            "default": 0.1,
+            "description": "Minimum average log fold change for a gene to be tested."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "required": ["dataset"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written, e.g. varm/post_clust_pval_countsplit_nb. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "For completed runs: method, alpha, epsilon, contrasts, genes_tested, genes_skipped_zero_variance, discoveries_q_le_alpha per contrast, provenance_check. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "statistics.post_clustering_inference",
+      "reads": [
+        "layers/counts",
+        "obs/<cluster_key>",
+        "var/highly_variable",
+        "var/<overdispersion_key>"
+      ],
+      "writes": [
+        "layers/split_fold1",
+        "layers/split_fold2",
+        "varm/post_clust_pval_<method>",
+        "varm/post_clust_qval_<method>",
+        "uns/post_clust/params"
+      ],
+      "devices": ["cpu", "cuda"],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/statistics/post_clustering_inference.md"
+    }
+  }
+}

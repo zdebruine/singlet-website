@@ -1,0 +1,74 @@
+{
+  "name": "singlet_compare_labelings",
+  "title": "Compare two labelings",
+  "description": "Agreement between two stored label arrays: ARI, the contingency of the largest groups and per-cluster purity. Use it to compare clusterings, or a clustering with planted truth.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "name": {
+        "type": "string",
+        "description": "Dataset name."
+      },
+      "key_a": {
+        "type": "string",
+        "description": "First label array key.",
+        "default": "clusters/louvain"
+      },
+      "key_b": {
+        "type": "string",
+        "description": "Second label array key.",
+        "default": "truth/labels"
+      }
+    },
+    "required": [
+      "name"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "status": {
+        "type": "string",
+        "enum": [
+          "ok",
+          "error"
+        ]
+      },
+      "summary": {
+        "type": "string"
+      },
+      "metrics": {
+        "type": "object"
+      },
+      "figures": {
+        "type": "array"
+      },
+      "artifacts": {
+        "type": "array"
+      },
+      "warnings": {
+        "type": "array"
+      },
+      "next": {
+        "type": "array"
+      },
+      "timings": {
+        "type": "object"
+      }
+    },
+    "required": [
+      "status",
+      "summary"
+    ]
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "evaluation.cluster_validity_indices",
+      "reads": [],
+      "writes": [],
+      "runtime": "local-cpu",
+      "streaming": true
+    }
+  }
+}

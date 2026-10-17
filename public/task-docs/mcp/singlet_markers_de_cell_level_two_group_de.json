@@ -1,0 +1,237 @@
+{
+  "name": "singlet_markers_de_cell_level_two_group_de",
+  "title": "Cell-level two-group differential expression",
+  "description": "Tests each gene for a difference between two groups of cells, treating every cell as an independent observation. Writes per-gene statistics, p-values, FDR-adjusted values, log fold changes and ranks. The default is a tie-corrected Wilcoxon test. Use it only when cells are the true unit, such as cell-line mixtures or simulations; for donor or sample designs use replicate-aware condition DE instead.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu", "cuda"],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Permutation seed for inference.null_calibration; the test itself is deterministic."
+      },
+      "method": {
+        "type": "string",
+        "enum": ["wilcoxon", "t-test", "mast", "desingle"],
+        "default": "wilcoxon",
+        "description": "Two-group test: wilcoxon (rank, default), t-test (Welch), mast (hurdle) or desingle (ZINB likelihood ratio)."
+      },
+      "contrast": {
+        "type": "object",
+        "description": "Group contrast: the two-level column in key, with group tested against reference.",
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "obs column holding the two-level group label."
+          },
+          "group": {
+            "type": "string",
+            "description": "Level of the contrast column to test."
+          },
+          "reference": {
+            "type": "string",
+            "default": "rest",
+            "description": "Comparison level, or rest for all other cells."
+          }
+        },
+        "required": ["key", "group"],
+        "additionalProperties": false
+      },
+      "layer": {
+        "type": "string",
+        "default": "auto",
+        "description": "Expression layer; auto uses layers/log1p_norm for wilcoxon, t-test and mast, and layers/counts for desingle."
+      },
+      "covariates": {
+        "type": "array",
+        "items": {"type": "string"},
+        "default": [],
+        "description": "obs columns added to the mast design, for example a detection-rate column; ignored by other methods."
+      },
+      "filters": {
+        "type": "object",
+        "description": "Gene filters applied before testing.",
+        "properties": {
+          "min_cells_per_group": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 3,
+            "description": "Genes with fewer cells than this in either group are not tested."
+          },
+          "min_detect_frac": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.01,
+            "description": "Minimum fraction of cells expressing the gene in at least one group."
+          }
+        },
+        "additionalProperties": false
+      },
+      "inference": {
+        "type": "object",
+        "description": "Multiple-testing and calibration settings.",
+        "properties": {
+          "fdr_threshold": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 1,
+            "default": 0.05,
+            "description": "Adjusted p-value threshold for calling a gene DE."
+          },
+          "corr_method": {
+            "type": "string",
+            "enum": ["benjamini-hochberg", "bonferroni"],
+            "default": "benjamini-hochberg",
+            "description": "Multiple-testing correction across tested genes."
+          },
+          "null_calibration": {
+            "type": "string",
+            "enum": ["none", "donor_permutation", "cell_permutation"],
+            "default": "none",
+            "description": "Empirical null for calibrated FDR; donor_permutation needs donor_key."
+          },
+          "donor_key": {
+            "type": "string",
+            "description": "obs column with donor or sample identifiers; required for donor_permutation."
+          }
+        },
+        "additionalProperties": false
+      },
+      "options": {
+        "type": "object",
+        "description": "Method-specific options; each block applies only to the method it names.",
+        "properties": {
+          "wilcoxon": {
+            "type": "object",
+            "description": "Options for the wilcoxon method.",
+            "properties": {
+              "tie_correct": {
+                "type": "boolean",
+                "default": true,
+                "description": "Use the tie-corrected rank variance; recommended for zero-inflated data."
+              }
+            },
+            "additionalProperties": false
+          },
+          "mast": {
+            "type": "object",
+            "description": "Options for the mast method.",
+            "properties": {
+              "ebayes": {
+                "type": "boolean",
+                "default": true,
+                "description": "Empirical-Bayes variance shrinkage in the MAST fit, as in its default."
+              }
+            },
+            "additionalProperties": false
+          },
+          "desingle": {
+            "type": "object",
+            "description": "Options for the desingle method.",
+            "properties": {
+              "type_threshold": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "maximum": 0.1,
+                "default": 0.05,
+                "description": "Threshold for classifying DEs, DEa and DEg genes; must be in (0, 0.1]."
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "required": ["dataset"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written: uns/de_cell_level and uns/de_cell_level_diagnostics. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Keys: n_tested, n_called, top_genes (gene, logfc, padj), calibration (called fraction under the null, or null) and confounding (flags, or null).",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "markers-de.cell_level_two_group_de",
+      "reads": [
+        "layers/counts",
+        "layers/log1p_norm",
+        "obs/<contrast_key>",
+        "obs/<covariate_keys>",
+        "obs/<donor_key>"
+      ],
+      "writes": [
+        "uns/de_cell_level",
+        "uns/de_cell_level_diagnostics"
+      ],
+      "devices": ["cpu", "cuda"],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/markers-de/cell_level_two_group_de.md"
+    }
+  }
+}

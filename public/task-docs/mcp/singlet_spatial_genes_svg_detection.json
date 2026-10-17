@@ -1,0 +1,201 @@
+{
+  "name": "singlet_spatial_genes_svg_detection",
+  "title": "Spatially variable gene detection",
+  "description": "Tests each gene for non-random expression variation across tissue coordinates and writes a score, p-value, FDR q-value and rank per gene. Use it on one spatial section with counts and obsm/spatial; the default method is sparkx. Do not use it for cell-type-specific spatial variation or for pooled multi-section data without section effects.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI, or a workspace handle, with obsm/spatial present."
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu", "cuda"],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without fitting any gene."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing svg_* members instead of failing."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Seed for shuffled nulls and permutations; the same seed reproduces the same p-values."
+      },
+      "method": {
+        "type": "string",
+        "enum": ["sparkx", "spark", "spatialde", "nnsvg", "morani", "gearyc"],
+        "default": "sparkx",
+        "description": "SVG test; sparkx is the provisional default, chosen for its rank in the 2025 benchmark."
+      },
+      "layer": {
+        "type": "string",
+        "enum": ["auto", "counts", "normalized"],
+        "default": "auto",
+        "description": "Expression layer; auto uses counts for model methods and normalized for morani and gearyc."
+      },
+      "graph": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Spatial graph options for morani and gearyc; other methods ignore them.",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["delaunay", "knn", "radius"],
+            "default": "delaunay",
+            "description": "Spatial graph used by the autocorrelation statistics."
+          },
+          "k_neighbors": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 6,
+            "description": "Neighbours per unit for knn graphs; 6 suits hexagonal Visium spots."
+          },
+          "radius": {
+            "type": ["number", "null"],
+            "default": null,
+            "description": "Distance cut-off in coordinate units for radius graphs."
+          }
+        }
+      },
+      "library_adjust": {
+        "type": "string",
+        "enum": ["auto", "regress_log_total", "offset", "none"],
+        "default": "auto",
+        "description": "How library size enters parametric models; auto matches each method's benchmark script."
+      },
+      "inference": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Calling threshold and calibration check.",
+        "properties": {
+          "alpha": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 1,
+            "default": 0.05,
+            "description": "Nominal FDR threshold used to count calls in the summary."
+          },
+          "calibrate_null": {
+            "type": "boolean",
+            "default": true,
+            "description": "Shuffled-null calibration on a gene sample; reports lambda_GC and rejection rate."
+          }
+        }
+      },
+      "morani": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options for Moran's I and Geary's C (methods morani and gearyc).",
+        "properties": {
+          "n_perms": {
+            "type": ["integer", "null"],
+            "minimum": 1,
+            "default": null,
+            "description": "Permutations for permutation p-values; null uses analytic normal moments."
+          },
+          "two_tailed": {
+            "type": "boolean",
+            "default": false,
+            "description": "Two-tailed p-values for Moran's I and Geary's C."
+          }
+        }
+      },
+      "spatialde": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options for the SpatialDE Gaussian-process test (method spatialde).",
+        "properties": {
+          "lengthscale_grid": {
+            "type": "integer",
+            "minimum": 2,
+            "default": 10,
+            "description": "Number of log-spaced squared-exponential lengthscales between the geometric limits."
+          }
+        }
+      }
+    },
+    "required": ["dataset"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: ran inline and wrote members; dry_run: estimate only; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written, for example var/svg_score. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "For completed runs: method, n_genes_tested, n_significant_at_alpha, lambda_gc (when calibrated), null_rejection_rate and the effective parameters.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "spatial-genes.svg_detection",
+      "reads": [
+        "layers/counts",
+        "layers/normalized",
+        "obsm/spatial",
+        "obs/total_counts",
+        "obsp/spatial_connectivities"
+      ],
+      "writes": [
+        "var/svg_score",
+        "var/svg_pvalue",
+        "var/svg_qvalue",
+        "var/svg_rank",
+        "var/svg_lengthscale",
+        "obsp/svg_graph",
+        "uns/svg_params"
+      ],
+      "devices": ["cpu", "cuda"],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": true,
+      "paradigm": "hybrid",
+      "docs": "tasks/spatial-genes/svg_detection.md"
+    }
+  }
+}

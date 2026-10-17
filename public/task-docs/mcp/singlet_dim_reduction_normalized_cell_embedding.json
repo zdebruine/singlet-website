@@ -1,0 +1,358 @@
+{
+  "name": "singlet_dim_reduction_normalized_cell_embedding",
+  "title": "Compute a cell embedding (PCA and alternatives)",
+  "description": "Computes a k-dimensional cell embedding from a normalised, highly-variable-gene layer. The default method is pca; alternatives are denoise_pca, ica, sparse_pca, factor_analysis, random_projection, diffusion_map and umap. Needs layers/log1p_norm and var/highly_variable (layers/counts only for denoise_pca); writes obsm/X_<method>, gene loadings where defined, and uns/dr_<method>. Do not use it to choose the number of components (use singlet_dim_reduction_pc_number_selection), to select genes, to remove batch effects, or to read lineage or global distances from a two-dimensional nonlinear layout.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "layer": {
+        "type": "string",
+        "default": "log1p_norm",
+        "description": "Normalised layer under layers/ to embed."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "pca",
+          "denoise_pca",
+          "ica",
+          "sparse_pca",
+          "factor_analysis",
+          "random_projection",
+          "diffusion_map",
+          "umap"
+        ],
+        "default": "pca",
+        "description": "Embedding method; each value writes the members listed in the task document."
+      },
+      "n_components": {
+        "type": "integer",
+        "minimum": 2,
+        "maximum": 200,
+        "default": 50,
+        "description": "Embedding dimension k; ignored by denoise_pca, which uses options.denoise_pca.max_rank."
+      },
+      "use_hvg": {
+        "type": "boolean",
+        "default": true,
+        "description": "Restrict to var/highly_variable; the call fails if the mask is absent."
+      },
+      "options": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Method-specific options; each object applies only when method has the same name.",
+        "properties": {
+          "pca": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Options for pca.",
+            "properties": {
+              "svd_solver": {
+                "type": "string",
+                "enum": [
+                  "arpack",
+                  "randomized",
+                  "covariance_eigh"
+                ],
+                "default": "arpack",
+                "description": "SVD solver; arpack is exact, randomized is the scalable option."
+              },
+              "zero_center": {
+                "type": "boolean",
+                "default": true,
+                "description": "Centre each gene before the decomposition."
+              }
+            }
+          },
+          "denoise_pca": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Options for denoise_pca.",
+            "properties": {
+              "count_layer": {
+                "type": "string",
+                "default": "counts",
+                "description": "Raw-count layer used to fit the technical variance trend."
+              },
+              "min_rank": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 200,
+                "default": 5,
+                "description": "Lower bound on the number of PCs kept."
+              },
+              "max_rank": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 200,
+                "default": 50,
+                "description": "Upper bound on the PCs computed and considered."
+              }
+            }
+          },
+          "ica": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Options for ica (FastICA).",
+            "properties": {
+              "fun": {
+                "type": "string",
+                "enum": [
+                  "logcosh",
+                  "exp",
+                  "cube"
+                ],
+                "default": "logcosh",
+                "description": "Non-quadratic contrast function."
+              },
+              "max_iter": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 10000,
+                "default": 200,
+                "description": "Maximum fixed-point iterations."
+              }
+            }
+          },
+          "sparse_pca": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Options for sparse_pca.",
+            "properties": {
+              "alpha": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "default": 1,
+                "description": "L1 penalty on loadings; larger gives sparser loadings."
+              },
+              "ridge_alpha": {
+                "type": "number",
+                "minimum": 0,
+                "default": 0.01,
+                "description": "Ridge shrinkage applied when projecting cells onto the components."
+              }
+            }
+          },
+          "factor_analysis": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Options for factor_analysis.",
+            "properties": {
+              "max_iter": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 100000,
+                "default": 1000,
+                "description": "Maximum iterations."
+              },
+              "tol": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "default": 0.01,
+                "description": "Convergence tolerance on the log-likelihood."
+              }
+            }
+          },
+          "random_projection": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Options for random_projection.",
+            "properties": {
+              "eps": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "exclusiveMaximum": 1,
+                "default": 0.1,
+                "description": "Distortion tolerance used only to report the Johnson-Lindenstrauss minimum dimension."
+              }
+            }
+          },
+          "diffusion_map": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Options for diffusion_map.",
+            "properties": {
+              "n_neighbors": {
+                "type": "integer",
+                "minimum": 2,
+                "maximum": 500,
+                "default": 15,
+                "description": "Neighbours of the kNN connectivity graph."
+              },
+              "time": {
+                "type": "number",
+                "minimum": 0,
+                "default": 0,
+                "description": "Diffusion time t scaling coordinate j by its eigenvalue to the power t; 0 gives unscaled eigenvectors as in scanpy."
+              }
+            }
+          },
+          "umap": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Options for umap.",
+            "properties": {
+              "n_neighbors": {
+                "type": "integer",
+                "minimum": 2,
+                "maximum": 500,
+                "default": 15,
+                "description": "Neighbours of the kNN graph."
+              },
+              "min_dist": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1,
+                "default": 0.5,
+                "description": "Minimum distance in the layout; sets the kernel parameters a and b."
+              },
+              "init": {
+                "type": "string",
+                "enum": [
+                  "spectral",
+                  "random",
+                  "pca"
+                ],
+                "default": "spectral",
+                "description": "Initial layout; pca uses the first n_components PCA scores."
+              }
+            }
+          }
+        }
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "minimum": 0,
+        "default": 42,
+        "description": "Random seed for randomised solvers, ICA and factor-analysis starts, random projection and UMAP."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": [
+      "dataset"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. obsm/X_pca. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "additionalProperties": true,
+        "description": "Compact summary for completed runs: method, embedding_key, n_cells, n_genes_used, n_components, explained_variance_ratio_head, d_selected, jl_min_dim, converged, n_iter, eigenvalues_head, runtime_s, peak_memory_gb, device_used. Never raw matrices."
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "additionalProperties": true,
+        "description": "Present for dry_run: seconds, peak_memory_gb, device."
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "dim-reduction.normalized_cell_embedding",
+      "reads": [
+        "layers/log1p_norm",
+        "var/highly_variable",
+        "layers/counts"
+      ],
+      "writes": [
+        "obsm/X_pca",
+        "varm/PCs",
+        "uns/pca",
+        "obsm/X_ica",
+        "varm/ica_loadings",
+        "obsm/X_sparse_pca",
+        "varm/sparse_pca_loadings",
+        "obsm/X_fa",
+        "varm/fa_loadings",
+        "var/fa_noise_variance",
+        "obsm/X_rp",
+        "obsm/X_diffmap",
+        "uns/dr_diffusion_map/eigenvalues",
+        "obsm/X_umap",
+        "uns/dr_<method>"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/dim-reduction/normalized_cell_embedding.md"
+    }
+  }
+}

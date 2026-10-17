@@ -1,0 +1,190 @@
+{
+  "name": "singlet_qc_mito_fraction_cutoff_by_tissue",
+  "title": "Mitochondrial fraction cutoff by tissue",
+  "description": "Flags cells whose mitochondrial UMI percent is high relative to their own group (tissue, sample or cluster) and reports the cutoff fitted for each group. The default mad method is a published heuristic; miqc and mitochontrol return compromise posteriors and need a seed. Do not use it on single-nucleus libraries, where mitochondrial counts are near zero; use the nucleus-aware filter instead. It writes obs/pct_mito, obs/mito_flag and uns/mito_cutoff_by_group and does not remove cells.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "species": {
+        "type": "string",
+        "enum": ["human", "mouse", "other"],
+        "description": "Sets the mitochondrial gene prefix: MT- for human, mt- for mouse; other reads var/mito. No safe default."
+      },
+      "method": {
+        "type": "string",
+        "enum": ["mad", "fixed", "miqc", "mitochontrol"],
+        "default": "mad",
+        "description": "mad: upper-tail MAD on logit fraction with floor (default). fixed: constant bound. miqc, mitochontrol: model posteriors."
+      },
+      "group_by": {
+        "type": ["string", "null"],
+        "default": null,
+        "description": "obs column defining fit groups, such as tissue or sample; use the cluster key for mitochontrol. Null means the whole dataset."
+      },
+      "mad": {
+        "type": "object",
+        "description": "Options for method mad.",
+        "properties": {
+          "nmads": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 3,
+            "description": "Upper-tail threshold in unscaled MADs above the group median of the transformed fraction."
+          },
+          "transform": {
+            "type": "string",
+            "enum": ["logit", "identity"],
+            "default": "logit",
+            "description": "Scale on which the median and MAD are computed: logit (with pseudocount) or identity."
+          },
+          "floor_percent": {
+            "type": ["number", "null"],
+            "minimum": 0,
+            "maximum": 100,
+            "default": 8.0,
+            "description": "Percent of UMIs a cell must also exceed to be flagged (AND rule); null disables the floor."
+          }
+        },
+        "additionalProperties": false
+      },
+      "fixed": {
+        "type": "object",
+        "description": "Options for method fixed.",
+        "properties": {
+          "mito_percent": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100,
+            "default": 5.0,
+            "description": "Cells with mitochondrial percent above this are flagged; a tutorial convention, comparator only."
+          }
+        },
+        "additionalProperties": false
+      },
+      "miqc": {
+        "type": "object",
+        "description": "Options for method miqc.",
+        "properties": {
+          "posterior_cutoff": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.75,
+            "description": "Cells with posterior probability of the compromised component above this are flagged."
+          },
+          "model_type": {
+            "type": "string",
+            "enum": ["linear", "spline", "polynomial", "one_dimensional"],
+            "default": "linear",
+            "description": "Regression of mitochondrial percent on detected genes: linear, spline, polynomial or one-dimensional."
+          },
+          "enforce_left_cutoff": {
+            "type": "boolean",
+            "default": true,
+            "description": "Also flag low-complexity cells with mitochondrial percent at or above the least-mitochondrial flagged cell."
+          }
+        },
+        "additionalProperties": false
+      },
+      "mitochontrol": {
+        "type": "object",
+        "description": "Options for method mitochontrol.",
+        "properties": {
+          "threshold_prob": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.8,
+            "description": "Posterior probability threshold for the compromised component within each group."
+          }
+        },
+        "additionalProperties": false
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Initialisation seed for miqc and mitochontrol mixtures; mad and fixed are deterministic."
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu", "cuda"],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": ["dataset", "species"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written, for example obs/mito_flag. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Completed runs: method, groups, cells_in, cells_flagged and cutoff_range (percent). Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "qc.mito_fraction_cutoff_by_tissue",
+      "reads": ["layers/counts", "var/mito", "obs/<group_by>"],
+      "writes": ["obs/pct_mito", "obs/mito_flag", "obs/prob_compromised", "uns/mito_cutoff_by_group", "models/mito_miqc", "models/mito_mitochontrol"],
+      "devices": ["cpu", "cuda"],
+      "stochastic": true,
+      "long_running": false,
+      "streaming": true,
+      "paradigm": "hybrid",
+      "docs": "tasks/qc/mito_fraction_cutoff_by_tissue.md"
+    }
+  }
+}

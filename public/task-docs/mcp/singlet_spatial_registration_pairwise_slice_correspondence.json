@@ -1,0 +1,289 @@
+{
+  "name": "singlet_spatial_registration_pairwise_slice_correspondence",
+  "title": "Pairwise slice correspondence",
+  "description": "Computes a soft correspondence between the spots or cells of two adjacent spatial sections by fused Gromov-Wasserstein optimal transport, balancing expression similarity against preserved spatial distances. Use it to link neighbouring sections before label transfer or multi-section analysis; it reads counts and coordinates and writes a coupling with per-unit matches. Do not use it for cross-technology or cross-resolution pairs, which have no validated benchmark here. It never changes layers/counts.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Source section handle: a .singlet path or URI, or a workspace handle. Rows of the coupling index this section."
+      },
+      "target_dataset": {
+        "type": "string",
+        "description": "Target section handle. Columns of the coupling index this section; its coordinates come from obsm/spatial."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "paste",
+          "paste2",
+          "moscot"
+        ],
+        "default": "paste",
+        "description": "paste: balanced fused GW, the published standard. paste2: partial overlap. moscot: entropic unbalanced fused GW."
+      },
+      "common": {
+        "type": "object",
+        "description": "Options shared by all methods.",
+        "properties": {
+          "alpha": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 1,
+            "default": null,
+            "description": "Spatial weight: 0 uses expression only, 1 spatial distances only; moscot accepts (0, 1]; null uses the method default."
+          },
+          "use_rep": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null,
+            "description": "obsm key used as the expression representation instead of layers/counts."
+          },
+          "normalize_spatial": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "default": null,
+            "description": "Scale spatial distances per section; null uses the method default."
+          },
+          "marginals_key": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null,
+            "description": "obs column of non-negative weights for both sections; null means uniform marginals."
+          },
+          "max_iterations": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1,
+            "default": null,
+            "description": "Cap on outer iterations; null uses the method default."
+          }
+        },
+        "additionalProperties": false
+      },
+      "paste": {
+        "type": "object",
+        "description": "Options for method paste.",
+        "properties": {
+          "dissimilarity": {
+            "type": "string",
+            "enum": [
+              "kl",
+              "euclidean"
+            ],
+            "default": "kl",
+            "description": "Expression cost: KL between proportion profiles with a pseudocount, or Euclidean."
+          }
+        },
+        "additionalProperties": false
+      },
+      "paste2": {
+        "type": "object",
+        "description": "Options for method paste2 (partial overlap).",
+        "properties": {
+          "overlap_fraction": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0,
+            "default": null,
+            "description": "Fraction s of mass to transport, at most the smaller total mass of the two sections; null means balanced transport, as in paste."
+          }
+        },
+        "additionalProperties": false
+      },
+      "moscot": {
+        "type": "object",
+        "description": "Options for method moscot (entropic unbalanced fused GW).",
+        "properties": {
+          "epsilon": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 0.01,
+            "description": "Entropic regularisation; the cost is rescaled by its mean."
+          },
+          "tau_a": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 1,
+            "default": 1.0,
+            "description": "Unbalanced penalty on the source marginal; 1 is balanced."
+          },
+          "tau_b": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 1,
+            "default": 1.0,
+            "description": "Unbalanced penalty on the target marginal; 1 is balanced."
+          },
+          "rank": {
+            "type": "integer",
+            "default": -1,
+            "description": "-1 selects the full-rank solver; a positive value selects low-rank GW."
+          }
+        },
+        "additionalProperties": false
+      },
+      "output_key": {
+        "type": "string",
+        "default": "pairwise",
+        "description": "Prefix of every written member, for example models/<output_key>/coupling."
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when the method has a CUDA path and memory allows."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, peak memory and device without computing the coupling."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing members with the same output_key instead of failing."
+      }
+    },
+    "required": [
+      "dataset",
+      "target_dataset"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the source dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: wrote members; dry_run: estimate only; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, for example models/s2_s3/coupling. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Compact summary for completed jobs: method, sizes, total mass, objective, iterations and overlap fraction.",
+        "properties": {
+          "method": {
+            "type": "string"
+          },
+          "n_source": {
+            "type": "integer"
+          },
+          "n_target": {
+            "type": "integer"
+          },
+          "total_mass": {
+            "type": "number"
+          },
+          "objective": {
+            "type": "number"
+          },
+          "iterations": {
+            "type": "integer"
+          },
+          "overlap_fraction": {
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "spatial-registration.pairwise_slice_correspondence",
+      "reads": [
+        "layers/counts",
+        "obsm/spatial",
+        "obsm/<use_rep>",
+        "obs/<marginals_key>"
+      ],
+      "writes": [
+        "models/<output_key>/coupling",
+        "obs/<output_key>_match_index",
+        "obs/<output_key>_match_mass",
+        "uns/<output_key>/overlap_fraction",
+        "uns/<output_key>/objective",
+        "obsm/<output_key>_aligned"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": false,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/spatial-registration/pairwise_slice_correspondence.md"
+    }
+  }
+}

@@ -1,0 +1,266 @@
+{
+  "name": "singlet_doublets_expression_doublet_scoring",
+  "title": "Expression-based per-cell doublet scoring",
+  "description": "Scores each barcode of one library's raw UMI counts by how much its expression resembles a mixture of two cells, and writes a continuous per-barcode score (higher is more doublet-like) with the simulated-score distribution and a parameter record. Needs integer counts in layers/counts for barcodes already called as cells; set sample_key when the dataset merges libraries so each is scored separately. The default method scrublet is closed-form and needs no training; solo needs a fitted scVI model at models/<solo.scvi_model_key>. It makes no labels (use doublets.doublet_call_thresholding); do not use it on empty droplets or as a replacement for hashing or genotype labels.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "scrublet",
+          "doubletfinder",
+          "scdblfinder",
+          "solo"
+        ],
+        "default": "scrublet",
+        "description": "Detector. scrublet (default, closed-form), doubletfinder, scdblfinder, solo (needs solo.scvi_model_key). Scores are on method-specific scales."
+      },
+      "sample_key": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "default": null,
+        "description": "obs column naming each library; each is scored separately. Set it whenever the dataset merges libraries. Null treats the dataset as one library."
+      },
+      "expected_doublet_rate": {
+        "type": "number",
+        "default": 0.05,
+        "exclusiveMinimum": 0,
+        "exclusiveMaximum": 1,
+        "description": "Expected doublet rate rho: the prior for scrublet; recorded for every method and passed to doublets.doublet_call_thresholding."
+      },
+      "scrublet": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options used only when method is scrublet.",
+        "properties": {
+          "sim_doublet_ratio": {
+            "type": "number",
+            "default": 2.0,
+            "exclusiveMinimum": 0,
+            "description": "Simulated doublets per observed barcode, r."
+          },
+          "n_neighbors": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "default": null,
+            "minimum": 2,
+            "description": "Base neighbour count k0. Null uses round(0.5 * sqrt(n))."
+          },
+          "n_prin_comps": {
+            "type": "integer",
+            "default": 30,
+            "minimum": 2,
+            "description": "Principal components of the merged embedding; must be below the number of barcodes and genes."
+          },
+          "min_gene_variability_pctl": {
+            "type": "number",
+            "default": 85.0,
+            "minimum": 0,
+            "maximum": 100,
+            "description": "Genes below this variability percentile are dropped before simulation."
+          },
+          "use_approx_neighbors": {
+            "type": "boolean",
+            "default": true,
+            "description": "Approximate neighbour lookup (true) or exact (false); exact scales quadratically with barcodes."
+          }
+        }
+      },
+      "doubletfinder": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options used only when method is doubletfinder.",
+        "properties": {
+          "pN": {
+            "type": "number",
+            "default": 0.25,
+            "exclusiveMinimum": 0,
+            "exclusiveMaximum": 1,
+            "description": "Artificial doublets as a fraction of the merged real plus artificial data."
+          },
+          "pK": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "default": null,
+            "exclusiveMinimum": 0,
+            "exclusiveMaximum": 1,
+            "description": "Neighbourhood fraction. Null runs the BCmvn sweep and records the chosen value."
+          },
+          "n_prin_comps": {
+            "type": "integer",
+            "default": 30,
+            "minimum": 2,
+            "description": "Principal components used for pANN. The reference has no default; singlet uses 30."
+          },
+          "use_approx_neighbors": {
+            "type": "boolean",
+            "default": true,
+            "description": "Approximate neighbour lookup (true) or the exact dense distance matrix (false)."
+          }
+        }
+      },
+      "scdblfinder": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options used only when method is scdblfinder.",
+        "properties": {
+          "dbr_per_1k": {
+            "type": "number",
+            "default": 0.008,
+            "exclusiveMinimum": 0,
+            "description": "Expected doublet rate per thousand cells; halve it for high-throughput 10x chips."
+          }
+        }
+      },
+      "solo": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Options used only when method is solo.",
+        "properties": {
+          "scvi_model_key": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null,
+            "description": "Key of a fitted scVI model at models/<key>. Required when method is solo."
+          },
+          "doublet_ratio": {
+            "type": "integer",
+            "default": 2,
+            "minimum": 1,
+            "description": "Simulated doublets per observed barcode used to train the classifier."
+          }
+        }
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Random seed for pair sampling, neighbour lookup and classifier training; recorded in uns/doublet_params_<method>."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace the obs and uns members written by a previous run of this tool instead of failing."
+      }
+    },
+    "required": [
+      "dataset"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. obs/doublet_score_scrublet. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Compact summary for completed runs: method, route, libraries_scored, barcodes_scored, simulated_doublets, expected_doublet_rate, score_column, score_min, score_median, score_max. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "doublets.expression_doublet_scoring",
+      "reads": [
+        "layers/counts",
+        "obs/<sample_key>",
+        "models/<scvi_model_key>"
+      ],
+      "writes": [
+        "obs/doublet_score_<method>",
+        "obs/doublet_score_se_scrublet",
+        "uns/doublet_sim_scores_<method>",
+        "uns/doublet_params_<method>"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/doublets/expression_doublet_scoring.md"
+    }
+  }
+}

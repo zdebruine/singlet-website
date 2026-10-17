@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from "react";
+import { Suspense, lazy, useEffect, type ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -29,6 +29,11 @@ import PrivateStudyDetail from "./pages/PrivateStudyDetail.tsx";
 import CohortDetail from "./pages/CohortDetail.tsx";
 import WorkspaceDetail from "./pages/WorkspaceDetail.tsx";
 import JoinWorkspace from "./pages/JoinWorkspace.tsx";
+// Task documentation pages pull in the markdown and math renderers; load them on demand.
+const Tasks = lazy(() => import("./pages/Tasks.tsx"));
+const Tools = lazy(() => import("./pages/Tools.tsx"));
+const ToolDetail = lazy(() => import("./pages/ToolDetail.tsx"));
+const TaskDetail = lazy(() => import("./pages/TaskDetail.tsx"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -91,6 +96,10 @@ const App = () => (
               <Route path="/study/:gse" element={<StudyDetail />} />
               <Route path="/docs" element={<Docs />} />
               <Route path="/docs/mcp" element={<DocsMcp />} />
+              <Route path="/tasks" element={<Suspense fallback={null}><Tasks /></Suspense>} />
+              <Route path="/tasks/:area/:slug" element={<Suspense fallback={null}><TaskDetail /></Suspense>} />
+              <Route path="/tools" element={<Suspense fallback={null}><Tools /></Suspense>} />
+              <Route path="/tools/:name" element={<Suspense fallback={null}><ToolDetail /></Suspense>} />
               <Route path="/about" element={<About />} />
               <Route path="/brand" element={<Brand />} />
 

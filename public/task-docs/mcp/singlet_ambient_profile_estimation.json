@@ -1,0 +1,285 @@
+{
+  "name": "singlet_ambient_profile_estimation",
+  "title": "Estimate per-channel ambient RNA profile",
+  "description": "Estimates the gene composition of cell-free RNA in each channel of an unfiltered droplet matrix and writes one profile per sample to varm/ambient_profile_<sample>. The default soupx method pools low-UMI droplets on CPU without clusters; cellbender, scar and decontx are model-based or hybrid alternatives that may be slower. Use it on a matrix that still contains empty droplets, before count removal with singlet_ambient_count_removal. Do not use it on filtered matrices, on pooled channels, or to remove counts.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: .singlet path or URI (s3://, r2://, https://) or workspace handle. Needs raw/counts."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "soupx",
+          "cellbender",
+          "scar",
+          "decontx"
+        ],
+        "default": "soupx",
+        "description": "soupx (default: pooled low-UMI droplets, CPU, no clusters); cellbender (learned profile, GPU advised); scar (iterative cell-free estimate); decontx (profiles pooled from other clusters)."
+      },
+      "sample_key": {
+        "type": "string",
+        "default": "sample",
+        "description": "obs column that defines channels; one profile is written per distinct value."
+      },
+      "seed": {
+        "type": "integer",
+        "minimum": 0,
+        "default": 12345,
+        "description": "Random seed for cellbender and decontx; ignored by soupx and scar."
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto uses CUDA for cellbender when enough memory is free, otherwise CPU. soupx is CPU only."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated seconds, peak memory and device without running or writing."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing ambient profile members for this method instead of failing."
+      },
+      "soupx": {
+        "type": "object",
+        "description": "Options used only when method is soupx.",
+        "properties": {
+          "umi_low": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 0,
+            "description": "Lower exclusive bound of total UMIs for pooled droplets (SoupX soupRange)."
+          },
+          "umi_high": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 100,
+            "description": "Upper exclusive bound of total UMIs for pooled droplets (SoupX soupRange)."
+          },
+          "cell_mask_key": {
+            "type": "string",
+            "default": "is_cell",
+            "description": "obs column of cell calls; called droplets are left out of the pool when present."
+          }
+        },
+        "additionalProperties": false
+      },
+      "scar": {
+        "type": "object",
+        "description": "Options used only when method is scar.",
+        "properties": {
+          "prob": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 1,
+            "default": 0.995,
+            "description": "Cell-free threshold probability for the multinomial rule; higher values give fewer cell-free droplets."
+          },
+          "iterations": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 3,
+            "description": "Rounds of re-estimating the profile from cell-free droplets."
+          },
+          "min_raw_counts": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 2,
+            "description": "Droplets with fewer total UMIs are dropped before the cell-free test."
+          }
+        },
+        "additionalProperties": false
+      },
+      "cellbender": {
+        "type": "object",
+        "description": "Options used only when method is cellbender.",
+        "properties": {
+          "epochs": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 150,
+            "description": "Training epochs for the variational model; upstream default is 150."
+          },
+          "low_umi_cutoff": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 5,
+            "description": "Droplets with total UMIs at or below this are excluded from the analysis."
+          },
+          "total_droplets": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 25000,
+            "description": "Droplets analysed by the model; upstream default is 25000."
+          },
+          "expected_cells": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1,
+            "default": null,
+            "description": "Expected cell count; null uses the model default. Sets the ambient filter via max(expected_cells, 5000)."
+          },
+          "min_ambient_counts_in_cells": {
+            "type": "number",
+            "minimum": 0,
+            "default": 0.1,
+            "description": "Genes whose projected ambient counts in cells are at or below this are returned unchanged."
+          }
+        },
+        "additionalProperties": false
+      },
+      "decontx": {
+        "type": "object",
+        "description": "Options used only when method is decontx.",
+        "properties": {
+          "cluster_key": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null,
+            "description": "obs column of cluster labels; when null, clusters are found internally as in DecontX."
+          },
+          "delta": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 2,
+            "maxItems": 2,
+            "default": [
+              10,
+              10
+            ],
+            "description": "Initial Beta concentrations for the native share; refitted each iteration by default."
+          },
+          "max_iter": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 500,
+            "description": "Maximum EM iterations."
+          },
+          "convergence": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 0.001,
+            "description": "EM convergence threshold."
+          },
+          "var_genes": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 5000,
+            "description": "Variable genes for internal clustering when cluster_key is null."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "dataset"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: profile written; dry_run: estimate only; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. varm/ambient_profile_<sample>. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "For completed runs, keys: method, samples (droplets used, UMI window or rounds, cell-free count), genes_excluded, convergence. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "ambient.profile_estimation",
+      "reads": [
+        "raw/counts",
+        "obs/is_cell",
+        "obs/<sample_key>",
+        "obs/<cluster_key>"
+      ],
+      "writes": [
+        "varm/ambient_profile_<sample>",
+        "uns/ambient_profile_meta/<sample>",
+        "obs/ambient_p_nonempty",
+        "models/ambient_profile_<method>"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/ambient/profile_estimation.md"
+    }
+  }
+}

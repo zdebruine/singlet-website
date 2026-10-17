@@ -1,0 +1,225 @@
+{
+  "name": "singlet_markers_de_lfc_shrinkage_effect_size",
+  "title": "Shrink log fold changes and rank genes by effect size",
+  "description": "Shrinks per-gene log2 fold changes for one contrast from donor-level pseudobulk counts using empirical-Bayes posteriors, returning shrunken estimates, intervals, lfsr and s-values. Use the default apeglm to rank genes by effect size; mle gives unshrunk estimates and seurat_avg_log2fc or scanpy_logfc are heuristic comparators only. A donor column is required, so cell-level input without donors is refused. Writes varm and uns members for the contrast; it does not compute p-values.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "layer": {
+        "type": "string",
+        "default": "counts",
+        "description": "Raw count layer summed into pseudobulk samples."
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu", "cuda"],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing LFC output members for this contrast instead of failing."
+      },
+      "method": {
+        "type": "string",
+        "enum": ["apeglm", "normal", "ashr", "mle", "seurat_avg_log2fc", "scanpy_logfc"],
+        "default": "apeglm",
+        "description": "Shrinkage method. apeglm is the default; seurat and scanpy methods are unshrunk comparators."
+      },
+      "contrast": {
+        "type": "object",
+        "description": "Test level compared with a reference level, optionally within strata.",
+        "properties": {
+          "column": {
+            "type": "string",
+            "description": "obs column holding condition labels."
+          },
+          "test": {
+            "type": "string",
+            "description": "Level whose expression is compared with the reference."
+          },
+          "reference": {
+            "type": "string",
+            "description": "Denominator level of the log fold change."
+          },
+          "donor_column": {
+            "type": "string",
+            "description": "obs column with biological replicate (donor) identifiers."
+          },
+          "cell_type_column": {
+            "type": ["string", "null"],
+            "default": null,
+            "description": "obs column defining strata; null pools all cells."
+          }
+        },
+        "required": ["column", "test", "reference", "donor_column"],
+        "additionalProperties": false
+      },
+      "filters": {
+        "type": "object",
+        "properties": {
+          "min_cells": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 10,
+            "description": "Minimum cells per pseudobulk sample."
+          },
+          "min_umis": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 1000,
+            "description": "Minimum total UMIs per pseudobulk sample."
+          },
+          "min_gene_umis": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 10,
+            "description": "Genes with fewer total UMIs across samples are not ranked."
+          }
+        },
+        "additionalProperties": false
+      },
+      "outputs": {
+        "type": "object",
+        "properties": {
+          "ci_level": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 1,
+            "default": 0.95,
+            "description": "Coverage of the reported intervals."
+          },
+          "svalue": {
+            "type": "boolean",
+            "default": true,
+            "description": "Compute lfsr and s-values; applies to apeglm and ashr only."
+          }
+        },
+        "additionalProperties": false
+      },
+      "apeglm": {
+        "type": "object",
+        "properties": {
+          "prior_scale": {
+            "type": ["number", "null"],
+            "default": null,
+            "description": "Cauchy prior scale; null adapts it to the MLE spread, capped at 1."
+          },
+          "interval_type": {
+            "type": "string",
+            "enum": ["laplace", "HPD", "credible"],
+            "default": "laplace",
+            "description": "Interval construction for the apeglm posterior."
+          }
+        },
+        "additionalProperties": false
+      },
+      "ashr": {
+        "type": "object",
+        "properties": {
+          "mixcompdist": {
+            "type": "string",
+            "enum": ["normal", "uniform"],
+            "default": "normal",
+            "description": "Mixture component family; normal matches the DESeq2 call."
+          }
+        },
+        "additionalProperties": false
+      },
+      "seurat": {
+        "type": "object",
+        "properties": {
+          "pseudocount": {
+            "type": "number",
+            "minimum": 0,
+            "default": 1,
+            "description": "Pseudocount added to group sums of normalised counts."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "required": ["dataset", "contrast"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: ran inline and wrote members; dry_run: estimate only; queued: long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written, e.g. varm/lfc_shrunk_<contrast>. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Method, pseudobulk sample count, ranked gene count, apeglm prior scale, and genes with lfsr at or below 0.05.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "markers-de.lfc_shrinkage_effect_size",
+      "reads": [
+        "layers/counts",
+        "obs/<contrast_key>",
+        "obs/<donor_key>",
+        "obs/<cell_type_key>"
+      ],
+      "writes": [
+        "varm/lfc_shrunk_<contrast>",
+        "varm/lfc_se_<contrast>",
+        "varm/lfc_ci_<contrast>",
+        "varm/lfsr_<contrast>",
+        "varm/svalue_<contrast>",
+        "uns/lfc_shrink/<contrast>"
+      ],
+      "devices": ["cpu", "cuda"],
+      "stochastic": false,
+      "long_running": false,
+      "streaming": true,
+      "paradigm": "model-based",
+      "docs": "tasks/markers-de/lfc_shrinkage_effect_size.md"
+    }
+  }
+}

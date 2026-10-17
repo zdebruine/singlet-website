@@ -1,0 +1,82 @@
+{
+  "name": "singlet_scan_resolution",
+  "title": "Scan clustering resolutions",
+  "description": "Run Louvain over a list of resolutions with two seeds each and report the number of clusters, modularity and seed-to-seed stability (ARI), so the resolution can be chosen from evidence rather than by default.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "name": {
+        "type": "string",
+        "description": "Dataset name."
+      },
+      "resolutions": {
+        "type": "array",
+        "description": "Resolutions to try.",
+        "items": {
+          "type": "number"
+        }
+      },
+      "mode": {
+        "type": "string",
+        "description": "Edge weights.",
+        "default": "snn",
+        "enum": [
+          "snn",
+          "knn"
+        ]
+      }
+    },
+    "required": [
+      "name"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "status": {
+        "type": "string",
+        "enum": [
+          "ok",
+          "error"
+        ]
+      },
+      "summary": {
+        "type": "string"
+      },
+      "metrics": {
+        "type": "object"
+      },
+      "figures": {
+        "type": "array"
+      },
+      "artifacts": {
+        "type": "array"
+      },
+      "warnings": {
+        "type": "array"
+      },
+      "next": {
+        "type": "array"
+      },
+      "timings": {
+        "type": "object"
+      }
+    },
+    "required": [
+      "status",
+      "summary"
+    ]
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "clustering.resolution_selection",
+      "reads": [
+        "knn/idx"
+      ],
+      "writes": [],
+      "runtime": "local-cpu",
+      "streaming": true
+    }
+  }
+}

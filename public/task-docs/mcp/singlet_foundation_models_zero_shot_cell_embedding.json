@@ -1,0 +1,328 @@
+{
+  "name": "singlet_foundation_models_zero_shot_cell_embedding",
+  "title": "Zero-shot cell embedding and cell-type separation",
+  "description": "Embeds a raw-count dataset with a frozen foundation model (scgpt or uce) or a baseline (hvg_pca or scvi), then scores expert cell-type separation with ARI, NMI, cell-type ASW and cLISI. The default is the hvg_pca baseline, so choose a foundation model explicitly. Writes an embedding, cluster labels and a score table. Do not use it to annotate cells, to fine-tune a model, or to judge a model on studies in its pretraining corpus.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "hvg_pca",
+          "scvi",
+          "scgpt",
+          "uce"
+        ],
+        "default": "hvg_pca",
+        "description": "Embedding method. hvg_pca is the baseline and default; scgpt and uce are frozen; scvi trains on the dataset."
+      },
+      "scoring": {
+        "type": "object",
+        "description": "Label, neighbourhood and resolution settings for the separation scores; applies to every method.",
+        "properties": {
+          "labels_key": {
+            "type": "string",
+            "default": "cell_type",
+            "description": "obs column of expert labels; used for scoring only, never as an input."
+          },
+          "batch_key": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null,
+            "description": "Optional obs column for stratified reporting; null for none."
+          },
+          "embedding_metric": {
+            "type": "string",
+            "enum": [
+              "euclidean",
+              "cosine"
+            ],
+            "default": "euclidean",
+            "description": "Distance for silhouette and cLISI; cosine is a sensitivity check."
+          },
+          "n_neighbors": {
+            "type": "integer",
+            "minimum": 2,
+            "default": 15,
+            "description": "Neighbours in the kNN graph used for Leiden clustering."
+          },
+          "resolution": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 2,
+            "default": null,
+            "description": "Fixed Leiden resolution; null optimises ARI over ten values in [0, 2]."
+          },
+          "pretraining_accessions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [],
+            "description": "Study accessions in the method's pretraining corpus; matching studies are flagged."
+          }
+        },
+        "additionalProperties": false
+      },
+      "scgpt": {
+        "type": "object",
+        "description": "Options for method scgpt; rejected for other methods.",
+        "properties": {
+          "model_dir": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null,
+            "description": "Directory of the frozen scGPT checkpoint; required for method scgpt."
+          },
+          "gene_col": {
+            "type": "string",
+            "default": "feature_name",
+            "description": "var column matching the scGPT gene vocabulary."
+          },
+          "max_length": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 1200,
+            "description": "Maximum gene tokens per cell."
+          },
+          "batch_size": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 64,
+            "description": "Inference batch size."
+          }
+        },
+        "additionalProperties": false
+      },
+      "uce": {
+        "type": "object",
+        "description": "Options for method uce; rejected for other methods.",
+        "properties": {
+          "model_dir": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null,
+            "description": "Directory of the frozen UCE model files; required for method uce."
+          },
+          "species": {
+            "type": "string",
+            "enum": [
+              "human",
+              "mouse"
+            ],
+            "default": "human",
+            "description": "Species of the input; the OpenProblems wrapper accepts only human and mouse."
+          },
+          "nlayers": {
+            "type": "integer",
+            "enum": [
+              4,
+              33
+            ],
+            "default": 4,
+            "description": "Pretrained model depth; 4-layer and 33-layer embeddings are not interchangeable."
+          },
+          "pad_length": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 1536,
+            "description": "Padded token length per cell."
+          },
+          "sample_size": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 1024,
+            "description": "Genes sampled per cell."
+          },
+          "batch_size": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 25,
+            "description": "Per-GPU batch size; 25 suits the 33-layer model on an 80 GB GPU."
+          }
+        },
+        "additionalProperties": false
+      },
+      "hvg_pca": {
+        "type": "object",
+        "description": "Options for method hvg_pca; rejected for other methods.",
+        "properties": {
+          "n_top_genes": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 2000,
+            "description": "Highly variable genes kept, selected by the seurat_v3 flavour on raw counts."
+          },
+          "n_comps": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 50,
+            "description": "Principal components retained for the baseline embedding."
+          }
+        },
+        "additionalProperties": false
+      },
+      "scvi": {
+        "type": "object",
+        "description": "Options for method scvi; rejected for other methods.",
+        "properties": {
+          "n_latent": {
+            "type": "integer",
+            "minimum": 2,
+            "default": 10,
+            "description": "Latent dimensionality of the scVI embedding."
+          },
+          "gene_likelihood": {
+            "type": "string",
+            "enum": [
+              "zinb",
+              "nb"
+            ],
+            "default": "zinb",
+            "description": "Count likelihood of the scVI decoder."
+          },
+          "max_epochs": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1,
+            "default": null,
+            "description": "Training epochs; null uses the library rule."
+          }
+        },
+        "additionalProperties": false
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Random seed for Leiden clustering and scVI initialisation."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": [
+      "dataset"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. obsm/X_zero_shot. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Compact summary for completed runs. Keys: method, n_cells, resolution, ari, nmi, cell_type_asw, clisi, leakage_flag. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "foundation-models.zero_shot_cell_embedding",
+      "reads": [
+        "layers/counts",
+        "var/<gene_col>",
+        "obs/<labels_key>",
+        "obs/<batch_key>"
+      ],
+      "writes": [
+        "obsm/X_zero_shot",
+        "obs/zero_shot_cluster",
+        "uns/zero_shot_eval"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/foundation-models/zero_shot_cell_embedding.md"
+    }
+  }
+}

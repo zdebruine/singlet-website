@@ -1,0 +1,82 @@
+{
+  "name": "singlet_qc_summary",
+  "title": "Per-cell QC and gene statistics",
+  "description": "One streaming pass: total counts, detected genes and percent counts in flagged (mitochondrial) genes per cell, plus per-gene moments. Reports quantiles, MAD-based outlier counts and histograms; stores per-cell arrays.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "name": {
+        "type": "string",
+        "description": "Dataset name."
+      },
+      "mito_prefix": {
+        "type": "string",
+        "description": "Gene-name prefix that marks mitochondrial genes (case-insensitive).",
+        "default": "MT-"
+      },
+      "mad_k": {
+        "type": "number",
+        "description": "Outlier threshold in MADs.",
+        "default": 5.0
+      }
+    },
+    "required": [
+      "name"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "status": {
+        "type": "string",
+        "enum": [
+          "ok",
+          "error"
+        ]
+      },
+      "summary": {
+        "type": "string"
+      },
+      "metrics": {
+        "type": "object"
+      },
+      "figures": {
+        "type": "array"
+      },
+      "artifacts": {
+        "type": "array"
+      },
+      "warnings": {
+        "type": "array"
+      },
+      "next": {
+        "type": "array"
+      },
+      "timings": {
+        "type": "object"
+      }
+    },
+    "required": [
+      "status",
+      "summary"
+    ]
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "qc.low_quality_cell_detection",
+      "reads": [
+        "counts"
+      ],
+      "writes": [
+        "qc/total",
+        "qc/ngenes",
+        "qc/pct_mito",
+        "qc/pass",
+        "stats/*"
+      ],
+      "runtime": "local-cpu",
+      "streaming": true
+    }
+  }
+}

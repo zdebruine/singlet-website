@@ -1,0 +1,296 @@
+{
+  "name": "singlet_neighbors_neighbor_count_selection",
+  "title": "Choose neighbour count k by partition stability",
+  "description": "Chooses the neighbour count k for a cell kNN graph from a candidate grid; k follows the Scanpy n_neighbors convention and counts the cell itself. By default (selection_rule partition_stability) it returns the smallest k whose Leiden partition, recomputed on random cell subsamples, reproduces the full-data partition; it needs only the embedding, and reference labels add ARI, NMI and graph-connectivity columns. It reads an obsm embedding from earlier steps (X_pca by default, first n_pcs columns) and writes a per-k table and a selection record under uns/<key>. Do not use it to build the final graph (run neighbors.approximate_knn_search with the chosen k), to choose the number of PCs or the clustering resolution, on raw counts, or to report a label-optimised k as validated.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "embedding": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Embedding used for every neighbour search.",
+        "properties": {
+          "use_rep": {
+            "type": "string",
+            "default": "X_pca",
+            "description": "Key of the obsm embedding (cells by dimensions); it must contain no missing values."
+          },
+          "n_pcs": {
+            "type": "integer",
+            "default": 30,
+            "minimum": 2,
+            "description": "Number of leading embedding columns used. Use the value from dim-reduction.pc_number_selection when that step has run."
+          }
+        }
+      },
+      "k_grid": {
+        "type": "array",
+        "items": {
+          "type": "integer",
+          "minimum": 3
+        },
+        "minItems": 2,
+        "maxItems": 32,
+        "default": [
+          5,
+          10,
+          15,
+          20,
+          30,
+          50
+        ],
+        "description": "Candidate neighbour counts, each at least 3, counting the cell itself. The largest is k_max; the subsample size must exceed k_max."
+      },
+      "selection_rule": {
+        "type": "string",
+        "enum": [
+          "partition_stability",
+          "label_ari",
+          "coclustering_robustness"
+        ],
+        "default": "partition_stability",
+        "description": "partition_stability: label-free, smallest k with stability at least min_stability. label_ari: benchmarking only, uses labels. coclustering_robustness: label-free, memory-heavy, highest median co-clustering silhouette."
+      },
+      "graph": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Graph construction from each k-prefix, and the fixed Leiden step applied at every k.",
+        "properties": {
+          "method": {
+            "type": "string",
+            "enum": [
+              "umap",
+              "snn"
+            ],
+            "default": "umap",
+            "description": "umap: fuzzy simplicial set with smooth-kNN calibration to log2 k. snn: shared-neighbour Jaccard weights, pruned at snn_prune."
+          },
+          "snn_prune": {
+            "type": "number",
+            "default": 0.06666666666666667,
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Jaccard weights below this value are dropped (Seurat default 1/15). Used only by method snn."
+          },
+          "search": {
+            "type": "string",
+            "enum": [
+              "exact",
+              "approximate"
+            ],
+            "default": "exact",
+            "description": "exact: brute-force search. approximate: the engine of neighbors.approximate_knn_search; its recall is not measured here."
+          },
+          "leiden_resolution": {
+            "type": "number",
+            "default": 1.0,
+            "exclusiveMinimum": 0,
+            "description": "Fixed Leiden resolution used for every partition at every k."
+          },
+          "leiden_seeds": {
+            "type": "integer",
+            "default": 1,
+            "minimum": 1,
+            "maximum": 25,
+            "description": "Leiden seeds per k on the full data. Values above 1 give the seed spread of ARI, NMI and GC and the seed floor."
+          }
+        }
+      },
+      "subsampling": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Cell subsampling for partition stability, the label_ari stability guard and coclustering_robustness.",
+        "properties": {
+          "n_subsamples": {
+            "type": "integer",
+            "default": 20,
+            "minimum": 2,
+            "description": "Number of random subsamples."
+          },
+          "fraction": {
+            "type": "number",
+            "default": 0.8,
+            "exclusiveMinimum": 0,
+            "exclusiveMaximum": 1,
+            "description": "Fraction of cells drawn without replacement into each subsample."
+          },
+          "min_stability": {
+            "type": "number",
+            "default": 0.7,
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Threshold on mean partition ARI between subsample and full data. Uncalibrated. Ignored by coclustering_robustness."
+          }
+        }
+      },
+      "labels": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Optional reference labels. Required for label_ari; otherwise they add reporting columns only.",
+        "properties": {
+          "reference_label_key": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null,
+            "description": "obs column of reference labels used for ARI, NMI and graph connectivity."
+          },
+          "score_mask_key": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null,
+            "description": "obs boolean column; only true cells are scored, for example to exclude doublets. Cells with a missing label are always excluded."
+          },
+          "ari_tolerance": {
+            "type": "number",
+            "default": 0.02,
+            "minimum": 0,
+            "description": "Tolerance below the best ARI among stable k. Used by label_ari only."
+          }
+        }
+      },
+      "output": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Names and extent of the written members.",
+        "properties": {
+          "key": {
+            "type": "string",
+            "default": "neighbor_k_selection",
+            "pattern": "^[A-Za-z0-9_]{1,64}$",
+            "description": "Stem of the output members uns/<key>/table, uns/<key>/selection and obs/<key>_leiden_k<k>."
+          },
+          "write_partitions": {
+            "type": "boolean",
+            "default": false,
+            "description": "Write one full-data Leiden partition per k to obs/<key>_leiden_k<k>, from the first seed."
+          }
+        }
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device for the exact search; auto picks CUDA when a device with enough memory is available. Leiden runs on CPU."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "minimum": 0,
+        "description": "Seed for subsample draws, Leiden runs and approximate search. A fixed seed, search and device reproduce the output on the same hardware."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory, device and the planned numbers of searches and Leiden runs without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members with the same key instead of failing."
+      }
+    },
+    "required": [
+      "dataset"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. uns/neighbor_k_selection/table and uns/neighbor_k_selection/selection. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "additionalProperties": true,
+        "description": "Compact summary for completed runs: selection_rule, chosen_k, fallback_used, stability_target_met, selection_uses_labels, per_k records (k, n_clusters, pstab, pstab_sd, seed_floor, ari_mean, ari_min, ari_max, nmi, gc, median_silhouette and interval bounds; null where not computed), search requested and resolved, device, n_cells, n_pcs, peak_memory_gb, seconds. Never raw matrices."
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "additionalProperties": true,
+        "description": "Present for dry_run: seconds, peak_memory_gb, device, resolved search, planned_searches (one full search plus n_subsamples subsample searches), planned_leiden_runs and, for coclustering_robustness, the frequency-matrix size."
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "neighbors.neighbor_count_selection",
+      "reads": [
+        "obsm/<use_rep>",
+        "obs/<reference_label_key>",
+        "obs/<score_mask_key>"
+      ],
+      "writes": [
+        "uns/<key>/table",
+        "uns/<key>/selection",
+        "obs/<key>_leiden_k<k>"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "heuristic",
+      "docs": "tasks/neighbors/neighbor_count_selection.md"
+    }
+  }
+}

@@ -1,0 +1,158 @@
+{
+  "name": "singlet_disease_clinical_gwas_cell_level_scoring",
+  "title": "Per-cell GWAS disease-relevance score",
+  "description": "Scores every cell for one trait from GWAS-implicated gene weights and returns a calibrated per-cell p-value against expression-matched random control gene sets. Use method scdrs by default; raw_weighted_mean is an uncalibrated comparator only. Needs log1p size-normalised counts in a layer and a .gs trait gene-set file. Writes per-cell score, p-value and optional group members. Do not use for cell-type-level enrichment or for per-sample phenotype labels.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "gene_set": {
+        "type": "string",
+        "description": "Trait gene-set file (.gs, with a TRAIT line and gene:weight pairs) or a handle to one stored in the dataset."
+      },
+      "method": {
+        "type": "string",
+        "enum": ["scdrs", "raw_weighted_mean"],
+        "default": "scdrs",
+        "description": "scdrs gives calibrated per-cell p-values; raw_weighted_mean gives the uncalibrated comparator score."
+      },
+      "layer": {
+        "type": "string",
+        "default": "lognorm",
+        "description": "Layer of log1p size-normalised counts; the tool does not normalise counts itself."
+      },
+      "group_key": {
+        "type": ["string", "null"],
+        "default": null,
+        "description": "Optional categorical obs column; when set, writes group FDR proportions and association tests."
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu", "cuda"],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Seed for control gene draws; with the same inputs it fixes the output."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      },
+      "scdrs": {
+        "type": "object",
+        "description": "Options used when method is scdrs.",
+        "properties": {
+          "n_ctrl": {
+            "type": "integer",
+            "minimum": 100,
+            "default": 1000,
+            "description": "Matched control gene sets; the Monte Carlo p-value cannot fall below 1/(1+n_ctrl)."
+          },
+          "n_genebin": {
+            "type": "integer",
+            "minimum": 10,
+            "default": 200,
+            "description": "Quantile bins on mean and variance used to match control genes."
+          },
+          "weight_opt": {
+            "type": "string",
+            "enum": ["vs", "uniform"],
+            "default": "vs",
+            "description": "vs weights genes by inverse regularised technical standard deviation; uniform weights all trait genes equally."
+          },
+          "covariates": {
+            "type": "array",
+            "items": {"type": "string"},
+            "default": [],
+            "description": "obs columns regressed out of expression before scoring."
+          },
+          "return_ctrl_norm_score": {
+            "type": "boolean",
+            "default": false,
+            "description": "Also write normalised control scores to obsm for downstream group tests."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "required": ["dataset", "gene_set"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written, for example obs/T2D_scdrs_pval. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Keys: trait, n_cells, n_genes_in_set, mapped_fraction, n_ctrl, p_floor_mc, n_cells_q_below_0_1 (completed runs only).",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "disease-clinical.gwas_cell_level_scoring",
+      "reads": ["layers/lognorm", "obs/<covariate>", "obs/<group_key>"],
+      "writes": [
+        "obs/<trait>_raw_score",
+        "obs/<trait>_scdrs_score",
+        "obs/<trait>_scdrs_pval",
+        "obs/<trait>_scdrs_mc_pval",
+        "obs/<trait>_scdrs_zscore",
+        "uns/<trait>_scdrs_group"
+      ],
+      "devices": ["cpu", "cuda"],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/disease-clinical/gwas_cell_level_scoring.md"
+    }
+  }
+}

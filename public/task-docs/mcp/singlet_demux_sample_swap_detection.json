@@ -1,0 +1,195 @@
+{
+  "name": "singlet_demux_sample_swap_detection",
+  "title": "Sample identity verification and swap detection",
+  "description": "Checks whether the genotypes in each sample's cells match the individual the sample is claimed to come from, and flags swaps and cross-sample contamination. Use after cell calling, with reads at informative sites and an independent reference genotype per individual. The default method sample_aggregate sums per-cell likelihoods per sample. Do not use it to assign individual cells to donors; use demux.donor_assignment_reference_genotypes for that. Writes per-sample calls and scores under uns/sample_identity.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "method": {
+        "type": "string",
+        "enum": ["sample_aggregate", "demuxlet", "vireo_match"],
+        "default": "sample_aggregate",
+        "description": "sample_aggregate sums per-cell likelihoods per sample; demuxlet scores per barcode; vireo_match maps Vireo donors to references."
+      },
+      "min_informative_sites": {
+        "type": "integer",
+        "minimum": 1,
+        "default": 50,
+        "description": "Samples with fewer informative sites covered by reads are ambiguous and never called swaps."
+      },
+      "min_reads_per_site": {
+        "type": "integer",
+        "minimum": 1,
+        "default": 1,
+        "description": "Minimum reads at a site in a cell for that site to count."
+      },
+      "swap_margin_tau": {
+        "type": ["number", "null"],
+        "minimum": 0,
+        "default": null,
+        "description": "Calibrated log-odds of the best alternative over the claimed individual needed for a swap call; null gives scores only."
+      },
+      "contamination": {
+        "type": "object",
+        "description": "Contamination estimation settings.",
+        "properties": {
+          "estimate": {
+            "type": "boolean",
+            "default": false,
+            "description": "Fit a per-sample contamination fraction by maximum likelihood."
+          },
+          "max_alpha": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 0.5,
+            "default": 0.2,
+            "description": "Upper bound of the contamination search."
+          }
+        },
+        "default": {"estimate": false, "max_alpha": 0.2},
+        "additionalProperties": false
+      },
+      "demuxlet": {
+        "type": "object",
+        "description": "Settings used only when method is demuxlet.",
+        "properties": {
+          "geno_error_offset": {
+            "type": "number",
+            "default": 0.1,
+            "description": "Offset of the genotype error rate."
+          },
+          "geno_error_coeff": {
+            "type": "number",
+            "default": 0,
+            "description": "Slope of the genotype error rate against imputation R squared."
+          },
+          "alpha_grid": {
+            "type": "array",
+            "items": {"type": "number"},
+            "default": [0.1, 0.2, 0.3, 0.4, 0.5],
+            "description": "Doublet mixture fractions searched; used only with method demuxlet."
+          },
+          "doublet_prior": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.5,
+            "description": "Prior probability of a doublet."
+          }
+        },
+        "additionalProperties": false
+      },
+      "vireo": {
+        "type": "object",
+        "description": "Settings used only when method is vireo_match.",
+        "properties": {
+          "n_init": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 50,
+            "description": "Random restarts of the variational fit."
+          },
+          "genotype_tag": {
+            "type": "string",
+            "default": "PL",
+            "description": "FORMAT field read from the donor VCF."
+          }
+        },
+        "additionalProperties": false
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Random seed for vireo_match restarts; other methods are deterministic."
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu", "cuda"],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": ["dataset"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate; queued: long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written, e.g. uns/sample_identity/call. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Keys: n_samples, n_match, n_swap, n_ambiguous, n_insufficient, tau_used. Counts only, never raw matrices.",
+        "properties": {
+          "n_samples": {"type": "integer"},
+          "n_match": {"type": "integer"},
+          "n_swap": {"type": "integer"},
+          "n_ambiguous": {"type": "integer"},
+          "n_insufficient": {"type": "integer"},
+          "tau_used": {"type": ["number", "null"]}
+        },
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "demux.sample_swap_detection",
+      "reads": ["layers/AD", "layers/DP", "obs/sample_id", "uns/variant_index", "uns/reference_genotypes", "uns/claimed_map"],
+      "writes": ["uns/sample_identity/score", "uns/sample_identity/call", "uns/sample_identity/swap_map", "uns/sample_identity/contamination", "obsm/donor_loglik"],
+      "devices": ["cpu", "cuda"],
+      "stochastic": true,
+      "long_running": false,
+      "streaming": true,
+      "paradigm": "model-based",
+      "docs": "tasks/demux/sample_swap_detection.md"
+    }
+  }
+}

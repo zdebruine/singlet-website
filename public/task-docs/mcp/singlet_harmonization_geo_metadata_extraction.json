@@ -1,0 +1,226 @@
+{
+  "name": "singlet_harmonization_geo_metadata_extraction",
+  "title": "Extract normalised sample metadata from GEO and SRA records",
+  "description": "Extracts organism, tissue, disease, cell line, perturbation, platform, technology and cell-count fields for each sample from its GEO and SRA text, with a verbatim evidence span and an ontology ID where one exists. The default method metasra_style links values to a pinned ontology release; rules uses exact lookup only and is the heuristic baseline. Writes uns/geo_sample_metadata, uns/geo_extraction_evidence and uns/geo_extraction_provenance. Do not use it to assign cell types or to edit source records; it reads text already attached to the dataset.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle holding uns/geo_records; a .singlet path or URI, or a workspace handle."
+      },
+      "ontology_release": {
+        "type": "string",
+        "description": "Pinned release identifier for each ontology used to resolve IDs. Required; there is no default."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "metasra_style",
+          "rules"
+        ],
+        "default": "metasra_style",
+        "description": "metasra_style links values to ontology IDs with fuzzy lookup and path scoring; rules uses exact lookup only."
+      },
+      "fields": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "enum": [
+            "organism",
+            "tissue",
+            "disease",
+            "cell_line",
+            "perturbation",
+            "platform",
+            "technology",
+            "cell_count"
+          ]
+        },
+        "uniqueItems": true,
+        "default": [
+          "organism",
+          "tissue",
+          "disease",
+          "cell_line",
+          "perturbation",
+          "platform",
+          "technology",
+          "cell_count"
+        ],
+        "description": "Target fields to extract; the default is all eight."
+      },
+      "series_inheritance": {
+        "type": "string",
+        "enum": [
+          "series_fallback",
+          "sample_only"
+        ],
+        "default": "series_fallback",
+        "description": "series_fallback fills sample gaps with series-level text, marked as series-inherited; sample_only uses sample-level text."
+      },
+      "negation_handling": {
+        "type": "boolean",
+        "default": true,
+        "description": "Detect control, negated and untreated phrases before assigning disease or perturbation values."
+      },
+      "min_confidence": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1,
+        "default": 0.8,
+        "description": "Values scoring below this become null. Proposed threshold, tuned on the development split only."
+      },
+      "cell_count_policy": {
+        "type": "string",
+        "enum": [
+          "report_as_stated",
+          "flag_unclear"
+        ],
+        "default": "report_as_stated",
+        "description": "report_as_stated keeps counts as written; flag_unclear marks counts whose unit or stage is unclear."
+      },
+      "metasra_style": {
+        "type": "object",
+        "description": "Options for metasra_style; ignored by rules.",
+        "properties": {
+          "fuzzy_max_edit": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2,
+            "default": 2,
+            "description": "Maximum edit distance for fuzzy lexicon lookup; 2 is the MetaSRA radius."
+          },
+          "fuzzy_min_token_length": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 5,
+            "description": "Tokens shorter than this are matched exactly, never fuzzily, which blocks links such as CD4 to CD8."
+          },
+          "match_numeric": {
+            "type": "boolean",
+            "default": false,
+            "description": "Whether numeric tokens are fuzzy-matched."
+          },
+          "cell_line_implies_disease": {
+            "type": "boolean",
+            "default": false,
+            "description": "Whether a cell line name may fill the disease field."
+          }
+        },
+        "additionalProperties": false
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto resolves to cpu because this task has no CUDA path."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": [
+      "dataset",
+      "ontology_release"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. uns/geo_sample_metadata. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Counts for completed runs: n_samples, n_values_by_field, n_null_by_field, flagged, grounding_rate and method. Never raw text.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "harmonization.geo_metadata_extraction",
+      "reads": [
+        "uns/geo_records",
+        "uns/sra_attributes",
+        "uns/publication_text"
+      ],
+      "writes": [
+        "uns/geo_sample_metadata",
+        "uns/geo_extraction_evidence",
+        "uns/geo_extraction_provenance",
+        "obs/geo_sample_id"
+      ],
+      "devices": [
+        "cpu"
+      ],
+      "stochastic": false,
+      "long_running": false,
+      "streaming": true,
+      "paradigm": "hybrid",
+      "docs": "tasks/harmonization/geo_metadata_extraction.md"
+    }
+  }
+}

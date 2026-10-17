@@ -1,0 +1,340 @@
+{
+  "name": "singlet_embedding_viz_hyperparameter_selection",
+  "title": "Select embedding hyperparameters without visual inspection",
+  "description": "Chooses t-SNE or UMAP settings for a fixed reference by scoring every candidate with label-free criteria: seed-averaged co-ranking QNX at K=30 with a stability tie-break (default), or the scDEED dubious-cell count. Writes the selected map, per-setting scores and the rule used. Each setting and seed is a full embedding, so call with dry_run first; use method rule_based for library defaults without a grid.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "grid_search",
+          "scdeed",
+          "rule_based"
+        ],
+        "default": "grid_search",
+        "description": "grid_search scores settings by neighbourhood preservation; scdeed counts dubious cells; rule_based keeps library defaults."
+      },
+      "embedding": {
+        "type": "string",
+        "enum": [
+          "tsne",
+          "umap"
+        ],
+        "default": "tsne",
+        "description": "Embedding algorithm whose hyperparameters are selected."
+      },
+      "reference": {
+        "type": "object",
+        "description": "Reference representation whose neighbourhoods are the ground truth.",
+        "properties": {
+          "key": {
+            "type": "string",
+            "default": "X_pca",
+            "description": "obsm key of the reference, on the same cells as the map."
+          },
+          "n_components": {
+            "type": "integer",
+            "minimum": 2,
+            "default": 50,
+            "description": "Leading reference components used as input."
+          }
+        },
+        "additionalProperties": false
+      },
+      "grid": {
+        "type": "object",
+        "description": "Candidate values; the search is their Cartesian product.",
+        "properties": {
+          "perplexity": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "exclusiveMinimum": 1
+            },
+            "default": [
+              15,
+              30,
+              50,
+              100
+            ],
+            "description": "Candidate t-SNE perplexities; each must be below the number of cells minus one."
+          },
+          "n_neighbors": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 2
+            },
+            "default": [
+              10,
+              15,
+              30,
+              50
+            ],
+            "description": "Candidate UMAP neighbour counts."
+          },
+          "min_dist": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "minimum": 0
+            },
+            "default": [
+              0.1,
+              0.3,
+              0.5
+            ],
+            "description": "Candidate UMAP minimum distances."
+          },
+          "learning_rate": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "default": [],
+            "description": "Candidate t-SNE learning rates; empty uses openTSNE auto, cell number over exaggeration."
+          },
+          "early_exaggeration": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "minimum": 1
+            },
+            "default": [
+              12
+            ],
+            "description": "Candidate early exaggeration factors for t-SNE."
+          },
+          "initialization": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "pca",
+                "random",
+                "spectral"
+              ]
+            },
+            "default": [
+              "pca"
+            ],
+            "description": "Candidate starting configurations."
+          }
+        },
+        "additionalProperties": false
+      },
+      "grid_search": {
+        "type": "object",
+        "description": "Options for the co-ranking grid search.",
+        "properties": {
+          "selection_rule": {
+            "type": "string",
+            "enum": [
+              "max_qnx_seed_tiebreak",
+              "kl_fixed_perplexity"
+            ],
+            "default": "max_qnx_seed_tiebreak",
+            "description": "Label-free rule; kl_fixed_perplexity needs exactly one perplexity."
+          },
+          "n_seeds": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 5,
+            "description": "Embedding seeds per setting for selection."
+          },
+          "score_k": {
+            "type": "integer",
+            "minimum": 5,
+            "default": 30,
+            "description": "Neighbourhood size for QNX and LCMC."
+          },
+          "score_subsample_n": {
+            "type": "integer",
+            "minimum": 100,
+            "default": 5000,
+            "description": "Cells in the seeded scored sample."
+          }
+        },
+        "additionalProperties": false
+      },
+      "scdeed": {
+        "type": "object",
+        "description": "Options for the scDEED dubious-cell count.",
+        "properties": {
+          "similarity_percent": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 1,
+            "default": 0.5,
+            "description": "Fraction of cells used as neighbours in the similarity score."
+          },
+          "dubious_cutoff": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 0.5,
+            "default": 0.05,
+            "description": "Null quantile below which a cell is flagged dubious."
+          },
+          "trustworthy_cutoff": {
+            "type": "number",
+            "minimum": 0.5,
+            "maximum": 1,
+            "default": 0.95,
+            "description": "Null quantile above which a cell is trustworthy."
+          },
+          "write_dubious_flags": {
+            "type": "boolean",
+            "default": false,
+            "description": "Store per-cell dubious flags in obs."
+          }
+        },
+        "additionalProperties": false
+      },
+      "rule_based": {
+        "type": "object",
+        "description": "Options for library-default settings.",
+        "properties": {
+          "multiscale_perplexities": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "exclusiveMinimum": 1
+            },
+            "default": [],
+            "description": "Perplexities averaged in a multiscale affinity; empty uses one perplexity."
+          },
+          "late_exaggeration": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 1,
+            "default": null,
+            "description": "Exaggeration applied after the early phase; null disables it."
+          }
+        },
+        "additionalProperties": false
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Random seed for the scored sample and embedding runs."
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory, device and embedding count without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": [
+      "dataset"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. obsm/hyper_tsne. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Compact summary for completed runs with keys method, selection_rule, selected, selected_scores, default_scores, n_settings, n_embeddings, scored_scope. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device, n_embeddings, n_scored.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "embedding-viz.hyperparameter_selection",
+      "reads": [
+        "obsm/<reference.key>"
+      ],
+      "writes": [
+        "obsm/hyper_<embedding>",
+        "uns/hyper_<embedding>",
+        "obs/hyper_<embedding>_dubious"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/embedding-viz/hyperparameter_selection.md"
+    }
+  }
+}

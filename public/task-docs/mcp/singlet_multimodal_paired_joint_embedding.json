@@ -1,0 +1,231 @@
+{
+  "name": "singlet_multimodal_paired_joint_embedding",
+  "title": "Paired joint embedding of RNA with ADT or ATAC",
+  "description": "Builds one per-cell representation from RNA and a paired second modality (ADT, ATAC or both) measured in the same cells: a latent embedding from totalvi, multivi or mofa, or a weighted kNN and SNN graph with per-cell modality weights from wnn. With auto, RNA with ADT uses totalvi, RNA with ATAC (with or without ADT) uses multivi, and wnn is used when raw counts of the second modality are absent. Needs layers/counts per modality with cell correspondence; scores conservation and batch removal when cell_type_key and batch_key are given; large inputs may return queued. Do not use for RNA-only data, for unpaired or mosaic modalities (multimodal.unpaired_cross_modal_alignment, multimodal.mosaic_integration) or to predict protein levels (multimodal.protein_imputation_from_rna); run multimodal.adt_background_removal_normalization first for raw ADT.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle holding the paired modalities."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "wnn",
+          "mofa",
+          "totalvi",
+          "multivi"
+        ],
+        "default": "auto",
+        "description": "Joint method. auto picks totalvi for RNA with ADT, multivi for RNA with ATAC, wnn without raw second-modality counts; resolved name returned."
+      },
+      "modalities": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "rna+adt",
+          "rna+atac",
+          "rna+atac+adt"
+        ],
+        "default": "auto",
+        "description": "Paired modalities to use; auto infers them from the layers present. totalvi accepts rna+adt only."
+      },
+      "batch_key": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "default": null,
+        "description": "obs column with batch labels; covariate for totalvi and multivi, groups for mofa, required for batch metrics."
+      },
+      "cell_type_key": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "default": null,
+        "description": "obs column with author annotations; used only for scoring, never for fitting; required for conservation metrics."
+      },
+      "n_latent": {
+        "type": "integer",
+        "minimum": 1,
+        "default": 20,
+        "description": "Latent dimension for totalvi and multivi, factor count for mofa, spectral embedding size when scoring wnn."
+      },
+      "wnn": {
+        "type": "object",
+        "description": "Options for method wnn only.",
+        "properties": {
+          "k_nn": {
+            "type": "integer",
+            "minimum": 2,
+            "default": 20,
+            "description": "Neighbours per cell in the WNN graph."
+          },
+          "knn_range": {
+            "type": "integer",
+            "minimum": 2,
+            "default": 200,
+            "description": "Candidate neighbours per modality before top-k selection; at least k_nn."
+          },
+          "prune_snn": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.0666666667,
+            "description": "Jaccard cutoff for pruning SNN edges (1/15)."
+          },
+          "sd_scale": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 1.0,
+            "description": "Scale of the per-cell kernel bandwidth."
+          },
+          "modality_weights_out": {
+            "type": "boolean",
+            "default": true,
+            "description": "Write per-cell modality weights to obsm/wnn_modality_weight."
+          }
+        },
+        "additionalProperties": false
+      },
+      "totalvi": {
+        "type": "object",
+        "description": "Options for method totalvi only.",
+        "properties": {
+          "override_missing_proteins": {
+            "type": "boolean",
+            "default": false,
+            "description": "If true, proteins zero in every cell of a batch are observed zeros; if false they are treated as missing."
+          }
+        },
+        "additionalProperties": false
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "minimum": 0,
+        "default": 0,
+        "description": "Random seed for initialisation, sampling and Leiden clustering."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without computing."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": [
+      "dataset"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, for example obsm/joint_totalvi. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Keys: method, modalities, n_cells, n_batches, n_latent, seed, final_elbo (VAEs), bio_composite, batch_composite, kbet_labels_zeroed, cells_missing_modality. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "multimodal.paired_joint_embedding",
+      "reads": [
+        "layers/counts",
+        "X",
+        "obs/<batch_key>",
+        "obs/<cell_type_key>"
+      ],
+      "writes": [
+        "obsm/joint_<method>",
+        "obsm/joint_<method>_var",
+        "obsm/wnn_modality_weight",
+        "obsp/wknn",
+        "obsp/wsnn",
+        "obs/joint_cluster_<method>_<res>",
+        "models/joint_<method>",
+        "uns/joint_embedding_metrics_<method>"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": true,
+      "paradigm": "hybrid",
+      "docs": "tasks/multimodal/paired_joint_embedding.md"
+    }
+  }
+}

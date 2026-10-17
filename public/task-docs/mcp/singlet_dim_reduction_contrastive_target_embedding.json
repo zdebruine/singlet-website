@@ -1,0 +1,243 @@
+{
+  "name": "singlet_dim_reduction_contrastive_target_embedding",
+  "title": "Contrastive target-specific embedding against a background",
+  "description": "Isolates structure specific to target cells by contrasting them with background cells measured on the same genes. The default method, contrastivevi, fits a count model with a shared background latent and a target-only salient latent; cpca scans a linear contrast on a log grid. Needs raw counts with target and background groups in obs. Do not use for batch correction (use integration tools) or when no background group exists.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "contrastivevi",
+          "cpca"
+        ],
+        "default": "contrastivevi",
+        "description": "Embedding method; contrastivevi is the default, cpca is the closed-form linear contrast."
+      },
+      "groups": {
+        "type": "object",
+        "description": "Obs column and values that mark target and background cells.",
+        "properties": {
+          "group_key": {
+            "type": "string",
+            "description": "Obs column holding each cell's group label."
+          },
+          "target": {
+            "type": "string",
+            "description": "Value of group_key for target cells."
+          },
+          "background": {
+            "type": "string",
+            "description": "Value of group_key for background cells."
+          }
+        },
+        "required": [
+          "group_key",
+          "target",
+          "background"
+        ],
+        "additionalProperties": false
+      },
+      "n_hvg": {
+        "type": "integer",
+        "minimum": 1,
+        "default": 2000,
+        "description": "Highly variable genes shared by all methods; 2000 is a proposed default."
+      },
+      "contrastivevi": {
+        "type": "object",
+        "description": "Options used when method is contrastivevi.",
+        "properties": {
+          "n_salient": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 10,
+            "description": "Dimension of the target-only salient latent."
+          },
+          "n_background": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 10,
+            "description": "Dimension of the shared background latent."
+          },
+          "n_hidden": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 128,
+            "description": "Hidden width of the encoders and decoder."
+          },
+          "wasserstein_penalty": {
+            "type": "number",
+            "minimum": 0,
+            "default": 0,
+            "description": "Weight of the background salient penalty; 0 leaves the split to the KL terms."
+          },
+          "batch_key": {
+            "type": "string",
+            "description": "Optional obs column used as a covariate."
+          },
+          "max_epochs": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Training epochs, fixed in advance rather than set by convergence."
+          }
+        },
+        "additionalProperties": false
+      },
+      "cpca": {
+        "type": "object",
+        "description": "Options used when method is cpca.",
+        "properties": {
+          "n_eigen": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 2,
+            "description": "Number of contrastive components returned."
+          },
+          "contrast_min": {
+            "type": "number",
+            "minimum": 0,
+            "default": 0.1,
+            "description": "Smallest contrast value on the log grid."
+          },
+          "contrast_max": {
+            "type": "number",
+            "minimum": 0,
+            "default": 1000,
+            "description": "Largest contrast value on the log grid."
+          },
+          "contrast_count": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 40,
+            "description": "Number of log-spaced contrast values scanned; the silhouette-best is kept."
+          }
+        },
+        "additionalProperties": false
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Random seed for training and for k-means in contrast selection."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without fitting."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": [
+      "dataset",
+      "groups"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. obsm/contrastive_salient. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Keys: method, n_target, n_background, n_hvg, setting (selected contrast or latent sizes) and selection_criterion. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "dim-reduction.contrastive_target_embedding",
+      "reads": [
+        "layers/counts",
+        "obs/<group_key>",
+        "obs/<batch_key>"
+      ],
+      "writes": [
+        "obsm/contrastive_salient",
+        "obsm/contrastive_background",
+        "varm/contrastive_loadings",
+        "models/contrastive",
+        "uns/contrastive_setting"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/dim-reduction/contrastive_target_embedding.md"
+    }
+  }
+}

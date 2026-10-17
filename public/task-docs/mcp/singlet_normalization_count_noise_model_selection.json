@@ -1,0 +1,189 @@
+{
+  "name": "singlet_normalization_count_noise_model_selection",
+  "title": "Count noise-model selection and zero-inflation diagnosis",
+  "description": "Chooses a count family per gene (Poisson, negative binomial or zero-inflated negative binomial) from negative controls when present, otherwise from a depth-only null, and writes dispersion, zero-inflation and calibration members. Use it before choosing a variance model or normalisation. Do not use it to correct or replace counts: layers/counts is read and never modified.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "layer": {
+        "type": "string",
+        "default": "counts",
+        "description": "Raw integer count layer to model; normalised or log-transformed values are rejected."
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu", "cuda"],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 42,
+        "description": "Seed for negative-control simulation; 42 matches the repository setting."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      },
+      "families": {
+        "type": "array",
+        "items": {"type": "string", "enum": ["poisson", "nb", "zinb"]},
+        "minItems": 1,
+        "uniqueItems": true,
+        "default": ["poisson", "nb", "zinb"],
+        "description": "Candidate families, simplest first. The depth-only multinomial null is always reported."
+      },
+      "method": {
+        "type": "string",
+        "enum": ["auto", "negative_control", "deviance"],
+        "default": "auto",
+        "description": "auto uses negative_control when uns/negative_control/counts exists, otherwise deviance."
+      },
+      "stratify_by": {
+        "type": ["string", "null"],
+        "default": null,
+        "description": "Optional obs column, such as cell type; families are selected within each level."
+      },
+      "min_detected_cells": {
+        "type": "integer",
+        "minimum": 1,
+        "default": 5,
+        "description": "Genes detected in fewer cells are skipped before any fit, in controls and data alike."
+      },
+      "negative_control": {
+        "type": "object",
+        "description": "Options for control calibration; used only when negative_control or auto finds control counts.",
+        "properties": {
+          "max_iter": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 100,
+            "description": "Iterations for per-gene dispersion maximum likelihood."
+          },
+          "theta_clip": {
+            "type": "number",
+            "minimum": 1,
+            "default": 100000,
+            "description": "Dispersion estimates above this value are reported as diverged."
+          },
+          "n_simulations": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 1000,
+            "description": "Simulated control datasets per true dispersion."
+          },
+          "n_means_simulated": {
+            "type": "integer",
+            "minimum": 2,
+            "default": 50,
+            "description": "Log-spaced gene means in each simulated control."
+          },
+          "sim_thetas": {
+            "type": "array",
+            "items": {"type": "number", "exclusiveMinimum": 0},
+            "default": [1000, 100, 10],
+            "description": "Finite true dispersions to simulate; the Poisson case is always added."
+          }
+        },
+        "additionalProperties": false
+      },
+      "zinb": {
+        "type": "object",
+        "description": "Options for the zero-inflation test; used only when zinb is in families.",
+        "properties": {
+          "lrt_alpha": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.05,
+            "description": "Significance level of the boundary-corrected likelihood-ratio test of ZINB against NB."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "required": ["dataset"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate; queued: long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written, e.g. varm/count_family. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Completed runs only: keys method, n_genes, n_cells, family_counts, median_R0, fraction_zinb_selected, and per_stratum when stratify_by is set.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Provenance record id appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "normalization.count_noise_model_selection",
+      "reads": [
+        "layers/counts",
+        "obs/total_counts",
+        "obs/protocol",
+        "uns/negative_control/counts"
+      ],
+      "writes": [
+        "varm/count_family",
+        "varm/theta",
+        "varm/zi_pi",
+        "varm/R0",
+        "uns/count_family_selection",
+        "uns/count_family_diagnostics",
+        "models/count_family_<name>"
+      ],
+      "devices": ["cpu", "cuda"],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": true,
+      "paradigm": "model-based",
+      "docs": "tasks/normalization/count_noise_model_selection.md"
+    }
+  }
+}

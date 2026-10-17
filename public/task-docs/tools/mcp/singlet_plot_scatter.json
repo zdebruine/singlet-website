@@ -1,0 +1,93 @@
+{
+  "name": "singlet_plot_scatter",
+  "title": "Scatter plot of two stored arrays",
+  "description": "Scatter of two stored arrays or columns (for example 'embedding/umap[0]' vs 'embedding/umap[1]') coloured by a stored label array. Returns the SVG path and a text description with cluster centroids.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "name": {
+        "type": "string",
+        "description": "Dataset name."
+      },
+      "x": {
+        "type": "string",
+        "description": "Array key, optionally with a column index, e.g. pca/scores[0].",
+        "default": "embedding/umap[0]"
+      },
+      "y": {
+        "type": "string",
+        "description": "Array key and column.",
+        "default": "embedding/umap[1]"
+      },
+      "color_by": {
+        "type": "string",
+        "description": "Label array key (optional).",
+        "default": "clusters/louvain"
+      },
+      "title": {
+        "type": "string",
+        "description": "Plot title."
+      },
+      "max_points": {
+        "type": "integer",
+        "description": "Maximum points drawn (deterministic subsample).",
+        "default": 20000
+      },
+      "include_svg": {
+        "type": "boolean",
+        "description": "Also return the SVG text inline.",
+        "default": false
+      }
+    },
+    "required": [
+      "name"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "status": {
+        "type": "string",
+        "enum": [
+          "ok",
+          "error"
+        ]
+      },
+      "summary": {
+        "type": "string"
+      },
+      "metrics": {
+        "type": "object"
+      },
+      "figures": {
+        "type": "array"
+      },
+      "artifacts": {
+        "type": "array"
+      },
+      "warnings": {
+        "type": "array"
+      },
+      "next": {
+        "type": "array"
+      },
+      "timings": {
+        "type": "object"
+      }
+    },
+    "required": [
+      "status",
+      "summary"
+    ]
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "embedding-viz.global_structure_preservation",
+      "reads": [],
+      "writes": [],
+      "runtime": "local-cpu",
+      "streaming": true
+    }
+  }
+}

@@ -1,0 +1,227 @@
+{
+  "name": "singlet_spatial_preproc_image_cell_segmentation",
+  "title": "Segment nuclei and cells in stain images",
+  "description": "Assigns integer instance labels to nuclei and cells in a registered stain image, and writes cell polygons, centroids, areas and a calibrated per-cell confidence. The default method is the learned cellpose flow model; watershed is a training-free Otsu and distance-transform baseline. Use it before transcript-to-cell assignment when no trusted segmentation exists. Do not use it for transcript-only assignment, or on a new stain before validation.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "cellpose",
+          "watershed"
+        ],
+        "default": "cellpose",
+        "description": "Segmentation method. cellpose is the learned default; watershed is the training-free baseline."
+      },
+      "nuclear_channel": {
+        "type": "string",
+        "default": "DAPI",
+        "description": "Channel of the stain image used to find nuclei, named as stored under images/<name>."
+      },
+      "membrane_channel": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "default": null,
+        "description": "Optional membrane or cytoplasm channel for whole-cell masks; null makes cell instances equal nuclear instances."
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return the estimated time, memory and device without segmenting."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      },
+      "cellpose": {
+        "type": "object",
+        "description": "Options for method cellpose; rejected when method is watershed.",
+        "properties": {
+          "model": {
+            "type": "string",
+            "default": "cpsam_v2",
+            "description": "Pretrained model name; the pinned default is recorded in uns/segmentation."
+          },
+          "diameter_px": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "default": null,
+            "description": "Expected cell diameter in pixels; null estimates it from the image."
+          },
+          "flow_threshold": {
+            "type": "number",
+            "minimum": 0,
+            "default": 0.4,
+            "description": "Maximum flow error for a kept mask."
+          },
+          "cellprob_threshold": {
+            "type": "number",
+            "default": 0.0,
+            "description": "Cell-probability cut; pixels below it do not form masks."
+          },
+          "min_size_px": {
+            "type": "integer",
+            "default": 15,
+            "description": "Discard masks smaller than this many pixels; -1 disables the filter."
+          },
+          "niter": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1,
+            "default": null,
+            "description": "Flow dynamics iterations; null uses the package's automatic value."
+          },
+          "resample": {
+            "type": "boolean",
+            "default": true,
+            "description": "Apply flow dynamics at the original image size rather than a resampled size."
+          },
+          "batch_size": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 8,
+            "description": "Tiles per network batch."
+          }
+        },
+        "additionalProperties": false
+      },
+      "watershed": {
+        "type": "object",
+        "description": "Options for method watershed; rejected when method is cellpose.",
+        "properties": {
+          "threshold": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "default": null,
+            "description": "Foreground threshold on the nuclear channel; null uses Otsu's method."
+          },
+          "footprint": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 5,
+            "description": "Side in pixels of the square footprint that finds distance maxima."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "dataset"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: computed inline and wrote members; dry_run: only an estimate was computed; queued: scheduled as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. labels/cell_instances. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Keys: method, model, n_nuclei, n_cells, cells_without_nucleus, median_cell_area_um2, device. Never raw masks.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "spatial-preproc.image_cell_segmentation",
+      "reads": [
+        "images/<name>"
+      ],
+      "writes": [
+        "labels/cell_instances",
+        "labels/nucleus_instances",
+        "shapes/cell_boundaries",
+        "obs/cell_area",
+        "obs/cell_confidence",
+        "obs/nucleus_area",
+        "obsm/spatial",
+        "uns/segmentation"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": false,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "model-based",
+      "docs": "tasks/spatial-preproc/image_cell_segmentation.md"
+    }
+  }
+}

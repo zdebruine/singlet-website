@@ -1,0 +1,255 @@
+{
+  "name": "singlet_imputation_expression_denoising",
+  "title": "Expression denoising of UMI counts",
+  "description": "Estimates expected expression for each cell and gene from a raw UMI count matrix and writes layers/denoised, plus layers/denoised_sd for posterior methods. The default method sanity is a model-based Poisson posterior with no user-tuned smoothing strength; magic and alra are heuristic comparators, dca and scvi are neural. Use before analyses that need expression rates. Do not use the output as counts for count-based tests or on protein counts. layers/counts is never modified.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "method": {
+        "type": "string",
+        "enum": ["sanity", "magic", "alra", "dca", "scvi"],
+        "default": "sanity",
+        "description": "Denoiser. sanity is the default model-based posterior; magic and alra are heuristic comparators; dca and scvi are neural."
+      },
+      "output_scale": {
+        "type": "string",
+        "enum": ["expected_counts", "cp10k"],
+        "default": "expected_counts",
+        "description": "expected_counts: molecules at the input depth; cp10k: per-cell proportions times 1e4, depth removed."
+      },
+      "sanity": {
+        "type": "object",
+        "description": "Options for method sanity (Poisson posterior with a per-gene variance grid).",
+        "properties": {
+          "variance_estimator": {
+            "type": "string",
+            "enum": ["MAP", "EAP"],
+            "default": "MAP",
+            "description": "MAP: mode of the variance-grid likelihood; EAP: its mean under a uniform grid prior."
+          },
+          "variance_min": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 0.001,
+            "description": "Lower bound of the variance grid."
+          },
+          "variance_max": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 50,
+            "description": "Upper bound of the variance grid; must exceed variance_min."
+          },
+          "n_bins": {
+            "type": "integer",
+            "minimum": 2,
+            "default": 160,
+            "description": "Number of grid points for the gene variance."
+          }
+        },
+        "additionalProperties": false
+      },
+      "magic": {
+        "type": "object",
+        "description": "Options for method magic (diffusion over a kNN graph in PCA space).",
+        "properties": {
+          "knn": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 5,
+            "description": "Neighbours for the affinity kernel."
+          },
+          "t": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 3,
+            "description": "Diffusion power; the main smoothing control."
+          },
+          "n_pca": {
+            "type": "integer",
+            "minimum": 2,
+            "default": 100,
+            "description": "Principal components used before the kNN graph."
+          },
+          "solver": {
+            "type": "string",
+            "enum": ["exact", "approximate"],
+            "default": "exact",
+            "description": "Diffusion solver; approximate trades accuracy for speed."
+          }
+        },
+        "additionalProperties": false
+      },
+      "alra": {
+        "type": "object",
+        "description": "Options for method alra (rank-k SVD with zero-preserving thresholding).",
+        "properties": {
+          "k": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 0,
+            "description": "Rank; 0 selects k automatically by the singular-value noise threshold."
+          },
+          "q": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 10,
+            "description": "Power iterations in the randomised SVD."
+          },
+          "quantile_prob": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "exclusiveMaximum": 0.5,
+            "default": 0.001,
+            "description": "Per-gene quantile setting the zeroing threshold."
+          }
+        },
+        "additionalProperties": false
+      },
+      "dca": {
+        "type": "object",
+        "description": "Options for method dca (autoencoder with NB or ZINB decoder).",
+        "properties": {
+          "ae_type": {
+            "type": "string",
+            "enum": ["nb-conddisp", "nb", "zinb"],
+            "default": "nb-conddisp",
+            "description": "Likelihood head; the API default is nb-conddisp, not zinb."
+          },
+          "epochs": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 300,
+            "description": "Maximum training epochs."
+          },
+          "batch_size": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 32,
+            "description": "Mini-batch size."
+          },
+          "early_stop": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 15,
+            "description": "Epochs without improvement before early stopping."
+          }
+        },
+        "additionalProperties": false
+      },
+      "scvi": {
+        "type": "object",
+        "description": "Options for method scvi (variational autoencoder; decoded normalised expression).",
+        "properties": {
+          "gene_likelihood": {
+            "type": "string",
+            "enum": ["zinb", "nb"],
+            "default": "zinb",
+            "description": "Decoder likelihood."
+          },
+          "use_observed_library_size": {
+            "type": "boolean",
+            "default": true,
+            "description": "Use the observed library size instead of inferring it."
+          },
+          "n_samples": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 1,
+            "description": "Posterior draws averaged; above 1 writes layers/denoised_sd."
+          },
+          "batch_key": {
+            "type": ["string", "null"],
+            "default": null,
+            "description": "obs column of batch labels used as a model covariate; null for none."
+          }
+        },
+        "additionalProperties": false
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu", "cuda"],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Random seed for neural training and the randomised SVD of alra."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without computing the result."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": ["dataset"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written, e.g. layers/denoised. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "For completed runs: method, output_scale, n_cells, n_genes, zero_fraction_before, zero_fraction_after. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "imputation.expression_denoising",
+      "reads": ["layers/counts", "obs/size_factor", "obs/batch", "obsm/X_pca"],
+      "writes": ["layers/denoised", "layers/denoised_sd", "obs/size_factor", "uns/denoising_params", "models/<name>"],
+      "devices": ["cpu", "cuda"],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "model-based",
+      "docs": "tasks/imputation/expression_denoising.md"
+    }
+  }
+}

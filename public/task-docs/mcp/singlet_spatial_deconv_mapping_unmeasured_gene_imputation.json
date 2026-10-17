@@ -1,0 +1,281 @@
+{
+  "name": "singlet_spatial_deconv_mapping_unmeasured_gene_imputation",
+  "title": "Impute unmeasured genes for targeted spatial panels",
+  "description": "Predicts expression of genes absent from a targeted or partial spatial panel by transferring values from a full-transcriptome scRNA-seq reference, fitted on the shared panel genes. Writes an imputed cells-or-spots by unmeasured-genes matrix, a held-out per-gene score table, and a predictive SD for probabilistic methods. The default method is tangram; spage is the heuristic comparator. Do not use it to correct dropouts in measured genes (use imputation.expression_denoising) or to place dissociated cells on template locations (use spatial-deconv-mapping.cell_to_location_mapping).",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Spatial dataset handle. layers/counts holds panel genes only; obsm/spatial holds optional coordinates."
+      },
+      "reference": {
+        "type": "string",
+        "description": "Reference scRNA-seq handle with full-transcriptome layers/counts and the cell-type column named by evaluation.label_key."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "tangram",
+          "gimvi",
+          "spage",
+          "seurat"
+        ],
+        "default": "tangram",
+        "description": "Imputation method. tangram is the default; spage is the heuristic comparator; gimvi returns predictive SDs."
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Random seed for initialisation, minibatch order and held-out fold order."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, peak memory, device and, for tangram, the dense mapping size, without fitting."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      },
+      "evaluation": {
+        "type": "object",
+        "description": "Held-out gene scoring and null baselines; scores are written to uns/unmeasured_imputation_loo.",
+        "properties": {
+          "cv_mode": {
+            "type": "string",
+            "enum": [
+              "loo",
+              "10fold"
+            ],
+            "default": "loo",
+            "description": "Held-out scheme: leave-one-gene-out or 10-fold over panel genes."
+          },
+          "label_key": {
+            "type": "string",
+            "default": "cell_type",
+            "description": "Reference obs column with cell-type labels, used by the cell-type-mean null."
+          },
+          "null_k": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 50,
+            "description": "Random reference cells averaged by the random-coupling null."
+          }
+        },
+        "additionalProperties": false
+      },
+      "spage": {
+        "type": "object",
+        "description": "Options for method spage (principal-vector alignment and kNN weights).",
+        "properties": {
+          "n_pv": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 30,
+            "description": "Principal vectors for alignment; 30 is the benchmark value, the SpaGE function has no default."
+          },
+          "pv_cosine_cutoff": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.3,
+            "description": "Keep principal-vector pairs whose cosine similarity exceeds this value."
+          },
+          "k_neighbors": {
+            "type": "integer",
+            "minimum": 2,
+            "default": 50,
+            "description": "Reference neighbours for kernel weights; neighbours with cosine distance of at least 1 are dropped."
+          }
+        },
+        "additionalProperties": false
+      },
+      "tangram": {
+        "type": "object",
+        "description": "Options for method tangram (cells-to-spots mapping).",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "cells",
+              "clusters",
+              "constrained"
+            ],
+            "default": "cells",
+            "description": "Mapping mode; cells is the default and the mode used in the benchmarks."
+          },
+          "learning_rate": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 0.1,
+            "description": "Adam learning rate for the mapping optimiser."
+          },
+          "num_epochs": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 1000,
+            "description": "Optimiser epochs for the mapping."
+          },
+          "density_prior": {
+            "type": "string",
+            "enum": [
+              "rna_count_based",
+              "uniform",
+              "none"
+            ],
+            "default": "rna_count_based",
+            "description": "Spatial density prior; none disables the density term."
+          }
+        },
+        "additionalProperties": false
+      },
+      "gimvi": {
+        "type": "object",
+        "description": "Options for method gimvi (joint variational model over two datasets).",
+        "properties": {
+          "max_epochs": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 200,
+            "description": "Training epochs."
+          },
+          "n_latent": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 10,
+            "description": "Dimension of the shared latent space."
+          },
+          "kappa": {
+            "type": "number",
+            "minimum": 0,
+            "default": 5,
+            "description": "Weight of the adversarial modality-classifier loss."
+          }
+        },
+        "additionalProperties": false
+      },
+      "seurat": {
+        "type": "object",
+        "description": "Options for method seurat (reference anchor transfer).",
+        "properties": {
+          "dims": {
+            "type": "integer",
+            "minimum": 2,
+            "default": 30,
+            "description": "Dimensions 1 to dims used for anchors; the vignette value, not a package default."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "dataset",
+      "reference"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. obsm/imputed_unmeasured. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Keys: method, n_spatial, n_unmeasured, median_rho, mean_rho, undefined_genes, median_variance_ratio, null_gap, interval_coverage (probabilistic methods only).",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "spatial-deconv-mapping.unmeasured_gene_imputation",
+      "reads": [
+        "layers/counts",
+        "var/gene_id",
+        "obsm/spatial",
+        "reference:layers/counts",
+        "reference:var/gene_id",
+        "reference:obs/<label_key>"
+      ],
+      "writes": [
+        "obsm/imputed_unmeasured",
+        "obsm/imputed_unmeasured_sd",
+        "uns/imputed_unmeasured_genes",
+        "uns/unmeasured_imputation_loo",
+        "models/<method>_mapper"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/spatial-deconv-mapping/unmeasured_gene_imputation.md"
+    }
+  }
+}

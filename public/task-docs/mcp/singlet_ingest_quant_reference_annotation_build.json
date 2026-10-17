@@ -1,0 +1,221 @@
+{
+  "name": "singlet_ingest_quant_reference_annotation_build",
+  "title": "Build reference annotation and mapper index",
+  "description": "Builds the gene set, transcript-to-gene map and mapper index that read mapping and counting use, from one genome FASTA and one annotation release with an explicit biotype filter. The default method is splici, which adds intronic flank sequence; choose cdna for spliced-only counting. Writes reference members and index paths, never cell counts. Does not map reads; run it after the library read layout is known and before read mapping.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "cpu"
+        ],
+        "default": "cpu",
+        "description": "Index construction is CPU and I/O bound; only cpu is accepted."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without writing."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing reference members and index paths instead of failing."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "cdna",
+          "splici",
+          "spliceu",
+          "lamanno",
+          "nac",
+          "star_genome",
+          "star_genefull",
+          "gentrome"
+        ],
+        "default": "splici",
+        "description": "Reference design. Default splici adds intronic flank; cdna is spliced only; lamanno and nac are kb intron modes; star_genefull counts gene bodies."
+      },
+      "genome_fasta": {
+        "type": "string",
+        "description": "Path to the genome FASTA of the assembly to index."
+      },
+      "annotation": {
+        "type": "object",
+        "description": "Annotation release and gene filter.",
+        "properties": {
+          "gtf": {
+            "type": "string",
+            "description": "Path to the GTF or GFF3 annotation file."
+          },
+          "release": {
+            "type": "string",
+            "description": "Release identifier recorded in uns/ref_build, for example GENCODE v32."
+          },
+          "biotype_key": {
+            "type": "string",
+            "default": "gene_biotype",
+            "description": "Attribute holding the biotype; gene_type is tried when it is missing."
+          },
+          "biotype_allowlist": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [],
+            "description": "Biotypes to keep; an empty list keeps all records and is recorded."
+          }
+        },
+        "required": [
+          "gtf",
+          "release"
+        ],
+        "additionalProperties": false
+      },
+      "read_length": {
+        "type": "integer",
+        "minimum": 1,
+        "description": "Read length r; flank is r minus 1. Omit to use the cDNA span length in uns/ingest_geometry. Needed by every method except cdna and gentrome."
+      },
+      "extra_contigs": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "default": [],
+        "description": "FASTA paths of transgene, pathogen or spike-in sequences appended to the genome."
+      },
+      "decoys": {
+        "type": "boolean",
+        "default": false,
+        "description": "Append genome decoy sequences; valid only with method gentrome."
+      },
+      "kb": {
+        "type": "object",
+        "description": "kb-python options for cdna, lamanno and nac.",
+        "properties": {
+          "k": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 31,
+            "description": "k-mer size of the kallisto index."
+          }
+        },
+        "additionalProperties": false
+      },
+      "star": {
+        "type": "object",
+        "description": "STAR options for star_genome and star_genefull.",
+        "properties": {
+          "sa_index_nbases": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Suffix pre-index length; omit to use the genome-size rule."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "dataset",
+      "genome_fasta",
+      "annotation"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: wrote reference members; dry_run: estimate only; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, for example uns/ref_build. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Keys: method, release, gene_count, excluded_no_biotype_key, multi_chromosome_transcripts, decoy_count, index_paths.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "ingest-quant.reference_annotation_build",
+      "reads": [
+        "uns/ingest_geometry"
+      ],
+      "writes": [
+        "uns/ref_build",
+        "var/gene_id",
+        "var/gene_name",
+        "var/gene_biotype",
+        "uns/t2g",
+        "uns/gene_set",
+        "uns/index_paths",
+        "uns/decoy_names"
+      ],
+      "devices": [
+        "cpu"
+      ],
+      "stochastic": false,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/ingest-quant/reference_annotation_build.md"
+    }
+  }
+}

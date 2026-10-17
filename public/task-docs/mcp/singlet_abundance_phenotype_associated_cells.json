@@ -1,0 +1,369 @@
+{
+  "name": "singlet_abundance_phenotype_associated_cells",
+  "title": "Phenotype-associated cell neighbourhoods",
+  "description": "Tests whether each cell's neighbourhood abundance across samples covaries with a sample-level phenotype after adjusting for covariates and batch or donor strata. Returns a global p-value (cna only), per-cell statistics and FDR-controlled cell calls. Use method cna by default, milo for count-based neighbourhood tests, and meld only for an ordered dose or time series. Requires a kNN graph, a cell-to-sample column and a per-sample phenotype. Do not use it for cell-type proportion changes or for expression differences.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "sample_key": {
+        "type": "string",
+        "description": "obs column giving the sample identifier of each cell."
+      },
+      "phenotype_key": {
+        "type": "string",
+        "description": "Sample-level phenotype column, numeric, binary or ordered; constant within donor when strata_keys[1] is set."
+      },
+      "covariate_keys": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "default": [],
+        "description": "Sample-level covariates adjusted for by cna and milo; ignored by meld."
+      },
+      "strata_keys": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "maxItems": 2,
+        "default": [],
+        "description": "Up to two columns, batch then donor. Batch enters residualisation and permutation; donor is the permutation unit."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "cna",
+          "milo",
+          "meld"
+        ],
+        "default": "cna",
+        "description": "cna is the default; milo for count-based neighbourhood tests; meld only for ordered phenotypes."
+      },
+      "fdr_levels": {
+        "type": "array",
+        "items": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "exclusiveMaximum": 1
+        },
+        "default": [
+          0.05,
+          0.1
+        ],
+        "description": "Nominal FDR levels at which cells are called."
+      },
+      "options": {
+        "type": "object",
+        "description": "Shared and method-specific settings; each block applies only to its named method, graph applies to all.",
+        "additionalProperties": false,
+        "properties": {
+          "graph": {
+            "type": "object",
+            "description": "Embedding and graph keys shared by all methods.",
+            "additionalProperties": false,
+            "properties": {
+              "use_rep": {
+                "type": "string",
+                "default": "X_pca",
+                "description": "obsm embedding the kNN graph was built on; milo uses it for neighbourhood refinement."
+              },
+              "graph_key": {
+                "type": "string",
+                "default": "connectivities",
+                "description": "obsp key of the kNN connectivities matrix."
+              }
+            }
+          },
+          "cna": {
+            "type": "object",
+            "description": "Options for the covarying neighbourhood analysis.",
+            "additionalProperties": false,
+            "properties": {
+              "n_permutations": {
+                "type": "integer",
+                "minimum": 1,
+                "default": 1000,
+                "description": "Conditional permutations for the global p-value and the FDR null."
+              },
+              "n_steps": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 1,
+                "maximum": 15,
+                "default": null,
+                "description": "Diffusion steps; null stops adaptively by median kurtosis, capped at 15."
+              },
+              "self_weight": {
+                "type": "number",
+                "minimum": 0,
+                "default": 1,
+                "description": "Self-weight w in the diffusion update."
+              },
+              "ridge": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "minimum": 0,
+                "default": null,
+                "description": "Batch ridge penalty; null selects it from the default list by batch kurtosis."
+              },
+              "allow_low_sample_size": {
+                "type": "boolean",
+                "default": false,
+                "description": "Permit fewer than 10 samples; power and permutation resolution are then poor."
+              }
+            }
+          },
+          "milo": {
+            "type": "object",
+            "description": "Options for neighbourhood negative-binomial testing.",
+            "additionalProperties": false,
+            "properties": {
+              "prop": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "maximum": 1,
+                "default": 0.1,
+                "description": "Fraction of cells sampled as neighbourhood index cells."
+              },
+              "k_nhood": {
+                "type": "integer",
+                "minimum": 1,
+                "default": 21,
+                "description": "Graph neighbours per neighbourhood."
+              },
+              "d_pcs": {
+                "type": "integer",
+                "minimum": 1,
+                "default": 30,
+                "description": "Embedding dimensions used for refined index-cell placement."
+              },
+              "refined": {
+                "type": "boolean",
+                "default": true,
+                "description": "Use refined index-cell placement as miloR does."
+              },
+              "norm_method": {
+                "type": "string",
+                "enum": [
+                  "TMM",
+                  "RLE",
+                  "logMS"
+                ],
+                "default": "TMM",
+                "description": "Library-size normalisation for the negative-binomial model."
+              },
+              "fdr_weighting": {
+                "type": "string",
+                "enum": [
+                  "k-distance",
+                  "graph-overlap"
+                ],
+                "default": "k-distance",
+                "description": "Weights for the graph-spatial FDR; k-distance uses the k-th neighbour distance."
+              }
+            }
+          },
+          "meld": {
+            "type": "object",
+            "description": "Options for the MELD heat-kernel likelihood.",
+            "additionalProperties": false,
+            "properties": {
+              "beta": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "default": 60,
+                "description": "Heat-kernel bandwidth of the graph filter."
+              },
+              "filter_type": {
+                "type": "string",
+                "enum": [
+                  "heat",
+                  "laplacian"
+                ],
+                "default": "heat",
+                "description": "Graph filter; heat is the reference default."
+              },
+              "sample_normalize": {
+                "type": "boolean",
+                "default": true,
+                "description": "Column-normalise sample indicators to sum to one before filtering."
+              }
+            }
+          }
+        }
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Random seed for conditional permutations and their FDR null."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing phenotype_assoc_* members instead of failing."
+      }
+    },
+    "required": [
+      "dataset",
+      "sample_key",
+      "phenotype_key"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: wrote members; dry_run: estimate only; queued: long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written; empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Compact summary for completed runs; never per-cell arrays.",
+        "additionalProperties": true,
+        "properties": {
+          "method": {
+            "type": "string"
+          },
+          "n_samples": {
+            "type": "integer"
+          },
+          "n_units": {
+            "type": "integer",
+            "description": "Cells tested (cna, meld) or index neighbourhoods (milo)."
+          },
+          "global_p": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "Global permutation p-value; null unless method is cna."
+          },
+          "n_called_05": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "n_called_10": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "selected_components": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Component count at the minimum p (cna)."
+          }
+        }
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "abundance.phenotype_associated_cells",
+      "reads": [
+        "obsp/<graph_key>",
+        "obsm/<use_rep>",
+        "obs/<sample_key>",
+        "obs/<phenotype_key>",
+        "obs/<covariate_keys>",
+        "obs/<strata_keys>"
+      ],
+      "writes": [
+        "uns/phenotype_assoc_global_p",
+        "obs/phenotype_assoc_coef",
+        "obs/phenotype_assoc_fdr",
+        "obs/phenotype_assoc_sig_05",
+        "obs/phenotype_assoc_sig_10",
+        "uns/phenotype_assoc_fdr_thresholds",
+        "obsm/phenotype_assoc_nam"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "model-based",
+      "docs": "tasks/abundance/phenotype_associated_cells.md"
+    }
+  }
+}

@@ -1,0 +1,258 @@
+{
+  "name": "singlet_disease_clinical_malignant_cell_identification",
+  "title": "Malignant cell identification in tumour scRNA-seq",
+  "description": "Labels each cell of a tumour sample as malignant or non-malignant and writes a malignant probability when the method provides one. The default classifier scores expression features with a catalogue-trained model; copykat, scevan and numbat add copy-number evidence; ikarus uses tumour signatures. Needs raw counts and gene coordinates; numbat also needs allele counts. Do not use on normal-only samples or to assign subclones; use the genetics tools for those.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "method": {
+        "type": "string",
+        "enum": ["classifier", "copykat", "scevan", "numbat", "ikarus"],
+        "default": "classifier",
+        "description": "Malignant caller. classifier is the default; numbat requires allele inputs."
+      },
+      "normal_reference": {
+        "type": "string",
+        "default": "auto",
+        "description": "auto uses obs/is_normal_reference when set, then immune or stromal labels in obs/cell_type; otherwise copykat and scevan build a synthetic diploid baseline."
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu", "cuda"],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 1234,
+        "description": "Random seed for stochastic steps, such as copykat MCMC segmentation."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      },
+      "copykat": {
+        "type": "object",
+        "description": "Options for method copykat; ignored by other methods.",
+        "properties": {
+          "min_genes_per_cell": {
+            "type": "integer",
+            "default": 200,
+            "description": "Cells with fewer detected genes are dropped before CNV scoring."
+          },
+          "ngene_chr": {
+            "type": "integer",
+            "default": 5,
+            "description": "Minimum genes per chromosome for a cell to pass filtering."
+          },
+          "win_size": {
+            "type": "integer",
+            "default": 25,
+            "description": "Minimum window size for segmentation (CopyKAT win.size)."
+          },
+          "ks_cut": {
+            "type": "number",
+            "default": 0.1,
+            "description": "Segmentation sensitivity (CopyKAT KS.cut); larger values give looser criteria."
+          },
+          "low_dr": {
+            "type": "number",
+            "default": 0.05,
+            "description": "Lower gene-filter threshold (CopyKAT LOW.DR)."
+          },
+          "up_dr": {
+            "type": "number",
+            "default": 0.1,
+            "description": "Upper gene-filter threshold (CopyKAT UP.DR)."
+          }
+        },
+        "additionalProperties": false
+      },
+      "scevan": {
+        "type": "object",
+        "description": "Options for method scevan; ignored by other methods.",
+        "properties": {
+          "beta_vega": {
+            "type": "number",
+            "default": 0.5,
+            "description": "VegaMC segmentation parameter; higher values give coarser segments."
+          },
+          "par_cores": {
+            "type": "integer",
+            "default": 20,
+            "description": "Number of cores used by SCEVAN."
+          },
+          "fixed_normal_cells": {
+            "type": "boolean",
+            "default": false,
+            "description": "Keep the supplied normal cells as a fixed reference; intended for clonal-structure analyses."
+          }
+        },
+        "additionalProperties": false
+      },
+      "numbat": {
+        "type": "object",
+        "description": "Options for method numbat; ignored by other methods.",
+        "properties": {
+          "t": {
+            "type": "number",
+            "default": 1e-5,
+            "description": "HMM switch probability between copy states."
+          },
+          "gamma": {
+            "type": "number",
+            "default": 20,
+            "description": "Numbat gamma parameter from the source defaults."
+          },
+          "min_llr": {
+            "type": "number",
+            "default": 5,
+            "description": "Minimum log-likelihood ratio used in Numbat segment calls."
+          },
+          "max_iter": {
+            "type": "integer",
+            "default": 2,
+            "description": "Maximum iterations of Numbat's inference loop."
+          },
+          "tumour_posterior_threshold": {
+            "type": "number",
+            "default": 0.5,
+            "description": "A cell whose tumour posterior exceeds this value is called malignant."
+          },
+          "ncores": {
+            "type": "integer",
+            "default": 1,
+            "description": "Number of cores used by Numbat."
+          }
+        },
+        "additionalProperties": false
+      },
+      "ikarus": {
+        "type": "object",
+        "description": "Options for method ikarus; ignored by other methods.",
+        "properties": {
+          "n_neighbors": {
+            "type": "integer",
+            "default": 100,
+            "description": "Neighbours in the kNN graph used for label propagation."
+          },
+          "n_iter": {
+            "type": "integer",
+            "default": 50,
+            "description": "Number of label-propagation iterations."
+          },
+          "certainty_threshold": {
+            "type": "number",
+            "default": 0.9,
+            "description": "Initial certainty percentile for seed cells."
+          }
+        },
+        "additionalProperties": false
+      },
+      "classifier": {
+        "type": "object",
+        "description": "Options for method classifier; ignored by CNV methods.",
+        "properties": {
+          "decision_threshold": {
+            "type": "number",
+            "default": 0.5,
+            "description": "A cell with malignant probability at or above this value is called malignant."
+          },
+          "C": {
+            "type": "number",
+            "default": 1.0,
+            "description": "Inverse L2 regularisation strength of the logistic head."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "required": ["dataset"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written, e.g. obs/malignant_label. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "For completed runs: method, n_cells, n_malignant, malignant_fraction, decision_threshold, normal_reference_source.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "disease-clinical.malignant_cell_identification",
+      "reads": [
+        "layers/counts",
+        "var/chrom",
+        "var/start",
+        "var/end",
+        "uns/genome_build",
+        "obs/sample_id",
+        "obs/is_normal_reference",
+        "obs/cell_type",
+        "layers/allele_ref",
+        "layers/allele_alt"
+      ],
+      "writes": [
+        "obs/malignant_label",
+        "obs/malignant_prob",
+        "obs/malignant_method",
+        "obsm/cnv_profile",
+        "uns/malignant_params"
+      ],
+      "devices": ["cpu", "cuda"],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": true,
+      "paradigm": "hybrid",
+      "docs": "tasks/disease-clinical/malignant_cell_identification.md"
+    }
+  }
+}

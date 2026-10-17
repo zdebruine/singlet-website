@@ -1,0 +1,288 @@
+{
+  "name": "singlet_qc_single_nucleus_quality_filtering",
+  "title": "Nucleus-aware quality filtering (single-nucleus RNA-seq)",
+  "description": "Flags compromised or incompletely stripped nuclei and writes obs/keep_cell, the nuclear fraction and flag reasons. The default method, mad_outlier, applies per-sample MAD rules to log counts, log genes and mito percent with a 0.5 percentage-point mito floor, the published nucleus practice. Use it on nucleus matrices with intronic counts, after nucleus-versus-empty calling. Do not use it on cell data (use qc.low_quality_cell_detection). Nuclear fraction is recorded as a covariate and never treated as damage.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "method": {
+        "type": "string",
+        "enum": [
+          "mad_outlier",
+          "fixed_mito_cutoff",
+          "miqc_mixture",
+          "dropletqc_nf",
+          "dropkick"
+        ],
+        "default": "mad_outlier",
+        "description": "Filter rule. mad_outlier is the default and published nucleus standard; the others are comparators."
+      },
+      "nucleus_inputs": {
+        "type": "object",
+        "description": "Column and layer mapping for nucleus inputs; applies to every method.",
+        "properties": {
+          "intronic_layer": {
+            "type": "string",
+            "default": "intronic",
+            "description": "Layer holding intronic (pre-mRNA) UMI counts per nucleus."
+          },
+          "sample_key": {
+            "type": "string",
+            "default": "sample",
+            "description": "obs column naming samples; thresholds are computed within each sample."
+          },
+          "mito_regex": {
+            "type": "string",
+            "default": "^mt-|^MT-",
+            "description": "Gene-name pattern identifying mitochondrial genes."
+          },
+          "quantification": {
+            "type": "string",
+            "default": "unspecified",
+            "description": "Pipeline and feature set that produced the intronic counts, such as STARsolo GeneFull; recorded in uns."
+          },
+          "covariate_mode": {
+            "type": "string",
+            "enum": [
+              "covariate",
+              "none"
+            ],
+            "default": "covariate",
+            "description": "covariate stores nuclear fraction and never flags on it; none skips computing it."
+          }
+        },
+        "additionalProperties": false
+      },
+      "mad_outlier": {
+        "type": "object",
+        "description": "Per-sample MAD rules; a nucleus is flagged beyond the median by max(nmads times MAD, min diff).",
+        "properties": {
+          "nmads_counts": {
+            "type": "number",
+            "default": 5,
+            "minimum": 0,
+            "description": "MADs from the median for log total counts, both tails."
+          },
+          "nmads_genes": {
+            "type": "number",
+            "default": 5,
+            "minimum": 0,
+            "description": "MADs from the median for log genes detected, both tails."
+          },
+          "nmads_mito": {
+            "type": "number",
+            "default": 3,
+            "minimum": 0,
+            "description": "MADs above the median for mito percent, upper tail only."
+          },
+          "mito_min_diff": {
+            "type": "number",
+            "default": 0.5,
+            "minimum": 0,
+            "description": "Minimum distance above the median for mito outliers, in percentage points."
+          }
+        },
+        "additionalProperties": false
+      },
+      "fixed_mito_cutoff": {
+        "type": "object",
+        "description": "Single mito percent cutoff, used when method is fixed_mito_cutoff.",
+        "properties": {
+          "cutoff_percent": {
+            "type": "number",
+            "default": 3,
+            "minimum": 0,
+            "maximum": 100,
+            "description": "Mito percent cutoff; the default is an unbenchmarked toolkit value for nuclei."
+          }
+        },
+        "additionalProperties": false
+      },
+      "miqc_mixture": {
+        "type": "object",
+        "description": "Two-component mixture of mito percent on detected genes, used when method is miqc_mixture.",
+        "properties": {
+          "posterior_cutoff": {
+            "type": "number",
+            "default": 0.75,
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Largest posterior probability of the compromised component that is kept."
+          }
+        },
+        "additionalProperties": false
+      },
+      "dropletqc_nf": {
+        "type": "object",
+        "description": "DropletQC damaged-cell gating on nuclear fraction and UMI, cell convention; used when method is dropletqc_nf.",
+        "properties": {
+          "nf_sep": {
+            "type": "number",
+            "default": 0.15,
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Nuclear fraction separation for damaged calls, cell convention."
+          },
+          "umi_sep_perc": {
+            "type": "number",
+            "default": 50,
+            "minimum": 0,
+            "maximum": 100,
+            "description": "UMI percentile separating damaged from intact calls, cell convention."
+          },
+          "remove_flagged": {
+            "type": "boolean",
+            "default": false,
+            "description": "Remove nuclei flagged as damaged; off by default because the convention inverts for nuclei."
+          }
+        },
+        "additionalProperties": false
+      },
+      "dropkick": {
+        "type": "object",
+        "description": "Elastic-net logistic classifier trained on heuristic labels; kept for comparison.",
+        "properties": {
+          "min_genes": {
+            "type": "integer",
+            "default": 50,
+            "minimum": 0,
+            "description": "Minimum genes per barcode before classification."
+          },
+          "n_hvgs": {
+            "type": "integer",
+            "default": 2000,
+            "minimum": 1,
+            "description": "Highly variable genes used as classifier features."
+          }
+        },
+        "additionalProperties": false
+      },
+      "device": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "cpu",
+          "cuda"
+        ],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Random seed for miqc_mixture and dropkick fits; mad_outlier and fixed_mito_cutoff are deterministic."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": [
+      "dataset"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "dry_run",
+          "queued"
+        ],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Members written, e.g. obs/keep_cell. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Completed runs: method, n_nuclei, n_kept, flags_by_reason, thresholds_by_sample, nuclear_fraction_summary. Never raw matrices.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": [
+      "dataset",
+      "status"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "qc.single_nucleus_quality_filtering",
+      "reads": [
+        "layers/counts",
+        "layers/exonic",
+        "layers/intronic",
+        "var/mito",
+        "obs/<sample_key>"
+      ],
+      "writes": [
+        "obs/keep_cell",
+        "obs/qc_nuclear_fraction",
+        "obs/qc_flag_reason",
+        "obs/qc_posterior_compromised",
+        "uns/qc_nucleus_thresholds",
+        "uns/qc_nucleus_params",
+        "models/nucleus_qc"
+      ],
+      "devices": [
+        "cpu",
+        "cuda"
+      ],
+      "stochastic": true,
+      "long_running": false,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/qc/single_nucleus_quality_filtering.md"
+    }
+  }
+}

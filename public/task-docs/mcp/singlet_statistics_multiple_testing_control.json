@@ -1,0 +1,162 @@
+{
+  "name": "singlet_statistics_multiple_testing_control",
+  "title": "Multiple-testing (FDR) control across genes and groups",
+  "description": "Adjusts per-gene, per-group p-values for multiple testing and returns q-values and reject flags at a stated FDR level. The caller must declare the family (pooled across groups or per group) and may choose BH (default), BY, Bonferroni, Storey q-value or IHW. Requires valid per-test p-values in varm/<test>_pvalues; do not use it on cell-level p-values from pseudoreplicated tests, or on clusters defined from the same counts without post-clustering correction. Writes varm/<test>_qvalues, varm/<test>_reject and uns/<test>_fdr.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "test": {
+        "type": "string",
+        "description": "Name of the test whose genes-by-groups p-values sit in varm/<test>_pvalues."
+      },
+      "family": {
+        "type": "string",
+        "enum": ["pooled", "per_cluster"],
+        "description": "FDR family: all gene-group tests together, or each group separately. Required; there is no default."
+      },
+      "method": {
+        "type": "string",
+        "enum": ["bh", "by", "bonferroni", "qvalue", "ihw"],
+        "default": "bh",
+        "description": "Adjustment procedure. Use bh unless dependence or informative covariates justify by or ihw."
+      },
+      "alpha": {
+        "type": "number",
+        "default": 0.05,
+        "exclusiveMinimum": 0,
+        "maximum": 1,
+        "description": "Nominal FDR level for reject flags. Adjusted values do not depend on it."
+      },
+      "missing": {
+        "type": "string",
+        "enum": ["exclude", "set_to_one"],
+        "default": "exclude",
+        "description": "NaN tests: exclude removes them from family size m; set_to_one keeps them as p = 1."
+      },
+      "qvalue": {
+        "type": "object",
+        "description": "Options for method qvalue: Storey pi0 estimation and q-values.",
+        "properties": {
+          "lambda_min": {"type": "number", "default": 0.05, "exclusiveMinimum": 0, "maximum": 1, "description": "Lowest lambda in the pi0 grid."},
+          "lambda_max": {"type": "number", "default": 0.95, "exclusiveMinimum": 0, "maximum": 1, "description": "Highest lambda in the pi0 grid; must exceed lambda_min."},
+          "lambda_step": {"type": "number", "default": 0.05, "exclusiveMinimum": 0, "maximum": 0.5, "description": "Spacing of the pi0 lambda grid."},
+          "smooth_df": {"type": "integer", "default": 3, "minimum": 1, "description": "Degrees of freedom of the smoothing spline for pi0 over lambda."},
+          "pi0_small_m": {"type": "integer", "default": 100, "minimum": 1, "description": "Below this many tests pi0 is fixed at 1, following SpatialDE."},
+          "pfdr": {"type": "boolean", "default": false, "description": "Use the positive-FDR variant with finite-m correction."}
+        },
+        "additionalProperties": false
+      },
+      "ihw": {
+        "type": "object",
+        "description": "Options for method ihw: covariates must be independent of null p-values.",
+        "properties": {
+          "covariates": {
+            "type": "array",
+            "items": {"type": "string", "enum": ["mean_expr", "detect_rate"]},
+            "minItems": 1,
+            "uniqueItems": true,
+            "default": ["mean_expr", "detect_rate"],
+            "description": "Per-test covariates; each must exist as varm/<test>_<covariate>."
+          },
+          "nfolds": {
+            "type": "integer",
+            "default": 5,
+            "minimum": 2,
+            "description": "Cross-fitting folds for weight estimation, assigned deterministically by test index."
+          }
+        },
+        "additionalProperties": false
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu", "cuda"],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without running."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      }
+    },
+    "required": ["dataset", "test", "family"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: ran inline and wrote members; dry_run: only an estimate was computed; queued: running as a long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written, e.g. varm/<test>_qvalues. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "Compact summary for completed calls: family, method, alpha, m_tests, n_nan, rejections (total and by_group), pi0 per family for qvalue.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "statistics.multiple_testing_control",
+      "reads": [
+        "varm/<test>_pvalues",
+        "uns/<test>/groups",
+        "varm/<test>_mean_expr",
+        "varm/<test>_detect_rate"
+      ],
+      "writes": [
+        "varm/<test>_qvalues",
+        "varm/<test>_reject",
+        "uns/<test>_fdr",
+        "models/<test>_ihw_weights"
+      ],
+      "devices": ["cpu", "cuda"],
+      "stochastic": false,
+      "long_running": false,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/statistics/multiple_testing_control.md"
+    }
+  }
+}

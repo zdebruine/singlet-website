@@ -1,0 +1,196 @@
+{
+  "name": "singlet_programs_denovo_program_decomposition",
+  "title": "De novo gene program decomposition",
+  "description": "Fits K non-negative gene programs to variable-gene counts and returns per-cell usages, L1-normalised program loadings and a per-program stability table. The default method schpf is a Gamma-Poisson model fitted by variational inference; cnmf and fasttopics are comparators. K is required, usually chosen with programs.program_number_selection. To project new cells onto fixed programs, use programs.program_usage_estimation instead.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Dataset handle: a .singlet path or URI (local path, s3://, r2://, https://) or a workspace handle."
+      },
+      "layer": {
+        "type": "string",
+        "default": "counts",
+        "description": "Count layer to read; the variable-gene mask is read from var/highly_variable."
+      },
+      "k": {
+        "type": "integer",
+        "minimum": 2,
+        "maximum": 200,
+        "description": "Number of programs K. Required; choose it with programs.program_number_selection."
+      },
+      "method": {
+        "type": "string",
+        "enum": ["schpf", "fasttopics", "cnmf"],
+        "default": "schpf",
+        "description": "Decomposition method. schpf is the model-based default; cnmf is the consensus comparator."
+      },
+      "n_restarts": {
+        "type": "integer",
+        "minimum": 2,
+        "maximum": 200,
+        "default": 20,
+        "description": "Independent random starts; stability is computed across starts. cNMF calls this n_iter."
+      },
+      "device": {
+        "type": "string",
+        "enum": ["auto", "cpu", "cuda"],
+        "default": "auto",
+        "description": "Execution device; auto picks CUDA when a device with enough memory is available."
+      },
+      "seed": {
+        "type": "integer",
+        "default": 0,
+        "description": "Seed for the random starts; reproducible on the same backend."
+      },
+      "dry_run": {
+        "type": "boolean",
+        "default": false,
+        "description": "Return estimated time, memory and device without fitting."
+      },
+      "overwrite": {
+        "type": "boolean",
+        "default": false,
+        "description": "Replace existing output members instead of failing."
+      },
+      "cnmf": {
+        "type": "object",
+        "description": "Options for method cnmf; the call is refused for other methods.",
+        "additionalProperties": false,
+        "properties": {
+          "local_density_threshold": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 2,
+            "default": 0.5,
+            "description": "Density threshold tau; replicates at or above it are discarded before clustering."
+          },
+          "local_neighborhood_size": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 1,
+            "default": 0.3,
+            "description": "Fraction of starts used as nearest neighbours for local density."
+          },
+          "max_nmf_iter": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 1000,
+            "description": "Maximum iterations per Frobenius NMF start."
+          }
+        }
+      },
+      "schpf": {
+        "type": "object",
+        "description": "Options for method schpf; the call is refused for other methods.",
+        "additionalProperties": false,
+        "properties": {
+          "a": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 0.3,
+            "description": "Shape of the Gamma prior on usages."
+          },
+          "c": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 0.3,
+            "description": "Shape of the Gamma prior on loadings."
+          },
+          "max_iter": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 1000,
+            "description": "Maximum variational iterations per start."
+          },
+          "epsilon": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "default": 0.001,
+            "description": "Relative change in loss below which a start counts as converged."
+          }
+        }
+      },
+      "fasttopics": {
+        "type": "object",
+        "description": "Options for method fasttopics (Poisson NMF); the call is refused for other methods.",
+        "additionalProperties": false,
+        "properties": {
+          "solver": {
+            "type": "string",
+            "enum": ["scd", "em", "mu", "ccd"],
+            "default": "scd",
+            "description": "Poisson NMF optimiser."
+          },
+          "numiter": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 100,
+            "description": "Maximum outer iterations per start."
+          }
+        }
+      }
+    },
+    "required": ["dataset", "k"],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "dataset": {
+        "type": "string",
+        "description": "Handle of the dataset that was (or would be) updated."
+      },
+      "status": {
+        "type": "string",
+        "enum": ["completed", "dry_run", "queued"],
+        "description": "completed: fitted and wrote members; dry_run: estimate only; queued: long job (see job_id)."
+      },
+      "wrote": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Members written, for example obsm/program_usage. Empty for dry_run and queued."
+      },
+      "summary": {
+        "type": "object",
+        "description": "For completed fits: method, k, n_restarts, n_cells, n_genes, median_program_stability, programs_stable, zero_usage_cells, and outlier_fraction for cnmf.",
+        "additionalProperties": true
+      },
+      "provenance_id": {
+        "type": ["string", "null"],
+        "description": "Id of the provenance record appended to the dataset (null unless completed)."
+      },
+      "job_id": {
+        "type": ["string", "null"],
+        "description": "Set when status is queued."
+      },
+      "estimate": {
+        "type": ["object", "null"],
+        "description": "Present for dry_run: seconds, peak_memory_gb, device.",
+        "additionalProperties": true
+      }
+    },
+    "required": ["dataset", "status"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false,
+    "openWorldHint": false
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "programs.denovo_program_decomposition",
+      "reads": ["layers/counts", "var/highly_variable", "obs/library_size"],
+      "writes": ["obsm/program_usage", "varm/program_loadings", "uns/program_stability", "uns/program_params", "models/program"],
+      "devices": ["cpu", "cuda"],
+      "stochastic": true,
+      "long_running": true,
+      "streaming": false,
+      "paradigm": "hybrid",
+      "docs": "tasks/programs/denovo_program_decomposition.md"
+    }
+  }
+}
