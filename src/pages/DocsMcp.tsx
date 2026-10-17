@@ -8,11 +8,8 @@ import { GITHUB_ISSUES } from "@/lib/install-snippets";
 import {
   MCP_URL,
   claudeCodeConfig,
-  claudeCodeConfigNoKey,
   claudeDesktopConfig,
-  claudeDesktopConfigNoKey,
   cursorConfig,
-  cursorConfigNoKey,
   vscodeConfig,
 } from "@/lib/mcp-snippets";
 
@@ -159,43 +156,41 @@ export default function DocsMcp() {
           <Section id="setup" title="Set it up">
             <p>
               The server is hosted at <code className="code-inline">{MCP_URL}</code> — nothing to install and nothing to
-              run locally. <strong>Start without a key:</strong> every tool except the two cohort tools works straight
-              away. Searches the built-in vocabulary can read, and repeats of any question, are free; questions that
-              need a fresh AI reading are limited to 10 a day. A free key from{" "}
-              <Link to="/account">your account</Link> raises search to 200 a day and lets you save cohorts and open
-              private ones (<code className="code-inline">save_cohort</code>, <code className="code-inline">get_cohort</code>).
+              run locally. <strong>Tools need a free API key:</strong> sign in, create a key under API keys in{" "}
+              <Link to="/account">your account</Link>, and send it with every request. Listing the tools needs no key,
+              and the data itself (CC0 downloads) never does. Searches the built-in vocabulary can read, and repeats of
+              any question, use no AI tokens; questions that need a fresh AI reading are counted against your monthly
+              allowance, and billing for heavier use is coming.
             </p>
 
             <h3>Claude Desktop</h3>
             <p className="text-sm text-muted-foreground">
               Settings → Developer → Edit Config, then restart Claude.
             </p>
-            <div className="grid md:grid-cols-2 gap-3">
-              <CodeBlock label="no key" code={claudeDesktopConfigNoKey} />
-              <CodeBlock label="with a key" code={claudeDesktopConfig(KEY)} />
-            </div>
+            <CodeBlock label="claude_desktop_config.json" code={claudeDesktopConfig(KEY)} />
 
             <h3 className="mt-8">Claude Code</h3>
-            <div className="grid md:grid-cols-2 gap-3">
-              <CodeBlock label="no key" code={claudeCodeConfigNoKey} />
-              <CodeBlock label="with a key" code={claudeCodeConfig(KEY)} />
-            </div>
+            <CodeBlock label="terminal" code={claudeCodeConfig(KEY)} />
+
+            <h3 className="mt-8">Claude.ai (custom connector)</h3>
+            <p className="text-sm text-muted-foreground">
+              Settings → Connectors → Add custom connector. The connector form takes only a URL, so put your key in it
+              (treat this URL like a password; revoke the key in your account if it leaks):
+            </p>
+            <CodeBlock label="connector url" code={`${MCP_URL}?key=${KEY}`} />
 
             <h3 className="mt-8">Cursor</h3>
             <p className="text-sm text-muted-foreground">
               Put this in <code className="code-inline">.cursor/mcp.json</code> in your project, or in{" "}
               <code className="code-inline">~/.cursor/mcp.json</code> for every project.
             </p>
-            <div className="grid md:grid-cols-2 gap-3">
-              <CodeBlock label="no key" code={cursorConfigNoKey} />
-              <CodeBlock label="with a key" code={cursorConfig(KEY)} />
-            </div>
+            <CodeBlock label=".cursor/mcp.json" code={cursorConfig(KEY)} />
 
             <h3 className="mt-8">ChatGPT</h3>
             <p className="text-sm text-muted-foreground">
               Enable developer mode, then Settings → Connectors → Create, and add the URL below as a custom connector
               (transport: HTTP/streamable). Add <code className="code-inline">Authorization: Bearer {KEY}</code> as a
-              header if you have a key.
+              header, or use the key-in-URL form shown under Claude.ai.
             </p>
             <CodeBlock label="connector url" code={MCP_URL} />
 
@@ -245,8 +240,8 @@ export default function DocsMcp() {
           <Section id="limits" title="Limits, and being honest about them">
             <ul>
               <li>
-                AI-interpreted search: 10 fresh AI readings a day without a key, 200 a day with one; vocabulary-only and
-                repeated questions do not count. The remaining budget comes back with every answer (in{" "}
+                Tool calls are per key: 60 a minute. AI-interpreted search draws on a monthly AI token allowance;
+                vocabulary-only and repeated questions use none. What is left comes back with every answer (in{" "}
                 <code className="code-inline">_meta.quota</code>). When it runs out the question is still answered, read
                 with the built-in vocabulary only, and the answer says so.
               </li>
@@ -276,14 +271,12 @@ export default function DocsMcp() {
           <Section id="troubleshooting" title="If something goes wrong">
             <ul>
               <li>
-                <strong>"Unknown API key", or a key that "was revoked" or "has expired"</strong> — every tool call fails
-                with that message while a bad key is sent; it is never quietly treated as anonymous. Remove the header to
-                fall back to anonymous access, or create a new key in <Link to="/account">your account</Link>.
+                <strong>"Unknown API key", or a key that "was revoked" or "has expired"</strong> — the whole request is
+                refused (HTTP 401) while a bad key is sent. Create a new key in <Link to="/account">your account</Link>.
               </li>
               <li>
-                <strong>"needs a personal singlet.bio API key"</strong> — you called{" "}
-                <code className="code-inline">save_cohort</code>, or <code className="code-inline">get_cohort</code>{" "}
-                without a key or a share-link token. Everything else works anonymously.
+                <strong>"needs a personal singlet.bio API key"</strong> — you called a tool without
+                a key. Create one in <Link to="/account">your account</Link> and add it to the config above.
               </li>
               <li>
                 <strong>"Today's AI-search budget is used up"</strong> — the daily allowance of fresh AI readings. The

@@ -26,7 +26,7 @@
 import { ensureCatalogColumns } from "./_shared/catalog-refresh";
 import { CORS_HEADERS } from "./_shared/cors";
 import type { AppEnv } from "./_shared/env";
-import { anonSubjectFromIp, apiKeyFromRequest, checkApiKey, clientIp, keyMessage, type Identity, type KeyCheck } from "./_shared/identity";
+import { anonSubjectFromIp, API_KEY_RE, apiKeyFromRequest, checkApiKey, clientIp, keyMessage, type Identity, type KeyCheck } from "./_shared/identity";
 import { nlSearch, type NlSearchBody } from "./_shared/nl-search-core";
 import { limitFor, type Quota } from "./_shared/quota";
 import { recordToolCall, withinRate } from "./_shared/spend";
@@ -58,7 +58,7 @@ import {
 
 type Env = AppEnv;
 
-const SERVER_INFO = { name: "singlet-bio", title: "singlet.bio atlas", version: "2.0.0" };
+const SERVER_INFO = { name: "singlet-bio", title: "singlet.bio atlas", version: "1.0.0" };
 const PROTOCOL_VERSIONS = ["2025-06-18", "2025-03-26"] as const;
 const LATEST_PROTOCOL = PROTOCOL_VERSIONS[0];
 const MAX_SAMPLES_IN_STUDY = 60;
@@ -976,8 +976,15 @@ async function handleMessage(ctx: CallContext, msg: JsonRpcRequest): Promise<unk
   }
 }
 
+function apiKeyFromQuery(request: Request): string | null {
+  const value = (new URL(request.url).searchParams.get("key") ?? "").trim();
+  return API_KEY_RE.test(value) ? value : null;
+}
+
 async function authFor(env: Env, request: Request, waitUntil: (p: Promise<unknown>) => void): Promise<CallContext["auth"]> {
-  const key = apiKeyFromRequest(request);
+  // Header first. Clients that cannot set one (a Claude.ai custom connector takes only a URL)
+  // may put the key in the query string instead: https://singlet.bio/mcp?key=sk_live_…
+  const key = apiKeyFromRequest(request) ?? apiKeyFromQuery(request);
   if (!key) return { ok: false, reason: "missing", message: keyMessage("unknown") };
   return checkApiKey(env, key, waitUntil);
 }

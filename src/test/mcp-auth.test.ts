@@ -20,9 +20,9 @@ async function setup(extra: Record<string, unknown> = {}) {
   return { DB: db, ...extra };
 }
 
-function post(body: unknown, env: unknown, headers: Record<string, string> = {}) {
+function post(body: unknown, env: unknown, headers: Record<string, string> = {}, query = "") {
   const text = typeof body === "string" ? body : JSON.stringify(body);
-  const request = new Request("https://singlet.bio/mcp", { method: "POST", headers: { "Content-Type": "application/json", ...headers }, body: text });
+  const request = new Request(`https://singlet.bio/mcp${query}`, { method: "POST", headers: { "Content-Type": "application/json", ...headers }, body: text });
   return onRequestPost({ request, env, waitUntil: () => undefined, params: {}, data: {}, next: async () => new Response(), functionPath: "/mcp" } as never);
 }
 
@@ -36,6 +36,16 @@ beforeEach(() => {
 });
 
 describe("MCP access", () => {
+  it("accepts the key in the query string for clients that cannot set headers", async () => {
+    const env = await setup();
+    const res = await post(call("get_atlas_stats"), env, {}, `?key=${KEY}`);
+    const body = (await res.json()) as { result: { _meta?: { auth?: string } } };
+    expect(res.status).toBe(200);
+    expect(body.result._meta?.auth).not.toBe("key_required"); // the tool itself fails here: no catalog tables
+    const bad = await post(call("get_atlas_stats"), env, {}, "?key=sk_live_" + "c".repeat(32));
+    expect(bad.status).toBe(401);
+  });
+
   it("lists tools without a key", async () => {
     const res = await post({ jsonrpc: "2.0", id: 1, method: "tools/list" }, await setup());
     expect(res.status).toBe(200);
