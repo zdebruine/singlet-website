@@ -179,23 +179,27 @@ const About = () => {
           <section id="status" className="pb-12 mb-12 border-b border-border scroll-mt-20">
             <h2>Processing status</h2>
             <p>
-              We are continuing to perform data reprocessing today. Here are live updates on the state of our continually
-              growing catalog.
+              Reprocessing runs in campaigns, and none is running right now. Here is where the catalog stands; the numbers
+              update whenever files are published.
             </p>
 
             <h3>Available to download now</h3>
             <p className="text-[14.5px]">
               These are the same numbers shown on the home page and returned by <Mono>/api/stats</Mono> as{" "}
               <Mono>studies_with_files</Mono>, <Mono>samples_in_files</Mono> and <Mono>cells_in_files</Mono>: studies
-              that have a published <Mono>.singlet</Mono> file you can download right now, the usable samples in those
-              files, and the cells called in them. A sample is usable when its count matrix is non-empty and it called at
-              least one cell
-              {stats && stats.samples_unusable > 0 ? `; the ${fmtInt(stats.samples_unusable)} samples in files that fail that test are not counted` : ""}
-              .
+              that have a published <Mono>.singlet</Mono> file you can download and use right now, the usable samples in
+              those files, and the cells called in them. A sample is usable when its count matrix is non-empty and it
+              called at least one cell; a study counts when at least one of its samples is usable and its reference matches
+              its species
+              {stats && stats.studies_withheld > 0
+                ? `. ${fmtInt(stats.files_published)} files are published in all; the other ${fmtInt(stats.studies_withheld)} hold no usable sample or were aligned to the wrong reference, so they are not counted here and do not appear in searches unless you ask for unbuilt studies`
+                : ""}
+              .{" "}
+              Default searches total their results on the same basis.
             </p>
             <dl className="grid grid-cols-2 md:grid-cols-3 gap-3 my-5">
               {[
-                { label: "studies with files", value: stats ? fmtInt(stats.studies_with_files) : null },
+                { label: "downloadable studies", value: stats ? fmtInt(stats.studies_with_files) : null },
                 { label: "usable samples in files", value: stats ? fmtInt(stats.samples_in_files) : null },
                 { label: "cells called in files", value: stats ? fmtCompact(stats.cells_in_files) : null },
               ].map((s) => (
@@ -231,6 +235,37 @@ const About = () => {
                 </div>
               ))}
             </dl>
+            {stats && stats.accounting.samples_advertised > 0 && (
+              <>
+                <h3>Where every sample stands</h3>
+                <p className="text-[14.5px]">
+                  GEO lists {fmtInt(stats.accounting.samples_advertised)} samples across the {fmtInt(stats.accounting.studies_tracked)}{" "}
+                  studies we track. Each one is in exactly one row below, and the rows add up.
+                </p>
+                <table className="w-full text-[13.5px] my-4">
+                  <tbody>
+                    {[
+                      ["Not ingested yet (or not scRNA-seq)", stats.accounting.samples_not_ingested],
+                      ["Failed processing", stats.accounting.samples_failed],
+                      ["In progress", stats.accounting.samples_other],
+                      ["Processed, not in a published file yet", stats.accounting.done_not_in_files],
+                      ["In a file, empty or no cells called", stats.accounting.in_files_unusable],
+                      ["In a file, usable, but the study is withheld", stats.accounting.in_files_usable_withheld],
+                      ["Usable in a downloadable study", stats.accounting.in_files_usable_downloadable],
+                    ].map(([label, n]) => (
+                      <tr key={String(label)} className="border-b border-border">
+                        <td className="py-1.5 pr-4">{label}</td>
+                        <td className="py-1.5 text-right tabular">{fmtInt(Number(n))}</td>
+                      </tr>
+                    ))}
+                    <tr className="font-medium">
+                      <td className="py-1.5 pr-4">All samples GEO lists</td>
+                      <td className="py-1.5 text-right tabular">{fmtInt(stats.accounting.samples_advertised)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </>
+            )}
             {stats && (
               <p className="text-[13.5px] text-muted-foreground">
                 Catalog means over processed samples: mapping rate {fmtPct(stats.avg_mapping_rate)}; median genes per

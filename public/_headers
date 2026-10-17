@@ -1,10 +1,25 @@
-# Response headers for static assets (Cloudflare Pages). Pages Functions set
-# their own headers; these rules apply to every page and file served from
-# dist/, including the SPA's index.html for client routes.
+# Response headers for static assets (Cloudflare Pages). Pages Functions answer
+# with their own headers (functions/_middleware.ts adds the security set), so
+# keep the two lists in step. These rules apply to every page and file served
+# from dist/, including the SPA's index.html for client routes.
 #
-# No framing by any site (clickjacking guard for the signed-in account and
-# project pages): X-Frame-Options for older browsers, frame-ancestors for the rest.
+# The first Content-Security-Policy is enforced and only holds directives that
+# cannot break a page: no framing by any site (clickjacking guard for the
+# signed-in account and project pages), no <base> tricks, no plugins, forms
+# only to this site. The full script/style policy is Report-Only so violations
+# show in the browser console without blocking anything; once a release has
+# run clean, move it into the enforced policy.
 
 /*
   X-Frame-Options: DENY
-  Content-Security-Policy: frame-ancestors 'none'
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()
+  Cross-Origin-Opener-Policy: same-origin-allow-popups
+  Strict-Transport-Security: max-age=31536000
+  Content-Security-Policy: frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'
+  Content-Security-Policy-Report-Only: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://data.singlet.bio; frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'
+
+# Fingerprinted build output never changes under the same name.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable

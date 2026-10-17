@@ -53,16 +53,36 @@ export function forgetKeyMemo(): void {
   memo.clear();
 }
 
-export async function anonSubjectFromIp(ip: string): Promise<string> {
-  return `anon:${(await sha256Hex(`${ANON_SALT}:${ip.trim()}`)).slice(0, 32)}`;
+/**
+ * Anonymous subject: a salted hash of the address. The default salt is in the repository, so with it alone
+ * a short IPv4 space can be hashed back; set ANON_IP_SALT (a secret) in Pages so the hashes cannot be
+ * reversed or linked to another deployment. Changing it resets every anonymous allowance.
+ */
+export async function anonSubjectFromIp(ip: string, salt: string = ANON_SALT): Promise<string> {
+  return `anon:${(await sha256Hex(`${salt}:${ip.trim()}`)).slice(0, 32)}`;
 }
 
 export function clientIp(request: Request): string {
-  return (
+  return normalizeIp(
     request.headers.get("CF-Connecting-IP") ??
-    request.headers.get("X-Forwarded-For")?.split(",")[0]?.trim() ??
-    "0.0.0.0"
+      request.headers.get("X-Forwarded-For")?.split(",")[0]?.trim() ??
+      "0.0.0.0",
   );
+}
+
+/**
+ * An IPv6 subscriber usually holds a whole /64, so the address alone is not a visitor: collapse it to its
+ * /64 (first four groups). IPv4 and IPv4-mapped addresses are returned as they are.
+ */
+export function normalizeIp(ip: string): string {
+  const v = ip.trim();
+  if (!v.includes(":") || /^::ffff:\d+\.\d+\.\d+\.\d+$/i.test(v)) return v;
+  const [head, tail = ""] = v.split("::");
+  const headGroups = head ? head.split(":") : [];
+  const tailGroups = v.includes("::") && tail ? tail.split(":") : [];
+  const fill = v.includes("::") ? Array(Math.max(0, 8 - headGroups.length - tailGroups.length)).fill("0") : [];
+  const groups = [...headGroups, ...fill, ...tailGroups].slice(0, 4).map((g) => g.toLowerCase().replace(/^0+(?=.)/, ""));
+  return `${groups.join(":")}::/64`;
 }
 
 /** The `sk_live_…` key on the request, if any (header wins over bearer). */
@@ -148,7 +168,13 @@ export async function checkApiKey(env: { DB: D1Database }, key: string, waitUnti
 }
 
 export type Identity =
-  | { kind: "anonymous"; subject: string }
+  /**
+   * `sandbox` is true for a request that looks like the website's own search
+   * box (same-origin fetch from a singlet.bio page or preview). It is a
+   * routing hint, not a credential: anyone can send those headers, so the
+   * sandbox allowance is tiny and every call is also capped globally.
+   */
+  | { kind: "anonymous"; subject: string; sandbox?: boolean }
   | { kind: "session"; subject: string; userId: string; user: SessionUser }
   | { kind: "api_key"; subject: string; userId: string; keyId: string };
 
@@ -198,7 +224,7 @@ export function sameOriginOrSafe(request: Request): boolean {
  */
 export async function resolveIdentity(
   request: Request,
-  env: { DB: D1Database },
+  env: { DB: D1Database; ANON_IP_SALT?: string },
   waitUntil: WaitUntil,
 ): Promise<IdentityOutcome> {
   const key = apiKeyFromRequest(request);
@@ -211,7 +237,15 @@ export async function resolveIdentity(
     const user = await lookupSession(env.DB, request, waitUntil);
     if (user) return { ok: true, identity: { kind: "session", subject: `user:${user.userId}`, userId: user.userId, user } };
   }
-  return { ok: true, identity: { kind: "anonymous", subject: await anonSubjectFromIp(clientIp(request)) } };
+  return { ok: true, identity: { kind: "anonymous", subject: await anonSubjectFromIp(clientIp(request), env.ANON_IP_SALT?.trim() || ANON_SALT), sandbox: isSiteRequest(request) } };
+}
+
+const SITE_ORIGIN_RE = /^https:\/\/(singlet\.bio|[a-z0-9-]+\.singlet-4gc\.pages\.dev|alpha\.singlet\.bio)$/i;
+
+/** True when the request comes from a page on this site (the browser sets these headers; scripts can forge them). */
+export function isSiteRequest(request: Request): boolean {
+  if ((request.headers.get("Sec-Fetch-Site") ?? "") === "same-origin") return true;
+  return SITE_ORIGIN_RE.test(request.headers.get("Origin") ?? "");
 }
 
 /** 401 for endpoints that need an account. */

@@ -10,25 +10,33 @@
  * one unit of the signed-in "explain" budget (100/day by default).
  *
  * Body:
- *   { q: string,
- *     studies: [{ gse_id, title, abstract?, organism_label?, tissue_groups?,
- *                 disease_groups?, cell_types_raw?, conditions_label?, n_cells?, year? }] }
+ *   { q: string, studies: [{ gse_id }] }
+ * Only the accession is taken from the request. Title, abstract, organism,
+ * tissue and the rest are read from D1: an explanation is cached for every
+ * visitor who asks the same question, so text supplied by one caller must
+ * never reach the model or the cache.
  * Reply:
  *   { explanations: { [gse_id]: string }, cached: number, generated: number,
  *     quota?: Quota, model?: string }
  * Errors ({ error, message }): 401 not signed in, 400 bad body, 429 budget
- * (with quota), 503 no model configured, 502 model failed.
+ * (with quota), 404 no such study, 503 no model configured, 502 model failed.
+ * Model calls are metered in tokens against the account's monthly allowance
+ * (../_shared/spend); a refused call answers 429 with `allowance`.
  */
 import type { AppEnv } from "../_shared/env";
 import { CORS_HEADERS, handleOptions } from "../_shared/cors";
 import { sha256Hex } from "../_shared/hash";
 import { requireUser } from "../_shared/identity";
 import { consume, quotaMessage } from "../_shared/quota";
-import { aiConfigured, modelLabel, runJson } from "../_shared/ai";
+import { aiConfigured, modelLabel } from "../_shared/ai";
+import { runMeteredJson } from "../_shared/ai-metered";
+import { safeList } from "../_shared/json";
+import { organismToCommon } from "../_shared/vocab";
+import { serverError } from "../_shared/errors";
 import { nowIso } from "../_shared/session";
 
 /** Bump to invalidate every cached explanation. */
-const CACHE_VERSION = "v1";
+const CACHE_VERSION = "v2"; // v1 entries were generated from caller-supplied study text
 const MAX_STUDIES = 10;
 const MODEL_TIMEOUT_MS = 20_000;
 const MODEL_MAX_TOKENS = 1600;
@@ -54,28 +62,59 @@ const strs = (v: unknown, max = 12): string[] =>
   Array.isArray(v) ? v.filter((x): x is string => typeof x === "string").map((s) => s.trim().slice(0, 120)).filter(Boolean).slice(0, max) : [];
 const numOrNull = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
 
-function coerceStudies(raw: unknown): StudyIn[] {
+/** Accessions from the request body; nothing else the caller sends about a study is used. */
+function coerceAccessions(raw: unknown): string[] {
   if (!Array.isArray(raw)) return [];
-  const out: StudyIn[] = [];
-  const seen = new Set<string>();
+  const out: string[] = [];
   for (const item of raw) {
     const r = (item && typeof item === "object" ? item : {}) as Record<string, unknown>;
     const id = str(r.gse_id, 20).toUpperCase();
-    if (!/^GSE\d{3,8}$/.test(id) || seen.has(id)) continue;
-    seen.add(id);
+    if (/^GSE\d{3,8}$/.test(id) && !out.includes(id)) out.push(id);
+    if (out.length >= MAX_STUDIES) break;
+  }
+  return out;
+}
+
+interface StudyRow {
+  gse_id: string;
+  title: string | null;
+  abstract: string | null;
+  organism_primary: string | null;
+  tissue_groups: string | null;
+  disease_groups: string | null;
+  cell_types_raw: string | null;
+  n_cells: number | null;
+  year: number | null;
+}
+
+/** The study fields the model sees, from the catalog. Unknown accessions are left out. */
+async function loadStudies(db: D1Database, ids: string[]): Promise<StudyIn[]> {
+  const rows = await db
+    .prepare(
+      `SELECT m.gse_id, g.title, g.abstract, m.organism_primary, m.tissue_groups, m.disease_groups,
+              m.cell_types_raw, m.n_cells, m.year
+         FROM gse_meta m LEFT JOIN gse g ON g.id = m.gse_id
+        WHERE m.gse_id IN (SELECT value FROM json_each(?1))`,
+    )
+    .bind(JSON.stringify(ids))
+    .all<StudyRow>();
+  const byId = new Map((rows.results ?? []).map((r) => [r.gse_id, r]));
+  const out: StudyIn[] = [];
+  for (const id of ids) {
+    const r = byId.get(id);
+    if (!r) continue;
     out.push({
       gse_id: id,
-      title: str(r.title, 400),
-      abstract: str(r.abstract, 1800),
-      organism_label: str(r.organism_label, 80),
-      tissue_groups: strs(r.tissue_groups),
-      disease_groups: strs(r.disease_groups),
-      cell_types_raw: strs(r.cell_types_raw, 15),
-      conditions_label: str(r.conditions_label, 300),
-      n_cells: numOrNull(r.n_cells),
-      year: numOrNull(r.year),
+      title: (r.title ?? "").slice(0, 400),
+      abstract: (r.abstract ?? "").slice(0, 1800),
+      organism_label: organismToCommon(r.organism_primary),
+      tissue_groups: safeList(r.tissue_groups).slice(0, 12),
+      disease_groups: safeList(r.disease_groups).slice(0, 12),
+      cell_types_raw: safeList(r.cell_types_raw).slice(0, 15),
+      conditions_label: "",
+      n_cells: r.n_cells != null ? Number(r.n_cells) : null,
+      year: r.year != null ? Number(r.year) : null,
     });
-    if (out.length >= MAX_STUDIES) break;
   }
   return out;
 }
@@ -157,9 +196,16 @@ export const onRequestPost: PagesFunction<AppEnv> = async ({ env, request, waitU
   const raw: unknown = await request.json().catch(() => null);
   const body = raw !== null && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
   const q = str(body.q, 500);
-  const studies = coerceStudies(body.studies);
+  const ids = coerceAccessions(body.studies);
   if (!q) return json({ error: "missing_query", message: "Missing 'q'." }, 400);
-  if (!studies.length) return json({ error: "missing_studies", message: "Provide 1–10 studies with a gse_id." }, 400);
+  if (!ids.length) return json({ error: "missing_studies", message: "Provide 1–10 studies with a gse_id." }, 400);
+  let studies: StudyIn[];
+  try {
+    studies = await loadStudies(env.DB, ids);
+  } catch (e) {
+    return serverError(e, "explain: load studies");
+  }
+  if (!studies.length) return json({ error: "unknown_study", message: "None of those studies is in the catalog." }, 404);
 
   const qn = normQ(q);
   const keys = await Promise.all(studies.map((s) => cacheKey(qn, s.gse_id)));
@@ -199,14 +245,26 @@ export const onRequestPost: PagesFunction<AppEnv> = async ({ env, request, waitU
 
   let generated: Record<string, string>;
   try {
-    const reply = await runJson(env, {
-      system: SYSTEM_PROMPT,
-      user: `Question: ${q}\n\nStudies:\n\n${missing.map(studyBlock).join("\n\n---\n\n")}\n\nReturn the JSON now.`,
-      schema: EXPLAIN_SCHEMA,
-      maxTokens: MODEL_MAX_TOKENS,
-      timeoutMs: MODEL_TIMEOUT_MS,
-    });
-    generated = explanationMap(reply, missing);
+    const metered = await runMeteredJson(
+      env,
+      who.identity,
+      {
+        system: SYSTEM_PROMPT,
+        user: `Question: ${q}\n\nStudies:\n\n${missing.map(studyBlock).join("\n\n---\n\n")}\n\nReturn the JSON now.`,
+        schema: EXPLAIN_SCHEMA,
+        maxTokens: MODEL_MAX_TOKENS,
+        timeoutMs: MODEL_TIMEOUT_MS,
+      },
+      waitUntil,
+    );
+    if (!metered.ok) {
+      const refused = metered.reason === "allowance";
+      return json(
+        { error: refused ? "allowance_used" : "ai_unavailable", message: metered.message, ...(metered.snapshot ? { allowance: metered.snapshot } : {}), explanations, cached },
+        refused ? 429 : 503,
+      );
+    }
+    generated = explanationMap(metered.value, missing);
   } catch (e) {
     console.warn("[explain] model call failed:", String(e).slice(0, 300));
     return json({ error: "ai_unavailable", message: "The explanation model did not answer. Try again in a minute.", quota, explanations, cached }, 502);

@@ -5,6 +5,7 @@
  * Single Cell Portal: take the current search, get back a file that lists every
  * matching study (≤ 2,000) and how to fetch it. Everything here is CC0.
  */
+import { serverError } from "../_shared/errors";
 import { ensureCatalogColumns } from "../_shared/catalog-refresh";
 import { CORS_HEADERS, corsErr, handleOptions } from "../_shared/cors";
 import { cachedJson } from "../_shared/cache";
@@ -61,7 +62,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request, waitUntil
           },
         });
       } catch (e) {
-        return corsErr(String(e));
+        return serverError(e, "manifest");
       }
     },
     { ttl: TTL, key }

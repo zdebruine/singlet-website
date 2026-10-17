@@ -333,7 +333,13 @@ function normalizeSearch<T>(raw: unknown, level: "gse" | "gsm"): SearchResponse<
   return {
     level: lvl,
     total: num(r.total, rows.length),
-    totals: { studies: numOrNull(totals.studies), samples: numOrNull(totals.samples), cells: numOrNull(totals.cells) },
+    totals: {
+      studies: numOrNull(totals.studies),
+      samples: numOrNull(totals.samples),
+      cells: numOrNull(totals.cells),
+      basis: totals.basis === "file" ? "file" : totals.basis === "catalog" ? "catalog" : undefined,
+      truncated: totals.truncated === true ? true : undefined,
+    },
     page: num(r.page, 1),
     limit: num(r.limit, rows.length),
     data: rows,
@@ -560,10 +566,13 @@ function normalizeStats(raw: unknown): CorpusStats {
     coverage_rate: numOrNull(r.coverage_rate),
     failure_categories: normalizeFacetOptions(r.failure_categories),
     studies_with_files: num(r.studies_with_files),
+    files_published: num(r.files_published),
+    studies_withheld: num(r.studies_withheld),
     samples_in_files: num(r.samples_in_files),
     cells_in_files: num(r.cells_in_files),
     samples_unusable: num(r.samples_unusable),
     studies_unusable: num(r.studies_unusable),
+    accounting: Object.fromEntries(Object.entries(rec(r.accounting)).map(([k, v]) => [k, num(v)])),
   };
 }
 
@@ -595,6 +604,26 @@ function searchParams(q: SearchQuery): Record<string, ParamValue> {
     page: q.page,
     limit: q.limit,
   };
+}
+
+/** What GET /api/account/usage tells the account page. */
+export interface AccountUsage {
+  search: number;
+  explain: number;
+  searchLimit: number | null;
+  explainLimit: number | null;
+  /** This month's AI token allowance; null when the API did not send one. */
+  allowance: {
+    used: number;
+    limit: number;
+    remaining: number;
+    tokensIn: number;
+    tokensOut: number;
+    resetsAt: string | null;
+    billing: string;
+  } | null;
+  /** MCP tool calls this month. */
+  mcpCalls: number;
 }
 
 export const apiClient = {
@@ -773,12 +802,33 @@ export const apiClient = {
       }
     },
     /** GET /api/account/usage — today's AI counters (and the deployment's limits) for the signed-in user. */
-    async usage(signal?: AbortSignal): Promise<{ search: number; explain: number; searchLimit: number | null; explainLimit: number | null }> {
+    async usage(signal?: AbortSignal): Promise<AccountUsage> {
       const res = await fetch(buildApiUrl("/api/account/usage"), { signal, credentials: "same-origin", cache: "no-store" });
       const r = rec(await readJson(res));
       const search = rec(r.search);
       const explain = rec(r.explain);
-      return { search: num(search.used), explain: num(explain.used), searchLimit: numOrNull(search.limit), explainLimit: numOrNull(explain.limit) };
+      const a = rec(r.allowance);
+      const allowance = rec(a.allowance);
+      const mcp = rec(r.mcp);
+      return {
+        search: num(search.used),
+        explain: num(explain.used),
+        searchLimit: numOrNull(search.limit),
+        explainLimit: numOrNull(explain.limit),
+        allowance:
+          numOrNull(allowance.limit) == null
+            ? null
+            : {
+                used: num(allowance.used),
+                limit: num(allowance.limit),
+                remaining: num(allowance.remaining),
+                tokensIn: num(a.tokens_in),
+                tokensOut: num(a.tokens_out),
+                resetsAt: typeof a.resets_at === "string" ? a.resets_at : null,
+                billing: typeof a.billing === "string" ? a.billing : "",
+              },
+        mcpCalls: num(mcp.total),
+      };
     },
     /** Where the browser goes to start a sign-in (full-page navigation). */
     startUrl(provider: "github" | "google", returnTo: string): string {

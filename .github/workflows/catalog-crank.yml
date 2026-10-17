@@ -9,8 +9,10 @@ name: Catalog crank
 #      (bundle_index + sample_qc for studies that have a file but no QC rows);
 #   3. one more refresh-next, so the new sample_qc rows get usable flags and
 #      their gse_meta is recomputed (skipped when steps 1-2 found nothing).
-# Both endpoints are public, idempotent and bounded per call. Each holds a D1
-# lock while it runs and answers HTTP 429 while another run holds it.
+# Both endpoints need the ingest token (repository secret SINGLET_INGEST_TOKEN,
+# the plaintext whose SHA-256 is in INGEST_TOKEN_SHA256), are idempotent and
+# bounded per call. Each holds a D1 lock while it runs and answers HTTP 429
+# while another run holds it.
 # A single bad response never fails the job; it fails only if every call did.
 
 on:
@@ -31,6 +33,7 @@ jobs:
     timeout-minutes: 50
     env:
       BASE: https://singlet.bio/api/ingest
+      SINGLET_INGEST_TOKEN: ${{ secrets.SINGLET_INGEST_TOKEN }}
     steps:
       - name: refresh-next → index-next → refresh-next
         shell: bash
@@ -48,7 +51,7 @@ jobs:
             BODY=""
             for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
               rm -f body.json
-              code=$(curl -sS -o body.json -w '%{http_code}' --max-time 150 "$url") || code="000"
+              code=$(curl -sS -o body.json -w '%{http_code}' --max-time 150 -H "X-Ingest-Token: $SINGLET_INGEST_TOKEN" "$url") || code="000"
               if [ "$code" = "429" ]; then
                 echo "  $1: 429 (lock held), retrying in 5 s"
                 sleep 5

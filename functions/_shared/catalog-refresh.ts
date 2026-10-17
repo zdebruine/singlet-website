@@ -29,6 +29,7 @@ export async function ensureCatalogColumns(db: D1Database): Promise<void> {
     "ALTER TABLE sample_qc ADD COLUMN usable INTEGER",
     "ALTER TABLE gse_meta ADD COLUMN n_usable_samples INTEGER",
     "ALTER TABLE gse_meta ADD COLUMN reference_mismatch INTEGER",
+    "ALTER TABLE gse_meta ADD COLUMN n_usable_cells INTEGER",
   ];
   // Each ALTER fails harmlessly with "duplicate column" once applied.
   for (const sql of alters) await db.prepare(sql).run().catch(() => undefined);
@@ -39,7 +40,7 @@ export async function ensureCatalogColumns(db: D1Database): Promise<void> {
     await db.prepare("CREATE INDEX IF NOT EXISTS idx_sample_qc_usable ON sample_qc(gse_id, usable)").run();
     await db.batch([
       db.prepare("SELECT matrix_bytes, usable FROM sample_qc LIMIT 0"),
-      db.prepare("SELECT n_usable_samples, reference_mismatch FROM gse_meta LIMIT 0"),
+      db.prepare("SELECT n_usable_samples, reference_mismatch, n_usable_cells FROM gse_meta LIMIT 0"),
     ]);
     columnsEnsured = true;
   } catch {
@@ -337,7 +338,7 @@ export async function recomputeMeta(db: D1Database, gse: string, stamp: string):
   await db
     .prepare(
       `INSERT INTO gse_meta (gse_id, organism_primary, organisms, tissue_groups, disease_groups, assay_families,
-         tissues_raw, cell_types_raw, n_conditions, n_done, n_total, n_cells, has_bundle, year, updated_at, n_usable_samples)
+         tissues_raw, cell_types_raw, n_conditions, n_done, n_total, n_cells, has_bundle, year, updated_at, n_usable_samples, n_usable_cells)
        SELECT g.id,
          (SELECT organism_primary FROM gsm WHERE gse_id = ?1 AND organism_primary IS NOT NULL GROUP BY organism_primary ORDER BY COUNT(*) DESC LIMIT 1),
          ${distinctJson("organism_primary")}, ${distinctJson("tissue_group")}, ${distinctJson("disease_group")}, ${distinctJson("assay_family")},
@@ -349,14 +350,15 @@ export async function recomputeMeta(db: D1Database, gse: string, stamp: string):
          CASE WHEN g.r2_bundle_key IS NOT NULL AND g.r2_bundle_key != '' THEN 1 ELSE 0 END,
          CAST(substr(g.submitted_date, 1, 4) AS INTEGER),
          ?2,
-         (SELECT COUNT(*) FROM sample_qc WHERE gse_id = ?1 AND usable = 1)
+         (SELECT COUNT(*) FROM sample_qc WHERE gse_id = ?1 AND usable = 1),
+         (SELECT COALESCE(SUM(n_cells_called), 0) FROM sample_qc WHERE gse_id = ?1 AND usable = 1)
        FROM gse g WHERE g.id = ?1
        ON CONFLICT(gse_id) DO UPDATE SET
          organism_primary = excluded.organism_primary, organisms = excluded.organisms, tissue_groups = excluded.tissue_groups,
          disease_groups = excluded.disease_groups, assay_families = excluded.assay_families, tissues_raw = excluded.tissues_raw,
          cell_types_raw = excluded.cell_types_raw, n_done = excluded.n_done, n_total = excluded.n_total, n_cells = excluded.n_cells,
          has_bundle = excluded.has_bundle, year = COALESCE(gse_meta.year, excluded.year), updated_at = excluded.updated_at,
-         n_usable_samples = excluded.n_usable_samples`
+         n_usable_samples = excluded.n_usable_samples, n_usable_cells = excluded.n_usable_cells`
     )
     .bind(gse, stamp)
     .run();

@@ -7,7 +7,7 @@
  *      ANTHROPIC_MODEL, default claude-haiku-4-5). The reply is constrained to
  *      the schema with structured outputs; a model that rejects them (HTTP
  *      400) is asked once more with the prompt alone.
- *   2. AI binding → Workers AI (AI_MODEL, default Llama 3.3 70B fp8-fast) in
+ *   2. AI binding → Workers AI (AI_MODEL, default Llama 4 Scout 17B) in
  *      JSON mode, routed through AI Gateway AI_GATEWAY_ID for logs, caching
  *      and rate limits when set. A failed attempt steps down one thing at a
  *      time inside the same deadline: without the gateway, then without JSON
@@ -24,7 +24,7 @@ import type { AppEnv } from "./env";
 
 export type AiEnv = Pick<AppEnv, "AI" | "AI_MODEL" | "AI_GATEWAY_ID" | "ANTHROPIC_API_KEY" | "ANTHROPIC_MODEL">;
 
-export const DEFAULT_WORKERS_AI_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
+export const DEFAULT_WORKERS_AI_MODEL = "@cf/meta/llama-4-scout-17b-16e-instruct";
 export const DEFAULT_ANTHROPIC_MODEL = "claude-haiku-4-5";
 
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
@@ -34,7 +34,7 @@ const DEFAULT_TIMEOUT_MS = 10_000;
 /** Below this much time left, a retry cannot finish — give up instead. */
 const MIN_RETRY_MS = 800;
 
-const JSON_ONLY = "\n\nReply with a single JSON object that matches the requested fields. No prose, no markdown fences.";
+export const JSON_ONLY = "\n\nReply with a single JSON object that matches the requested fields. No prose, no markdown fences.";
 
 export interface RunJsonOptions {
   system: string;
@@ -47,6 +47,8 @@ export interface RunJsonOptions {
   schema: Record<string, unknown>;
   maxTokens?: number;
   timeoutMs?: number;
+  /** Called once with the provider's token counts for the call that produced the reply, when it reports them. */
+  onUsage?: (usage: { inputTokens: number; outputTokens: number }) => void;
 }
 
 /** Neither ANTHROPIC_API_KEY nor the AI binding is available. */
@@ -109,6 +111,7 @@ export async function runJson(env: AiEnv, opts: RunJsonOptions): Promise<unknown
 interface AnthropicReply {
   content?: { type?: string; text?: string }[];
   stop_reason?: string;
+  usage?: { input_tokens?: number; output_tokens?: number };
 }
 
 /** Only these accept `temperature`; newer models reject sampling parameters outright. */
@@ -147,6 +150,7 @@ async function runAnthropic(env: AiEnv, key: string, opts: RunJsonOptions, maxTo
       throw new AiError(`Anthropic ${res.status}: ${detail}`, res.status);
     }
     const data = (await res.json()) as AnthropicReply;
+    reportUsage(opts, data.usage?.input_tokens, data.usage?.output_tokens);
     if (data.stop_reason === "refusal") throw new AiError("Anthropic declined the request");
     const text = (data.content ?? [])
       .filter((b) => b.type === "text" && typeof b.text === "string")
@@ -188,7 +192,10 @@ async function runWorkersAi(env: AiEnv, ai: LooseAi, opts: RunJsonOptions, maxTo
     if (i > 0 && left < MIN_RETRY_MS) break;
     try {
       const call = a.options ? ai.run(model, a.inputs, a.options) : ai.run(model, a.inputs);
-      return parseAiResult(await withTimeout(call, left));
+      const result = await withTimeout(call, left);
+      const u = (result as { usage?: { prompt_tokens?: number; completion_tokens?: number; input_tokens?: number; output_tokens?: number } } | null)?.usage;
+      reportUsage(opts, u?.prompt_tokens ?? u?.input_tokens, u?.completion_tokens ?? u?.output_tokens);
+      return parseAiResult(result);
     } catch (e) {
       if (e instanceof AiTimeout) throw e;
       last = e;
@@ -196,6 +203,13 @@ async function runWorkersAi(env: AiEnv, ai: LooseAi, opts: RunJsonOptions, maxTo
     }
   }
   throw last instanceof AiError ? last : new AiError(String(last));
+}
+
+/** Hand the provider's token counts to the caller's meter, if both are real numbers. */
+function reportUsage(opts: RunJsonOptions, input: unknown, output: unknown): void {
+  if (!opts.onUsage) return;
+  if (typeof input !== "number" || typeof output !== "number" || !(input >= 0) || !(output >= 0)) return;
+  opts.onUsage({ inputTokens: input, outputTokens: output });
 }
 
 /** Pull the JSON object out of whatever shape the binding returned. */

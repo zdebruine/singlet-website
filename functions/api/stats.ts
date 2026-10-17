@@ -8,6 +8,7 @@
  * valid one, so a script with a revoked key learns about it here rather than
  * on its first search. The check runs before the cache lookup.
  */
+import { serverError } from "../_shared/errors";
 import { corsOk, corsErr, handleOptions } from "../_shared/cors";
 import { cachedJson } from "../_shared/cache";
 import { resolveIdentity } from "../_shared/identity";
@@ -29,7 +30,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request, waitUntil
       if (!stats) return corsErr("No stats available", 404);
       return corsOk(stats);
     } catch (e) {
-      return corsErr(String(e));
+      return serverError(e, "stats");
     }
   });
 };

@@ -1,11 +1,13 @@
 {
   "name": "singlet-website",
   "private": true,
+  "license": "MIT",
   "version": "0.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "prebuild": "vitest run && tsc -p tsconfig.functions.json --noEmit && wrangler pages functions build --outdir /tmp/fnbuild",
+    "eval:search": "esbuild scripts/search-eval/run.ts --bundle --platform=node --format=esm --outfile=scripts/search-eval/.run.mjs --log-level=error && node scripts/search-eval/.run.mjs",
+    "check": "vitest run && tsc -p tsconfig.functions.json --noEmit && wrangler pages functions build --outdir /tmp/fnbuild",
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",

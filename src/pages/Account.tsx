@@ -5,19 +5,15 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { CodeBlock } from "@/components/CodeBlock";
 import { useAuth } from "@/components/auth/AuthProvider";
-import { apiClient, isApiError } from "@/integrations/api/client";
+import { apiClient, isApiError, type AccountUsage } from "@/integrations/api/client";
 import type { ApiKeySummary } from "@/integrations/api/types";
 import { usePageMeta } from "@/hooks/usePageMeta";
-import { useAiQuota } from "@/lib/ai-quota";
 import { fmtInt } from "@/lib/catalog-display";
 import { cn } from "@/lib/utils";
 
-/** Signed-in defaults (functions/_shared/quota.ts); a fresher limit from the API wins when we have one. */
-const SEARCH_LIMIT = 200;
-const EXPLAIN_LIMIT = 100;
 
 interface UsageState {
-  usage: { search: number; explain: number; searchLimit: number | null; explainLimit: number | null } | null;
+  usage: AccountUsage | null;
   failed: boolean;
 }
 
@@ -41,12 +37,6 @@ function useUsageToday(enabled: boolean, onUnauthorized: () => Promise<void>): U
     return () => ctrl.abort();
   }, [enabled, onUnauthorized]);
   return state;
-}
-
-function UsageValue({ used, limit, failed }: { used: number | null; limit: number; failed: boolean }) {
-  if (used != null) return <>{`${fmtInt(used)} / ${fmtInt(limit)}`}</>;
-  if (failed) return <span className="text-muted-foreground">— / {fmtInt(limit)}</span>;
-  return <span className="inline-block h-4 w-14 rounded bg-secondary animate-pulse" />;
 }
 
 const EXPIRY_OPTIONS: { label: string; days: number | null }[] = [
@@ -141,12 +131,6 @@ const Account = () => {
   // A 401 means the session ended elsewhere (another tab, expiry): re-check it,
   // so the page shows the signed-out view instead of errors under "Signed in as".
   const { usage, failed: usageFailed } = useUsageToday(signedIn, refresh);
-  const searchQuota = useAiQuota("search");
-  const explainQuota = useAiQuota("explain");
-  const searchLimit = usage?.searchLimit ?? (searchQuota?.kind === "user" ? searchQuota.limit : SEARCH_LIMIT);
-  const explainLimit = usage?.explainLimit ?? (explainQuota?.kind === "user" ? explainQuota.limit : EXPLAIN_LIMIT);
-  const searchUsed = usage?.search ?? (searchQuota?.kind === "user" ? searchQuota.used : null);
-  const explainUsed = usage?.explain ?? (explainQuota?.kind === "user" ? explainQuota.used : null);
 
   // ── API keys ──
   const [keys, setKeys] = useState<ApiKeySummary[] | null>(null);
@@ -258,28 +242,43 @@ const Account = () => {
               </p>
             </header>
 
-            {/* ── AI usage ── */}
-            <section className="surface p-5" aria-labelledby="usage-h">
-              <h2 id="usage-h" className="text-[15px] font-semibold text-foreground">
-                Today's AI usage
+            {/* ── Monthly AI allowance ── */}
+            <section className="surface p-5" aria-labelledby="allowance-h">
+              <h2 id="allowance-h" className="text-[15px] font-semibold text-foreground">
+                This month's AI allowance
               </h2>
-              <p className="mt-1 type-small text-muted-foreground">Signing in raises the daily AI allowance. Data and downloads are available to everyone.</p>
-              <dl className="mt-3 grid sm:grid-cols-2 gap-4 text-[13.5px]">
-                <div>
-                  <dt className="text-muted-foreground">AI searches</dt>
-                  <dd className="mt-0.5 font-medium tabular text-foreground">
-                    <UsageValue used={searchUsed} limit={searchLimit} failed={usageFailed} />
-                  </dd>
-                  <dd className="text-[12px] text-muted-foreground">Website and API keys share this budget.</dd>
-                </div>
-                <div>
-                  <dt className="text-muted-foreground">AI explanations</dt>
-                  <dd className="mt-0.5 font-medium tabular text-foreground">
-                    <UsageValue used={explainUsed} limit={explainLimit} failed={usageFailed} />
-                  </dd>
-                  <dd className="text-[12px] text-muted-foreground">Resets at 00:00 UTC.</dd>
-                </div>
-              </dl>
+              {usage?.allowance ? (
+                <>
+                  <p className="mt-1 type-small text-muted-foreground">
+                    <span className="font-medium text-foreground tabular">{fmtInt(usage.allowance.used)}</span> of{" "}
+                    <span className="tabular">{fmtInt(usage.allowance.limit)}</span> tokens used
+                    {usage.allowance.resetsAt ? <>, renews {fmtDate(usage.allowance.resetsAt)}</> : null}. Output tokens count more than input
+                    tokens.
+                  </p>
+                  <div
+                    className="mt-3 h-2 rounded-full bg-secondary overflow-hidden"
+                    role="progressbar"
+                    aria-label="AI allowance used this month"
+                    aria-valuemin={0}
+                    aria-valuemax={usage.allowance.limit}
+                    aria-valuenow={usage.allowance.used}
+                  >
+                    <div
+                      className="h-full bg-primary"
+                      style={{ width: `${Math.min(100, usage.allowance.limit ? (100 * usage.allowance.used) / usage.allowance.limit : 0)}%` }}
+                    />
+                  </div>
+                  <p className="mt-3 text-[13px] text-muted-foreground tabular">
+                    {fmtInt(usage.allowance.tokensIn)} input and {fmtInt(usage.allowance.tokensOut)} output tokens · {fmtInt(usage.mcpCalls)} MCP tool
+                    calls this month
+                  </p>
+                  {usage.allowance.billing ? <p className="mt-2 text-[12.5px] text-muted-foreground">{usage.allowance.billing}</p> : null}
+                </>
+              ) : (
+                <p className="mt-1 type-small text-muted-foreground">
+                  {usageFailed ? "The allowance could not be loaded. Reload to try again." : "Loading your allowance…"}
+                </p>
+              )}
             </section>
 
             {/* ── API keys ── */}

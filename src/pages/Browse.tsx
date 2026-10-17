@@ -432,7 +432,7 @@ const Browse = () => {
                   <>
                     {state.level === "gse" ? (
                       <>
-                        {fmtInt(total)} {total === 1 ? "study" : "studies"}
+                        {fmtInt(total)}{totals.truncated ? "+" : ""} {total === 1 && !totals.truncated ? "study" : "studies"}
                         {totals.samples != null && <span className="text-muted-foreground font-normal"> · {fmtInt(totals.samples)} samples</span>}
                       </>
                     ) : (
@@ -443,20 +443,22 @@ const Browse = () => {
                     )}
                     {totals.cells != null && <span className="text-muted-foreground font-normal"> · {fmtCompact(totals.cells)} cells</span>}
                     <span className="text-muted-foreground font-normal"> match</span>
-                    {/* The server sums catalog fields here (processed samples, recorded cells), not the
-                        usable-samples-in-files definition the home page uses — say so rather than mix them. */}
+                    {/* Say which definition the totals use. Default searches count what is in the published files,
+                        the same as the home page; a search that includes unbuilt studies counts catalog metadata. */}
                     {(totals.samples != null || totals.cells != null) && (
                       <>
                         {" "}
                         <span
                           className="text-muted-foreground font-normal underline decoration-dotted underline-offset-2 cursor-help"
                           title={
-                            state.q
-                              ? "These totals are summed from the catalog: for ranked study results, each study's file counts where they are known, otherwise its catalog metadata. The home page counts only usable samples and cells in the published files."
-                              : "These totals are catalog metadata: the samples and cells the processing database records for the matching results. The home page counts only usable samples and cells in the published files, so these totals are larger."
+                            totals.basis === "catalog"
+                              ? "These totals are catalog metadata: the samples and cells the processing database records for the matching results, including studies without a file yet."
+                              : totals.truncated
+                                ? "Samples and cells are those usable in the published files, as on the home page. The search stopped at its 200 best candidates, so the real number of matching studies is at least this many; add filters to narrow it."
+                                : "Samples and cells are those usable in the published files, the same definition as the home page."
                           }
                         >
-                          (catalog counts)
+                          {totals.basis === "catalog" ? "(catalog counts)" : "(in published files)"}
                         </span>
                       </>
                     )}

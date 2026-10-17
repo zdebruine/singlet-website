@@ -47,7 +47,10 @@ GITHUB_CLIENT_ID = "Ov23liHa1tQnWNBZjrSZ"
 # AI search: query interpretation and result explanations. Workers AI model ids
 # start with "@cf/"; a third-party id such as "anthropic/claude-haiku-4-5"
 # routes through AI Gateway unified billing (needs gateway credits, no key).
-AI_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast"
+# Llama 4 Scout: about a third of the cost of Llama 3.3 70B per call, equal on the
+# golden queries (scripts/search-eval). Not Claude Haiku: that path is only used when
+# ANTHROPIC_API_KEY is set, and is several times dearer per token.
+AI_MODEL = "@cf/meta/llama-4-scout-17b-16e-instruct"
 # AI Gateway id for logs, caching and rate limits ("default" is auto-created).
 AI_GATEWAY_ID = "default"
 

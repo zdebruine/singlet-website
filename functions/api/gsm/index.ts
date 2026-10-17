@@ -9,6 +9,7 @@
  *
  * Cached at the edge for CATALOG_CACHE_TTL seconds, keyed on the full URL.
  */
+import { serverError } from "../../_shared/errors";
 import { corsOk, corsErr, handleOptions, intParam, clampPageSize } from "../../_shared/cors";
 import { cachedJson, CATALOG_CACHE_TTL } from "../../_shared/cache";
 import { safeList } from "../../_shared/json";
@@ -109,7 +110,7 @@ async function listSamples(env: Env, request: Request): Promise<Response> {
 
     return corsOk({ total: countRow?.n ?? 0, page, page_size: pageSize, data });
   } catch (e) {
-    return corsErr(String(e));
+    return serverError(e, "gsm/index");
   }
 }
 

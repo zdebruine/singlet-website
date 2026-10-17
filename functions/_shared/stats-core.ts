@@ -23,6 +23,7 @@
  *     labelled as such wherever it is shown.
  */
 import { SUSPECT_CELLS_SQL, UNVERIFIED_CELLS_SQL, COUNTABLE_CELLS_SQL } from "./suspect-cells";
+import { DOWNLOADABLE_SQL } from "./search-core";
 
 /**
  * Distinct species over the normalised `gsm.organism_primary` (the raw GEO
@@ -41,6 +42,7 @@ export const SPECIES_COUNT_SQL = `COUNT(DISTINCT CASE
 interface StatsRow {
   total_samples: number;
   success_samples: number;
+  failed_samples: number;
   total_cells: number | null;
   suspect_cells: number | null;
   unverified_cells: number | null;
@@ -53,11 +55,16 @@ interface StatsRow {
 }
 
 interface FileStatsRow {
+  files_published?: number | null;
   studies_with_files: number;
   samples_in_files: number;
   cells_in_files: number | null;
   samples_unusable?: number | null;
   studies_unusable?: number | null;
+  studies_withheld?: number | null;
+  qc_rows?: number | null;
+  usable_all?: number | null;
+  awaiting_index?: number | null;
 }
 
 interface CoverageRow {
@@ -92,15 +99,101 @@ export interface CorpusStats {
   /** DONE / advertised — the honest end-to-end yield. */
   coverage_rate: number | null;
   failure_categories: { value: string; count: number }[];
+  /** Studies a visitor can download and use: a published file, at least one usable sample, a reference that matches the species (DOWNLOADABLE_SQL). */
   studies_with_files: number;
+  /** Files published in total, usable or not. `studies_with_files + studies_withheld`. */
+  files_published: number;
+  /** Published files withheld from the headline and from default searches: no usable sample, or a reference/species mismatch. */
+  studies_withheld: number;
   /** Usable samples only: non-empty count matrix AND ≥ 1 called cell. */
   samples_in_files: number;
-  /** Called cells in usable samples only. */
+  /** Called cells in usable samples of downloadable studies. */
   cells_in_files: number;
   /** Samples in files whose matrix is empty or that called 0 cells. */
   samples_unusable: number;
   /** Studies with a file but 0 usable samples. */
   studies_unusable: number;
+  /**
+   * Where every study and sample the catalog knows about stands. The lines add up:
+   *   samples_advertised = not_ingested + failed + other + done
+   *   done = done_in_files + done_not_in_files
+   *   done_in_files = usable_downloadable + usable_withheld + unusable
+   *   studies_tracked = studies_without_samples + studies_with_samples
+   *   studies_published = studies_downloadable + studies_withheld
+   */
+  accounting: Accounting;
+}
+
+export interface Accounting {
+  studies_tracked: number;
+  /** Tracked studies for which no sample has been ingested yet. */
+  studies_without_samples: number;
+  studies_with_samples: number;
+  /** Files published, usable or not. */
+  studies_published: number;
+  studies_downloadable: number;
+  studies_withheld: number;
+  /** Published files whose per-sample QC has not been read yet (the index crank has not reached them or parked them). */
+  studies_awaiting_index: number;
+  /** Samples GEO advertises for the tracked studies. */
+  samples_advertised: number;
+  /** Advertised samples with no catalog row: not attempted (or not scRNA-seq). */
+  samples_not_ingested: number;
+  samples_failed: number;
+  /** Ingested samples that are neither done nor failed (running, queued). */
+  samples_other: number;
+  samples_done: number;
+  /** Done samples that are in a published file. */
+  done_in_files: number;
+  /** Done samples not (yet) in a published file. */
+  done_not_in_files: number;
+  /** In a file but empty or without called cells. */
+  in_files_unusable: number;
+  /** Usable, but in a study that is withheld (no usable sample is in the study's count, or wrong reference). */
+  in_files_usable_withheld: number;
+  /** The headline: usable samples in downloadable studies. */
+  in_files_usable_downloadable: number;
+}
+
+interface AccountInputs {
+  studiesTracked: number;
+  studiesWithSamples: number;
+  published: number;
+  downloadable: number;
+  withheld: number;
+  awaitingIndex: number;
+  advertised: number;
+  ingested: number;
+  failed: number;
+  done: number;
+  qcRows: number;
+  usableAll: number;
+  unusable: number;
+  usableDownloadable: number;
+}
+
+/** Splits the corpus into parts that sum to their whole (see Accounting). Counts that cannot be split cleanly are clamped at zero. */
+export function accountFor(a: AccountInputs): Accounting {
+  const nonNeg = (n: number) => Math.max(0, n);
+  return {
+    studies_tracked: a.studiesTracked,
+    studies_without_samples: nonNeg(a.studiesTracked - a.studiesWithSamples),
+    studies_with_samples: a.studiesWithSamples,
+    studies_published: a.published,
+    studies_downloadable: a.downloadable,
+    studies_withheld: a.withheld,
+    studies_awaiting_index: a.awaitingIndex,
+    samples_advertised: a.advertised,
+    samples_not_ingested: nonNeg(a.advertised - a.ingested),
+    samples_failed: a.failed,
+    samples_other: nonNeg(a.ingested - a.done - a.failed),
+    samples_done: a.done,
+    done_in_files: a.qcRows,
+    done_not_in_files: nonNeg(a.done - a.qcRows),
+    in_files_unusable: a.unusable,
+    in_files_usable_withheld: nonNeg(a.usableAll - a.usableDownloadable),
+    in_files_usable_downloadable: a.usableDownloadable,
+  };
 }
 
 export async function computeStats(db: D1Database): Promise<CorpusStats | null> {
@@ -110,6 +203,7 @@ export async function computeStats(db: D1Database): Promise<CorpusStats | null> 
         `SELECT
            COUNT(*)                                                   AS total_samples,
            SUM(CASE WHEN status = 'DONE' THEN 1 ELSE 0 END)           AS success_samples,
+           SUM(CASE WHEN status IN ('FAIL', 'HARD_FAIL') THEN 1 ELSE 0 END) AS failed_samples,
            SUM(CASE WHEN status = 'DONE' AND ${COUNTABLE_CELLS_SQL}
                     THEN COALESCE(n_cells, 0) ELSE 0 END)             AS total_cells,
            SUM(CASE WHEN status = 'DONE' AND ${SUSPECT_CELLS_SQL}
@@ -142,10 +236,17 @@ export async function computeStats(db: D1Database): Promise<CorpusStats | null> 
     db
       .prepare(
         `SELECT
-           (SELECT COUNT(*) FROM bundle_manifest) AS studies_with_files,
-           (SELECT COUNT(*) FROM sample_qc WHERE usable = 1) AS samples_in_files,
-           (SELECT SUM(COALESCE(n_cells_called, 0)) FROM sample_qc WHERE usable = 1) AS cells_in_files,
+           (SELECT COUNT(*) FROM gse_meta m WHERE ${DOWNLOADABLE_SQL}) AS studies_with_files,
+           (SELECT COUNT(*) FROM bundle_manifest) AS files_published,
+           (SELECT COUNT(*) FROM gse_meta m WHERE m.has_bundle = 1 AND NOT ${DOWNLOADABLE_SQL}) AS studies_withheld,
+           (SELECT COUNT(*) FROM sample_qc q WHERE q.usable = 1
+               AND q.gse_id IN (SELECT m.gse_id FROM gse_meta m WHERE ${DOWNLOADABLE_SQL})) AS samples_in_files,
+           (SELECT SUM(COALESCE(q.n_cells_called, 0)) FROM sample_qc q WHERE q.usable = 1
+               AND q.gse_id IN (SELECT m.gse_id FROM gse_meta m WHERE ${DOWNLOADABLE_SQL})) AS cells_in_files,
            (SELECT COUNT(*) FROM sample_qc WHERE usable = 0) AS samples_unusable,
+           (SELECT COUNT(*) FROM sample_qc) AS qc_rows,
+           (SELECT COUNT(*) FROM sample_qc WHERE usable = 1) AS usable_all,
+           (SELECT COUNT(*) FROM bundle_manifest b WHERE NOT EXISTS (SELECT 1 FROM sample_qc q WHERE q.gse_id = b.gse_id)) AS awaiting_index,
            (SELECT COUNT(*) FROM bundle_manifest m
              WHERE EXISTS (SELECT 1 FROM sample_qc q WHERE q.gse_id = m.gse_id)
                AND NOT EXISTS (SELECT 1 FROM sample_qc q WHERE q.gse_id = m.gse_id AND q.usable = 1)) AS studies_unusable`
@@ -189,9 +290,27 @@ export async function computeStats(db: D1Database): Promise<CorpusStats | null> 
     coverage_rate: geoKnown > 0 ? done / geoKnown : null,
     failure_categories: failures.results.map((f) => ({ value: f.value, count: Number(f.count) })),
     studies_with_files: fileStats?.studies_with_files ?? 0,
+    files_published: fileStats?.files_published ?? 0,
+    studies_withheld: fileStats?.studies_withheld ?? 0,
     samples_in_files: fileStats?.samples_in_files ?? 0,
     cells_in_files: fileStats?.cells_in_files ?? 0,
     samples_unusable: fileStats?.samples_unusable ?? 0,
     studies_unusable: fileStats?.studies_unusable ?? 0,
+    accounting: accountFor({
+      studiesTracked: coverage?.studies_tracked ?? 0,
+      studiesWithSamples: row.series_count ?? 0,
+      published: fileStats?.files_published ?? 0,
+      downloadable: fileStats?.studies_with_files ?? 0,
+      withheld: fileStats?.studies_withheld ?? 0,
+      awaitingIndex: fileStats?.awaiting_index ?? 0,
+      advertised: geoKnown,
+      ingested: total,
+      failed: row.failed_samples ?? 0,
+      done,
+      qcRows: fileStats?.qc_rows ?? 0,
+      usableAll: fileStats?.usable_all ?? 0,
+      unusable: fileStats?.samples_unusable ?? 0,
+      usableDownloadable: fileStats?.samples_in_files ?? 0,
+    }),
   };
 }

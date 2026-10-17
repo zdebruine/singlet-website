@@ -9,6 +9,7 @@
  * job should read that value and write it into gse.r2_bundle_n_gsms so this
  * endpoint can return series.bundle_n_samples without hitting R2 per request.
  */
+import { serverError } from "../../_shared/errors";
 import { corsOk, corsErr, handleOptions } from "../../_shared/cors";
 import { cachedJson } from "../../_shared/cache";
 import { resolveIdentity } from "../../_shared/identity";
@@ -35,7 +36,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, params, request, w
         if (!detail) return corsErr(`Series ${id} not found`, 404);
         return corsOk(detail);
       } catch (e) {
-        return corsErr(String(e));
+        return serverError(e, "gse/[id]");
       }
     },
     DETAIL_TTL

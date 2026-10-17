@@ -94,6 +94,13 @@ describe("parseQuery (vocabulary only)", () => {
     expect(r.ambiguous).toBe(false);
   });
 
+  it("reads words that can only mean people as human, but not 'adult'", () => {
+    expect(parse("cells that line the airways of smokers").interpreted.organism).toEqual(["Homo sapiens"]);
+    expect(parse("people with lupus").interpreted.organism).toEqual(["Homo sapiens"]);
+    expect(parse("adult mouse liver").interpreted.organism).toEqual(["Mus musculus"]);
+    expect(parse("liver of an adult").interpreted.organism).toEqual([]);
+  });
+
   it("never infers a tissue from a disease (melanoma is not Skin)", () => {
     const r = parse("tumor-infiltrating T cells in melanoma");
     expect(r.interpreted.tissue_group).toEqual([]);

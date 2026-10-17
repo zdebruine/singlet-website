@@ -575,6 +575,23 @@ export async function createProject(ctx: ProductCtx, uid: string, body: ProductB
 }
 
 /**
+ * Replaces a project's read token. The old one stops working at once; the new one is returned
+ * once and only its hash is kept. Owner only: a workspace member can read a project but cannot
+ * hand out or revoke the link that gives anonymous access to it.
+ */
+export async function rotateProjectToken(ctx: ProductCtx, uid: string, body: ProductBody) {
+  const projectId = text(body.project_id, 80);
+  if (!projectId) throw fail("invalid_id", "Say which project to rotate the token of.");
+  const readToken = newToken("spr");
+  const row = await ctx.db
+    .prepare(`UPDATE projects SET read_token_hash = ?1, read_token_prefix = ?2, updated_at = ?3 WHERE id = ?4 AND owner_id = ?5 RETURNING id`)
+    .bind(await sha256Hex(readToken), readToken.slice(0, 12), nowIso(), projectId, uid)
+    .first<{ id: string }>();
+  if (!row) throw fail("not_found", "No project of yours has that id.", 404);
+  return { project_id: row.id, read_token: readToken, note: "The previous token no longer works. Send this one in the X-Project-Token header." };
+}
+
+/**
  * Summary rows for the Browse "Your private studies" list. manifest and
  * study_meta (up to ~600k characters each) are left out, so 200 rows stay
  * small; get_private_study returns the full row. The abstract is read only
@@ -1418,6 +1435,7 @@ type UserAction = (ctx: ProductCtx, uid: string, body: ProductBody) => Promise<u
 const USER_ACTIONS = new Map<string, UserAction>([
   ["dashboard", (ctx, uid) => dashboard(ctx, uid)],
   ["create_project", createProject],
+  ["rotate_project_token", rotateProjectToken],
   ["list_private_studies", listPrivateStudies],
   ["get_project", getProject],
   ["get_private_study", getPrivateStudy],

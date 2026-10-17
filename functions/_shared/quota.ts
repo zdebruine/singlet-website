@@ -107,6 +107,14 @@ export async function usageToday(db: D1Database, env: LimitEnv, identity: Identi
   return { search: q("search"), explain: q("explain") };
 }
 
+/** A zero allowance that is already used up: what a caller outside the sandbox sees. */
+export function deniedQuota(now: number = Date.now()): Quota {
+  return { kind: "anon", used: 0, limit: 0, resets_at: nextMidnightIso(now), exceeded: true };
+}
+
+export const SIGN_IN_FOR_AI =
+  "AI-assisted search outside the singlet.bio search box needs a free account and API key. Create one at https://singlet.bio/account.";
+
 /** Human sentence for the 429 body — the UI shows it verbatim as a fallback. */
 export function quotaMessage(env: LimitEnv, q: Quota, what: string): string {
   const when = new Date(q.resets_at);
@@ -114,9 +122,9 @@ export function quotaMessage(env: LimitEnv, q: Quota, what: string): string {
     ? "midnight UTC"
     : `${String(when.getUTCHours()).padStart(2, "0")}:${String(when.getUTCMinutes()).padStart(2, "0")} UTC`;
   if (q.kind === "anon") {
-    return `You have used today's ${q.limit} free ${what}. Sign in (free) for ${limitFor(env, "search", "user")} a day, or try again after ${hhmm}.`;
+    return `You have reached today's free limit for ${what}. Sign in (free) to get your own monthly AI allowance, or try again after ${hhmm}.`;
   }
-  return `You have used today's ${q.limit} ${what}. The limit resets at ${hhmm}.`;
+  return `You have reached today's limit for ${what}. It resets at ${hhmm}.`;
 }
 
 /** Compact header value for X-Singlet-Quota (the UI parses this JSON). */
