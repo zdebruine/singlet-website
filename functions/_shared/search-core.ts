@@ -1286,10 +1286,18 @@ export async function countStudies(ctx: Ctx, p: SearchParams): Promise<number> {
   return c?.n ?? 0;
 }
 
+/**
+ * The study query cut down to accession ids and the total. Text queries start with a WITH block whose own
+ * SELECTs must survive, so the rewrite anchors on the main select list, which begins with `m.gse_id,`.
+ */
+export function exportAccessionsSql(sql: string): string {
+  return sql.replace(/SELECT\s+m\.gse_id,[\s\S]*?FROM gse_meta m/, "SELECT m.gse_id, COUNT(*) OVER () AS _total FROM gse_meta m");
+}
+
 /** Whole-result-set accession export (≤ MAX_EXPORT). */
 export async function exportStudyAccessions(ctx: Ctx, p: SearchParams): Promise<{ total: number; accessions: string[] }> {
   const plan = planStudyQuery({ ...p, page: 1, limit: MAX_EXPORT });
-  const sql = plan.sql.replace(/SELECT[\s\S]*?FROM gse_meta m/, "SELECT m.gse_id, COUNT(*) OVER () AS _total FROM gse_meta m");
+  const sql = exportAccessionsSql(plan.sql);
   const res = await ctx.db.prepare(sql).bind(...plan.params).all<{ gse_id: string; _total: number }>();
   return { total: res.results[0]?._total ?? 0, accessions: res.results.map((r) => r.gse_id) };
 }
