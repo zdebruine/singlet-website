@@ -263,6 +263,9 @@ const ORGANISM_ALIASES: Record<string, string> = {
   humans: "Homo sapiens",
   "homo sapiens": "Homo sapiens",
   hsapiens: "Homo sapiens",
+  homo: "Homo sapiens", // genus only, as written in some GEO records
+  mus: "Mus musculus",
+  rattus: "Rattus norvegicus",
   hs: "Homo sapiens",
   patient: "Homo sapiens",
   patients: "Homo sapiens",
