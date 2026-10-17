@@ -291,6 +291,18 @@
     @apply px-3 py-2 border-b border-border align-top;
   }
 
+  .prose-doc code {
+    overflow-wrap: anywhere;
+  }
+
+  /* Let long inline equations break between KaTeX's inline-block chunks instead of widening the page. */
+  .prose-doc .katex {
+    white-space: normal;
+  }
+  .prose-doc .katex-display {
+    @apply overflow-x-auto overflow-y-hidden max-w-full;
+  }
+
   .gradient-text { color: var(--primary); }
 }
 
