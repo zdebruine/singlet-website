@@ -8,7 +8,6 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import { apiClient, isApiError, type AccountUsage } from "@/integrations/api/client";
 import type { ApiKeySummary } from "@/integrations/api/types";
 import { usePageMeta } from "@/hooks/usePageMeta";
-import { fmtInt } from "@/lib/catalog-display";
 import { cn } from "@/lib/utils";
 
 
@@ -249,29 +248,30 @@ const Account = () => {
               </h2>
               {usage?.allowance ? (
                 <>
-                  <p className="mt-1 type-small text-muted-foreground">
-                    <span className="font-medium text-foreground tabular">{fmtInt(usage.allowance.used)}</span> of{" "}
-                    <span className="tabular">{fmtInt(usage.allowance.limit)}</span> tokens used
-                    {usage.allowance.resetsAt ? <>, renews {fmtDate(usage.allowance.resetsAt)}</> : null}. Output tokens count more than input
-                    tokens.
-                  </p>
-                  <div
-                    className="mt-3 h-2 rounded-full bg-secondary overflow-hidden"
-                    role="progressbar"
-                    aria-label="AI allowance used this month"
-                    aria-valuemin={0}
-                    aria-valuemax={usage.allowance.limit}
-                    aria-valuenow={usage.allowance.used}
-                  >
-                    <div
-                      className="h-full bg-primary"
-                      style={{ width: `${Math.min(100, usage.allowance.limit ? (100 * usage.allowance.used) / usage.allowance.limit : 0)}%` }}
-                    />
-                  </div>
-                  <p className="mt-3 text-[13px] text-muted-foreground tabular">
-                    {fmtInt(usage.allowance.tokensIn)} input and {fmtInt(usage.allowance.tokensOut)} output tokens · {fmtInt(usage.mcpCalls)} MCP tool
-                    calls this month
-                  </p>
+                  {(() => {
+                    const { used, limit } = usage.allowance;
+                    const pct = limit ? Math.min(100, (100 * used) / limit) : 0;
+                    const shown = used > 0 && pct < 1 ? "<1" : String(Math.round(pct));
+                    return (
+                      <>
+                        <p className="mt-1 type-small text-muted-foreground">
+                          <span className="font-medium text-foreground tabular">{shown}%</span> used
+                          {usage.allowance.resetsAt ? <>, renews {fmtDate(usage.allowance.resetsAt)}</> : null}.
+                        </p>
+                        <div
+                          className="mt-3 h-2 rounded-full bg-secondary overflow-hidden"
+                          role="progressbar"
+                          aria-label="AI allowance used this month"
+                          aria-valuemin={0}
+                          aria-valuemax={100}
+                          aria-valuenow={Math.round(pct)}
+                          aria-valuetext={`${shown}% used`}
+                        >
+                          <div className={pct >= 90 ? "h-full bg-warning" : "h-full bg-primary"} style={{ width: `${pct}%` }} />
+                        </div>
+                      </>
+                    );
+                  })()}
                   {usage.allowance.billing ? <p className="mt-2 text-[12.5px] text-muted-foreground">{usage.allowance.billing}</p> : null}
                 </>
               ) : (

@@ -70,39 +70,29 @@ export function SignInDialog({ open, reason, onOpenChange, providers, signInWith
           <Logo variant="mark" height={32} link={false} className="mb-2" />
           <DialogTitle className="font-display text-[19px] font-semibold tracking-tight">Sign in to singlet.bio</DialogTitle>
           <DialogDescription className="text-[13px] leading-relaxed text-muted-foreground">
-            {reason ?? "Free, and only needed for more AI: 200 AI searches a day instead of 10, AI explanations of why a study matches, and API keys for scripts."}{" "}
+            {reason ?? "Free. Adds AI search, AI explanations and API keys."}{" "}
             Browsing and downloading never need an account.
           </DialogDescription>
         </DialogHeader>
 
         <div className="mt-5 space-y-2">
-          {PROVIDERS.map(({ id, label, icon }) => {
-            const available = providers[id];
-            return (
-              <div key={id}>
-                <button
-                  type="button"
-                  onClick={() => oauth(id)}
-                  disabled={busy !== null || !available}
-                  aria-describedby={available ? undefined : `signin-${id}-note`}
-                  className="btn-secondary w-full h-10"
-                >
-                  {busy === id ? <Loader2 size={15} className="animate-spin" /> : icon}
-                  Continue with {label}
-                </button>
-                {!available && (
-                  <p id={`signin-${id}-note`} className="mt-1 text-[11.5px] text-muted-foreground">
-                    {label} sign-in isn't available yet.
-                  </p>
-                )}
-              </div>
-            );
-          })}
+          {PROVIDERS.filter(({ id }) => providers[id]).map(({ id, label, icon }) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => oauth(id)}
+              disabled={busy !== null}
+              className="btn-secondary w-full h-10"
+            >
+              {busy === id ? <Loader2 size={15} className="animate-spin" /> : icon}
+              Continue with {label}
+            </button>
+          ))}
         </div>
 
         {noneAvailable && (
-          <p className="mt-3 text-[12.5px] leading-snug text-muted-foreground">
-            Accounts are being set up on this site. Everything else works without one in the meantime.
+          <p className="text-[12.5px] leading-snug text-muted-foreground">
+            Sign-in is not open yet. Everything else works without an account.
           </p>
         )}
 
@@ -113,16 +103,13 @@ export function SignInDialog({ open, reason, onOpenChange, providers, signInWith
         )}
 
         <p className="mt-5 text-[11.5px] leading-relaxed text-muted-foreground">
-          We store your email, name and avatar from the account you choose, a sign-in session per browser, a daily count of AI requests and
-          whatever you create (API keys, private projects), nothing else. See the{" "}
           <Link to="/privacy" className="underline underline-offset-2 hover:text-foreground" onClick={() => onOpenChange(false)}>
-            privacy policy
+            Privacy
           </Link>{" "}
-          and{" "}
+          ·{" "}
           <Link to="/terms" className="underline underline-offset-2 hover:text-foreground" onClick={() => onOpenChange(false)}>
-            terms
+            Terms
           </Link>
-          .
         </p>
       </DialogContent>
     </Dialog>

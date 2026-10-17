@@ -10,7 +10,7 @@ describe("Function responses", () => {
     expect(res.headers.get("Content-Type")).toBe("application/json");
     expect(res.headers.get("Cache-Control")).toBe("no-store");
     for (const name of Object.keys(SECURITY_HEADERS)) expect(res.headers.get(name), name).toBeTruthy();
-    expect(res.headers.get("Strict-Transport-Security")).toMatch(/max-age=\d{7,}/);
+    expect(res.headers.get("Strict-Transport-Security")).toMatch(/^max-age=\d{7,}; includeSubDomains$/);
     expect(res.headers.get("X-Content-Type-Options")).toBe("nosniff");
   });
 
