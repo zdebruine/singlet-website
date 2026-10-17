@@ -1287,10 +1287,12 @@ export async function countStudies(ctx: Ctx, p: SearchParams): Promise<number> {
 }
 
 /**
- * The study query cut down to accession ids and the total. Text queries start with a WITH block whose own
- * SELECTs must survive, so the rewrite anchors on the main select list, which begins with `m.gse_id,`.
+ * The study query cut down to accession ids and the total. A text query starts with a WITH block and
+ * orders by a score column in its select list, so it is wrapped whole; a filter-only query has neither
+ * and keeps the cheaper rewrite of its select list.
  */
 export function exportAccessionsSql(sql: string): string {
+  if (/^\s*WITH\b/i.test(sql)) return `SELECT gse_id, _total FROM (${sql})`;
   return sql.replace(/SELECT\s+m\.gse_id,[\s\S]*?FROM gse_meta m/, "SELECT m.gse_id, COUNT(*) OVER () AS _total FROM gse_meta m");
 }
 
