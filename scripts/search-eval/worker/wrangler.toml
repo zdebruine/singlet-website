@@ -1,0 +1,8 @@
+# Throwaway Worker that forwards one Workers AI call, so the eval can run the same
+# models production uses. Run with:  npx wrangler dev --remote --port 8799
+name = "singlet-search-eval"
+main = "index.js"
+compatibility_date = "2025-09-01"
+
+[ai]
+binding = "AI"

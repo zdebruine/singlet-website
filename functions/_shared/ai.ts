@@ -7,7 +7,7 @@
  *      ANTHROPIC_MODEL, default claude-haiku-4-5). The reply is constrained to
  *      the schema with structured outputs; a model that rejects them (HTTP
  *      400) is asked once more with the prompt alone.
- *   2. AI binding → Workers AI (AI_MODEL, default Llama 3.3 70B fp8-fast) in
+ *   2. AI binding → Workers AI (AI_MODEL, default Llama 4 Scout 17B) in
  *      JSON mode, routed through AI Gateway AI_GATEWAY_ID for logs, caching
  *      and rate limits when set. A failed attempt steps down one thing at a
  *      time inside the same deadline: without the gateway, then without JSON
@@ -24,7 +24,7 @@ import type { AppEnv } from "./env";
 
 export type AiEnv = Pick<AppEnv, "AI" | "AI_MODEL" | "AI_GATEWAY_ID" | "ANTHROPIC_API_KEY" | "ANTHROPIC_MODEL">;
 
-export const DEFAULT_WORKERS_AI_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
+export const DEFAULT_WORKERS_AI_MODEL = "@cf/meta/llama-4-scout-17b-16e-instruct";
 export const DEFAULT_ANTHROPIC_MODEL = "claude-haiku-4-5";
 
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
@@ -34,7 +34,7 @@ const DEFAULT_TIMEOUT_MS = 10_000;
 /** Below this much time left, a retry cannot finish — give up instead. */
 const MIN_RETRY_MS = 800;
 
-const JSON_ONLY = "\n\nReply with a single JSON object that matches the requested fields. No prose, no markdown fences.";
+export const JSON_ONLY = "\n\nReply with a single JSON object that matches the requested fields. No prose, no markdown fences.";
 
 export interface RunJsonOptions {
   system: string;

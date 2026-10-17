@@ -28,8 +28,7 @@ import { CORS_HEADERS } from "./_shared/cors";
 import type { AppEnv } from "./_shared/env";
 import { anonSubjectFromIp, API_KEY_RE, apiKeyFromRequest, checkApiKey, clientIp, keyMessage, type Identity, type KeyCheck } from "./_shared/identity";
 import { nlSearch, type NlSearchBody } from "./_shared/nl-search-core";
-import { limitFor, type Quota } from "./_shared/quota";
-import { recordToolCall, withinRate } from "./_shared/spend";
+import { allowanceFor, recordToolCall, withinRate } from "./_shared/spend";
 import { requestId } from "./_shared/errors";
 import { loadStudy, bundleUrl, GSE_RE, type StudyDetail } from "./_shared/study-core";
 import { computeStats } from "./_shared/stats-core";
@@ -62,9 +61,6 @@ const SERVER_INFO = { name: "singlet-bio", title: "singlet.bio atlas", version: 
 const PROTOCOL_VERSIONS = ["2025-06-18", "2025-03-26"] as const;
 const LATEST_PROTOCOL = PROTOCOL_VERSIONS[0];
 const MAX_SAMPLES_IN_STUDY = 60;
-/** Default daily AI-reading allowances, for static text (live values: limitFor(env, …)). */
-const ANON_SEARCH_LIMIT = limitFor({}, "search", "anon");
-const KEY_SEARCH_LIMIT = limitFor({}, "search", "user");
 
 const INSTRUCTIONS = `singlet.bio is an open atlas of public single-cell RNA-seq studies from GEO, all reprocessed the same way. One CC0 .singlet file per study (zip64) holding per-sample count matrices and per-sample QC.
 
@@ -460,30 +456,24 @@ async function readResource(env: Env, uri: string) {
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
-/** `_meta.quota` goes on every tool result, metered or not. */
-function quotaMeta(env: Env, hasKey: boolean, quota?: Quota) {
-  const anonLimit = limitFor(env, "search", "anon");
-  const keyLimit = limitFor(env, "search", "user");
-  if (quota) {
-    return {
-      quota: {
-        metered: true,
-        kind: quota.kind,
-        used: quota.used,
-        limit: quota.limit,
-        remaining: Math.max(0, quota.limit - quota.used),
-        resets_at: quota.resets_at,
-        exceeded: !!quota.exceeded,
-      },
-      rate_limit: { used: quota.used, limit: quota.limit, remaining: Math.max(0, quota.limit - quota.used), resets_at: quota.resets_at },
-    };
+/**
+ * `_meta.quota` goes on every tool result. It speaks in AI tokens: this month's
+ * allowance, what is left, when it renews. Never money, never request counts.
+ */
+async function quotaMeta(env: Env, identity: Identity | null) {
+  if (!identity || identity.kind === "anonymous") {
+    return { quota: { metered: false, note: "Create a free API key at " + ACCOUNT_URL + " to use the tools and get a monthly AI token allowance." } };
   }
+  const snap = await allowanceFor(env.DB, env, identity.subject);
   return {
     quota: {
-      metered: false,
-      kind: hasKey ? "user" : "anon",
-      ai_search_limit_per_day: hasKey ? keyLimit : anonLimit,
-      note: "This call used no AI tokens. Only a search that needs a fresh AI reading does; that comes out of your monthly AI token allowance.",
+      metered: true,
+      unit: snap.allowance.unit,
+      used: snap.allowance.used,
+      limit: snap.allowance.limit,
+      remaining: snap.allowance.remaining,
+      resets_at: snap.resets_at,
+      note: "Only a search that needs a fresh AI reading uses tokens. " + snap.billing,
     },
   };
 }
@@ -596,8 +586,7 @@ async function searchDatasets(
   const r = await nlSearch(env, identity, waitUntil, url);
   if (!r.ok) return toolError(r.message, { error: r.error });
   const b = r.body;
-  const quota = r.quota ?? b.quota;
-  const meta = quotaMeta(env, hasKey, quota);
+  const meta = await quotaMeta(env, identity);
   // The budget is spent: nlSearch already fell back to the vocabulary-only
   // reading, so the caller still gets results — flagged as an error so the
   // assistant relays the sign-in advice rather than pretending the AI reading happened.
@@ -610,7 +599,7 @@ async function searchDatasets(
     lines.push(`Read as: ${describeApplied(b.applied)}.`);
     if (b.dropped.length) lines.push(`Not recognised: ${b.dropped.map((d) => `${d.field} "${d.value}"`).join(", ")}.`);
     if (b.note) lines.push(b.note);
-    if (b.quota_exceeded) lines.push("Today's AI-search budget is used up; the question was read with the built-in vocabulary only.");
+    if (b.quota_exceeded) lines.push("This month's AI allowance is used up; the question was read with the built-in vocabulary only.");
     lines.push("");
     const fullCount = Math.min(rows.length, b.groups?.full ?? rows.length);
     for (const [index, s] of rows.entries()) {
@@ -847,7 +836,7 @@ async function callTool(ctx: CallContext, params: Record<string, unknown>) {
     return {
       result: toolError(
         `${name} needs a personal singlet.bio API key. Sign in at ${ACCOUNT_URL} (free), create a key under "API keys", then send it as \`Authorization: Bearer sk_live_…\` (or \`X-API-Key\`) with requests to ${SITE}/mcp. Calls are counted per key.`,
-        { auth: "key_required", tool: name, account_url: ACCOUNT_URL, ...quotaMeta(ctx.env, false) }
+        { auth: "key_required", tool: name, account_url: ACCOUNT_URL, ...(await quotaMeta(ctx.env, null)) }
       ),
     };
   }
@@ -862,7 +851,7 @@ async function callTool(ctx: CallContext, params: Record<string, unknown>) {
   }
   await recordToolCall(ctx.env.DB, ctx.identity.subject, name);
 
-  const meta = quotaMeta(ctx.env, hasKey);
+  const meta = await quotaMeta(ctx.env, ctx.identity);
   const db = { db: ctx.env.DB, waitUntil: ctx.waitUntil };
   const uid = ctx.auth.userId;
   try {
@@ -983,7 +972,7 @@ function apiKeyFromQuery(request: Request): string | null {
 
 async function authFor(env: Env, request: Request, waitUntil: (p: Promise<unknown>) => void): Promise<CallContext["auth"]> {
   // Header first. Clients that cannot set one (a Claude.ai custom connector takes only a URL)
-  // may put the key in the query string instead: https://singlet.bio/mcp?key=sk_live_�
+  // may put the key in the query string instead: https://singlet.bio/mcp?key=sk_live_…
   const key = apiKeyFromRequest(request) ?? apiKeyFromQuery(request);
   if (!key) return { ok: false, reason: "missing", message: keyMessage("unknown") };
   return checkApiKey(env, key, waitUntil);

@@ -32,6 +32,7 @@ import { runMeteredJson } from "./ai-metered";
 import { nowIso } from "./session";
 import { cellTypeVocab } from "./facets-core";
 import type { Ctx } from "./search-core";
+import { COMPACT_SYSTEM_PROMPT, compactUserPrompt } from "./interpret-prompt";
 import {
   ASSAY_FAMILIES,
   DISEASE_GROUPS,
@@ -46,7 +47,7 @@ import {
 } from "./vocab";
 
 /** Bump whenever the parser policy, the prompt or its pinned examples change, so cached readings expire at once. */
-export const INTERPRET_RULES_VERSION = "12-cf2";
+export const INTERPRET_RULES_VERSION = "13-compact";
 
 export type InterpretEnv = Pick<
   AppEnv,
@@ -451,9 +452,16 @@ function speciesFor(phrase: string): string | null {
   return sci && ORGANISM_COMMON[sci.toLowerCase()] ? sci : null;
 }
 
+/** Words that can only mean people in a study query ("adult" and "man" are left out: "adult mouse"). */
+const HUMAN_CUES = new Set([
+  "people", "person", "persons", "woman", "women", "men", "child", "children", "infant", "infants", "baby", "babies",
+  "smoker", "smokers", "individual", "individuals", "volunteer", "volunteers", "cohort", "cohorts",
+]);
+
 /** The species an n-gram names ("mouse", "mice", "Danio rerio"), plural "-s" allowed on one word. */
 function spanSpecies(span: Tok[]): string | null {
   const phrase = span.map((t) => t.key).join(" ");
+  if (span.length === 1 && HUMAN_CUES.has(phrase)) return "Homo sapiens";
   const sci = speciesFor(phrase);
   if (sci) return sci;
   return span.length === 1 && phrase.length > 4 && phrase.endsWith("s") ? speciesFor(phrase.slice(0, -1)) : null;
@@ -767,7 +775,7 @@ export function parseQuery(query: string, vocab: ParseVocab, nowYear = new Date(
 
 // ── The model ───────────────────────────────────────────────────────────────
 
-const SYSTEM_PROMPT = `You translate a plain-English search for single-cell RNA-seq studies into strict JSON filters for a catalog.
+export const SYSTEM_PROMPT = `You translate a plain-English search for single-cell RNA-seq studies into strict JSON filters for a catalog.
 
 The catalog has these filter fields:
 - "organism": array of SCIENTIFIC names (e.g. "Mus musculus"). Choose from the organism vocabulary, which lists "Common name (Scientific name)". Always answer with the scientific name only. "human", "patient", "donor" → "Homo sapiens"; "mouse", "mice", "murine" → "Mus musculus".
@@ -820,7 +828,7 @@ export const INTERPRET_SCHEMA: Record<string, unknown> = {
   additionalProperties: false,
 };
 
-function userPrompt(query: string, cellTypes: readonly string[]): string {
+export function userPrompt(query: string, cellTypes: readonly string[]): string {
   const vocab: [string, readonly string[]][] = [
     ["organism", organismVocabForModel()],
     ["tissue_group", TISSUE_GROUPS],
@@ -1123,8 +1131,8 @@ export async function interpretQuery(env: InterpretEnv, ctx: Ctx, identity: Iden
       env,
       identity,
       {
-        system: SYSTEM_PROMPT,
-        user: userPrompt(query, cellTypes),
+        system: COMPACT_SYSTEM_PROMPT,
+        user: compactUserPrompt(query, cellTypes),
         schema: INTERPRET_SCHEMA,
         maxTokens: INTERPRET_MAX_TOKENS,
         timeoutMs: INTERPRET_TIMEOUT_MS,

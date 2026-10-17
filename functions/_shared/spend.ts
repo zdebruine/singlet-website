@@ -62,6 +62,9 @@ const ANTHROPIC_PRICES: Record<string, Price> = {
 };
 const WORKERS_AI_PRICES: Record<string, Price> = {
   "@cf/meta/llama-3.3-70b-instruct-fp8-fast": { inUsdPerM: 0.293, outUsdPerM: 2.253 },
+  "@cf/meta/llama-4-scout-17b-16e-instruct": { inUsdPerM: 0.27, outUsdPerM: 0.85 },
+  "@cf/mistralai/mistral-small-3.1-24b-instruct": { inUsdPerM: 0.351, outUsdPerM: 0.555 },
+  "@cf/meta/llama-3.1-8b-instruct-fp8": { inUsdPerM: 0.152, outUsdPerM: 0.287 },
 };
 const UNKNOWN_MODEL_PRICE: Price = { inUsdPerM: 5, outUsdPerM: 25 };
 
@@ -88,7 +91,7 @@ export function priceFor(env: SpendEnv): Price {
   const outOverride = positive(env.AI_PRICE_OUT_USD_PER_M);
   if (inOverride && outOverride) return { inUsdPerM: inOverride, outUsdPerM: outOverride };
   const table = env.ANTHROPIC_API_KEY ? ANTHROPIC_PRICES : WORKERS_AI_PRICES;
-  const model = env.ANTHROPIC_API_KEY ? env.ANTHROPIC_MODEL || "claude-haiku-4-5" : env.AI_MODEL || "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
+  const model = env.ANTHROPIC_API_KEY ? env.ANTHROPIC_MODEL || "claude-haiku-4-5" : env.AI_MODEL || "@cf/meta/llama-4-scout-17b-16e-instruct";
   return table[model] ?? UNKNOWN_MODEL_PRICE;
 }
 

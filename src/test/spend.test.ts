@@ -28,7 +28,8 @@ const NOW = Date.UTC(2026, 9, 15, 12);
 describe("prices and caps", () => {
   it("price the configured model, and unknown models high", () => {
     expect(priceFor(HAIKU)).toEqual({ inUsdPerM: 1, outUsdPerM: 5 });
-    expect(priceFor({})).toEqual({ inUsdPerM: 0.293, outUsdPerM: 2.253 });
+    expect(priceFor({})).toEqual({ inUsdPerM: 0.27, outUsdPerM: 0.85 });
+    expect(priceFor({ AI_MODEL: "@cf/meta/llama-3.3-70b-instruct-fp8-fast" })).toEqual({ inUsdPerM: 0.293, outUsdPerM: 2.253 });
     expect(priceFor({ ANTHROPIC_API_KEY: "k", ANTHROPIC_MODEL: "claude-future-9" }).inUsdPerM).toBeGreaterThanOrEqual(5);
     expect(priceFor({ AI_PRICE_IN_USD_PER_M: "2", AI_PRICE_OUT_USD_PER_M: "8" })).toEqual({ inUsdPerM: 2, outUsdPerM: 8 });
   });

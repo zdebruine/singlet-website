@@ -8,13 +8,9 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import { apiClient, isApiError, type AccountUsage } from "@/integrations/api/client";
 import type { ApiKeySummary } from "@/integrations/api/types";
 import { usePageMeta } from "@/hooks/usePageMeta";
-import { useAiQuota } from "@/lib/ai-quota";
 import { fmtInt } from "@/lib/catalog-display";
 import { cn } from "@/lib/utils";
 
-/** Signed-in defaults (functions/_shared/quota.ts); a fresher limit from the API wins when we have one. */
-const SEARCH_LIMIT = 200;
-const EXPLAIN_LIMIT = 100;
 
 interface UsageState {
   usage: AccountUsage | null;
@@ -41,12 +37,6 @@ function useUsageToday(enabled: boolean, onUnauthorized: () => Promise<void>): U
     return () => ctrl.abort();
   }, [enabled, onUnauthorized]);
   return state;
-}
-
-function UsageValue({ used, limit, failed }: { used: number | null; limit: number; failed: boolean }) {
-  if (used != null) return <>{`${fmtInt(used)} / ${fmtInt(limit)}`}</>;
-  if (failed) return <span className="text-muted-foreground">— / {fmtInt(limit)}</span>;
-  return <span className="inline-block h-4 w-14 rounded bg-secondary animate-pulse" />;
 }
 
 const EXPIRY_OPTIONS: { label: string; days: number | null }[] = [
@@ -141,12 +131,6 @@ const Account = () => {
   // A 401 means the session ended elsewhere (another tab, expiry): re-check it,
   // so the page shows the signed-out view instead of errors under "Signed in as".
   const { usage, failed: usageFailed } = useUsageToday(signedIn, refresh);
-  const searchQuota = useAiQuota("search");
-  const explainQuota = useAiQuota("explain");
-  const searchLimit = usage?.searchLimit ?? (searchQuota?.kind === "user" ? searchQuota.limit : SEARCH_LIMIT);
-  const explainLimit = usage?.explainLimit ?? (explainQuota?.kind === "user" ? explainQuota.limit : EXPLAIN_LIMIT);
-  const searchUsed = usage?.search ?? (searchQuota?.kind === "user" ? searchQuota.used : null);
-  const explainUsed = usage?.explain ?? (explainQuota?.kind === "user" ? explainQuota.used : null);
 
   // ── API keys ──
   const [keys, setKeys] = useState<ApiKeySummary[] | null>(null);
@@ -295,30 +279,6 @@ const Account = () => {
                   {usageFailed ? "The allowance could not be loaded. Reload to try again." : "Loading your allowance…"}
                 </p>
               )}
-            </section>
-
-            {/* ── AI usage ── */}
-            <section className="surface p-5" aria-labelledby="usage-h">
-              <h2 id="usage-h" className="text-[15px] font-semibold text-foreground">
-                Today's AI requests
-              </h2>
-              <p className="mt-1 type-small text-muted-foreground">Signing in raises the daily AI allowance. Data and downloads are available to everyone.</p>
-              <dl className="mt-3 grid sm:grid-cols-2 gap-4 text-[13.5px]">
-                <div>
-                  <dt className="text-muted-foreground">AI searches</dt>
-                  <dd className="mt-0.5 font-medium tabular text-foreground">
-                    <UsageValue used={searchUsed} limit={searchLimit} failed={usageFailed} />
-                  </dd>
-                  <dd className="text-[12px] text-muted-foreground">Website and API keys share this budget.</dd>
-                </div>
-                <div>
-                  <dt className="text-muted-foreground">AI explanations</dt>
-                  <dd className="mt-0.5 font-medium tabular text-foreground">
-                    <UsageValue used={explainUsed} limit={explainLimit} failed={usageFailed} />
-                  </dd>
-                  <dd className="text-[12px] text-muted-foreground">Resets at 00:00 UTC.</dd>
-                </div>
-              </dl>
             </section>
 
             {/* ── API keys ── */}
