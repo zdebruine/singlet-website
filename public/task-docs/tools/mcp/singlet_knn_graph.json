@@ -1,0 +1,109 @@
+{
+  "name": "singlet_knn_graph",
+  "title": "k-nearest-neighbour graph",
+  "description": "Neighbour graph on PCA scores. Exact blocked search up to a size limit, grouped IVF above it, always with a recall check against exact search on a random sample of cells.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "name": {
+        "type": "string",
+        "description": "Dataset name."
+      },
+      "k": {
+        "type": "integer",
+        "description": "Neighbours per cell.",
+        "default": 15,
+        "minimum": 2
+      },
+      "n_pcs": {
+        "type": "integer",
+        "description": "Leading components to use; default all computed."
+      },
+      "method": {
+        "type": "string",
+        "description": "Search method.",
+        "default": "auto",
+        "enum": [
+          "auto",
+          "exact",
+          "ivf"
+        ]
+      },
+      "nprobe": {
+        "type": "integer",
+        "description": "IVF lists per query group (recall knob).",
+        "default": 4
+      },
+      "recall_sample": {
+        "type": "integer",
+        "description": "Cells used for the exact recall check.",
+        "default": 500
+      },
+      "exact_limit": {
+        "type": "integer",
+        "description": "Largest n for which auto picks exact search.",
+        "default": 150000
+      },
+      "cosine": {
+        "type": "boolean",
+        "description": "Use cosine distance (normalise rows).",
+        "default": false
+      }
+    },
+    "required": [
+      "name"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "status": {
+        "type": "string",
+        "enum": [
+          "ok",
+          "error"
+        ]
+      },
+      "summary": {
+        "type": "string"
+      },
+      "metrics": {
+        "type": "object"
+      },
+      "figures": {
+        "type": "array"
+      },
+      "artifacts": {
+        "type": "array"
+      },
+      "warnings": {
+        "type": "array"
+      },
+      "next": {
+        "type": "array"
+      },
+      "timings": {
+        "type": "object"
+      }
+    },
+    "required": [
+      "status",
+      "summary"
+    ]
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "neighbors.approximate_knn_search",
+      "reads": [
+        "pca/scores"
+      ],
+      "writes": [
+        "knn/idx",
+        "knn/dist"
+      ],
+      "runtime": "local-cpu",
+      "streaming": true
+    }
+  }
+}

@@ -12,6 +12,7 @@ const NAV = [
   { to: "/quickstart", label: "Quickstart" },
   { to: "/docs", label: "Docs" },
   { to: "/tasks", label: "Tasks" },
+  { to: "/tools", label: "Tools" },
   { to: "/about", label: "About the data" },
 ];
 

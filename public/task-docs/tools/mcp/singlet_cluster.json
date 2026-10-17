@@ -1,0 +1,92 @@
+{
+  "name": "singlet_cluster",
+  "title": "Cluster cells (Louvain)",
+  "description": "Louvain modularity clustering on the kNN graph (shared-nearest-neighbour or plain connectivity weights). Stores labels; reports sizes, modularity and agreement with truth labels if the dataset has them.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "name": {
+        "type": "string",
+        "description": "Dataset name."
+      },
+      "resolution": {
+        "type": "number",
+        "description": "Resolution; higher gives more clusters.",
+        "default": 1.0
+      },
+      "mode": {
+        "type": "string",
+        "description": "Edge weights.",
+        "default": "snn",
+        "enum": [
+          "snn",
+          "knn"
+        ]
+      },
+      "seed": {
+        "type": "integer",
+        "description": "Random seed.",
+        "default": 0
+      },
+      "key": {
+        "type": "string",
+        "description": "Label array key to write.",
+        "default": "clusters/louvain"
+      }
+    },
+    "required": [
+      "name"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "status": {
+        "type": "string",
+        "enum": [
+          "ok",
+          "error"
+        ]
+      },
+      "summary": {
+        "type": "string"
+      },
+      "metrics": {
+        "type": "object"
+      },
+      "figures": {
+        "type": "array"
+      },
+      "artifacts": {
+        "type": "array"
+      },
+      "warnings": {
+        "type": "array"
+      },
+      "next": {
+        "type": "array"
+      },
+      "timings": {
+        "type": "object"
+      }
+    },
+    "required": [
+      "status",
+      "summary"
+    ]
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "clustering.cell_partitioning",
+      "reads": [
+        "knn/idx"
+      ],
+      "writes": [
+        "clusters/louvain"
+      ],
+      "runtime": "local-cpu",
+      "streaming": true
+    }
+  }
+}

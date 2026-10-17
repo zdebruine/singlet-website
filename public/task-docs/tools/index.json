@@ -1,0 +1,528 @@
+{
+ "version": 1,
+ "status": "prototype",
+ "tools": [
+  {
+   "name": "engine_status",
+   "tool": "singlet_engine_status",
+   "title": "Engine status",
+   "task_id": "harmonization.object_integrity_checks",
+   "description": "Report the engine build, CPU features, thread count, workspace location and the datasets it holds. Call this first to check the environment.",
+   "params": [],
+   "required": [],
+   "reads": [],
+   "writes": [],
+   "doc": "tools/engine_status.md",
+   "mcp": "tools/mcp/singlet_engine_status.json",
+   "has_notes": true
+  },
+  {
+   "name": "simulate_dataset",
+   "tool": "singlet_simulate_dataset",
+   "title": "Simulate a planted-structure dataset",
+   "task_id": "simulation.reference_matched_counts",
+   "description": "Create a synthetic count matrix with known cell types and a low-rank continuum, written to the block format. Use it to test workflows and to benchmark: the true labels are stored as 'truth/labels'.",
+   "params": [
+    "name",
+    "n_cells",
+    "n_genes",
+    "n_types",
+    "rank",
+    "mean_umi",
+    "cell_noise",
+    "seed",
+    "block_cells"
+   ],
+   "required": [
+    "name"
+   ],
+   "reads": [],
+   "writes": [
+    "truth/labels"
+   ],
+   "doc": "tools/simulate_dataset.md",
+   "mcp": "tools/mcp/singlet_simulate_dataset.json",
+   "has_notes": true
+  },
+  {
+   "name": "import_matrix",
+   "tool": "singlet_import_matrix",
+   "title": "Import a count matrix",
+   "task_id": "harmonization.object_integrity_checks",
+   "description": "Convert a Matrix Market (.mtx/.mtx.gz), SciPy sparse (.npz) or an existing block file into the workspace. Counts must be non-negative integers below 65536.",
+   "params": [
+    "name",
+    "path",
+    "format",
+    "orientation",
+    "genes_path",
+    "block_cells"
+   ],
+   "required": [
+    "name",
+    "path"
+   ],
+   "reads": [],
+   "writes": [],
+   "doc": "tools/import_matrix.md",
+   "mcp": "tools/mcp/singlet_import_matrix.json",
+   "has_notes": true
+  },
+  {
+   "name": "describe_dataset",
+   "tool": "singlet_describe_dataset",
+   "title": "Describe a dataset",
+   "task_id": "harmonization.object_integrity_checks",
+   "description": "Cheap structural summary: size, block layout, density, estimated memory and time for the common steps, and the arrays already computed.",
+   "params": [
+    "name"
+   ],
+   "required": [
+    "name"
+   ],
+   "reads": [
+    "counts"
+   ],
+   "writes": [],
+   "doc": "tools/describe_dataset.md",
+   "mcp": "tools/mcp/singlet_describe_dataset.json",
+   "has_notes": true
+  },
+  {
+   "name": "qc_summary",
+   "tool": "singlet_qc_summary",
+   "title": "Per-cell QC and gene statistics",
+   "task_id": "qc.low_quality_cell_detection",
+   "description": "One streaming pass: total counts, detected genes and percent counts in flagged (mitochondrial) genes per cell, plus per-gene moments. Reports quantiles, MAD-based outlier counts and histograms; stores per-cell arrays.",
+   "params": [
+    "name",
+    "mito_prefix",
+    "mad_k"
+   ],
+   "required": [
+    "name"
+   ],
+   "reads": [
+    "counts"
+   ],
+   "writes": [
+    "qc/total",
+    "qc/ngenes",
+    "qc/pct_mito",
+    "qc/pass",
+    "stats/*"
+   ],
+   "doc": "tools/qc_summary.md",
+   "mcp": "tools/mcp/singlet_qc_summary.json",
+   "has_notes": true
+  },
+  {
+   "name": "select_hvg",
+   "tool": "singlet_select_hvg",
+   "title": "Highly variable genes",
+   "task_id": "feature-selection.highly_variable_gene_selection",
+   "description": "Select highly variable genes by the Seurat dispersion method from the streaming gene moments (matches Scanpy's top-n selection). Stores a mask used by pca and nmf_programs.",
+   "params": [
+    "name",
+    "n_top",
+    "n_bins"
+   ],
+   "required": [
+    "name"
+   ],
+   "reads": [
+    "stats/*"
+   ],
+   "writes": [
+    "genes/hvg_mask",
+    "genes/hvg_score"
+   ],
+   "doc": "tools/select_hvg.md",
+   "mcp": "tools/mcp/singlet_select_hvg.json",
+   "has_notes": true
+  },
+  {
+   "name": "pca",
+   "tool": "singlet_pca",
+   "title": "Streaming PCA",
+   "task_id": "dim-reduction.scalable_truncated_svd",
+   "description": "Block-Krylov PCA of log1p(CP10k) values streamed from disk, with Rayleigh-Ritz extraction after every pass and Ritz-residual stopping. Memory does not grow with cells. Stores scores, loadings and singular values.",
+   "params": [
+    "name",
+    "n_components",
+    "max_passes",
+    "tol",
+    "use_hvg",
+    "block",
+    "compute_scores",
+    "precision",
+    "seed"
+   ],
+   "required": [
+    "name"
+   ],
+   "reads": [
+    "counts",
+    "genes/hvg_mask"
+   ],
+   "writes": [
+    "pca/scores",
+    "pca/loadings",
+    "pca/sv",
+    "pca/mean"
+   ],
+   "doc": "tools/pca.md",
+   "mcp": "tools/mcp/singlet_pca.json",
+   "has_notes": true
+  },
+  {
+   "name": "choose_n_pcs",
+   "tool": "singlet_choose_n_pcs",
+   "title": "Choose the number of PCs",
+   "task_id": "dim-reduction.pc_number_selection",
+   "description": "Recommend how many principal components to keep from the spectrum: elbow, cumulative variance and a random-matrix noise edge, with the evidence for each.",
+   "params": [
+    "name"
+   ],
+   "required": [
+    "name"
+   ],
+   "reads": [
+    "pca/sv"
+   ],
+   "writes": [],
+   "doc": "tools/choose_n_pcs.md",
+   "mcp": "tools/mcp/singlet_choose_n_pcs.json",
+   "has_notes": true
+  },
+  {
+   "name": "knn_graph",
+   "tool": "singlet_knn_graph",
+   "title": "k-nearest-neighbour graph",
+   "task_id": "neighbors.approximate_knn_search",
+   "description": "Neighbour graph on PCA scores. Exact blocked search up to a size limit, grouped IVF above it, always with a recall check against exact search on a random sample of cells.",
+   "params": [
+    "name",
+    "k",
+    "n_pcs",
+    "method",
+    "nprobe",
+    "recall_sample",
+    "exact_limit",
+    "cosine"
+   ],
+   "required": [
+    "name"
+   ],
+   "reads": [
+    "pca/scores"
+   ],
+   "writes": [
+    "knn/idx",
+    "knn/dist"
+   ],
+   "doc": "tools/knn_graph.md",
+   "mcp": "tools/mcp/singlet_knn_graph.json",
+   "has_notes": true
+  },
+  {
+   "name": "cluster",
+   "tool": "singlet_cluster",
+   "title": "Cluster cells (Louvain)",
+   "task_id": "clustering.cell_partitioning",
+   "description": "Louvain modularity clustering on the kNN graph (shared-nearest-neighbour or plain connectivity weights). Stores labels; reports sizes, modularity and agreement with truth labels if the dataset has them.",
+   "params": [
+    "name",
+    "resolution",
+    "mode",
+    "seed",
+    "key"
+   ],
+   "required": [
+    "name"
+   ],
+   "reads": [
+    "knn/idx"
+   ],
+   "writes": [
+    "clusters/louvain"
+   ],
+   "doc": "tools/cluster.md",
+   "mcp": "tools/mcp/singlet_cluster.json",
+   "has_notes": true
+  },
+  {
+   "name": "scan_resolution",
+   "tool": "singlet_scan_resolution",
+   "title": "Scan clustering resolutions",
+   "task_id": "clustering.resolution_selection",
+   "description": "Run Louvain over a list of resolutions with two seeds each and report the number of clusters, modularity and seed-to-seed stability (ARI), so the resolution can be chosen from evidence rather than by default.",
+   "params": [
+    "name",
+    "resolutions",
+    "mode"
+   ],
+   "required": [
+    "name"
+   ],
+   "reads": [
+    "knn/idx"
+   ],
+   "writes": [],
+   "doc": "tools/scan_resolution.md",
+   "mcp": "tools/mcp/singlet_scan_resolution.json",
+   "has_notes": true
+  },
+  {
+   "name": "embed_umap",
+   "tool": "singlet_embed_umap",
+   "title": "2-D embedding (UMAP-class)",
+   "task_id": "embedding-viz.large_scale_embedding",
+   "description": "Fuzzy-graph layout optimised by multithreaded SGD, initialised from scaled PCA scores. Reports how well 2-D neighbours match the high-dimensional graph.",
+   "params": [
+    "name",
+    "epochs",
+    "min_dist",
+    "neg_rate",
+    "seed",
+    "color_by"
+   ],
+   "required": [
+    "name"
+   ],
+   "reads": [
+    "knn/idx",
+    "knn/dist",
+    "pca/scores"
+   ],
+   "writes": [
+    "embedding/umap"
+   ],
+   "doc": "tools/embed_umap.md",
+   "mcp": "tools/mcp/singlet_embed_umap.json",
+   "has_notes": true
+  },
+  {
+   "name": "nmf_programs",
+   "tool": "singlet_nmf_programs",
+   "title": "Gene programs by NMF",
+   "task_id": "programs.denovo_program_decomposition",
+   "description": "Streaming alternating-least-squares NMF of log1p(CP10k): one pass per iteration, state independent of the number of cells. Returns the top genes of each program and the loss curve.",
+   "params": [
+    "name",
+    "k",
+    "max_iter",
+    "tol",
+    "use_hvg",
+    "l1",
+    "compute_usage",
+    "seed",
+    "top_genes"
+   ],
+   "required": [
+    "name"
+   ],
+   "reads": [
+    "counts",
+    "genes/hvg_mask"
+   ],
+   "writes": [
+    "nmf/H",
+    "nmf/usage"
+   ],
+   "doc": "tools/nmf_programs.md",
+   "mcp": "tools/mcp/singlet_nmf_programs.json",
+   "has_notes": true
+  },
+  {
+   "name": "gsea_prerank",
+   "tool": "singlet_gsea_prerank",
+   "title": "Preranked gene-set enrichment",
+   "task_id": "enrichment.preranked_gene_set_enrichment",
+   "description": "Weighted-KS enrichment score for each gene set on a ranked gene list, with a size-matched permutation null (exact scores, Benjamini-Hochberg FDR). Provide the ranking inline or point at an NMF program.",
+   "params": [
+    "ranked",
+    "from_program",
+    "gene_sets",
+    "gmt_path",
+    "n_perm",
+    "weight",
+    "min_size",
+    "max_size",
+    "seed",
+    "top",
+    "dataset"
+   ],
+   "required": [],
+   "reads": [],
+   "writes": [],
+   "doc": "tools/gsea_prerank.md",
+   "mcp": "tools/mcp/singlet_gsea_prerank.json",
+   "has_notes": true
+  },
+  {
+   "name": "compare_labelings",
+   "tool": "singlet_compare_labelings",
+   "title": "Compare two labelings",
+   "task_id": "evaluation.cluster_validity_indices",
+   "description": "Agreement between two stored label arrays: ARI, the contingency of the largest groups and per-cluster purity. Use it to compare clusterings, or a clustering with planted truth.",
+   "params": [
+    "name",
+    "key_a",
+    "key_b"
+   ],
+   "required": [
+    "name"
+   ],
+   "reads": [],
+   "writes": [],
+   "doc": "tools/compare_labelings.md",
+   "mcp": "tools/mcp/singlet_compare_labelings.json",
+   "has_notes": true
+  },
+  {
+   "name": "plot_scatter",
+   "tool": "singlet_plot_scatter",
+   "title": "Scatter plot of two stored arrays",
+   "task_id": "embedding-viz.global_structure_preservation",
+   "description": "Scatter of two stored arrays or columns (for example 'embedding/umap[0]' vs 'embedding/umap[1]') coloured by a stored label array. Returns the SVG path and a text description with cluster centroids.",
+   "params": [
+    "name",
+    "x",
+    "y",
+    "color_by",
+    "title",
+    "max_points",
+    "include_svg"
+   ],
+   "required": [
+    "name"
+   ],
+   "reads": [],
+   "writes": [],
+   "doc": "tools/plot_scatter.md",
+   "mcp": "tools/mcp/singlet_plot_scatter.json",
+   "has_notes": true
+  },
+  {
+   "name": "plot_histogram",
+   "tool": "singlet_plot_histogram",
+   "title": "Histogram of a stored array",
+   "task_id": "qc.low_quality_cell_detection",
+   "description": "Histogram of a stored array or column with quantiles and optional vertical threshold lines.",
+   "params": [
+    "name",
+    "key",
+    "bins",
+    "log_y",
+    "thresholds"
+   ],
+   "required": [
+    "name"
+   ],
+   "reads": [],
+   "writes": [],
+   "doc": "tools/plot_histogram.md",
+   "mcp": "tools/mcp/singlet_plot_histogram.json",
+   "has_notes": true
+  },
+  {
+   "name": "inspect_artifact",
+   "tool": "singlet_inspect_artifact",
+   "title": "Inspect a stored array",
+   "task_id": "harmonization.object_integrity_checks",
+   "description": "Debug view of any stored array: shape, dtype, finite fraction, quantiles, a small head, and for label arrays the group counts. Use it to check an intermediate result before the next step.",
+   "params": [
+    "name",
+    "key",
+    "head"
+   ],
+   "required": [
+    "name"
+   ],
+   "reads": [],
+   "writes": [],
+   "doc": "tools/inspect_artifact.md",
+   "mcp": "tools/mcp/singlet_inspect_artifact.json",
+   "has_notes": true
+  },
+  {
+   "name": "provenance",
+   "tool": "singlet_provenance",
+   "title": "Run history of a dataset",
+   "task_id": "harmonization.object_integrity_checks",
+   "description": "Chronological list of the tools run on a dataset with parameters, key metrics and timings, for auditing and reproducing an analysis.",
+   "params": [
+    "name"
+   ],
+   "required": [
+    "name"
+   ],
+   "reads": [],
+   "writes": [],
+   "doc": "tools/provenance.md",
+   "mcp": "tools/mcp/singlet_provenance.json",
+   "has_notes": true
+  },
+  {
+   "name": "report",
+   "tool": "singlet_report",
+   "title": "Assemble an analysis report",
+   "task_id": "evaluation.cluster_validity_indices",
+   "description": "Build a single HTML or Markdown report from the recorded steps of a dataset: every summary, metric table and figure, in order. Returns the file path.",
+   "params": [
+    "name",
+    "format",
+    "path"
+   ],
+   "required": [
+    "name"
+   ],
+   "reads": [],
+   "writes": [],
+   "doc": "tools/report.md",
+   "mcp": "tools/mcp/singlet_report.json",
+   "has_notes": true
+  },
+  {
+   "name": "standard_workflow",
+   "tool": "singlet_standard_workflow",
+   "title": "Standard workflow in one call",
+   "task_id": "clustering.cell_partitioning",
+   "description": "QC, HVG, PCA, neighbour graph, clustering and 2-D embedding in a single call (each step is one compiled streaming pass or kernel), then a report. Use it for a first look; use the individual tools to tune.",
+   "params": [
+    "name",
+    "n_hvg",
+    "n_pcs",
+    "k",
+    "resolution",
+    "umap",
+    "make_report"
+   ],
+   "required": [
+    "name"
+   ],
+   "reads": [],
+   "writes": [],
+   "doc": "tools/standard_workflow.md",
+   "mcp": "tools/mcp/singlet_standard_workflow.json",
+   "has_notes": true
+  },
+  {
+   "name": "selftest",
+   "tool": "singlet_selftest",
+   "title": "Engine self-test and timing",
+   "task_id": "harmonization.object_integrity_checks",
+   "description": "Run correctness checks against NumPy references and short timings on a small simulated dataset (a few seconds). Run it after building on a new machine or cluster node, before trusting large runs.",
+   "params": [
+    "n_cells"
+   ],
+   "required": [],
+   "reads": [],
+   "writes": [],
+   "doc": "tools/selftest.md",
+   "mcp": "tools/mcp/singlet_selftest.json",
+   "has_notes": true
+  }
+ ]
+}

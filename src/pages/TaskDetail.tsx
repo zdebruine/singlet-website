@@ -12,6 +12,7 @@ import { CodeBlock } from "@/components/CodeBlock";
 import { usePageMeta } from "@/hooks/usePageMeta";
 import { cn } from "@/lib/utils";
 import {
+  toolPath,
   TASK_ID_RE,
   TIER_LABEL,
   extractHeadings,
@@ -200,6 +201,11 @@ const TaskDetail = () => {
                       {showMcp ? "Hide" : "Show"} MCP tool definition
                     </button>
                   )}
+                  {meta?.engine_tools?.map((n) => (
+                    <Link key={n} className="chip no-underline" to={toolPath(n)}>
+                      Prototype tool: {n}
+                    </Link>
+                  ))}
                   <a className="chip no-underline" href={`/task-docs/${area}/${slug}.md`}>
                     Markdown source
                   </a>
@@ -207,7 +213,8 @@ const TaskDetail = () => {
                 {showMcp && (
                   <div className="mt-4">
                     <p className="text-[13px] mb-2">
-                      Tool name <code className="code-inline">{meta?.mcp_tool}</code>. Planned for the singlet MCP server; not yet callable.
+                      Tool name <code className="code-inline">{meta?.mcp_tool}</code>.{" "}
+                      {meta?.engine_tools?.length ? "A prototype implementation exists in the engine; see the linked tools." : "Planned for the singlet MCP server; not yet callable."}
                     </p>
                     <CodeBlock label="json" code={mcp ?? "Loading…"} />
                   </div>

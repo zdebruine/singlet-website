@@ -31,6 +31,8 @@ import WorkspaceDetail from "./pages/WorkspaceDetail.tsx";
 import JoinWorkspace from "./pages/JoinWorkspace.tsx";
 // Task documentation pages pull in the markdown and math renderers; load them on demand.
 const Tasks = lazy(() => import("./pages/Tasks.tsx"));
+const Tools = lazy(() => import("./pages/Tools.tsx"));
+const ToolDetail = lazy(() => import("./pages/ToolDetail.tsx"));
 const TaskDetail = lazy(() => import("./pages/TaskDetail.tsx"));
 
 const queryClient = new QueryClient({
@@ -96,6 +98,8 @@ const App = () => (
               <Route path="/docs/mcp" element={<DocsMcp />} />
               <Route path="/tasks" element={<Suspense fallback={null}><Tasks /></Suspense>} />
               <Route path="/tasks/:area/:slug" element={<Suspense fallback={null}><TaskDetail /></Suspense>} />
+              <Route path="/tools" element={<Suspense fallback={null}><Tools /></Suspense>} />
+              <Route path="/tools/:name" element={<Suspense fallback={null}><ToolDetail /></Suspense>} />
               <Route path="/about" element={<About />} />
               <Route path="/brand" element={<Brand />} />
 

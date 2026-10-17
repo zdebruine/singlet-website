@@ -1,0 +1,94 @@
+{
+  "name": "singlet_embed_umap",
+  "title": "2-D embedding (UMAP-class)",
+  "description": "Fuzzy-graph layout optimised by multithreaded SGD, initialised from scaled PCA scores. Reports how well 2-D neighbours match the high-dimensional graph.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "name": {
+        "type": "string",
+        "description": "Dataset name."
+      },
+      "epochs": {
+        "type": "integer",
+        "description": "Optimisation epochs; default 200 below 100k cells and 100 above."
+      },
+      "min_dist": {
+        "type": "number",
+        "description": "Minimum distance in the embedding.",
+        "default": 0.1
+      },
+      "neg_rate": {
+        "type": "integer",
+        "description": "Negative samples per edge.",
+        "default": 5
+      },
+      "seed": {
+        "type": "integer",
+        "description": "Random seed.",
+        "default": 0
+      },
+      "color_by": {
+        "type": "string",
+        "description": "Array key used to colour the plot.",
+        "default": "clusters/louvain"
+      }
+    },
+    "required": [
+      "name"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "status": {
+        "type": "string",
+        "enum": [
+          "ok",
+          "error"
+        ]
+      },
+      "summary": {
+        "type": "string"
+      },
+      "metrics": {
+        "type": "object"
+      },
+      "figures": {
+        "type": "array"
+      },
+      "artifacts": {
+        "type": "array"
+      },
+      "warnings": {
+        "type": "array"
+      },
+      "next": {
+        "type": "array"
+      },
+      "timings": {
+        "type": "object"
+      }
+    },
+    "required": [
+      "status",
+      "summary"
+    ]
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "embedding-viz.large_scale_embedding",
+      "reads": [
+        "knn/idx",
+        "knn/dist",
+        "pca/scores"
+      ],
+      "writes": [
+        "embedding/umap"
+      ],
+      "runtime": "local-cpu",
+      "streaming": true
+    }
+  }
+}

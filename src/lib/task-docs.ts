@@ -31,6 +31,7 @@ export interface TaskMeta {
   n_unverified?: number;
   repos?: string[];
   documented: boolean;
+  engine_tools?: string[];
 }
 
 export interface TaskArea {
@@ -124,3 +125,27 @@ export function taskPath(id: string): string {
   const [area, ...rest] = id.split(".");
   return `/tasks/${area}/${rest.join(".")}`;
 }
+
+export interface ToolMeta {
+  name: string;
+  tool: string;
+  title: string;
+  task_id: string;
+  description: string;
+  params: string[];
+  required: string[];
+  reads: string[];
+  writes: string[];
+  doc: string;
+  mcp: string;
+  has_notes: boolean;
+}
+
+export interface ToolIndex {
+  version: number;
+  status: string;
+  tools: ToolMeta[];
+}
+
+export const fetchToolIndex = () => getJson<ToolIndex>("tools/index.json");
+export const toolPath = (name: string) => `/tools/${name}`;

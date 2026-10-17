@@ -1,0 +1,111 @@
+{
+  "name": "singlet_simulate_dataset",
+  "title": "Simulate a planted-structure dataset",
+  "description": "Create a synthetic count matrix with known cell types and a low-rank continuum, written to the block format. Use it to test workflows and to benchmark: the true labels are stored as 'truth/labels'.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "name": {
+        "type": "string",
+        "description": "Dataset name."
+      },
+      "n_cells": {
+        "type": "integer",
+        "description": "Number of cells.",
+        "default": 20000,
+        "minimum": 100
+      },
+      "n_genes": {
+        "type": "integer",
+        "description": "Number of genes (max 65535).",
+        "default": 2000,
+        "minimum": 50,
+        "maximum": 65535
+      },
+      "n_types": {
+        "type": "integer",
+        "description": "Number of planted cell types.",
+        "default": 8,
+        "minimum": 1,
+        "maximum": 255
+      },
+      "rank": {
+        "type": "integer",
+        "description": "Rank of the within-type continuum.",
+        "default": 6
+      },
+      "mean_umi": {
+        "type": "number",
+        "description": "Mean UMIs per cell.",
+        "default": 5000
+      },
+      "cell_noise": {
+        "type": "number",
+        "description": "Within-type latent noise.",
+        "default": 0.5
+      },
+      "seed": {
+        "type": "integer",
+        "description": "Random seed.",
+        "default": 1
+      },
+      "block_cells": {
+        "type": "integer",
+        "description": "Cells per stored block.",
+        "default": 16384
+      }
+    },
+    "required": [
+      "name"
+    ],
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "status": {
+        "type": "string",
+        "enum": [
+          "ok",
+          "error"
+        ]
+      },
+      "summary": {
+        "type": "string"
+      },
+      "metrics": {
+        "type": "object"
+      },
+      "figures": {
+        "type": "array"
+      },
+      "artifacts": {
+        "type": "array"
+      },
+      "warnings": {
+        "type": "array"
+      },
+      "next": {
+        "type": "array"
+      },
+      "timings": {
+        "type": "object"
+      }
+    },
+    "required": [
+      "status",
+      "summary"
+    ]
+  },
+  "_meta": {
+    "singlet": {
+      "task_id": "simulation.reference_matched_counts",
+      "reads": [],
+      "writes": [
+        "truth/labels"
+      ],
+      "runtime": "local-cpu",
+      "streaming": true
+    }
+  }
+}
