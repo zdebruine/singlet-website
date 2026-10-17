@@ -13,6 +13,7 @@ import { serverError } from "../../_shared/errors";
 import { corsOk, corsErr, handleOptions, intParam, clampPageSize } from "../../_shared/cors";
 import { cachedJson, CATALOG_CACHE_TTL } from "../../_shared/cache";
 import { safeList } from "../../_shared/json";
+import { normalizeModality, sanitizeQcFlag } from "../../_shared/data-quality";
 import { tokenizeQuery } from "../../_shared/search-core";
 
 interface Env {
@@ -93,7 +94,7 @@ async function listSamples(env: Env, request: Request): Promise<Response> {
       env.DB.prepare(`SELECT COUNT(*) as n FROM gsm ${where}`)
         .bind(...bindParams).first<{ n: number }>(),
       env.DB.prepare(
-        `SELECT gsm_id, gse_id, organism, protocol, modality, tissue, cell_type, donor_id,
+        `SELECT gsm_id, gse_id, organism, protocol, assay_family, modality, tissue, cell_type, donor_id,
                 disease, sex, n_cells, mapping_rate, median_genes, median_umis, mt_pct,
                 status, qc_flag, failure_category, singlet_version, pipeline_date,
                 pz_size_bytes, title, source, srr_ids, last_updated
@@ -105,6 +106,8 @@ async function listSamples(env: Env, request: Request): Promise<Response> {
 
     const data = rows.results.map(r => ({
       ...r,
+      modality: normalizeModality(r.modality, r.assay_family),
+      qc_flag: sanitizeQcFlag(r.qc_flag),
       srr_ids: safeList(r.srr_ids),
     }));
 
