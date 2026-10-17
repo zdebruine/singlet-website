@@ -1,0 +1,7 @@
+name = "alpha-singlet-proxy"
+main = "index.js"
+compatibility_date = "2026-10-01"
+account_id = "2f8a8cc95b6bc0be84ac611fe2e5c3c2"
+workers_dev = false
+# Needs the proxied CNAME `alpha` in the singlet.bio zone (its target is never reached).
+routes = [{ pattern = "alpha.singlet.bio/*", zone_name = "singlet.bio" }]
