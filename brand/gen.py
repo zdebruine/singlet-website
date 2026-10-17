@@ -2,6 +2,7 @@ import os, json
 from fontTools.ttLib import TTFont
 from fontTools.pens.svgPathPen import SVGPathPen
 from fontTools.pens.transformPen import TransformPen
+from fontTools.pens.boundsPen import BoundsPen
 
 OUT = os.environ.get("BRAND_OUT", "public/brand"); os.makedirs(OUT, exist_ok=True)
 FONT = os.environ.get("PLEX_SANS_DIR", "/tmp/plex/ibm-plex-sans/fonts/complete/ttf") + "/IBMPlexSans-SemiBold.ttf"
@@ -50,9 +51,16 @@ write("singlet-wordmark-dark.svg", wordmark_svg(P["white"], P["teal_bright"]))
 write("singlet-wordmark-mono-ink.svg", wordmark_svg(P["ink"], P["ink"]))
 write("singlet-wordmark-mono-white.svg", wordmark_svg(P["white"], P["white"]))
 
+def glyph_extent(ch):
+    f = TTFont(FONT); gs = f.getGlyphSet(); pen = BoundsPen(gs); gs[f.getBestCmap()[ord(ch)]].draw(pen)
+    return pen.bounds  # (xMin, yMin, xMax, yMax), y up
+# In the lockup the wordmark runs from the top of the "l" to the bottom of the "g",
+# which are the top and bottom of the mark (4 cells at s=0.72 span y=14..86).
+L_TOP = glyph_extent("l")[3] * scale; G_BOT = -glyph_extent("g")[1] * scale
+MARK_TOP, MARK_H = 14, 72
 def lockup_svg(lit, cell, ink, teal):
-    mark = mark_svg(lit=lit, cell=cell, s=0.72, x0=0, y0=14); wm_scale = 0.78; wm_w = total_w * wm_scale
-    wm = f'<g transform="translate(86,{18 + asc*scale*wm_scale:.2f}) scale({wm_scale})">{wm_group(paths, ink)}{wm_group(paths2, teal, width*scale)}</g>'
+    mark = mark_svg(lit=lit, cell=cell, s=0.72, x0=0, y0=MARK_TOP); wm_scale = MARK_H / (L_TOP + G_BOT); wm_w = total_w * wm_scale
+    wm = f'<g transform="translate(86,{MARK_TOP + L_TOP*wm_scale:.2f}) scale({wm_scale:.4f})">{wm_group(paths, ink)}{wm_group(paths2, teal, width*scale)}</g>'
     W = 86 + wm_w
     return f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W:.1f} 100" width="{W:.1f}" height="100" role="img" aria-label="singlet.bio">{mark}{wm}</svg>'
 write("singlet-lockup-light.svg", lockup_svg(P["teal"], P["cell"], P["ink"], P["teal"]))
