@@ -12,6 +12,7 @@ import { safeList } from "./json";
 import { normalizeModality, sanitizeQcFlag } from "./data-quality";
 import { QC_LOW_MESSAGE, QC_RULES, qcReasons } from "./qc-rules";
 import { parseCharacteristics, summarizeConditions, type ConditionSummary } from "./conditions";
+import { exclusionFor, studyCompleteness, type Completeness, type Exclusion } from "./completeness";
 import { cellCountVerdict, type CellCountVerdict } from "./suspect-cells";
 import { statusText } from "./search-core";
 import { organismToCommon } from "./vocab";
@@ -96,6 +97,8 @@ export interface StudySample extends Record<string, unknown> {
   low_qc: boolean;
   qc_message: string | null;
   qc_reasons: string[];
+  /** Why the sample is not usable (class + plain-words reason); null for processed samples. */
+  exclusion: Exclusion | null;
   suspect_cells: boolean;
   /** "ok" | "suspect" | "unverified" — see ./suspect-cells. */
   cell_verdict: CellCountVerdict;
@@ -111,6 +114,8 @@ export interface StudyDetail {
   conditions: ConditionSummary["conditions"];
   conditions_label: string;
   publications: Record<string, unknown>[];
+  /** Where every GEO sample of the series ended up. */
+  completeness: Completeness;
 }
 
 export const GSE_RE = /^GSE\d+$/;
@@ -214,6 +219,7 @@ export async function loadStudy(db: D1Database, rawId: string): Promise<StudyDet
       low_qc: !!low,
       qc_message: low ? QC_LOW_MESSAGE : null,
       qc_reasons: low ? qcReasons(low.median_genes, low.mapping_rate) : [],
+      exclusion: exclusionFor(r.status as string, r.failure_category as string | null),
       suspect_cells: verdict === "suspect",
       cell_verdict: verdict,
       qc_flag: sanitizeQcFlag(r.qc_flag),
@@ -303,6 +309,25 @@ export async function loadStudy(db: D1Database, rawId: string): Promise<StudyDet
       }
     : null;
 
+  const completeness = studyCompleteness({
+    nGsmTotal: series.n_gsm_total,
+    samples: samplesResult.results.map((r) => ({ status: r.status as string | null, failure_category: r.failure_category as string | null })),
+    hasFile: hasBundle,
+    bundleSamples: bundleNSamples != null && !Number.isNaN(bundleNSamples) ? bundleNSamples : null,
+    passedQc: assessed != null ? Math.max(0, Number(usableRow?.ok ?? 0) - lowById.size - removedIds.size) : null,
+    lowQc: lowById.size,
+    removed: removedIds.size,
+  });
+
+  // One source of truth: the sample rows. The stored gse.* counters are written by the ingest and drift.
+  series.n_gsm_total = completeness.geo_samples;
+  series.n_gsm_done = completeness.processed;
+  series.n_gsm_failed = completeness.not_processable + completeness.retry + completeness.failed_qc;
+  if (meta) {
+    meta.n_total = completeness.geo_samples;
+    meta.n_done = completeness.processed;
+  }
+
   return {
     series,
     meta,
@@ -310,5 +335,6 @@ export async function loadStudy(db: D1Database, rawId: string): Promise<StudyDet
     conditions: summary.conditions,
     conditions_label: summary.label,
     publications: pubsResult.results,
+    completeness,
   };
 }

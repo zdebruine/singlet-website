@@ -23,6 +23,7 @@ import type {
   CorpusStats,
   ExplainResponse,
   FacetsResponse,
+  Completeness,
   GseDetailResponse,
   GsmDetailResponse,
   GsmRow,
@@ -483,6 +484,7 @@ export function normalizeGseDetail(raw: unknown): GseDetailResponse {
     samples,
     conditions: normalizeConditions(r.conditions),
     conditions_label: str(r.conditions_label),
+    completeness: normalizeCompleteness(r.completeness),
     publications: arr<unknown>(r.publications)
       .map((p) => rec(p))
       .filter((p) => typeof p.pmid === "string" || typeof p.pmid === "number")
@@ -494,6 +496,36 @@ export function normalizeGseDetail(raw: unknown): GseDetailResponse {
         year: numOrNull(p.year),
         journal: strOrNull(p.journal),
       })),
+  };
+}
+
+const EXCLUSION_CLASSES = ["not_processable", "retry", "qc", "queued"] as const;
+const COMPLETENESS_STATES = ["complete", "partial", "file_pending", "none"] as const;
+
+export function normalizeCompleteness(raw: unknown): Completeness | null {
+  if (!raw || typeof raw !== "object") return null;
+  const c = rec(raw);
+  const state = COMPLETENESS_STATES.find((x) => x === c.state);
+  if (!state) return null;
+  return {
+    geo_samples: num(c.geo_samples),
+    not_queued: num(c.not_queued),
+    queued: num(c.queued),
+    processed: num(c.processed),
+    file_pending: num(c.file_pending),
+    in_file: numOrNull(c.in_file),
+    passed_qc: numOrNull(c.passed_qc),
+    low_qc: num(c.low_qc),
+    removed: num(c.removed),
+    not_processable: num(c.not_processable),
+    retry: num(c.retry),
+    failed_qc: num(c.failed_qc),
+    reasons: arr<unknown>(c.reasons)
+      .map((x) => rec(x))
+      .filter((x) => EXCLUSION_CLASSES.some((k) => k === x.class) && typeof x.reason === "string")
+      .map((x) => ({ class: x.class as Completeness["reasons"][number]["class"], reason: String(x.reason), n: num(x.n) })),
+    state,
+    notes: strArr(c.notes),
   };
 }
 

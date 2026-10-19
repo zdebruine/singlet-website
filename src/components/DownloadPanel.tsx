@@ -65,7 +65,7 @@ export function DownloadPanel({ accession, bundleUrl, bundleBytes, bundleNSample
             <Download size={14} /> Download{stacked && bundleBytes != null ? ` · ${fmtBytes(bundleBytes)}` : ""}
           </a>
         ) : (
-          <span className="flag self-start">File not built yet</span>
+          <span className="flag self-start">File pending</span>
         )}
       </div>
       {hollow ? (
@@ -92,8 +92,8 @@ export function DownloadPanel({ accession, bundleUrl, bundleBytes, bundleNSample
         </p>
       ) : (
         <p className="px-4 pb-3 text-xs text-muted-foreground leading-relaxed">
-          The samples are processed but the study file hasn't been assembled yet, so <code className="code-inline">singlet.load("{accession}")</code> will
-          not work until it is. Files are built in batches; check back soon.
+          The samples are processed but the study file is still being assembled, so <code className="code-inline">singlet.load("{accession}")</code> will
+          not work until it is. The study will appear in default searches once the file is published.
         </p>
       )}
     </div>

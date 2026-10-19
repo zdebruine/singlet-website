@@ -104,7 +104,7 @@ export function StudyCard({ row, selected, onToggle, ai, why, aiWhy }: Props) {
                     {row.bundle_bytes != null && <span className="text-muted-foreground">· {fmtBytes(row.bundle_bytes)}</span>}
                   </a>
                 ) : (
-                  <span className="text-[13px] text-muted-foreground">File not built yet</span>
+                  <span className="text-[13px] text-muted-foreground">File pending</span>
                 )}
               </div>
               {row.year && <span className="font-mono text-[12px] text-muted-foreground tabular">{row.year}</span>}

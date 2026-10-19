@@ -1,6 +1,6 @@
 # singlet.bio
 
-Website, catalog API and MCP server for the **singlet** atlas — every public single-cell RNA-seq study on GEO, reprocessed the same way, one `.singlet` file per study. Data is CC0, code is MIT.
+Website, catalog API and MCP server for the **singlet** atlas — public single-cell RNA-seq studies from GEO, reprocessed from raw reads with one pipeline, one `.singlet` file per study. Data is CC0, code is MIT.
 
 ```bash
 pip install "singlet-bio @ git+https://github.com/Singlet-Bio/singlet"

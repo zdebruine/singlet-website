@@ -976,6 +976,7 @@ export async function assessStudy(ctx: SampleQcArgs, args: Record<string, unknow
     },
     missing_metadata,
     fit,
+    completeness: d.completeness,
     year: d.meta?.year ?? null,
     pubmed_ids: d.series.pubmed_ids,
     study_url: `${SITE}/study/${gse}`,
@@ -989,10 +990,11 @@ export async function assessStudy(ctx: SampleQcArgs, args: Record<string, unknow
     `${[d.series.organism_label, d.meta?.tissue_groups.join("/"), d.meta?.disease_groups.join("/"), d.meta?.assay_families.join("/"), d.meta?.year].filter(Boolean).join(" · ")}`
   );
   lines.push(
-    `File: ${d.series.bundle_url ? `${fmtBytes(d.series.bundle_bytes)}, ${fmt(structured.file.n_samples_in_file)} samples${structured.file.reference_build ? `, reference ${structured.file.reference_build}` : ""}` : "not built yet"}.`
+    `File: ${d.series.bundle_url ? `${fmtBytes(d.series.bundle_bytes)}, ${fmt(structured.file.n_samples_in_file)} samples${structured.file.reference_build ? `, reference ${structured.file.reference_build}` : ""}` : "file pending (samples processed, file not yet published)"}.`
   );
   if (structured.file.per_sample_files.length) lines.push(`Per sample: ${structured.file.per_sample_files.join(", ")}.`);
   lines.push(`Samples: ${fmt(d.series.n_gsm_done)} processed of ${fmt(d.series.n_gsm_total)} on GEO${d.series.n_gsm_failed ? `, ${fmt(d.series.n_gsm_failed)} failed` : ""}.`);
+  for (const n of d.completeness.notes) lines.push(`Completeness: ${n}`);
   if (conditionLines.length) {
     lines.push("Conditions:");
     for (const c of conditionLines) lines.push(`- ${c}`);
