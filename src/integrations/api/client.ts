@@ -768,14 +768,14 @@ export const apiClient = {
   },
 
   /** GET /api/stats/layers — downloadable studies holding each layer beyond gene counts. */
-  async layers(): Promise<{ studies: number; layers: { key: string; label: string; studies: number }[] }> {
+  async layers(): Promise<{ studies: number; layers: { key: string; label: string; studies: number; of: number }[] }> {
     const r = rec(await get<unknown>("/api/stats/layers"));
     return {
       studies: num(r.studies),
       layers: arr<unknown>(r.layers)
         .map((x) => rec(x))
         .filter((x) => typeof x.key === "string")
-        .map((x) => ({ key: String(x.key), label: str(x.label), studies: num(x.studies) })),
+        .map((x) => ({ key: String(x.key), label: str(x.label), studies: num(x.studies), of: num(x.of, num(r.studies)) })),
     };
   },
 

@@ -73,12 +73,12 @@ const Index = () => {
     { value: facets ? fmtInt(tissueOptions.length) : null, label: "tissue groups" },
   ];
 
-  const layerBy = Object.fromEntries((layers?.layers ?? []).map((l) => [l.key, l.studies]));
-  const nStudies = layers?.studies ?? 0;
+  const layerBy = Object.fromEntries((layers?.layers ?? []).map((l) => [l.key, l]));
+  const share = (key: string) => (layerBy[key] ? `${pct(layerBy[key].studies, layerBy[key].of)}%` : null);
   const layerBars = (layers?.layers ?? []).map((l) => ({
     label: l.label,
-    value: pct(l.studies, nStudies),
-    display: `${pct(l.studies, nStudies)}%`,
+    value: pct(l.studies, l.of),
+    display: `${pct(l.studies, l.of)}%`,
     highlight: l.key !== "gene_counts",
   }));
 
@@ -178,14 +178,14 @@ const Index = () => {
             <Reveal>
               <SectionHead id="layers-h" kicker="Inside every file" title="More than a count matrix" />
               <div className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-6">
-                <Fact value={layers ? `${pct(layerBy.splicing ?? 0, nStudies)}%` : null} label="splicing-resolved (spliced + unspliced)" />
-                <Fact value={layers ? `${pct(layerBy.mtdna ?? 0, nStudies)}%` : null} label="with mitochondrial DNA variants" />
-                <Fact value={layers ? `${pct(layerBy.snps ?? 0, nStudies)}%` : null} label="with SNP genotypes" />
-                <Fact value={layers ? `${pct(layerBy.ancestry ?? 0, nStudies)}%` : null} label="with genetic ancestry and sex" />
+                <Fact value={share("splicing")} label="of studies splicing-resolved" />
+                <Fact value={share("mtdna")} label="with mitochondrial DNA variants" />
+                <Fact value={share("snps")} label="with SNP genotypes" />
+                <Fact value={layerBy.ancestry ? fmtInt(layerBy.ancestry.studies) : null} label="human studies with genetic ancestry" />
               </div>
               <div className="mt-10 grid lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] gap-10 items-start">
                 <div>
-                  <p className="text-[13px] font-medium mb-3">Share of downloadable studies with each layer</p>
+                  <p className="text-[13px] font-medium mb-3">Share of downloadable studies with each layer (ancestry: of human studies)</p>
                   <HBars data={layerBars} max={100} labelWidth="w-[150px] sm:w-[210px]" />
                 </div>
                 <StudyAnatomy />

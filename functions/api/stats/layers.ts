@@ -21,7 +21,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request, waitUntil
     waitUntil,
     async () => {
       try {
-        return corsOk(await metaCached(env.DB, waitUntil, "stats:layers:v1", MAX_AGE_MS, () => computeLayerStats(env.DB)));
+        return corsOk(await metaCached(env.DB, waitUntil, "stats:layers:v2", MAX_AGE_MS, () => computeLayerStats(env.DB)));
       } catch (e) {
         return serverError(e, "stats/layers");
       }
