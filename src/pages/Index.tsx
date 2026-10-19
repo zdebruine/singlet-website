@@ -45,8 +45,7 @@ const Index = () => {
       <main className="flex-1">
         {/* ── Hero ── */}
         <section className="container-site pt-14 md:pt-16 pb-10 text-center">
-          <p className="type-mono text-primary">AI-ready single-cell data</p>
-          <h1 className="type-display text-foreground mx-auto mt-3 max-w-[820px]">
+          <h1 className="type-display text-foreground mx-auto max-w-[820px]">
             AI-ready single-cell data,
             <br />
             at your fingertips.
