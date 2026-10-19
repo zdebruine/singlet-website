@@ -86,8 +86,42 @@ Site
 4. Soften the OG image and tagline to what the headline numbers can support.
 5. Add `scope` and `exclusion_reason` to the API and MCP so agents can tell "excluded on purpose" from "not done yet".
 
-## 7. Open items
+## 7. Follow-up findings
 
-- Run the classifier over the full 6,227 barcode-stripped samples to size each of the four causes.
-- Read per-sample `provenance.json` for a sample of runtime_fail and uncategorised FAIL rows; the registry names the categories but not the root causes.
+**Scope triage of the barcode-stripped studies.** `scripts/data-audit/scope.mjs` reads each series title and abstract. Over the 678 studies with a barcode-stripped sample (536 have no processed sample at all):
+
+| Text verdict | Studies |
+|---|---|
+| single-cell wording, no other assay | 462 |
+| single-cell wording plus bulk/ATAC/ChIP wording | 57 |
+| no single-cell wording | 139 |
+| SuperSeries with no single-cell wording | 20 |
+
+216 studies (32%) need a scope review before any more compute is spent on them. This is a text heuristic: some of the 139 are single-cell studies with uninformative abstracts, so the verdict means "review", not "remove". The protocol and assay labels already in D1 cannot settle it (525 studies are "Unknown", and the 10x labels are a cataloguer's guess, not evidence).
+
+**runtime_fail is mostly an incident, not a data problem.** 1,427 of the 1,725 rows were last attempted on 2026-06-09 to 2026-06-11 (868 of them on 06-10), and 719 carry `attempts=4`. The stored detail is only the attempt count and a timestamp. These are retry candidates, and the missing root cause is itself a defect.
+
+**simpleaf_permit** is not a whitelist mismatch in the logs: 1,044 of 1,047 are `alevin-fry generate-permit-list` exiting non-zero. The site words it as "barcode whitelist mismatch". Until a log pass confirms the cause, the wording should say "barcode filtering step failed".
+
+**Uncategorised failures.** 548 FAIL/HARD_FAIL rows (511 + 37) have no category and no detail at all.
+
+## 8. Status
+
+Done in [singlet-website PR 28](https://github.com/zdebruine/singlet-website/pull/28) (site-side, no cluster needed):
+- per-study completeness on `/api/gse/:id`, MCP `get_study` and the study page, with a per-sample exclusion reason
+- study counts taken from the sample rows instead of the stored counters
+- "File pending" wording, and README and MCP coverage copy that no longer claims every study
+- the scope triage script above, and a smoke check for the completeness field
+
+Not done, with the reason:
+- OG image tagline: re-rendering needs IBM Plex, and the browser pane could not reach a local render page.
+- Barcode test v2, BAM streaming, retry queue, rebuild queue, real run dates: these run on the cluster (pipeline repo).
+- Scope classifier on the GEO series record (series type, library strategy): needs GEO fetches at scale; the text triage above is the stand-in.
+- Reconciling the stored `gse`, `gse_meta` and `bundle_manifest` counters in D1: the API now derives its numbers from sample rows, but the stored columns still drift.
+- Changing the "barcode whitelist mismatch" wording in `FAILURE_WORDS` (simpleaf_permit) pending a log pass.
+
+## 9. Open items
+
+- Run the series-record classifier over the 216 flagged studies and over the 6,227 barcode-stripped samples to size each of the four causes in section 4.
+- Pull the real error for runtime_fail and the 548 uncategorised rows from the cluster logs.
 - Decide how to count per-cell-GSM studies (GSE152607 class) in `n_gsm_total`.
