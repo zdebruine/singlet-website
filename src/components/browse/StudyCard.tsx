@@ -2,7 +2,8 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { AlertTriangle, Check, Copy, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { fmtBytes, fmtCompact, fmtInt } from "@/lib/catalog-display";
+import { AddToLibraryMenu } from "@/components/library/AddToLibraryMenu";
+import { fmtCompact, fmtInt } from "@/lib/catalog-display";
 import { bundleUrl } from "@/integrations/api/client";
 import type { StudyRow } from "@/integrations/api/types";
 
@@ -22,12 +23,9 @@ export function metaLine(r: StudyRow): string[] {
   parts.push(r.organism_label || "Unknown organism");
   if (r.tissue_groups.length) parts.push(r.tissue_groups.slice(0, 2).join(", ") + (r.tissue_groups.length > 2 ? " +" + (r.tissue_groups.length - 2) : ""));
   if (r.assay_families.length) parts.push(r.assay_families.slice(0, 2).join(", "));
-  parts.push(
-    r.has_bundle && r.usable_samples != null
-      ? `${fmtInt(r.usable_samples)} ${r.usable_samples === 1 ? "sample" : "samples"} passed QC`
-      : r.bundle_n_samples != null ? `${fmtInt(r.bundle_n_samples)} samples in file` : `${fmtInt(r.n_done)} samples (catalog)`
-  );
-  parts.push(r.file_cells != null ? `${fmtCompact(r.file_cells)} cells (file)` : `${fmtCompact(r.n_cells)} cells (catalog)`);
+  const n = r.has_bundle && r.usable_samples != null ? r.usable_samples : (r.bundle_n_samples ?? r.n_done);
+  parts.push(`${fmtInt(n)} ${n === 1 ? "sample" : "samples"}`);
+  parts.push(`${fmtCompact(r.file_cells ?? r.n_cells)} cells`);
   if (r.year) parts.push(String(r.year));
   return parts;
 }
@@ -93,15 +91,18 @@ export function StudyCard({ row, selected, onToggle, ai, why, aiWhy }: Props) {
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 lg:group-focus-within:opacity-100 transition-opacity">
                 <LoadSnippet gseId={row.gse_id} />
+                <span className="relative z-10">
+                  <AddToLibraryMenu gseIds={[row.gse_id]} className="!h-6 !px-1.5" />
+                </span>
                 {row.has_bundle ? (
                   <a
                     href={bundleUrl(row.gse_id)}
-                    className="relative z-10 inline-flex items-center gap-1.5 text-[13px] text-primary hover:underline"
+                    className="relative z-10 inline-flex items-center text-primary hover:text-foreground"
                     download
+                    title="Download .singlet"
+                    aria-label={`Download ${row.gse_id}`}
                   >
-                    <Download size={13} />
-                    Download .singlet
-                    {row.bundle_bytes != null && <span className="text-muted-foreground">· {fmtBytes(row.bundle_bytes)}</span>}
+                    <Download size={15} />
                   </a>
                 ) : (
                   <span className="text-[13px] text-muted-foreground">File pending</span>

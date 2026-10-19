@@ -24,6 +24,7 @@ import type {
   ExplainResponse,
   FacetsResponse,
   Completeness,
+  Library,
   GseDetailResponse,
   GsmDetailResponse,
   GsmRow,
@@ -279,6 +280,7 @@ export function normalizeStudyRow(raw: unknown): StudyRow | null {
     usable_samples: numOrNull(r.usable_samples),
     low_qc_samples: numOrNull(r.low_qc_samples),
     reference_build: strOrNull(r.reference_build),
+    pubmed_ids: strArr(r.pubmed_ids),
     year: numOrNull(r.year),
     n_conditions: num(r.n_conditions),
     conditions: normalizeConditions(r.conditions),
@@ -589,6 +591,21 @@ async function accountPost(path: string, body: unknown, signal?: AbortSignal): P
 
 const productPost = (body: Record<string, unknown>) => accountPost("/api/product", body);
 
+function normalizeLibraries(raw: unknown): Library[] {
+  return arr<unknown>(rec(raw).libraries)
+    .map((x) => rec(x))
+    .filter((x) => typeof x.id === "string" && typeof x.name === "string")
+    .map((x) => ({
+      id: String(x.id),
+      name: String(x.name),
+      gse_ids: strArr(x.gse_ids),
+      created_at: str(x.created_at),
+      updated_at: str(x.updated_at),
+    }));
+}
+
+const libraryPost = async (body: Record<string, unknown>) => normalizeLibraries(await accountPost("/api/library", body));
+
 function normalizeStats(raw: unknown): CorpusStats {
   const r = rec(raw);
   return {
@@ -686,6 +703,20 @@ export interface AccountUsage {
 }
 
 export const apiClient = {
+  /** The signed-in user's libraries (named folders of studies). Every call returns the updated list. */
+  library: {
+    list: () => libraryPost({ action: "list" }),
+    create: (name: string, gseIds: string[] = []) => libraryPost({ action: "create", name, gse_ids: gseIds }),
+    rename: (id: string, name: string) => libraryPost({ action: "rename", id, name }),
+    remove: (id: string) => libraryPost({ action: "delete", id }),
+    add: (id: string, gseIds: string[]) => libraryPost({ action: "add", id, gse_ids: gseIds }),
+    removeItems: (id: string, gseIds: string[]) => libraryPost({ action: "remove", id, gse_ids: gseIds }),
+  },
+  feedback: {
+    async send(input: { message: string; category: string; email?: string; page?: string; website?: string }) {
+      await accountPost("/api/feedback", input);
+    },
+  },
   product: {
     async dashboard(): Promise<ProductDashboard> {
       return (await productPost({ action: "dashboard" })) as ProductDashboard;

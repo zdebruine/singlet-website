@@ -41,6 +41,8 @@ check "home"                 200 "$BASE/"                                   "<di
 check "study page (SPA)"     200 "$BASE/study/GSE138867"                    "<div id=\"root\""     "text/html"
 check "study api"            200 "$BASE/api/gse/GSE138867"                  "GSE138867"
 check "study completeness"   200 "$BASE/api/gse/GSE138867"                  "\"completeness\": *{"
+check "library api deployed" 405 "$BASE/api/library"                       "method_not_allowed"
+check "feedback api deployed" 405 "$BASE/api/feedback"                       "method_not_allowed"
 check "related"              200 "$BASE/api/gse/GSE138867/related"          "\\["
 check "search"               200 "$BASE/api/search?q=pbmc&limit=3"          "\"data\""
 check "facets"               200 "$BASE/api/facets"                         "organism"

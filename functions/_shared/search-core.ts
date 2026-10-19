@@ -116,6 +116,7 @@ export interface StudyRow {
   bundle_n_samples: number | null;
   file_cells: number | null;
   reference_build: string | null;
+  pubmed_ids: string[];
   /** Samples in the file with usable count data; null = not yet assessed. */
   usable_samples?: number | null;
   /** Samples in the file that singlet's QC flagged (low QC); left out of usable_samples and every count by default. */
@@ -839,6 +840,7 @@ interface StudyDbRow {
   n_lowqc_cells?: number | null;
   reference_mismatch?: number | null;
   n_gsm_failed: number | null;
+  pubmed_ids?: string | null;
   s_gse: number | null;
   s_gsm: number | null;
   n_match: number | null;
@@ -864,7 +866,7 @@ const studySelect = (includeLow: boolean) => `
   m.gse_id, m.organism_primary, m.organisms, m.tissue_groups, m.disease_groups, m.assay_families,
   m.tissues_raw, m.cell_types_raw, m.n_conditions, m.n_done, m.n_total, m.n_cells, m.has_bundle, m.year,
   m.n_usable_samples, m.n_usable_cells, m.n_lowqc_samples, m.n_lowqc_cells, m.reference_mismatch,
-  g.title, g.abstract, g.r2_bundle_bytes, g.r2_bundle_key, g.n_gsm_failed,
+  g.title, g.abstract, g.r2_bundle_bytes, g.r2_bundle_key, g.n_gsm_failed, g.pubmed_ids,
   (SELECT b.n_gsms_in_bundle FROM bundle_manifest b WHERE b.gse_id = m.gse_id) AS bundle_n_samples,
   (SELECT b.reference_build FROM bundle_manifest b WHERE b.gse_id = m.gse_id) AS reference_build,
   (SELECT SUM(q.n_cells_called) FROM sample_qc q WHERE q.gse_id = m.gse_id AND COALESCE(q.usable, 1) = 1 AND COALESCE(q.qc_tier, 0) ${includeLow ? "< 2" : "= 0"}) AS file_cells`;
@@ -1012,6 +1014,7 @@ function shapeStudy(r: StudyDbRow): StudyRow {
     bundle_n_samples: r.bundle_n_samples != null ? Number(r.bundle_n_samples) : null,
     file_cells: r.file_cells != null ? Number(r.file_cells) : null,
     reference_build: r.reference_build,
+    pubmed_ids: safeList(r.pubmed_ids),
     usable_samples: r.n_usable_samples != null ? Number(r.n_usable_samples) : null,
     low_qc_samples: r.n_lowqc_samples != null ? Number(r.n_lowqc_samples) : null,
     reference_mismatch: Number(r.reference_mismatch ?? 0) === 1,

@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { Logo } from "@/components/Logo";
+import { FeedbackButton } from "@/components/FeedbackDialog";
 import { GITHUB_ISSUES, GITHUB_REPO } from "@/lib/install-snippets";
 
 const LINKS: { label: string; to?: string; href?: string }[] = [
@@ -30,6 +31,8 @@ const Footer = () => (
           <a href={GITHUB_ISSUES} target="_blank" rel="noopener noreferrer" className="text-dark-foreground/85 underline underline-offset-2 hover:text-dark-foreground transition-colors">
             GitHub Issues
           </a>
+          {" · "}
+          <FeedbackButton className="text-dark-foreground/85 underline underline-offset-2 hover:text-dark-foreground transition-colors">Send feedback</FeedbackButton>
         </p>
       </div>
       <nav aria-label="Footer" className="flex flex-wrap items-center gap-x-5 gap-y-2">

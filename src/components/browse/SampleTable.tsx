@@ -1,8 +1,9 @@
 import { Link } from "react-router-dom";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { fmtInt } from "@/lib/catalog-display";
 import type { SampleRow } from "@/integrations/api/types";
+import type { ColumnDef } from "./columns";
 
 /** Keys that identify a sample rather than describe a condition. */
 const ID_KEY_RE = /(^|\s)(id|identifier|donor|subject|patient|replicate|rep|barcode|library|sample name|sample|name|index|run|lane|batch|well)($|\s)/i;
@@ -30,97 +31,124 @@ function StatusCell({ s }: { s: SampleRow }) {
   );
 }
 
-export function SampleTable({ rows }: { rows: SampleRow[] }) {
+const text = (v: string | null | undefined) => <span title={v ?? undefined}>{v || "—"}</span>;
+
+export const SAMPLE_COLUMNS: ColumnDef<SampleRow>[] = [
+  {
+    key: "sample",
+    label: "Sample",
+    default: true,
+    required: true,
+    width: "w-[118px]",
+    render: (r) => (
+      <Link to={`/study/${r.gse_id}#${r.gsm_id}`} className="font-mono text-primary hover:underline">
+        {r.gsm_id}
+      </Link>
+    ),
+  },
+  { key: "organism", label: "Organism", default: true, width: "w-[84px]", render: (r) => r.organism_label || "—" },
+  {
+    key: "study",
+    label: "Study",
+    default: true,
+    width: "w-[22%]",
+    render: (r) => (
+      <>
+        <Link to={`/study/${r.gse_id}`} className="font-mono text-[12px] text-primary hover:underline">
+          {r.gse_id}
+        </Link>
+        <div className="text-[12px] text-muted-foreground truncate" title={r.study_title ?? undefined}>
+          {r.study_title ?? "—"}
+        </div>
+      </>
+    ),
+  },
+  { key: "tissue", label: "Tissue", default: true, width: "w-[13%]", render: (r) => text(r.tissue ?? r.tissue_group) },
+  { key: "cell_type", label: "Cell type", default: true, width: "w-[12%]", render: (r) => text(r.cell_type) },
+  {
+    key: "conditions",
+    label: "Conditions",
+    default: true,
+    render: (r) => {
+      const pairs = conditionPairs(r.characteristics);
+      return pairs.length ? (
+        <ul className="space-y-0.5">
+          {pairs.map((p) => (
+            <li key={p} className="text-[12px] text-foreground/80 truncate" title={p}>
+              {p}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <span className="text-muted-foreground">—</span>
+      );
+    },
+  },
+  { key: "disease", label: "Disease", default: false, width: "w-[12%]", render: (r) => text(r.disease ?? r.disease_group) },
+  { key: "sex", label: "Sex", default: false, width: "w-[64px]", render: (r) => text(r.sex) },
+  { key: "assay", label: "Assay", default: true, width: "w-[11%]", render: (r) => text(r.assay_family ?? r.protocol) },
+  {
+    key: "cells",
+    label: "Cells",
+    default: true,
+    align: "right",
+    width: "w-[84px]",
+    render: (r) => (
+      <span className={cn(r.suspect_cells && "text-warning")}>
+        {r.suspect_cells && <AlertTriangle size={11} className="inline mr-1" aria-label="Implausible cell count — under review" />}
+        {r.n_cells == null ? "—" : fmtInt(r.n_cells)}
+      </span>
+    ),
+  },
+  { key: "status", label: "Status", default: false, width: "w-[110px]", render: (r) => <StatusCell s={r} /> },
+  {
+    key: "geo",
+    label: "GEO",
+    default: false,
+    width: "w-[52px]",
+    render: (r) => (
+      <a
+        href={`https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=${r.gsm_id}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-primary hover:text-foreground"
+        title="View on GEO"
+        aria-label={`View ${r.gsm_id} on GEO`}
+      >
+        <ExternalLink size={13} />
+      </a>
+    ),
+  },
+];
+
+export function SampleTable({ rows, columns }: { rows: SampleRow[]; columns: ColumnDef<SampleRow>[] }) {
   return (
     <div className="surface overflow-x-auto !rounded-none">
-      <table className="data-table w-full table-fixed min-w-[820px]">
+      <table className="data-table w-full table-fixed min-w-[760px]">
         <colgroup>
-          <col className="w-[118px]" />
-          <col className="w-[22%]" />
-          <col className="w-[14%]" />
-          <col className="w-[13%]" />
-          <col />
-          <col className="w-[96px]" />
-          <col className="w-[92px]" />
+          {columns.map((c) => (
+            <col key={c.key} className={c.width} />
+          ))}
         </colgroup>
         <thead>
           <tr>
-            <th>Sample</th>
-            <th>Study</th>
-            <th>Tissue</th>
-            <th>Cell type</th>
-            <th>Conditions</th>
-            <th className="text-right">Cells</th>
-            <th>Status</th>
+            {columns.map((c) => (
+              <th key={c.key} className={c.align === "right" ? "text-right" : undefined}>
+                {c.label}
+              </th>
+            ))}
           </tr>
         </thead>
         <tbody>
-          {rows.map((r) => {
-            const pairs = conditionPairs(r.characteristics);
-            return (
-              <tr key={r.gsm_id}>
-                <td className="whitespace-nowrap align-top">
-                  <Link to={`/study/${r.gse_id}#${r.gsm_id}`} className="font-mono text-primary hover:underline">
-                    {r.gsm_id}
-                  </Link>
-                  <div className="text-[11px] text-muted-foreground">{r.organism_label}</div>
+          {rows.map((r) => (
+            <tr key={r.gsm_id}>
+              {columns.map((c) => (
+                <td key={c.key} className={cn("align-top", c.align === "right" ? "num whitespace-nowrap text-right" : "truncate", c.key === "sample" && "whitespace-nowrap")}>
+                  {c.render(r)}
                 </td>
-                <td className="align-top">
-                  <Link to={`/study/${r.gse_id}`} className="font-mono text-[12px] text-primary hover:underline">
-                    {r.gse_id}
-                  </Link>
-                  <div className="text-[12px] text-muted-foreground truncate" title={r.study_title ?? undefined}>
-                    {r.study_title ?? "—"}
-                  </div>
-                </td>
-                <td className="align-top">
-                  <div className="truncate" title={r.tissue ?? undefined}>
-                    {r.tissue ?? "—"}
-                  </div>
-                  {r.tissue_group && r.tissue_group !== r.tissue && (
-                    <div className="text-[11px] text-muted-foreground truncate">{r.tissue_group}</div>
-                  )}
-                </td>
-                <td className="align-top">
-                  <div className="truncate" title={r.cell_type ?? undefined}>
-                    {r.cell_type ?? "—"}
-                  </div>
-                </td>
-                <td className="align-top">
-                  {pairs.length ? (
-                    <ul className="space-y-0.5">
-                      {pairs.map((p) => (
-                        <li key={p} className="text-[12px] text-foreground/80 truncate" title={p}>
-                          {p}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <span className="text-muted-foreground">—</span>
-                  )}
-                </td>
-                <td className={cn("num whitespace-nowrap align-top", r.suspect_cells && "text-warning")}>
-                  {r.suspect_cells && (
-                    <AlertTriangle
-                      size={11}
-                      className="inline mr-1"
-                      aria-label="Implausible cell count — under review"
-                    />
-                  )}
-                  {r.n_cells == null ? "—" : fmtInt(r.n_cells)}
-                  <div
-                    className="font-sans text-[11px] text-muted-foreground font-normal truncate"
-                    title={r.assay_family ?? r.protocol ?? undefined}
-                  >
-                    {r.assay_family ?? r.protocol ?? "—"}
-                  </div>
-                </td>
-                <td className="align-top">
-                  <StatusCell s={r} />
-                </td>
-              </tr>
-            );
-          })}
+              ))}
+            </tr>
+          ))}
         </tbody>
       </table>
     </div>
