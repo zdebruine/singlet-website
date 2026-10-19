@@ -82,12 +82,16 @@ const Index = () => {
     highlight: l.key !== "gene_counts",
   }));
 
+  // Every processed sample in a published file, in exactly one bucket (/api/stats accounting).
+  const acc = stats?.accounting ?? {};
   const qcParts = stats
     ? [
-        { label: "passed QC", value: stats.samples_in_files, className: "bg-primary" },
-        { label: "low QC, kept apart", value: stats.qc.low_qc_samples, className: "bg-[var(--chart-warning)]" },
-        { label: "failed, removed", value: stats.qc.removed_samples, className: "bg-[var(--chart-danger)]" },
-      ]
+        { label: "passed QC", value: acc.in_files_usable_downloadable ?? stats.samples_in_files, className: "bg-primary" },
+        { label: "low QC, kept apart", value: acc.in_files_low_qc ?? stats.qc.low_qc_samples, className: "bg-[var(--chart-warning)]" },
+        { label: "failed, removed", value: acc.in_files_removed ?? stats.qc.removed_samples, className: "bg-[var(--chart-danger)]" },
+        { label: "no count data", value: acc.in_files_unusable ?? 0, className: "bg-[var(--chart-muted)]" },
+        { label: "wrong reference, withheld", value: acc.in_files_usable_withheld ?? 0, className: "bg-[var(--cell)]" },
+      ].filter((p) => p.value > 0)
     : [];
 
   return (
@@ -199,7 +203,7 @@ const Index = () => {
           <Reveal>
             <SectionHead id="qc-h" kicker="Quality control" title="Every sample checked" />
             <p className="mt-3 text-[15px] text-muted-foreground">
-              Samples in published files.{" "}
+              Every processed sample in a published file.{" "}
               <Link to="/about#qc" className="text-primary hover:underline">
                 How QC works →
               </Link>
