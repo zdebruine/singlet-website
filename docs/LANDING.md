@@ -32,22 +32,22 @@ and short on time.
 **Hero, about 15 s.** Three answers, in reading order:
 1. *What is it?* "AI-ready single-cell data" and a subline that names GEO, raw reads and QC.
 2. *Is it big and real?* Live numbers next to the search: studies, samples, cells, species.
-3. *Is it easy?* A search box with a real example query, and the 10 s demo: a notebook loads a study, then
-   Claude finds and loads one. Free, CC0, no account to download.
+3. *Is it easy?* A search box with a real example query, and the demo (about 33 s, three scenes with time to
+   read): Python loads a study and plots it, R lists the layers in the file, Claude finds and loads a study.
 
-**Rest of the page, 15 to 30 s.** Each section is one screen at most, with a title that carries the message on
-its own for someone who reads only titles:
-1. *Built for how you work*: two short columns, one per audience, each with one link.
-2. *Everything about a study, one click away*: a real study (GSE138867) laid out as the site shows it, with
-   four plain callouts: metadata, per-sample QC, the counts, provenance. Details stay on the study page.
-3. *Rigorous quality control*: the three live QC numbers.
-4. *Three ways in*: the browser, Python or R, Claude. One tab open at a time.
-5. *Start from a topic*: live tissue and disease hubs for the biologist who does not have a query yet.
-6. *Open by default*: CC0 data, MIT code, no account to download, a citation.
-7. A last call to action that returns to the search box.
+**Rest of the page, 15 to 30 s.** Few words; each section is a title that carries the message and a chart that
+passes the "grandma test":
+1. *Coverage*: studies by tissue (each bar opens Browse) and studies by year.
+2. *Inside every file*: four big shares (splicing-resolved, mtDNA variants, SNP genotypes, ancestry and sex), a bar
+   per layer, and a real study (GSE138867) laid out the way the site shows it.
+3. *Quality control*: one stacked bar of every sample in the published files: passed, low QC, removed.
+4. *Format*: the size of the same count matrix in H5AD, 10x HDF5, npz, RDS, BPCells and .1pz (published benchmark).
+5. *Three ways in*: the browser, Python or R, Claude. One tab open at a time.
+6. A last call to action that returns to the search box, with CC0 / MIT / no account / Python · R · Claude.
 
 ## Rules
-- Every number is live from `/api/stats` or `/api/facets`, or is a real record (GSE138867). Nothing is invented.
+- Every number is live from `/api/stats`, `/api/stats/layers` or `/api/facets`, is a real record (GSE138867), or is
+  a published benchmark that the page names. Nothing is invented.
 - Short, factual copy. No "best" or "revolutionary"; the numbers and the demo make the case.
 - One search input per page (the hero). The last call to action scrolls back to it.
 - Motion is quiet: sections fade in once as they scroll into view; none with `prefers-reduced-motion`.

@@ -1,34 +1,11 @@
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Activity, FileArchive, FlaskConical, Tags } from "lucide-react";
 import { apiClient } from "@/integrations/api/client";
 import { fmtInt } from "@/lib/catalog-display";
 import { EXAMPLE_GSE } from "@/lib/install-snippets";
 
-const CALLOUTS = [
-  {
-    icon: Tags,
-    title: "Metadata you recognise",
-    body: "Tissue, disease, cell type and organism mapped to one vocabulary; GEO characteristics kept word for word.",
-  },
-  {
-    icon: Activity,
-    title: "QC for every sample",
-    body: "Cells called, genes per cell and reads mapped, so you can judge a sample before you download it.",
-  },
-  {
-    icon: FileArchive,
-    title: "The counts, not a summary",
-    body: "Exon and intron counts and cell calls for each sample, in one file per study.",
-  },
-  {
-    icon: FlaskConical,
-    title: "Provenance",
-    body: "Reference genome, pipeline version and the SRA runs behind each sample.",
-  },
-];
 
-/** A real study (GSE138867, read live) laid out the way the site shows it, with what each part tells you. */
+/** A real study (GSE138867, read live) laid out the way the site shows it. */
 export function StudyAnatomy() {
   const { data } = useQuery({ queryKey: ["gse", EXAMPLE_GSE], queryFn: () => apiClient.gse(EXAMPLE_GSE), staleTime: 300_000 });
   const { data: index } = useQuery({ queryKey: ["bundle-index", EXAMPLE_GSE], queryFn: () => apiClient.bundleIndex(EXAMPLE_GSE), staleTime: 300_000 });
@@ -37,11 +14,10 @@ export function StudyAnatomy() {
   const cells = samples.reduce((n, s) => n + (s.n_cells ?? 0), 0);
   const max = Math.max(1, ...samples.map((s) => s.n_cells ?? 0));
   const condKey = data?.conditions[0]?.key;
-  const files = (index?.samples[0]?.files ?? []).map((f) => f.path.split("/").pop() ?? f.path).slice(0, 5);
+  const files = (index?.samples[0]?.files ?? []).map((f) => f.path.split("/").pop() ?? f.path);
 
   return (
-    <div className="grid lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] gap-6 lg:gap-10 items-center">
-      <Link
+    <Link
         to={`/study/${EXAMPLE_GSE}`}
         className="surface block p-5 text-left hover:border-primary/40 transition-colors"
         aria-label={`Open ${EXAMPLE_GSE}`}
@@ -92,16 +68,5 @@ export function StudyAnatomy() {
           </p>
         )}
       </Link>
-
-      <ul className="grid sm:grid-cols-2 gap-x-6 gap-y-5">
-        {CALLOUTS.map(({ icon: Icon, title, body }) => (
-          <li key={title}>
-            <Icon size={18} className="text-primary" aria-hidden="true" />
-            <h3 className="mt-2 text-[15px] font-semibold">{title}</h3>
-            <p className="mt-1 text-[13.5px] leading-relaxed text-muted-foreground">{body}</p>
-          </li>
-        ))}
-      </ul>
-    </div>
   );
 }

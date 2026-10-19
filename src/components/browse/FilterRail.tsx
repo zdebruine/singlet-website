@@ -328,7 +328,7 @@ export function FilterRail({
           <div className="mb-2 flex h-8 items-end gap-px" aria-label="Studies by year">
             {(facets?.year ?? []).slice().reverse().map((y) => {
               const max = Math.max(1, ...(facets?.year ?? []).map((x) => x.count));
-              return <span key={y.value} title={`${y.value}: ${fmtInt(y.count)}`} className="min-w-px flex-1 bg-primary/35" style={{ height: `${Math.max(8, y.count / max * 100)}%` }} />;
+              return <span key={y.value} title={`${y.value}: ${fmtInt(y.count)}`} className="min-w-px flex-1 bg-[var(--teal-300)]" style={{ height: `${Math.max(8, y.count / max * 100)}%` }} />;
             })}
           </div>
         )}
