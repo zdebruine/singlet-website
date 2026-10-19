@@ -7,7 +7,7 @@ import { SearchBox } from "@/components/SearchBox";
 import { apiClient } from "@/integrations/api/client";
 import { usePageMeta } from "@/hooks/usePageMeta";
 import { fmtCompact, fmtInt } from "@/lib/catalog-display";
-import { EXAMPLE_QUERIES, searchDestination } from "@/lib/search-routing";
+import { EXAMPLE_QUERIES } from "@/lib/search-routing";
 import { Reveal } from "@/components/landing/Reveal";
 import { StudyAnatomy } from "@/components/landing/StudyAnatomy";
 import { WaysIn } from "@/components/landing/WaysIn";
@@ -116,15 +116,6 @@ const Index = () => {
 
               <div className="mt-7 max-w-[620px] mx-auto lg:mx-0">
                 <SearchBox variant="hero" placeholder={`Try "${EXAMPLE_QUERIES[0]}"`} />
-                <ul className="mt-3 flex flex-wrap justify-center lg:justify-start gap-2" aria-label="Example searches">
-                  {EXAMPLE_QUERIES.slice(1).map((q) => (
-                    <li key={q}>
-                      <Link to={searchDestination(q)!} className="chip">
-                        {q}
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
               </div>
 
               <dl className="mt-8 grid grid-cols-4 gap-2 max-w-[560px] mx-auto lg:mx-0">

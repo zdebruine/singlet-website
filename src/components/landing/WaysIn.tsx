@@ -44,10 +44,7 @@ export function WaysIn() {
           <div className="grid md:grid-cols-2 gap-5 items-start">
             <div>
               <h3 className="text-[16px] font-semibold">Search like you would ask a colleague</h3>
-              <p className="mt-1.5 text-[14px] leading-relaxed text-muted-foreground">
-                Type a question in plain English, a GEO accession or keywords. Filter by organism, tissue, disease, assay and cell
-                type, open a study to see its samples and QC, and download the files you pick. No account needed.
-              </p>
+              <p className="mt-1.5 text-[14px] leading-relaxed text-muted-foreground">A question, a GEO accession or keywords. Filter, open a study, download.</p>
               <Link to="/browse" className="btn-primary btn-sm mt-4 inline-flex">
                 Browse studies
               </Link>
@@ -67,10 +64,7 @@ export function WaysIn() {
           <div className="grid md:grid-cols-2 gap-5 items-start">
             <div>
               <h3 className="text-[16px] font-semibold">One line to an AnnData or SingleCellExperiment</h3>
-              <p className="mt-1.5 text-[14px] leading-relaxed text-muted-foreground">
-                The packages download a study once, cache it, and hand back the object your analysis already expects, with the
-                sample metadata in <code className="code-inline">obs</code> / <code className="code-inline">colData</code>.
-              </p>
+              <p className="mt-1.5 text-[14px] leading-relaxed text-muted-foreground">Sample metadata included. Downloaded once, then cached.</p>
               <p className="mt-3 text-[13px]">
                 <Link to="/docs#install" className="text-primary hover:underline">Install and API docs →</Link>
               </p>
@@ -99,11 +93,7 @@ export function WaysIn() {
           <div className="grid md:grid-cols-2 gap-5 items-start">
             <div>
               <h3 className="text-[16px] font-semibold">Ask Claude to find and load data</h3>
-              <p className="mt-1.5 text-[14px] leading-relaxed text-muted-foreground">
-                Connect singlet.bio to Claude and ask for what you need: it searches the atlas, reads each study's samples and QC,
-                compares candidates and writes the loading code. It works in Claude.ai, Claude Desktop and Claude Code with a free
-                API key.
-              </p>
+              <p className="mt-1.5 text-[14px] leading-relaxed text-muted-foreground">It searches, checks QC and writes the code. Needs a free API key.</p>
               <p className="mt-3 text-[13px]">
                 <Link to="/docs/mcp" className="text-primary hover:underline">Connect Claude →</Link>
               </p>

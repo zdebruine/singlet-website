@@ -3,6 +3,7 @@ import { Logo } from "@/components/Logo";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { CodeBlock } from "@/components/CodeBlock";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { usePageMeta } from "@/hooks/usePageMeta";
 import { GITHUB_ISSUES } from "@/lib/install-snippets";
 import {
@@ -80,7 +81,15 @@ const TOOLS: { name: string; input: string; returns: string; key: string }[] = [
   { name: "save_cohort", input: "name, gse_ids, notes?, visibility?, workspace_id?", returns: "Saves up to 2,000 studies as a cohort pinned to the current catalogue", key: "Yes" },
 ];
 
-function Section({ id, title, children }: { id: string; title: string; children: React.ReactNode }) {
+function Section({ id, title, children, collapsible }: { id: string; title: string; children: React.ReactNode; collapsible?: boolean }) {
+  if (collapsible) {
+    return (
+      <details id={id} className="pb-6 mb-6 border-b border-border scroll-mt-20">
+        <summary className="cursor-pointer text-[20px] font-semibold">{title}</summary>
+        <div className="mt-4">{children}</div>
+      </details>
+    );
+  }
   return (
     <section id={id} className="pb-12 mb-12 border-b border-border scroll-mt-20">
       <h2 className="mb-4">{title}</h2>
@@ -109,13 +118,9 @@ export default function DocsMcp() {
             / MCP
           </p>
           <Logo variant="mark" height={28} link={false} className="docs-brand-mark mb-4" />
-              <h1 className="text-[36px] md:text-[42px] mb-3">Use singlet from Claude, Cursor or ChatGPT</h1>
+          <h1 className="text-[36px] md:text-[42px] mb-3">Ask your AI assistant for single-cell data</h1>
           <p className="text-lg text-muted-foreground">
-            Finding the right public single-cell study, checking whether its samples are any good, and getting the counts
-            onto your machine used to be an afternoon of GEO clicking, GEOquery calls and FASTQ processing. Connected to
-            singlet.bio, it is one conversation: your assistant searches the atlas, reads the per-sample QC out of the
-            file itself, picks matched controls and hands you a download command — for a whole study, or for the single
-            sample you actually need.
+            Connect singlet.bio to Claude, Cursor, ChatGPT or VS Code. It searches the atlas, checks QC and writes the loading code.
           </p>
           <p className="text-sm text-muted-foreground">
             <strong className="text-foreground">Contact:</strong>{" "}
@@ -155,50 +160,46 @@ export default function DocsMcp() {
 
           <Section id="setup" title="Set it up">
             <p>
-              The server is hosted at <code className="code-inline">{MCP_URL}</code> — nothing to install and nothing to
-              run locally. <strong>Tools need a free API key:</strong> sign in, create a key under API keys in{" "}
-              <Link to="/account">your account</Link>, and send it with every request. Listing the tools needs no key,
-              and the data itself (CC0 downloads) never does. Searches the built-in vocabulary can read, and repeats of
-              any question, use no AI tokens; questions that need a fresh AI reading are counted against your monthly
-              allowance, and billing for heavier use is coming.
+              Hosted at <code className="code-inline">{MCP_URL}</code>. Tools need a free API key from{" "}
+              <Link to="/account">your account</Link>; downloads never do.
             </p>
-
-            <h3>Claude Desktop</h3>
-            <p className="text-sm text-muted-foreground">
-              Settings → Developer → Edit Config, then restart Claude.
-            </p>
-            <CodeBlock label="claude_desktop_config.json" code={claudeDesktopConfig(KEY)} />
-
-            <h3 className="mt-8">Claude Code</h3>
-            <CodeBlock label="terminal" code={claudeCodeConfig(KEY)} />
-
-            <h3 className="mt-8">Claude.ai (custom connector)</h3>
-            <p className="text-sm text-muted-foreground">
-              Settings → Connectors → Add custom connector. The connector form takes only a URL, so put your key in it
-              (treat this URL like a password; revoke the key in your account if it leaks):
-            </p>
-            <CodeBlock label="connector url" code={`${MCP_URL}?key=${KEY}`} />
-
-            <h3 className="mt-8">Cursor</h3>
-            <p className="text-sm text-muted-foreground">
-              Put this in <code className="code-inline">.cursor/mcp.json</code> in your project, or in{" "}
-              <code className="code-inline">~/.cursor/mcp.json</code> for every project.
-            </p>
-            <CodeBlock label=".cursor/mcp.json" code={cursorConfig(KEY)} />
-
-            <h3 className="mt-8">ChatGPT</h3>
-            <p className="text-sm text-muted-foreground">
-              Enable developer mode, then Settings → Connectors → Create, and add the URL below as a custom connector
-              (transport: HTTP/streamable). Add <code className="code-inline">Authorization: Bearer {KEY}</code> as a
-              header, or use the key-in-URL form shown under Claude.ai.
-            </p>
-            <CodeBlock label="connector url" code={MCP_URL} />
-
-            <h3 className="mt-8">VS Code</h3>
-            <p className="text-sm text-muted-foreground">
-              Add it to <code className="code-inline">.vscode/mcp.json</code>.
-            </p>
-            <CodeBlock label=".vscode/mcp.json" code={vscodeConfig(KEY)} />
+            <Tabs defaultValue="claude-ai">
+              <TabsList className="flex-wrap h-auto">
+                <TabsTrigger value="claude-ai">Claude.ai</TabsTrigger>
+                <TabsTrigger value="claude-desktop">Claude Desktop</TabsTrigger>
+                <TabsTrigger value="claude-code">Claude Code</TabsTrigger>
+                <TabsTrigger value="cursor">Cursor</TabsTrigger>
+                <TabsTrigger value="chatgpt">ChatGPT</TabsTrigger>
+                <TabsTrigger value="vscode">VS Code</TabsTrigger>
+              </TabsList>
+              <TabsContent value="claude-ai" className="mt-4">
+                <p className="text-sm text-muted-foreground">Settings → Connectors → Add custom connector. Treat this URL like a password.</p>
+                <CodeBlock label="connector url" code={`${MCP_URL}?key=${KEY}`} />
+              </TabsContent>
+              <TabsContent value="claude-desktop" className="mt-4">
+                <p className="text-sm text-muted-foreground">Settings → Developer → Edit Config, then restart Claude.</p>
+                <CodeBlock label="claude_desktop_config.json" code={claudeDesktopConfig(KEY)} />
+              </TabsContent>
+              <TabsContent value="claude-code" className="mt-4">
+                <CodeBlock label="terminal" code={claudeCodeConfig(KEY)} />
+              </TabsContent>
+              <TabsContent value="cursor" className="mt-4">
+                <p className="text-sm text-muted-foreground">
+                  <code className="code-inline">.cursor/mcp.json</code> in your project, or <code className="code-inline">~/.cursor/mcp.json</code>.
+                </p>
+                <CodeBlock label=".cursor/mcp.json" code={cursorConfig(KEY)} />
+              </TabsContent>
+              <TabsContent value="chatgpt" className="mt-4">
+                <p className="text-sm text-muted-foreground">
+                  Developer mode → Settings → Connectors → Create (HTTP). Add <code className="code-inline">Authorization: Bearer {KEY}</code>, or
+                  use the Claude.ai URL with the key in it.
+                </p>
+                <CodeBlock label="connector url" code={MCP_URL} />
+              </TabsContent>
+              <TabsContent value="vscode" className="mt-4">
+                <CodeBlock label=".vscode/mcp.json" code={vscodeConfig(KEY)} />
+              </TabsContent>
+            </Tabs>
 
             <h3 className="mt-8">Check it works</h3>
             <CodeBlock
@@ -237,7 +238,7 @@ export default function DocsMcp() {
             </p>
           </Section>
 
-          <Section id="limits" title="Limits, and being honest about them">
+          <Section id="limits" title="Limits" collapsible>
             <ul>
               <li>
                 Tool calls are per key: 60 a minute. AI-interpreted search draws on a monthly AI token allowance;
@@ -268,7 +269,7 @@ export default function DocsMcp() {
             </ul>
           </Section>
 
-          <Section id="troubleshooting" title="If something goes wrong">
+          <Section id="troubleshooting" title="If something goes wrong" collapsible>
             <ul>
               <li>
                 <strong>"Unknown API key", or a key that "was revoked" or "has expired"</strong> — the whole request is
