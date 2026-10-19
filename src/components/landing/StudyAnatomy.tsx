@@ -70,7 +70,7 @@ export function StudyAnatomy() {
             {samples.map((s) => (
               <li key={s.gsm_id} className="flex items-center gap-2 text-[11.5px]">
                 <span className="font-mono text-muted-foreground w-[86px] shrink-0">{s.gsm_id}</span>
-                <span className="h-2 rounded-sm bg-primary/80" style={{ width: `${((s.n_cells ?? 0) / max) * 60}%` }} />
+                <span className="block h-2 shrink-0 rounded-sm bg-primary" style={{ width: `${((s.n_cells ?? 0) / max) * 60}%` }} />
                 <span className="tabular text-muted-foreground">{fmtInt(s.n_cells ?? 0)}</span>
               </li>
             ))}
