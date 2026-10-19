@@ -454,6 +454,14 @@ export function normalizeGseDetail(raw: unknown): GseDetailResponse {
       submitted_date: strOrNull(s.submitted_date),
       last_updated: str(s.last_updated),
       organism_label: typeof s.organism_label === "string" ? s.organism_label : undefined,
+      usable_samples: numOrNull(s.usable_samples),
+      assessed_samples: numOrNull(s.assessed_samples),
+      unusable_gsm_ids: strArr(s.unusable_gsm_ids),
+      low_qc_samples: num(s.low_qc_samples),
+      low_qc_gsm_ids: strArr(s.low_qc_gsm_ids),
+      removed_samples: num(s.removed_samples),
+      reference_mismatch: s.reference_mismatch === true,
+      reference_mismatch_note: strOrNull(s.reference_mismatch_note),
     },
     meta: m
       ? {
