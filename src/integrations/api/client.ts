@@ -275,6 +275,7 @@ export function normalizeStudyRow(raw: unknown): StudyRow | null {
     bundle_key: strOrNull(r.bundle_key),
     bundle_n_samples: numOrNull(r.bundle_n_samples),
     file_cells: numOrNull(r.file_cells),
+    usable_samples: numOrNull(r.usable_samples),
     low_qc_samples: numOrNull(r.low_qc_samples),
     reference_build: strOrNull(r.reference_build),
     year: numOrNull(r.year),

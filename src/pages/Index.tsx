@@ -82,7 +82,7 @@ const Index = () => {
                 <dd className="font-mono font-medium text-[30px] leading-none text-foreground tabular">
                   {s.value ?? <StatSkeleton />}
                 </dd>
-                <dt className="mt-2 text-[13px] text-muted-foreground lowercase">{s.label}</dt>
+                <dt className="mt-2 text-[13px] text-muted-foreground">{s.label}</dt>
               </div>
             ))}
           </dl>
