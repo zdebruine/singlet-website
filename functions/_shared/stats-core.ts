@@ -24,6 +24,7 @@
  */
 import { SUSPECT_CELLS_SQL, UNVERIFIED_CELLS_SQL, COUNTABLE_CELLS_SQL } from "./suspect-cells";
 import { DOWNLOADABLE_SQL } from "./search-core";
+import { QC_RULES } from "./qc-rules";
 
 /**
  * Distinct species over the normalised `gsm.organism_primary` (the raw GEO
@@ -65,6 +66,10 @@ interface FileStatsRow {
   qc_rows?: number | null;
   usable_all?: number | null;
   awaiting_index?: number | null;
+  qc_removed?: number | null;
+  qc_low?: number | null;
+  qc_low_cells?: number | null;
+  qc_studies_affected?: number | null;
 }
 
 interface CoverageRow {
@@ -105,10 +110,12 @@ export interface CorpusStats {
   files_published: number;
   /** Published files withheld from the headline and from default searches: no usable sample, or a reference/species mismatch. */
   studies_withheld: number;
-  /** Usable samples only: non-empty count matrix AND ≥ 1 called cell. */
+  /** Samples that passed QC: non-empty count matrix, ≥ 1 called cell, and not flagged low QC or removed. */
   samples_in_files: number;
-  /** Called cells in usable samples of downloadable studies. */
+  /** Called cells in those samples, in downloadable studies. */
   cells_in_files: number;
+  /** What singlet's QC did to the catalog; see qc-rules.ts for the thresholds. */
+  qc: QcSummary;
   /** Samples in files whose matrix is empty or that called 0 cells. */
   samples_unusable: number;
   /** Studies with a file but 0 usable samples. */
@@ -117,11 +124,22 @@ export interface CorpusStats {
    * Where every study and sample the catalog knows about stands. The lines add up:
    *   samples_advertised = not_ingested + failed + other + done
    *   done = done_in_files + done_not_in_files
-   *   done_in_files = usable_downloadable + usable_withheld + unusable
+   *   done_in_files = usable_downloadable + usable_withheld + low_qc + removed + unusable
    *   studies_tracked = studies_without_samples + studies_with_samples
    *   studies_published = studies_downloadable + studies_withheld
    */
   accounting: Accounting;
+}
+
+export interface QcSummary {
+  /** Failed runs (almost no reads mapped and almost no genes detected), left out of the catalog. */
+  removed_samples: number;
+  /** Samples flagged low QC: held back from searches, counts and bulk downloads unless the user opts in. */
+  low_qc_samples: number;
+  low_qc_cells: number;
+  /** Studies with at least one removed or low-QC sample. */
+  studies_affected: number;
+  rules: typeof QC_RULES;
 }
 
 export interface Accounting {
@@ -149,9 +167,13 @@ export interface Accounting {
   done_not_in_files: number;
   /** In a file but empty or without called cells. */
   in_files_unusable: number;
-  /** Usable, but in a study that is withheld (no usable sample is in the study's count, or wrong reference). */
+  /** In a file with data, but a failed run: almost no reads mapped and almost no genes detected. Removed. */
+  in_files_removed: number;
+  /** In a file with data, flagged low QC. Left out of counts and default searches. */
+  in_files_low_qc: number;
+  /** Passed QC, but in a study that is withheld (no passing sample is in the study's count, or wrong reference). */
   in_files_usable_withheld: number;
-  /** The headline: usable samples in downloadable studies. */
+  /** The headline: samples that passed QC, in downloadable studies. */
   in_files_usable_downloadable: number;
 }
 
@@ -170,6 +192,9 @@ interface AccountInputs {
   usableAll: number;
   unusable: number;
   usableDownloadable: number;
+  /** Usable samples by QC tier (counted inside usableAll). */
+  removed?: number;
+  lowQc?: number;
 }
 
 /** Splits the corpus into parts that sum to their whole (see Accounting). Counts that cannot be split cleanly are clamped at zero. */
@@ -191,7 +216,9 @@ export function accountFor(a: AccountInputs): Accounting {
     done_in_files: a.qcRows,
     done_not_in_files: nonNeg(a.done - a.qcRows),
     in_files_unusable: a.unusable,
-    in_files_usable_withheld: nonNeg(a.usableAll - a.usableDownloadable),
+    in_files_removed: a.removed ?? 0,
+    in_files_low_qc: a.lowQc ?? 0,
+    in_files_usable_withheld: nonNeg(a.usableAll - (a.removed ?? 0) - (a.lowQc ?? 0) - a.usableDownloadable),
     in_files_usable_downloadable: a.usableDownloadable,
   };
 }
@@ -239,10 +266,14 @@ export async function computeStats(db: D1Database): Promise<CorpusStats | null> 
            (SELECT COUNT(*) FROM gse_meta m WHERE ${DOWNLOADABLE_SQL}) AS studies_with_files,
            (SELECT COUNT(*) FROM bundle_manifest) AS files_published,
            (SELECT COUNT(*) FROM gse_meta m WHERE m.has_bundle = 1 AND NOT ${DOWNLOADABLE_SQL}) AS studies_withheld,
-           (SELECT COUNT(*) FROM sample_qc q WHERE q.usable = 1
+           (SELECT COUNT(*) FROM sample_qc q WHERE q.usable = 1 AND COALESCE(q.qc_tier, 0) = 0
                AND q.gse_id IN (SELECT m.gse_id FROM gse_meta m WHERE ${DOWNLOADABLE_SQL})) AS samples_in_files,
-           (SELECT SUM(COALESCE(q.n_cells_called, 0)) FROM sample_qc q WHERE q.usable = 1
+           (SELECT SUM(COALESCE(q.n_cells_called, 0)) FROM sample_qc q WHERE q.usable = 1 AND COALESCE(q.qc_tier, 0) = 0
                AND q.gse_id IN (SELECT m.gse_id FROM gse_meta m WHERE ${DOWNLOADABLE_SQL})) AS cells_in_files,
+           (SELECT COUNT(*) FROM sample_qc WHERE usable = 1 AND qc_tier = 2) AS qc_removed,
+           (SELECT COUNT(*) FROM sample_qc WHERE usable = 1 AND qc_tier = 1) AS qc_low,
+           (SELECT COALESCE(SUM(n_cells_called), 0) FROM sample_qc WHERE usable = 1 AND qc_tier = 1) AS qc_low_cells,
+           (SELECT COUNT(DISTINCT gse_id) FROM sample_qc WHERE usable = 1 AND qc_tier >= 1) AS qc_studies_affected,
            (SELECT COUNT(*) FROM sample_qc WHERE usable = 0) AS samples_unusable,
            (SELECT COUNT(*) FROM sample_qc) AS qc_rows,
            (SELECT COUNT(*) FROM sample_qc WHERE usable = 1) AS usable_all,
@@ -294,6 +325,13 @@ export async function computeStats(db: D1Database): Promise<CorpusStats | null> 
     studies_withheld: fileStats?.studies_withheld ?? 0,
     samples_in_files: fileStats?.samples_in_files ?? 0,
     cells_in_files: fileStats?.cells_in_files ?? 0,
+    qc: {
+      removed_samples: fileStats?.qc_removed ?? 0,
+      low_qc_samples: fileStats?.qc_low ?? 0,
+      low_qc_cells: fileStats?.qc_low_cells ?? 0,
+      studies_affected: fileStats?.qc_studies_affected ?? 0,
+      rules: QC_RULES,
+    },
     samples_unusable: fileStats?.samples_unusable ?? 0,
     studies_unusable: fileStats?.studies_unusable ?? 0,
     accounting: accountFor({
@@ -311,6 +349,8 @@ export async function computeStats(db: D1Database): Promise<CorpusStats | null> 
       usableAll: fileStats?.usable_all ?? 0,
       unusable: fileStats?.samples_unusable ?? 0,
       usableDownloadable: fileStats?.samples_in_files ?? 0,
+      removed: fileStats?.qc_removed ?? 0,
+      lowQc: fileStats?.qc_low ?? 0,
     }),
   };
 }

@@ -15,6 +15,7 @@
 import type { BundleIndex } from "./bundle-reader";
 import { getBundleIndex, readEntryText, ensureSampleQcTable } from "./bundle-reader";
 import { loadRules, toGroup, organismToScientific } from "./vocab";
+import { qcTier } from "./qc-rules";
 
 /** Minimum compressed exon+intron bytes for a sample to hold a real matrix. */
 export const MIN_MATRIX_BYTES = 400;
@@ -30,6 +31,9 @@ export async function ensureCatalogColumns(db: D1Database): Promise<void> {
     "ALTER TABLE gse_meta ADD COLUMN n_usable_samples INTEGER",
     "ALTER TABLE gse_meta ADD COLUMN reference_mismatch INTEGER",
     "ALTER TABLE gse_meta ADD COLUMN n_usable_cells INTEGER",
+    "ALTER TABLE sample_qc ADD COLUMN qc_tier INTEGER",
+    "ALTER TABLE gse_meta ADD COLUMN n_lowqc_samples INTEGER",
+    "ALTER TABLE gse_meta ADD COLUMN n_lowqc_cells INTEGER",
   ];
   // Each ALTER fails harmlessly with "duplicate column" once applied.
   for (const sql of alters) await db.prepare(sql).run().catch(() => undefined);
@@ -39,8 +43,8 @@ export async function ensureCatalogColumns(db: D1Database): Promise<void> {
   try {
     await db.prepare("CREATE INDEX IF NOT EXISTS idx_sample_qc_usable ON sample_qc(gse_id, usable)").run();
     await db.batch([
-      db.prepare("SELECT matrix_bytes, usable FROM sample_qc LIMIT 0"),
-      db.prepare("SELECT n_usable_samples, reference_mismatch, n_usable_cells FROM gse_meta LIMIT 0"),
+      db.prepare("SELECT matrix_bytes, usable, qc_tier FROM sample_qc LIMIT 0"),
+      db.prepare("SELECT n_usable_samples, reference_mismatch, n_usable_cells, n_lowqc_samples, n_lowqc_cells FROM gse_meta LIMIT 0"),
     ]);
     columnsEnsured = true;
   } catch {
@@ -67,20 +71,23 @@ export function isUsable(matrixBytes: number | null | undefined, cellsCalled: nu
   return Number(matrixBytes ?? 0) > MIN_MATRIX_BYTES && Number(cellsCalled ?? 0) > 0;
 }
 
-/** Write matrix_bytes/usable for every sample_qc row of one study and mark its gse_meta stale. */
+/**
+ * Write matrix_bytes/usable/qc_tier for every sample_qc row of one study and mark its gse_meta stale.
+ * `usable` means the sample has count data; `qc_tier` is the quality verdict from qc-rules.ts.
+ */
 export async function applyUsable(db: D1Database, gse: string, index: Pick<BundleIndex, "entries">): Promise<number> {
   const bytes = matrixBytesByGsm(index);
   const rows = await db
-    .prepare(`SELECT gsm_id, n_cells_called FROM sample_qc WHERE gse_id = ?`)
+    .prepare(`SELECT gsm_id, n_cells_called, median_genes, mapping_rate FROM sample_qc WHERE gse_id = ?`)
     .bind(gse)
-    .all<{ gsm_id: string; n_cells_called: number | null }>();
+    .all<{ gsm_id: string; n_cells_called: number | null; median_genes: number | null; mapping_rate: number | null }>();
   // No rows → nothing changes, so gse_meta is not marked stale either.
   if (!rows.results?.length) return 0;
   const stmts = rows.results.map((r) => {
     const b = bytes.get(r.gsm_id) ?? 0;
     return db
-      .prepare(`UPDATE sample_qc SET matrix_bytes = ?, usable = ? WHERE gsm_id = ?`)
-      .bind(b, isUsable(b, r.n_cells_called) ? 1 : 0, r.gsm_id);
+      .prepare(`UPDATE sample_qc SET matrix_bytes = ?, usable = ?, qc_tier = ? WHERE gsm_id = ?`)
+      .bind(b, isUsable(b, r.n_cells_called) ? 1 : 0, qcTier(r.median_genes, r.mapping_rate), r.gsm_id);
   });
   stmts.push(db.prepare(`UPDATE gse_meta SET n_usable_samples = NULL WHERE gse_id = ?`).bind(gse));
   for (let i = 0; i < stmts.length; i += 100) await db.batch(stmts.slice(i, i + 100));
@@ -346,7 +353,8 @@ export async function recomputeMeta(db: D1Database, gse: string, stamp: string):
   await db
     .prepare(
       `INSERT INTO gse_meta (gse_id, organism_primary, organisms, tissue_groups, disease_groups, assay_families,
-         tissues_raw, cell_types_raw, n_conditions, n_done, n_total, n_cells, has_bundle, year, updated_at, n_usable_samples, n_usable_cells)
+         tissues_raw, cell_types_raw, n_conditions, n_done, n_total, n_cells, has_bundle, year, updated_at, n_usable_samples, n_usable_cells,
+         n_lowqc_samples, n_lowqc_cells)
        SELECT g.id,
          (SELECT organism_primary FROM gsm WHERE gse_id = ?1 AND organism_primary IS NOT NULL GROUP BY organism_primary ORDER BY COUNT(*) DESC LIMIT 1),
          ${distinctJson("organism_primary")}, ${distinctJson("tissue_group")}, ${distinctJson("disease_group")}, ${distinctJson("assay_family")},
@@ -358,15 +366,18 @@ export async function recomputeMeta(db: D1Database, gse: string, stamp: string):
          CASE WHEN g.r2_bundle_key IS NOT NULL AND g.r2_bundle_key != '' THEN 1 ELSE 0 END,
          CAST(substr(g.submitted_date, 1, 4) AS INTEGER),
          ?2,
-         (SELECT COUNT(*) FROM sample_qc WHERE gse_id = ?1 AND usable = 1),
-         (SELECT COALESCE(SUM(n_cells_called), 0) FROM sample_qc WHERE gse_id = ?1 AND usable = 1)
+         (SELECT COUNT(*) FROM sample_qc WHERE gse_id = ?1 AND usable = 1 AND COALESCE(qc_tier, 0) = 0),
+         (SELECT COALESCE(SUM(n_cells_called), 0) FROM sample_qc WHERE gse_id = ?1 AND usable = 1 AND COALESCE(qc_tier, 0) = 0),
+         (SELECT COUNT(*) FROM sample_qc WHERE gse_id = ?1 AND usable = 1 AND qc_tier = 1),
+         (SELECT COALESCE(SUM(n_cells_called), 0) FROM sample_qc WHERE gse_id = ?1 AND usable = 1 AND qc_tier = 1)
        FROM gse g WHERE g.id = ?1
        ON CONFLICT(gse_id) DO UPDATE SET
          organism_primary = excluded.organism_primary, organisms = excluded.organisms, tissue_groups = excluded.tissue_groups,
          disease_groups = excluded.disease_groups, assay_families = excluded.assay_families, tissues_raw = excluded.tissues_raw,
          cell_types_raw = excluded.cell_types_raw, n_done = excluded.n_done, n_total = excluded.n_total, n_cells = excluded.n_cells,
          has_bundle = excluded.has_bundle, year = COALESCE(gse_meta.year, excluded.year), updated_at = excluded.updated_at,
-         n_usable_samples = excluded.n_usable_samples, n_usable_cells = excluded.n_usable_cells`
+         n_usable_samples = excluded.n_usable_samples, n_usable_cells = excluded.n_usable_cells,
+         n_lowqc_samples = excluded.n_lowqc_samples, n_lowqc_cells = excluded.n_lowqc_cells`
     )
     .bind(gse, stamp)
     .run();

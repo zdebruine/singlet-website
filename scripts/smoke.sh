@@ -114,6 +114,17 @@ for u in "/" "/api/stats" "/sitemap.xml"; do
   done
 done
 
+# QC: the stats report what was removed and flagged, and the opt-in only ever adds studies.
+fetch "$BASE/api/stats"
+qc_removed=$(printf '%s' "$body" | tr -d ' \r\n' | grep -o '"removed_samples":[0-9]*' | head -n 1 | grep -o '[0-9]*$')
+qc_low=$(printf '%s' "$body" | tr -d ' \r\n' | grep -o '"low_qc_samples":[0-9]*' | head -n 1 | grep -o '[0-9]*$')
+if [ -n "$qc_removed" ] && [ -n "$qc_low" ]; then ok "stats report QC (removed $qc_removed, low QC $qc_low)"; else bad "stats carry no qc block"; fi
+fetch "$BASE/api/search?limit=1"
+qc_def=$(printf '%s' "$body" | tr -d ' \r\n' | grep -o '"totals":{"studies":[0-9]*' | grep -o '[0-9]*$')
+fetch "$BASE/api/search?limit=1&include_low_qc=1"
+qc_inc=$(printf '%s' "$body" | tr -d ' \r\n' | grep -o '"totals":{"studies":[0-9]*' | grep -o '[0-9]*$')
+if [ -n "$qc_def" ] && [ -n "$qc_inc" ] && [ "$qc_inc" -ge "$qc_def" ]; then ok "include_low_qc never shrinks results ($qc_def -> $qc_inc studies)"; else bad "include_low_qc search ($qc_def -> ${qc_inc:-?})"; fi
+
 # The numbers on the home page and in search count the same thing.
 fetch "$BASE/api/stats"
 st_studies=$(printf '%s' "$body" | grep -o '"studies_with_files": *[0-9]*' | head -n 1 | grep -o '[0-9]*$')

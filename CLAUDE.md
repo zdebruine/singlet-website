@@ -24,8 +24,11 @@ either back.
   once to production (`wrangler d1 execute singlet-catalog --remote --file=schema/NNN_x.sql` or the
   Cloudflare D1 connector) **before** merging code that uses them. `010_accounts.sql` and `011_product.sql`
   are applied.
-- "Downloadable" = `DOWNLOADABLE_SQL` in `functions/_shared/search-core.ts`: has a file, at least one usable
-  sample (`sample_qc.usable`: matrix bytes > 400 and cells called > 0), no species/reference mismatch.
+- "Downloadable" = `DOWNLOADABLE_SQL` in `functions/_shared/search-core.ts`: has a file, at least one sample that passed QC
+  (`sample_qc.usable`: matrix bytes > 400 and cells called > 0, and `qc_tier = 0`), no species/reference mismatch.
+- Sample QC (`functions/_shared/qc-rules.ts`, `docs/QC.md`): tier 1 = low QC (median genes < 30 or mapping < 20%), tier 2 =
+  removed (mapping < 5% and genes < 10). `gse_meta.n_usable_*` count tier 0 only, so everything on `DOWNLOADABLE_SQL` leaves low-QC
+  samples out by default; `include_low_qc=1` adds tier 1 back, tier 2 never counts. Say "low QC" in copy, never "junk".
   Headline numbers count what a visitor can download: studies passing `DOWNLOADABLE_SQL` (`studies_with_files`), their usable samples and the cells called in them (`/api/stats` samples_in_files, cells_in_files). `files_published` is every file, `studies_withheld` the difference. Default searches total on the same basis (`totals.basis = "file"`), and `accounting` places every sample in exactly one bucket; label
   catalog metadata as such.
 - The catalog crank (`/api/ingest/refresh-next`, `/api/ingest/index-next`) is idempotent and runs every 3 h

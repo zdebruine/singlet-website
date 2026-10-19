@@ -22,7 +22,11 @@ export function metaLine(r: StudyRow): string[] {
   parts.push(r.organism_label || "Unknown organism");
   if (r.tissue_groups.length) parts.push(r.tissue_groups.slice(0, 2).join(", ") + (r.tissue_groups.length > 2 ? " +" + (r.tissue_groups.length - 2) : ""));
   if (r.assay_families.length) parts.push(r.assay_families.slice(0, 2).join(", "));
-  parts.push(r.bundle_n_samples != null ? `${fmtInt(r.bundle_n_samples)} samples in file` : `${fmtInt(r.n_done)} samples (catalog)`);
+  parts.push(
+    r.has_bundle && r.usable_samples != null
+      ? `${fmtInt(r.usable_samples)} ${r.usable_samples === 1 ? "sample" : "samples"} passed QC`
+      : r.bundle_n_samples != null ? `${fmtInt(r.bundle_n_samples)} samples in file` : `${fmtInt(r.n_done)} samples (catalog)`
+  );
   parts.push(r.file_cells != null ? `${fmtCompact(r.file_cells)} cells (file)` : `${fmtCompact(r.n_cells)} cells (catalog)`);
   if (r.year) parts.push(String(r.year));
   return parts;
@@ -118,6 +122,11 @@ export function StudyCard({ row, selected, onToggle, ai, why, aiWhy }: Props) {
                 {p}
               </span>
             ))}
+            {row.has_bundle && !!row.low_qc_samples && (
+              <span className="ml-1.5 inline-flex items-center gap-1 text-warning" title="singlet's QC algorithms detected an issue with these samples. It is recommended to proceed with caution. They are left out of counts and bulk downloads unless low-QC samples are included.">
+                <AlertTriangle size={12} /> {fmtInt(row.low_qc_samples)} low QC
+              </span>
+            )}
             {row.suspect_cells && (
               <span className="ml-1.5 inline-flex items-center gap-1 text-warning" title="Cell counts for some plate-based samples in this study are implausible and are under review.">
                 <AlertTriangle size={12} /> flagged counts

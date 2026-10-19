@@ -132,7 +132,7 @@ export function StudyTable({ rows, selectedIds, onToggle, onTogglePage, sort, on
                   {r.assay_families.join(", ") || "—"}
                 </td>
                 <td className="num whitespace-nowrap align-top">
-                  {r.bundle_n_samples != null ? <>{fmtInt(r.bundle_n_samples)} <span className="text-muted-foreground">file</span></> : <>{fmtInt(r.n_done)} <span className="text-muted-foreground">(catalog)</span></>}
+                  {r.has_bundle && r.usable_samples != null ? <>{fmtInt(r.usable_samples)} <span className="text-muted-foreground">passed QC</span>{!!r.low_qc_samples && <span className="text-warning" title="Samples flagged low QC"> +{fmtInt(r.low_qc_samples)} low</span>}</> : r.bundle_n_samples != null ? <>{fmtInt(r.bundle_n_samples)} <span className="text-muted-foreground">file</span></> : <>{fmtInt(r.n_done)} <span className="text-muted-foreground">(catalog)</span></>}
                 </td>
                 <td className="num whitespace-nowrap align-top">
                   {r.suspect_cells && <AlertTriangle size={11} className="inline mr-1 text-warning" aria-label="Some counts flagged" />}

@@ -114,6 +114,7 @@ const TOOLS = [
         assay: { type: "array", items: { type: "string", enum: ASSAY_FAMILIES as unknown as string[] }, description: "Extra canonical assay families." },
         min_cells: { type: "integer", minimum: 0, description: "Only studies/samples with at least this many cells." },
         include_unbuilt: { type: "boolean", default: false, description: "Also return studies whose .singlet file is not built yet." },
+        include_low_qc: { type: "boolean", default: false, description: "Also count and return samples singlet's QC flagged (few genes detected or few reads mapped). Left out by default; proceed with caution if you include them." },
       },
       required: ["query"],
       additionalProperties: false,
@@ -243,6 +244,7 @@ const TOOLS = [
           additionalProperties: false,
         },
         gse_ids: { type: "array", items: { type: "string", pattern: "^GSE\\d+$" }, description: "Explicit accessions; overrides query and filters." },
+        include_low_qc: { type: "boolean", default: false, description: "Also list studies whose only usable samples are flagged low QC. Left out by default." },
         format: { type: "string", enum: MANIFEST_FORMATS as unknown as string[], default: "tsv" },
       },
       required: ["format"],
@@ -512,6 +514,7 @@ function studySummary(r: StudyRow, why: string) {
     file_cells: r.file_cells,
     reference_build: r.reference_build,
     usable_samples: r.usable_samples ?? null,
+    low_qc_samples: r.low_qc_samples ?? null,
     reference_mismatch: r.reference_mismatch ?? false,
     match: r.match,
     why,
@@ -582,6 +585,7 @@ async function searchDatasets(
   for (const v of strArray(args.assay)) url.searchParams.append("assay_family", v);
   if (args.min_cells != null && Number.isFinite(Number(args.min_cells))) url.searchParams.set("min_cells", String(Math.max(0, Math.floor(Number(args.min_cells)))));
   if (args.include_unbuilt === true) url.searchParams.set("has_bundle", "0");
+  if (args.include_low_qc === true) url.searchParams.set("include_low_qc", "1");
 
   const r = await nlSearch(env, identity, waitUntil, url);
   if (!r.ok) return toolError(r.message, { error: r.error });
@@ -686,6 +690,7 @@ function studyText(d: StudyDetail): string {
   if (s.bundle_url && s.usable_samples === 0) lines.push("⚠ This file currently contains no usable count data (empty matrices or 0 called cells).");
   else if (s.usable_samples != null && s.assessed_samples != null && s.usable_samples < s.assessed_samples)
     lines.push(`⚠ ${s.assessed_samples - s.usable_samples} of ${s.assessed_samples} samples in the file have no count data: ${s.unusable_gsm_ids.join(", ")}.`);
+  if (s.low_qc_samples) lines.push(`⚠ ${s.low_qc_samples} of the samples in this file are flagged low QC (${s.low_qc_gsm_ids.join(", ")}). singlet's QC algorithms detected an issue with them; proceed with caution.`);
   if (s.reference_mismatch_note) lines.push(`⚠ ${s.reference_mismatch_note}`);
   lines.push(`Load: singlet.load("${s.id}")  /  R: load("${s.id}")`);
   lines.push(`${SITE}/study/${s.id}`);
@@ -788,7 +793,8 @@ async function getAtlasStats(env: Env) {
   // is in the published files, usable samples only. Catalog numbers follow,
   // labelled as such.
   const text = [
-    `In published files: ${fmt(s.studies_with_files)} studies · ${fmt(s.samples_in_files)} usable samples · ${fmt(s.cells_in_files)} cells called`,
+    `In published files: ${fmt(s.studies_with_files)} studies · ${fmt(s.samples_in_files)} samples that passed QC · ${fmt(s.cells_in_files)} cells called`,
+    `QC: ${fmt(s.qc.removed_samples)} failed samples removed and ${fmt(s.qc.low_qc_samples)} flagged low QC (left out of every count and of searches unless include_low_qc is set)`,
     `Catalog metadata: ${fmt(s.series_count)} studies · ${fmt(s.success_samples)} samples processed (of ${fmt(s.total_samples)} ingested) · ${fmt(s.total_cells)} cells recorded · ${fmt(s.species_count)} species`,
     s.avg_mapping_rate != null ? `Catalog means: mapping rate ${(s.avg_mapping_rate * 100).toFixed(1)}% · median genes per cell ${fmt(s.avg_median_genes)}` : null,
     s.failure_categories.length ? `Most common failure reasons: ${s.failure_categories.slice(0, 5).map((f) => `${f.value} (${fmt(f.count)})`).join(", ")}` : null,

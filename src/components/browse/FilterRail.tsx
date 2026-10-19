@@ -1,4 +1,5 @@
 import { useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { Link } from "react-router-dom";
 import { ChevronRight, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { fmtInt, organismLabel } from "@/lib/catalog-display";
@@ -28,6 +29,7 @@ interface Props {
   onMinCells: (n: number | null) => void;
   onYear: (min: number | null, max: number | null) => void;
   onBundle: (only: boolean) => void;
+  onLowQc: (include: boolean) => void;
   onFileSamples: (n: number | null) => void;
   onFileCells: (n: number | null) => void;
   onFileSize: (n: number | null) => void;
@@ -239,6 +241,7 @@ export function FilterRail({
   onMinCells,
   onYear,
   onBundle,
+  onLowQc,
   onFileSamples,
   onFileCells,
   onFileSize,
@@ -401,6 +404,21 @@ export function FilterRail({
         </label>
         <p className="mt-1.5 text-[11px] text-muted-foreground leading-snug">
           Off also shows {level === "gse" ? "studies" : "samples"} that were catalogued but whose <span className="font-mono">.singlet</span> file has not been built yet.
+        </p>
+      </Section>
+      <Section title="Quality control">
+        <label className="flex items-start gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={current.include_low_qc ?? false}
+            onChange={(e) => onLowQc(e.target.checked)}
+            className="h-3.5 w-3.5 mt-0.5 shrink-0 rounded-[2px]"
+          />
+          <span className="text-[13px] text-foreground/90 leading-snug">Include low-QC samples</span>
+        </label>
+        <p className="mt-1.5 text-[11px] text-muted-foreground leading-snug">
+          singlet's QC flags samples where few genes were detected or few reads mapped. They are left out of results, counts and bulk downloads unless you include them.{" "}
+          <Link to="/about#qc" className="underline underline-offset-2 hover:text-foreground">How QC works</Link>
         </p>
       </Section>
       {level === "gse" && (

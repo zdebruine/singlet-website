@@ -477,7 +477,9 @@ if (singlet_has(path, "donor_assignments", gsm))
                 <Mono>GET /api/manifest</Mono> takes the same filters as <Mono>/api/search</Mono> (organism,
                 tissue_group, disease_group, assay_family, cell_type, q, min_cells, year_min/max, has_bundle) and
                 returns every matching study — up to 2,000 — as a manifest or a ready-to-run download script, chosen
-                with <Mono>format=</Mono>:
+                with <Mono>format=</Mono>. Studies whose only samples are flagged low QC are left out; add{" "}
+                <Mono>include_low_qc=1</Mono> to include them (<Link to="/about#qc">how QC works</Link>). Each row reports{" "}
+                <Mono>n_samples_passing_qc</Mono> and <Mono>n_samples_low_qc</Mono>:
               </p>
               <table>
                 <thead>

@@ -214,6 +214,7 @@ const Browse = () => {
   const onMinCells = (n: number | null) => go({ ...explicitBase(), min_cells: n });
   const onYear = (min: number | null, max: number | null) => go({ ...explicitBase(), year_min: min, year_max: max });
   const onBundle = (only: boolean) => go({ ...explicitBase(), has_bundle: only });
+  const onLowQc = (include: boolean) => go({ ...explicitBase(), include_low_qc: include });
   const onBoolean = (field: "has_pubmed" | "has_conditions", value: boolean | null) => go({ ...explicitBase(), [field]: value });
   const onRemove = (field: string, value: string) => go(withoutFilter(explicitBase(), field, value));
   const onClear = () => go({ ...DEFAULT_STATE, level: state.level, view: state.view });
@@ -365,6 +366,7 @@ const Browse = () => {
                 onMinCells={onMinCells}
                 onYear={onYear}
                 onBundle={onBundle}
+                onLowQc={onLowQc}
                  onFileSamples={(n) => go({ ...explicitBase(), min_file_samples: n })}
                  onFileCells={(n) => go({ ...explicitBase(), min_file_cells: n })}
                  onFileSize={(n) => go({ ...explicitBase(), max_file_bytes: n })}

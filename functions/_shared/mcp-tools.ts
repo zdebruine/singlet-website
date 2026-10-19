@@ -18,6 +18,7 @@ import { normalizeFilters, parseSearchParams, type Ctx } from "./search-core";
 import { MODALITIES, resolveModalities } from "./modalities";
 import { loadRules, organismToCommon } from "./vocab";
 import { safeList } from "./json";
+import { QC_LOW_MESSAGE, QC_RULES, qcReasons, qcStatus } from "./qc-rules";
 
 export const SITE = "https://singlet.bio";
 export const ACCOUNT_URL = `${SITE}/account`;
@@ -116,6 +117,8 @@ export async function getSampleQc(ctx: SampleQcArgs, args: Record<string, unknow
     median_mito_fraction: s.median_mito_fraction || null,
     sequencing_saturation: s.sequencing_saturation || null,
     input_reads_capped: s.n_input_reads === 30_000_000,
+    qc_status: qcStatus(s.median_genes, s.mapping_rate),
+    qc_reasons: qcReasons(s.median_genes, s.mapping_rate),
   }));
   if (!rows.length) return toolError(`None of those GSM ids are in ${gse}'s file. Samples present: ${samples.map((s) => s.gsm_id).join(", ")}.`);
 
@@ -128,7 +131,11 @@ export async function getSampleQc(ctx: SampleQcArgs, args: Record<string, unknow
       warnings.push({ gsm_id: r.gsm_id, issue: `${mapping.toFixed(1)}% uniquely mapped (< ${LOW_MAPPING_PCT}%)` });
   }
 
+  const flagged = rows.filter((r) => r.qc_status === "low_qc");
+  const removedRows = rows.filter((r) => r.qc_status === "removed");
   const totals = {
+    n_low_qc: flagged.length,
+    n_removed: removedRows.length,
     n_samples: rows.length,
     n_samples_in_file: samples.length,
     total_cells_called: rows.reduce((n, r) => n + (r.n_cells_called ?? 0), 0),
@@ -151,8 +158,12 @@ export async function getSampleQc(ctx: SampleQcArgs, args: Record<string, unknow
   lines.push("");
   for (const r of rows) {
     lines.push(
-      `- ${r.gsm_id}: ${fmt(r.n_cells_called)} cells · ${fmt(r.median_umi)} UMI · ${fmt(r.median_genes)} genes · ${r.uniquely_mapped_pct ?? "—"}% uniquely mapped · ${r.median_mito_pct ?? "—"}% mito · ${r.fraction_reads_in_cells_pct ?? "—"}% reads in cells · ${fmt(r.n_input_reads)} input reads`
+      `- ${r.qc_status === "low_qc" ? "⚠ LOW QC " : r.qc_status === "removed" ? "✗ REMOVED " : ""}${r.gsm_id}: ${fmt(r.n_cells_called)} cells · ${fmt(r.median_umi)} UMI · ${fmt(r.median_genes)} genes · ${r.uniquely_mapped_pct ?? "—"}% uniquely mapped · ${r.median_mito_pct ?? "—"}% mito · ${r.fraction_reads_in_cells_pct ?? "—"}% reads in cells · ${fmt(r.n_input_reads)} input reads`
     );
+  }
+  if (flagged.length || removedRows.length) {
+    lines.push("");
+    lines.push(`QC: ${flagged.length} flagged low QC, ${removedRows.length} removed. ${QC_LOW_MESSAGE} (${flagged.map((r) => `${r.gsm_id}: ${r.qc_reasons.join("; ")}`).join(" | ") || "none flagged"}). Removed samples are failed runs that stay in the file but are not counted anywhere on singlet.bio.`);
   }
   if (warnings.length) {
     lines.push("");
@@ -167,6 +178,7 @@ export async function getSampleQc(ctx: SampleQcArgs, args: Record<string, unknow
     totals,
     warnings,
     thresholds: { low_cells: LOW_CELLS, low_uniquely_mapped_pct: LOW_MAPPING_PCT },
+    qc_rules: QC_RULES,
     study_url: `${SITE}/study/${gse}`,
   });
 }
@@ -445,6 +457,7 @@ export async function exportManifest(
     if (f.min_cells != null && Number.isFinite(Number(f.min_cells))) url.searchParams.set("min_cells", String(Math.floor(Number(f.min_cells))));
     if (f.year_min != null && Number.isFinite(Number(f.year_min))) url.searchParams.set("year_min", String(Math.floor(Number(f.year_min))));
     if (f.year_max != null && Number.isFinite(Number(f.year_max))) url.searchParams.set("year_max", String(Math.floor(Number(f.year_max))));
+    if (args.include_low_qc === true) url.searchParams.set("include_low_qc", "1");
 
     const rules = await loadRules(env.DB, waitUntil);
     const { filters } = normalizeFilters(parseSearchParams(url), rules);

@@ -34,7 +34,7 @@ const Index = () => {
   // numbers live on /about under "Catalog metadata".
   const statItems = [
     { value: stats ? fmtInt(stats.studies_with_files) : null, label: "downloadable studies" },
-    { value: stats ? fmtInt(stats.samples_in_files) : null, label: "usable samples in files" },
+    { value: stats ? fmtInt(stats.samples_in_files) : null, label: "samples that passed QC" },
     { value: stats ? fmtCompact(stats.cells_in_files) : null, label: "cells called in files" },
   ];
 
@@ -82,14 +82,43 @@ const Index = () => {
                 <dd className="font-mono font-medium text-[30px] leading-none text-foreground tabular">
                   {s.value ?? <StatSkeleton />}
                 </dd>
-                <dt className="mt-2 text-[13px] text-muted-foreground lowercase">{s.label}</dt>
+                <dt className="mt-2 text-[13px] text-muted-foreground">{s.label}</dt>
               </div>
             ))}
           </dl>
           <p className="mt-2.5 text-center text-[12px] text-muted-foreground">
-            Counted from the published files; samples with an empty matrix or no called cells are left out.{" "}
+            Counted from the published files after QC; empty, failed and low-QC samples are left out.{" "}
             <Link to="/about#status" className="text-primary hover:underline">Catalog numbers →</Link>
           </p>
+        </section>
+
+        {/* ── Quality control ── */}
+        <section className="container-site pb-14" aria-labelledby="qc-h">
+          <div className="mx-auto max-w-[900px] surface p-6 md:p-8">
+            <p className="type-mono text-primary">Quality control</p>
+            <h2 id="qc-h" className="type-h2 mt-2">We clean the data before you see it</h2>
+            <p className="mt-3 type-small text-muted-foreground max-w-[64ch]">
+              Public single-cell data is uneven: some samples never aligned and carry almost no signal. singlet measures every sample
+              and acts on it. Failed runs are removed. Samples with an issue are flagged low QC, kept out of searches, counts and bulk
+              downloads by default, and one click away if you want them.
+            </p>
+            <dl className="mt-5 grid sm:grid-cols-3 gap-4">
+              {[
+                { value: stats ? fmtInt(stats.qc.removed_samples) : null, label: "failed samples removed", note: "almost no reads mapped, almost no genes detected" },
+                { value: stats ? fmtInt(stats.qc.low_qc_samples) : null, label: "samples flagged low QC", note: "few genes detected or few reads mapped; left out by default" },
+                { value: stats ? fmtInt(stats.qc.studies_affected) : null, label: "studies checked and cleaned", note: "with at least one removed or flagged sample" },
+              ].map((s) => (
+                <div key={s.label}>
+                  <dd className="font-mono font-medium text-[26px] leading-none text-foreground tabular">{s.value ?? <StatSkeleton />}</dd>
+                  <dt className="mt-2 text-[13px] text-foreground">{s.label}</dt>
+                  <p className="mt-0.5 text-[12px] text-muted-foreground">{s.note}</p>
+                </div>
+              ))}
+            </dl>
+            <p className="mt-5 text-[13px]">
+              <Link to="/about#qc" className="text-primary hover:underline">How QC works →</Link>
+            </p>
+          </div>
         </section>
 
         {/* ── Start from ── */}
