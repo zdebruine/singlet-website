@@ -6,7 +6,7 @@ import { createTestD1 } from "./helpers/d1-sqlite";
 // Runs the real export SQL, FTS included: a text query once failed in production with "no such column: score"
 // while a string-level check of the rewritten SQL passed.
 const SCHEMA = `
-CREATE TABLE gse (id TEXT PRIMARY KEY, title TEXT, abstract TEXT, n_gsm_total INTEGER, n_gsm_failed INTEGER, r2_bundle_bytes INTEGER, r2_bundle_key TEXT);
+CREATE TABLE gse (id TEXT PRIMARY KEY, title TEXT, abstract TEXT, n_gsm_total INTEGER, n_gsm_failed INTEGER, r2_bundle_bytes INTEGER, r2_bundle_key TEXT, pubmed_ids TEXT);
 CREATE TABLE gsm (gsm_id TEXT PRIMARY KEY, gse_id TEXT, status TEXT, n_cells INTEGER);
 CREATE TABLE gse_meta (gse_id TEXT PRIMARY KEY, organism_primary TEXT, organisms TEXT, tissue_groups TEXT, disease_groups TEXT,
                        assay_families TEXT, tissues_raw TEXT, cell_types_raw TEXT, n_conditions INTEGER, n_done INTEGER, n_total INTEGER,

@@ -69,6 +69,8 @@ export interface StudyRow {
   bundle_n_samples: number | null;
   file_cells: number | null;
   reference_build: string | null;
+  /** PubMed ids of the study's publications. */
+  pubmed_ids: string[];
   usable_samples?: number | null;
   /** Samples in the file that singlet's QC flagged (low QC); not part of usable_samples. */
   low_qc_samples?: number | null;
@@ -434,6 +436,15 @@ export interface StudyMeta {
   n_cells: number;
   has_bundle: boolean;
   year: number | null;
+}
+
+/** A named folder of studies owned by the signed-in user. */
+export interface Library {
+  id: string;
+  name: string;
+  gse_ids: string[];
+  created_at: string;
+  updated_at: string;
 }
 
 export type ExclusionClass = "not_processable" | "retry" | "qc" | "queued";

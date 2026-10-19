@@ -7,6 +7,8 @@ import Footer from "@/components/Footer";
 import { DownloadPanel } from "@/components/DownloadPanel";
 import { ConditionsPanel, type ConditionFilter } from "@/components/study/ConditionsPanel";
 import { StudySamplesTable } from "@/components/study/StudySamplesTable";
+import { AddToLibraryMenu } from "@/components/library/AddToLibraryMenu";
+import { FeedbackButton } from "@/components/FeedbackDialog";
 import CompletenessPanel from "@/components/study/CompletenessPanel";
 import { CiteDialog } from "@/components/study/CiteDialog";
 import { FileTreePanel } from "@/components/study/FileTreePanel";
@@ -60,7 +62,7 @@ function Shell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <Navbar />
-      <main className="container-site flex-1 py-8 md:py-10">{children}</main>
+      <main className="container-site flex-1 py-4 md:py-5">{children}</main>
       <Footer />
     </div>
   );
@@ -319,17 +321,6 @@ const StudyDetail = () => {
   } = derived;
   const hasQc = avgMR != null || medGenes != null;
 
-  const metaLine: string[] = [
-    organismLabelList(organisms) || "Unknown organism",
-    ...(tissueGroups.length ? [tissueGroups.slice(0, 2).join(", ") + (tissueGroups.length > 2 ? ` +${tissueGroups.length - 2}` : "")] : []),
-    ...(assays.length ? [assays.slice(0, 2).join(", ")] : []),
-    `${fmtInt(processed.length)} / ${fmtInt(samples.length)} samples`,
-    totalCells > 0 ? `${fmtCompact(totalCells)} cells (catalog)` : flagged > 0 ? "cell count under review" : "no cells",
-    ...(fileCells != null ? [`${fmtCompact(fileCells)} cells in file`] : []),
-
-    ...(year ? [String(year)] : []),
-  ];
-
   const facts: { label: string; value: React.ReactNode; title?: string }[] = [
     { label: "Organism", value: organismLabelList(organisms) || "—", title: organisms.join(", ") },
     {
@@ -347,13 +338,15 @@ const StudyDetail = () => {
       label: "Samples",
       value: (
         <>
-          {fmtInt(processed.length)} processed
+          {fmtInt(processed.length)}
           {failed.length > 0 && <span className="text-muted-foreground font-normal"> · {fmtInt(failed.length)} failed</span>}
         </>
       ),
       title: geoTotal > samples.length ? `${samples.length} of ${geoTotal} GEO samples are catalogued` : `${samples.length} samples`,
     },
-    {
+    ...(fileCells != null
+      ? []
+      : [{
       label: "Cells (catalog)",
       value:
 
@@ -375,32 +368,25 @@ const StudyDetail = () => {
         flagged > 0
           ? `${flagged} of ${processed.length} processed samples report implausible cell counts (a known plate-based pipeline issue). They are excluded from this total.`
           : "Cell counts as recorded in the catalog metadata, not the cells called in the published file.",
-    },
+    }]),
     ...(fileCells != null
       ? [
           {
-            label: "Cells (file)",
+            label: "Cells",
             value: fmtCompact(fileCells),
-            title: "Sum of cells called in the published .singlet file, from its per-sample QC summaries.",
+            title: `Cells called in the published .singlet file, from its per-sample QC summaries. The catalog metadata records ${fmtCompact(totalCells)}.`,
           },
         ]
       : []),
 
     // QC tiles only for metrics that were actually recorded; a study with none
     // gets one sentence instead (below the grid), never an em-dash tile.
-    ...(avgMR != null ? [{ label: "Mean mapping rate", value: fmtPct(avgMR) }] : []),
-    ...(medGenes != null ? [{ label: "Median genes / cell", value: fmtInt(medGenes) }] : []),
+    ...(avgMR != null ? [{ label: "Mapped", value: fmtPct(avgMR), title: "Mean mapping rate across samples" }] : []),
+    ...(medGenes != null ? [{ label: "Genes / cell", value: fmtInt(medGenes), title: "Median genes per cell" }] : []),
   ];
 
   return (
     <Shell>
-      {/* Breadcrumb */}
-      <nav className="text-[13px] text-muted-foreground mb-5" aria-label="Breadcrumb">
-        <Link to="/browse" className="hover:text-foreground">Browse</Link>
-        <span className="mx-2">/</span>
-        <span className="font-mono text-foreground">{gseId}</span>
-      </nav>
-
       {/* Header */}
       {series.bundle_url && usableCount === 0 && (
         <div role="alert" className="mb-4 border border-destructive/40 bg-destructive/10 text-destructive px-4 py-3 text-[14px] font-medium" style={{ borderRadius: 3 }}>
@@ -412,13 +398,21 @@ const StudyDetail = () => {
           {series.reference_mismatch_note}
         </div>
       )}
-      <header className="mb-6">
-        <div className="flex items-center gap-3 flex-wrap text-[13px]">
+      <header className="mb-3">
+        <div className="flex items-center gap-x-3 gap-y-1 flex-wrap text-[13px]">
+          <Link to="/browse" className="text-muted-foreground hover:text-foreground" aria-label="Back to Browse">
+            ← Browse
+          </Link>
           <span className="font-mono text-[15px] font-semibold text-primary">{gseId}</span>
+          {year && <span className="font-mono text-muted-foreground">{year}</span>}
           <a href={GEO(gseId)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-muted-foreground hover:text-primary">
             View on GEO <ExternalLink size={11} />
           </a>
           <CiteDialog gseId={gseId} title={series.title} year={year} pubmedIds={series.pubmed_ids} doi={series.doi} />
+          <AddToLibraryMenu gseIds={[gseId]} label="Library" />
+          <FeedbackButton category="data" prefill={`About ${gseId}: `} className="inline-flex items-center gap-1 text-muted-foreground hover:text-primary">
+            Report a problem
+          </FeedbackButton>
           {series.reference_build && (
             <span className="text-muted-foreground">
               Reference: <span className="font-mono">{series.reference_build}</span>
@@ -443,15 +437,7 @@ const StudyDetail = () => {
             </span>
           )}
         </div>
-        <h1 className="mt-1.5 text-[24px] md:text-[28px] font-semibold tracking-tight leading-snug max-w-[900px]">{series.title ?? "Untitled study"}</h1>
-        <p className="mt-2 text-[14px] text-muted-foreground tabular">
-          {metaLine.map((p, i) => (
-            <span key={i}>
-              {i > 0 && <span className="mx-1.5 text-border-strong">·</span>}
-              {p}
-            </span>
-          ))}
-        </p>
+        <h1 className="mt-1 text-[20px] md:text-[22px] font-semibold tracking-tight leading-snug max-w-[900px]">{series.title ?? "Untitled study"}</h1>
       </header>
 
       <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-8 items-start">
@@ -460,11 +446,11 @@ const StudyDetail = () => {
           <CompletenessPanel c={data.completeness} />
 
           {/* Facts */}
-          <dl className={cn("grid grid-cols-2 md:grid-cols-4 gap-2", hasQc || processed.length === 0 ? "mb-6" : "mb-2")}>
+          <dl className={cn("grid grid-cols-[repeat(auto-fit,minmax(128px,1fr))] gap-1.5", hasQc || processed.length === 0 ? "mb-4" : "mb-2")}>
             {facts.map((f) => (
-              <div key={f.label} className="surface px-3.5 py-3 min-w-0">
-                <dt className="text-[11px] uppercase tracking-wider text-muted-foreground mb-1">{f.label}</dt>
-                <dd className="text-sm font-medium text-foreground leading-snug line-clamp-2" title={f.title ?? (typeof f.value === "string" ? f.value : undefined)}>
+              <div key={f.label} className="surface px-2.5 py-1.5 min-w-0">
+                <dt className="text-[10.5px] uppercase tracking-wider text-muted-foreground">{f.label}</dt>
+                <dd className="text-[13px] font-medium text-foreground leading-snug truncate" title={f.title ?? (typeof f.value === "string" ? f.value : undefined)}>
                   {f.value}
                 </dd>
               </div>

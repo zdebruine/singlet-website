@@ -49,11 +49,15 @@ import {
 import { FilterRail } from "@/components/browse/FilterRail";
 import { ActiveFiltersRow } from "@/components/browse/ActiveFiltersRow";
 import { StudyCard, StudyCardSkeleton } from "@/components/browse/StudyCard";
-import { StudyTable } from "@/components/browse/StudyTable";
-import { SampleTable } from "@/components/browse/SampleTable";
+import { StudyTable, STUDY_COLUMNS } from "@/components/browse/StudyTable";
+import { SampleTable, SAMPLE_COLUMNS } from "@/components/browse/SampleTable";
+import { ColumnsMenu, useColumnVisibility } from "@/components/browse/columns";
 import { SelectionBar } from "@/components/browse/SelectionBar";
 import { EmptyState } from "@/components/browse/EmptyState";
 import { ExportMenu } from "@/components/browse/ExportMenu";
+import { LibrarySection } from "@/components/library/LibrarySection";
+import { AddToLibraryMenu } from "@/components/library/AddToLibraryMenu";
+import { FeedbackButton } from "@/components/FeedbackDialog";
 import { useSelection } from "@/components/browse/useSelection";
 
 type Result = SearchResponse | NlSearchResponse;
@@ -67,11 +71,14 @@ function Segmented<T extends string>({
   options,
   onChange,
   ariaLabel,
+  iconOnly,
 }: {
   value: T;
   options: { value: T; label: string; icon?: React.ReactNode }[];
   onChange: (v: T) => void;
   ariaLabel: string;
+  /** Show only the icons; the label stays as the tooltip and accessible name. */
+  iconOnly?: boolean;
 }) {
   return (
     <div className="inline-flex rounded border border-border overflow-hidden" role="group" aria-label={ariaLabel}>
@@ -80,6 +87,8 @@ function Segmented<T extends string>({
           key={o.value}
           type="button"
           aria-pressed={value === o.value}
+          aria-label={iconOnly ? o.label : undefined}
+          title={iconOnly ? o.label : undefined}
           onClick={() => onChange(o.value)}
           className={cn(
             "inline-flex items-center gap-1.5 h-8 px-2.5 text-[12.5px] font-medium transition-colors border-r border-border last:border-r-0",
@@ -87,7 +96,7 @@ function Segmented<T extends string>({
           )}
         >
           {o.icon}
-          {o.label}
+          {!iconOnly && o.label}
         </button>
       ))}
     </div>
@@ -99,6 +108,8 @@ const Browse = () => {
   const navigate = useNavigate();
   const state = useMemo(() => parseBrowseState(sp), [sp]);
   const aiMode = isAiMode(state);
+  const studyCols = useColumnVisibility("singlet:cols:studies", STUDY_COLUMNS);
+  const sampleCols = useColumnVisibility("singlet:cols:samples", SAMPLE_COLUMNS);
   const [mine, setMine] = useState(false);
   const { user, openSignIn } = useAuth();
   const privateResult = useQuery({
@@ -355,6 +366,7 @@ const Browse = () => {
           <div id="browse-filters" ref={railRef} role="dialog" aria-modal={railOpen || undefined} aria-label="Search filters" className={cn("fixed inset-y-0 left-0 z-40 w-[min(88vw,340px)] overflow-y-auto bg-background px-5 pt-16 shadow-overlay transition-transform lg:static lg:z-auto lg:block lg:w-auto lg:translate-x-0 lg:overflow-visible lg:bg-transparent lg:px-0 lg:pt-0 lg:shadow-none", railOpen ? "translate-x-0" : "-translate-x-full")}>
             <div className="mb-2 flex items-center justify-between lg:hidden"><strong className="text-[15px]">Filters</strong><button type="button" className="btn-secondary btn-sm" onClick={() => setRailOpen(false)}>Close</button></div>
             <div className="lg:sticky lg:top-[120px] lg:max-h-[calc(100vh-136px)] lg:overflow-y-auto lg:pr-2 no-scrollbar">
+              <LibrarySection currentQuery={state.q} />
               <FilterRail
                 facets={facets.data}
                 loading={facets.isFetching && !facets.data}
@@ -464,7 +476,6 @@ const Browse = () => {
                         </span>
                       </>
                     )}
-                    {shown.ms != null && <span className="text-muted-foreground font-normal"> · {fmtInt(shown.ms)} ms</span>}
                   </>
                 ) : (
                   "Studies"
@@ -484,6 +495,7 @@ const Browse = () => {
                 {state.level === "gse" && (
                   <Segmented
                     ariaLabel="Layout"
+                    iconOnly
                     value={state.view}
                     onChange={setView}
                     options={[
@@ -492,6 +504,11 @@ const Browse = () => {
                     ]}
                   />
                 )}
+                {state.level === "gsm" ? (
+                  <ColumnsMenu defs={SAMPLE_COLUMNS} keys={sampleCols.keys} onToggle={sampleCols.toggle} onReset={sampleCols.reset} />
+                ) : state.view === "table" ? (
+                  <ColumnsMenu defs={STUDY_COLUMNS} keys={studyCols.keys} onToggle={studyCols.toggle} onReset={studyCols.reset} />
+                ) : null}
                 <label className="inline-flex items-center gap-1.5 text-[12.5px] text-muted-foreground">
                   <span className="sr-only sm:not-sr-only">Sort</span>
                   <select value={state.sort} onChange={(e) => setSort(e.target.value as Sort)} className="input h-8 w-auto px-2 text-[12.5px]">
@@ -506,6 +523,7 @@ const Browse = () => {
                 {state.level === "gse" && total > 0 && (
                   <ExportMenu query={appliedQuery} total={total} accessionsHref={exportHref} />
                 )}
+                {state.level === "gse" && <AddToLibraryMenu gseIds={selection.items.map((i) => i.gse_id)} label="Library" />}
                 <button
                   type="button"
                   className="btn-primary btn-sm"
@@ -544,10 +562,11 @@ const Browse = () => {
             ) : (
               <div className={cn("transition-opacity", refreshing && "opacity-60 pointer-events-none")} aria-busy={refreshing || undefined}>
                 {state.level === "gsm" ? (
-                  <SampleTable rows={samples} />
+                  <SampleTable rows={samples} columns={sampleCols.visible} />
                 ) : state.view === "table" ? (
                   <StudyTable
                     rows={studies}
+                    columns={studyCols.visible}
                     selectedIds={selection.ids}
                     onToggle={selection.toggle}
                     onTogglePage={(rows, select) => (select ? selection.addMany(rows) : selection.removeMany(rows.map((r) => r.gse_id)))}
@@ -602,6 +621,9 @@ const Browse = () => {
                   <nav className="mt-5 flex items-center justify-center gap-4 text-[13px]" aria-label="More results">
                     <span className="text-muted-foreground tabular">Showing 1–{fmtInt(shown.data.length)} of {fmtInt(total)}</span>
                     {canLoadMore && <button type="button" className="btn-secondary btn-sm" onClick={() => setPage(state.page + 1)}>Load 25 more <ChevronRight size={13} /></button>}
+                    <FeedbackButton category="data" prefill={state.q ? `Search "${state.q}": ` : ""} className="text-muted-foreground hover:text-foreground underline underline-offset-2">
+                      Missing a study? Tell us
+                    </FeedbackButton>
                   </nav>
                 )}
               </div>

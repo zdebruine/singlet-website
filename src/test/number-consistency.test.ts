@@ -16,7 +16,7 @@ import { createTestD1 } from "./helpers/d1-sqlite";
  *   E  downloadable   1 usable sample (70 cells)
  */
 const SCHEMA = `
-CREATE TABLE gse (id TEXT PRIMARY KEY, title TEXT, abstract TEXT, n_gsm_total INTEGER, n_gsm_failed INTEGER, r2_bundle_bytes INTEGER, r2_bundle_key TEXT);
+CREATE TABLE gse (id TEXT PRIMARY KEY, title TEXT, abstract TEXT, n_gsm_total INTEGER, n_gsm_failed INTEGER, r2_bundle_bytes INTEGER, r2_bundle_key TEXT, pubmed_ids TEXT);
 CREATE TABLE gsm (gsm_id TEXT PRIMARY KEY, gse_id TEXT, status TEXT, n_cells INTEGER, protocol TEXT, median_umis REAL,
                   organism_primary TEXT, mapping_rate REAL, median_genes REAL, failure_category TEXT);
 CREATE TABLE gse_meta (gse_id TEXT PRIMARY KEY, organism_primary TEXT, organisms TEXT, tissue_groups TEXT, disease_groups TEXT,
