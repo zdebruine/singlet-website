@@ -26,7 +26,8 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request, waitUntil
         return serverError(e, "stats/layers");
       }
     },
-    3600,
+    // The key carries the payload version, so a change of shape never meets an old cached copy.
+    { ttl: 3600, key: "v2" },
   );
 
 export const onRequestOptions: PagesFunction<Env> = async () => handleOptions();
