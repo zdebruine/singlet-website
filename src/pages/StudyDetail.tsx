@@ -612,6 +612,19 @@ const StudyDetail = () => {
 
       {/* Samples */}
       <section id="samples" className="mt-8 scroll-mt-20" aria-labelledby="samples-h">
+        {!!series.low_qc_samples && (
+          <div role="note" className="mb-3 border border-warning/40 bg-warning/10 text-warning px-3 py-2 text-[13px]" style={{ borderRadius: 3 }}>
+            {fmtInt(series.low_qc_samples)} {series.low_qc_samples === 1 ? "sample is" : "samples are"} flagged low QC ({series.low_qc_gsm_ids?.slice(0, 6).join(", ")}
+            {(series.low_qc_gsm_ids?.length ?? 0) > 6 ? ", …" : ""}). singlet's QC algorithms detected an issue with {series.low_qc_samples === 1 ? "it" : "them"}; it is recommended to proceed with caution.
+            They stay in the file, and are left out of counts, searches and bulk downloads unless you include low-QC samples.{" "}
+            <Link to="/about#qc" className="underline underline-offset-2">How QC works</Link>
+          </div>
+        )}
+        {!!series.removed_samples && (
+          <div role="note" className="mb-3 border border-border bg-muted/40 text-muted-foreground px-3 py-2 text-[13px]" style={{ borderRadius: 3 }}>
+            {fmtInt(series.removed_samples)} failed {series.removed_samples === 1 ? "sample was" : "samples were"} removed from this list: almost no reads mapped and almost no genes were detected. {series.removed_samples === 1 ? "It is" : "They are"} still present in the downloaded file.
+          </div>
+        )}
         {unusableCount > 0 && usableCount != null && usableCount > 0 && (
           <div role="note" className="mb-3 border border-warning/40 bg-warning/10 text-warning px-3 py-2 text-[13px]" style={{ borderRadius: 3 }}>
             {unusableCount} of {assessedCount} samples in this file have no count data (empty matrix or 0 called cells) and will load as empty.

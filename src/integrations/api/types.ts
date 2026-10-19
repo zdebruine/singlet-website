@@ -70,6 +70,8 @@ export interface StudyRow {
   file_cells: number | null;
   reference_build: string | null;
   usable_samples?: number | null;
+  /** Samples in the file that singlet's QC flagged (low QC); not part of usable_samples. */
+  low_qc_samples?: number | null;
   reference_mismatch?: boolean;
   year: number | null;
   n_conditions: number;
@@ -131,6 +133,8 @@ export interface AppliedFilters {
   cell_type: string[];
   min_cells: number | null;
   has_bundle: boolean | null;
+  /** Samples flagged low QC are counted and listed too (left out by default). */
+  include_low_qc?: boolean;
   year_min: number | null;
   year_max: number | null;
   min_file_samples: number | null;
@@ -294,10 +298,18 @@ export interface CorpusStats {
   /** Files published in total; the difference to studies_with_files is what is withheld as unusable or mismatched. */
   files_published: number;
   studies_withheld: number;
-  /** …usable samples in those files (non-empty matrix and ≥ 1 called cell)… */
+  /** …samples in those files that passed QC (non-empty matrix, ≥ 1 called cell, not flagged low QC or removed)… */
   samples_in_files: number;
-  /** …and the cells called in those usable samples. */
+  /** …and the cells called in those samples. */
   cells_in_files: number;
+  /** What singlet's QC did to the catalog. */
+  qc: {
+    removed_samples: number;
+    low_qc_samples: number;
+    low_qc_cells: number;
+    studies_affected: number;
+    rules: { version: string; removed: { max_mapping_rate: number; max_median_genes: number }; low_qc: { min_median_genes: number; min_mapping_rate: number } };
+  };
   /** Samples in files whose matrix is empty or that called 0 cells. */
   samples_unusable: number;
   /** Studies with a file but 0 usable samples. */
@@ -341,6 +353,11 @@ export interface GseRow {
   assessed_samples?: number | null;
   /** GSMs in the file with no count data. */
   unusable_gsm_ids?: string[];
+  /** Samples singlet's QC flagged: few genes detected or few reads mapped. */
+  low_qc_samples?: number;
+  low_qc_gsm_ids?: string[];
+  /** Failed runs removed from the sample list and every count (still present in the file). */
+  removed_samples?: number;
   /** Primary organism is not covered by the reference build. */
   reference_mismatch?: boolean;
   reference_mismatch_note?: string | null;
@@ -368,6 +385,10 @@ export interface GsmRow {
   cell_verdict?: CellVerdict;
   /** Pipeline QC verdict, null until the sample has been scored. */
   qc_flag?: QcFlag | null;
+  /** Flagged by singlet's QC (few genes or few reads mapped): proceed with caution. */
+  low_qc?: boolean;
+  qc_message?: string | null;
+  qc_reasons?: string[];
   mapping_rate: number | null;
   median_genes: number | null;
   median_umis: number | null;
@@ -441,6 +462,7 @@ export interface SearchQuery {
   cell_type?: string[];
   min_cells?: number;
   has_bundle?: boolean;
+  include_low_qc?: boolean;
   year_min?: number;
   year_max?: number;
   min_file_samples?: number;

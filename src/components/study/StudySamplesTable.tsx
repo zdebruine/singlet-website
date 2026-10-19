@@ -495,6 +495,15 @@ export function StudySamplesTable({ gseId, studyTitle, samples, highlightGsm, co
                     </td>
                     <td>
                       <StatusCell s={s} />
+                      {s.low_qc && (
+                        <span
+                          className="mt-1 inline-block border border-warning/40 bg-warning/10 text-warning px-1.5 text-[11px] whitespace-nowrap"
+                          style={{ borderRadius: 3 }}
+                          title={`${s.qc_message ?? "singlet's QC algorithms detected an issue with this sample. It is recommended to proceed with caution."}${s.qc_reasons?.length ? ` (${s.qc_reasons.join("; ")})` : ""}`}
+                        >
+                          low QC
+                        </span>
+                      )}
                       {qc?.usable === 0 && (
                         <span
                           className="mt-1 inline-block border border-warning/40 bg-warning/10 text-warning px-1.5 text-[11px] whitespace-nowrap"

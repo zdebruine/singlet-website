@@ -25,6 +25,10 @@ export interface ManifestRow {
   disease_groups: string[];
   assay_families: string[];
   n_samples_in_file: number | null;
+  /** Samples in the file that passed QC. */
+  n_samples_passing_qc: number | null;
+  /** Samples in the file flagged low QC: proceed with caution. */
+  n_samples_low_qc: number | null;
   n_cells: number;
   year: number | null;
   pubmed_ids: string[];
@@ -43,6 +47,7 @@ export async function manifestRows(db: D1Database, ids: string[]): Promise<Manif
       .prepare(
         `SELECT g.id AS gse_id, g.title, g.pubmed_ids, g.n_cells AS g_cells, g.r2_bundle_bytes, g.r2_bundle_n_gsms,
                 m.organism_primary, m.tissue_groups, m.disease_groups, m.assay_families, m.n_cells AS m_cells, m.year,
+                m.n_usable_samples, m.n_lowqc_samples,
                 b.reference_build, b.n_gsms_in_bundle, b.bytes AS b_bytes
            FROM gse g
            LEFT JOIN gse_meta m ON m.gse_id = g.id
@@ -62,6 +67,8 @@ export async function manifestRows(db: D1Database, ids: string[]): Promise<Manif
         disease_groups: safeList(r.disease_groups),
         assay_families: safeList(r.assay_families),
         n_samples_in_file: nInFile,
+        n_samples_passing_qc: r.n_usable_samples != null ? Number(r.n_usable_samples) : null,
+        n_samples_low_qc: r.n_lowqc_samples != null ? Number(r.n_lowqc_samples) : null,
         n_cells: Number(r.m_cells ?? r.g_cells ?? 0),
         year: r.year != null ? Number(r.year) : null,
         pubmed_ids: safeList(r.pubmed_ids),
@@ -84,6 +91,8 @@ const TSV_COLUMNS = [
   "disease_groups",
   "assay_families",
   "n_samples_in_file",
+  "n_samples_passing_qc",
+  "n_samples_low_qc",
   "n_cells",
   "year",
   "pubmed_ids",

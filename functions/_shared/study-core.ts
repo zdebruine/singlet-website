@@ -10,6 +10,7 @@
 import { referenceMismatch } from "./catalog-refresh";
 import { safeList } from "./json";
 import { normalizeModality, sanitizeQcFlag } from "./data-quality";
+import { QC_LOW_MESSAGE, QC_RULES, qcReasons } from "./qc-rules";
 import { parseCharacteristics, summarizeConditions, type ConditionSummary } from "./conditions";
 import { cellCountVerdict, type CellCountVerdict } from "./suspect-cells";
 import { statusText } from "./search-core";
@@ -57,6 +58,12 @@ export interface StudySeries {
   assessed_samples: number | null;
   /** GSMs in the file with no count data (empty matrix or 0 called cells). */
   unusable_gsm_ids: string[];
+  /** Samples singlet's QC flagged (few genes or few reads mapped). They stay in the file and are listed here with a warning. */
+  low_qc_samples: number;
+  low_qc_gsm_ids: string[];
+  /** Failed runs removed from the catalog entirely: not listed, not counted. Still present in the file. */
+  removed_samples: number;
+  qc_rules: typeof QC_RULES;
   /** Primary organism is not covered by the reference build the reads were aligned to. */
   reference_mismatch: boolean;
   reference_mismatch_note: string | null;
@@ -85,6 +92,10 @@ export interface StudySample extends Record<string, unknown> {
   characteristics: Record<string, string>;
   characteristics_raw: string | null;
   status_text: string;
+  /** Flagged low QC: proceed with caution. */
+  low_qc: boolean;
+  qc_message: string | null;
+  qc_reasons: string[];
   suspect_cells: boolean;
   /** "ok" | "suspect" | "unverified" — see ./suspect-cells. */
   cell_verdict: CellCountVerdict;
@@ -112,12 +123,20 @@ export async function loadStudy(db: D1Database, rawId: string): Promise<StudyDet
     .prepare(
       `SELECT COUNT(*) AS n, SUM(CASE WHEN usable = 1 THEN 1 ELSE 0 END) AS ok,
               SUM(CASE WHEN usable IS NULL THEN 1 ELSE 0 END) AS unknown,
-              group_concat(CASE WHEN usable = 0 THEN gsm_id END) AS bad
+              group_concat(CASE WHEN usable = 0 THEN gsm_id END) AS bad,
+              SUM(CASE WHEN usable = 1 AND qc_tier = 1 THEN 1 ELSE 0 END) AS low,
+              SUM(CASE WHEN usable = 1 AND qc_tier = 2 THEN 1 ELSE 0 END) AS removed
          FROM sample_qc WHERE gse_id = ?`
     )
     .bind(id)
-    .first<{ n: number; ok: number | null; unknown: number | null; bad: string | null }>()
+    .first<{ n: number; ok: number | null; unknown: number | null; bad: string | null; low: number | null; removed: number | null }>()
     .catch(() => null);
+  // Per-sample verdicts for the samples QC touched (tier 1 low QC, tier 2 removed).
+  const tiersPromise = db
+    .prepare(`SELECT gsm_id, qc_tier, median_genes, mapping_rate FROM sample_qc WHERE gse_id = ? AND usable = 1 AND qc_tier >= 1`)
+    .bind(id)
+    .all<{ gsm_id: string; qc_tier: number; median_genes: number | null; mapping_rate: number | null }>()
+    .catch(() => ({ results: [] as { gsm_id: string; qc_tier: number; median_genes: number | null; mapping_rate: number | null }[] }));
   const [seriesRow, metaRow, samplesResult, pubsResult, manifestRow] = await Promise.all([
     db
       .prepare(
@@ -172,7 +191,11 @@ export async function loadStudy(db: D1Database, rawId: string): Promise<StudyDet
 
   if (!seriesRow) return null;
 
-  const samples: StudySample[] = samplesResult.results.map((r) => {
+  const tiers = (await tiersPromise).results ?? [];
+  const lowById = new Map(tiers.filter((t) => Number(t.qc_tier) === 1).map((t) => [t.gsm_id, t]));
+  const removedIds = new Set(tiers.filter((t) => Number(t.qc_tier) === 2).map((t) => t.gsm_id));
+  const samples: StudySample[] = samplesResult.results.filter((r) => !removedIds.has(String(r.gsm_id))).map((r) => {
+    const low = lowById.get(String(r.gsm_id));
     const nCells = r.n_cells != null ? Number(r.n_cells) : null;
     const verdict = cellCountVerdict(
       r.protocol as string | null,
@@ -188,6 +211,9 @@ export async function loadStudy(db: D1Database, rawId: string): Promise<StudyDet
       characteristics: parseCharacteristics(r.characteristics),
       characteristics_raw: typeof r.characteristics === "string" ? r.characteristics : null,
       status_text: statusText(r.status as string, r.failure_category as string | null),
+      low_qc: !!low,
+      qc_message: low ? QC_LOW_MESSAGE : null,
+      qc_reasons: low ? qcReasons(low.median_genes, low.mapping_rate) : [],
       suspect_cells: verdict === "suspect",
       cell_verdict: verdict,
       qc_flag: sanitizeQcFlag(r.qc_flag),
@@ -249,6 +275,10 @@ export async function loadStudy(db: D1Database, rawId: string): Promise<StudyDet
     usable_samples: assessed != null ? Number(usableRow?.ok ?? 0) : null,
     assessed_samples: assessed,
     unusable_gsm_ids: assessed != null && usableRow?.bad ? usableRow.bad.split(",").sort() : [],
+    low_qc_samples: lowById.size,
+    low_qc_gsm_ids: [...lowById.keys()].sort(),
+    removed_samples: removedIds.size,
+    qc_rules: QC_RULES,
     reference_mismatch: mismatch,
     reference_mismatch_note: mismatch
       ? `Reads from ${organismLabel} were aligned to ${referenceBuild}; gene-level counts are cross-species and not suitable for most analyses.`

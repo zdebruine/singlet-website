@@ -22,9 +22,9 @@ CREATE TABLE gsm (gsm_id TEXT PRIMARY KEY, gse_id TEXT, status TEXT, n_cells INT
 CREATE TABLE gse_meta (gse_id TEXT PRIMARY KEY, organism_primary TEXT, organisms TEXT, tissue_groups TEXT, disease_groups TEXT,
                        assay_families TEXT, tissues_raw TEXT, cell_types_raw TEXT, n_conditions INTEGER, n_done INTEGER, n_total INTEGER,
                        n_cells INTEGER, has_bundle INTEGER, year INTEGER, updated_at TEXT, n_usable_samples INTEGER,
-                       reference_mismatch INTEGER, n_usable_cells INTEGER);
+                       reference_mismatch INTEGER, n_usable_cells INTEGER, n_lowqc_samples INTEGER, n_lowqc_cells INTEGER);
 CREATE TABLE bundle_manifest (gse_id TEXT PRIMARY KEY, n_gsms_in_bundle INTEGER, reference_build TEXT);
-CREATE TABLE sample_qc (gsm_id TEXT PRIMARY KEY, gse_id TEXT, usable INTEGER, n_cells_called INTEGER);
+CREATE TABLE sample_qc (gsm_id TEXT PRIMARY KEY, gse_id TEXT, usable INTEGER, n_cells_called INTEGER, median_genes REAL, mapping_rate REAL, qc_tier INTEGER);
 
 INSERT INTO gse (id, n_gsm_total, n_gsm_failed, r2_bundle_key) VALUES
   ('GSE1', 3, 0, 'k'), ('GSE2', 1, 0, 'k'), ('GSE3', 1, 0, 'k'), ('GSE4', 5, 1, NULL), ('GSE5', 1, 0, 'k'), ('GSE6', 1, 0, NULL);
@@ -35,7 +35,7 @@ INSERT INTO gse_meta (gse_id, n_done, n_total, n_cells, has_bundle, n_usable_sam
   ('GSE4', 2, 2, 900, 0, NULL, NULL, NULL),
   ('GSE5', 1, 1, 70,  1, 1, 0, 70);
 INSERT INTO bundle_manifest (gse_id, n_gsms_in_bundle) VALUES ('GSE1', 3), ('GSE2', 1), ('GSE3', 1), ('GSE5', 1);
-INSERT INTO sample_qc VALUES
+INSERT INTO sample_qc (gsm_id, gse_id, usable, n_cells_called) VALUES
   ('GSM11', 'GSE1', 1, 100), ('GSM12', 'GSE1', 1, 50), ('GSM13', 'GSE1', 0, 10),
   ('GSM21', 'GSE2', 0, 0),
   ('GSM31', 'GSE3', 1, 30),

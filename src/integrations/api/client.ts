@@ -177,6 +177,7 @@ const EMPTY_APPLIED = (): FacetsResponse["applied"] => ({
   cell_type: [],
   min_cells: null,
   has_bundle: null,
+  include_low_qc: false,
   year_min: null,
   year_max: null,
   min_file_samples: null,
@@ -200,6 +201,7 @@ function normalizeApplied(v: unknown): FacetsResponse["applied"] {
     cell_type: strArr(a.cell_type),
     min_cells: numOrNull(a.min_cells),
     has_bundle: typeof a.has_bundle === "boolean" ? a.has_bundle : null,
+    include_low_qc: a.include_low_qc === true,
     year_min: numOrNull(a.year_min),
     year_max: numOrNull(a.year_max),
     min_file_samples: numOrNull(a.min_file_samples),
@@ -273,6 +275,7 @@ export function normalizeStudyRow(raw: unknown): StudyRow | null {
     bundle_key: strOrNull(r.bundle_key),
     bundle_n_samples: numOrNull(r.bundle_n_samples),
     file_cells: numOrNull(r.file_cells),
+    low_qc_samples: numOrNull(r.low_qc_samples),
     reference_build: strOrNull(r.reference_build),
     year: numOrNull(r.year),
     n_conditions: num(r.n_conditions),
@@ -570,6 +573,20 @@ function normalizeStats(raw: unknown): CorpusStats {
     studies_withheld: num(r.studies_withheld),
     samples_in_files: num(r.samples_in_files),
     cells_in_files: num(r.cells_in_files),
+    qc: (() => {
+      const q = rec(r.qc), rules = rec(q.rules), rm = rec(rules.removed), low = rec(rules.low_qc);
+      return {
+        removed_samples: num(q.removed_samples),
+        low_qc_samples: num(q.low_qc_samples),
+        low_qc_cells: num(q.low_qc_cells),
+        studies_affected: num(q.studies_affected),
+        rules: {
+          version: str(rules.version),
+          removed: { max_mapping_rate: num(rm.max_mapping_rate, 0.05), max_median_genes: num(rm.max_median_genes, 10) },
+          low_qc: { min_median_genes: num(low.min_median_genes, 30), min_mapping_rate: num(low.min_mapping_rate, 0.2) },
+        },
+      };
+    })(),
     samples_unusable: num(r.samples_unusable),
     studies_unusable: num(r.studies_unusable),
     accounting: Object.fromEntries(Object.entries(rec(r.accounting)).map(([k, v]) => [k, num(v)])),
@@ -590,6 +607,7 @@ function searchParams(q: SearchQuery): Record<string, ParamValue> {
     cell_type: q.cell_type,
     min_cells: q.min_cells,
     has_bundle: q.has_bundle,
+    include_low_qc: q.include_low_qc ? true : undefined,
     year_min: q.year_min,
     year_max: q.year_max,
     min_file_samples: q.min_file_samples,

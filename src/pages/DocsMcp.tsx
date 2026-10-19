@@ -64,7 +64,7 @@ const EXAMPLES: { ask: string; tools: string; gets: string }[] = [
 ];
 
 const TOOLS: { name: string; input: string; returns: string; key: string }[] = [
-  { name: "search_datasets", input: "query, level?, limit?, page?, organism?, tissue?, disease?, assay?, min_cells?, include_unbuilt?", returns: "Matching studies or samples with a reason for each match. The only tool that can call a language model, and only when the built-in vocabulary cannot read the question; only those fresh AI readings are metered", key: "No — 10 AI readings a day without, 200 with" },
+  { name: "search_datasets", input: "query, level?, limit?, page?, organism?, tissue?, disease?, assay?, min_cells?, include_unbuilt?, include_low_qc?", returns: "Matching studies or samples with a reason for each match. The only tool that can call a language model, and only when the built-in vocabulary cannot read the question; only those fresh AI readings are metered", key: "No — 10 AI readings a day without, 200 with" },
   { name: "get_study", input: "gse_id", returns: "Title, abstract, groups, conditions, samples (first 60), file URL", key: "No" },
   { name: "get_download_url", input: "gse_id", returns: "The .singlet URL, size and loader lines", key: "No" },
   { name: "get_atlas_stats", input: "—", returns: "Studies, usable samples and cells in published files (the site's headline numbers), plus catalog metadata: samples processed, cells recorded, species, failure reasons", key: "No" },
@@ -72,7 +72,7 @@ const TOOLS: { name: string; input: string; returns: string; key: string }[] = [
   { name: "list_bundle_files", input: "gse_id, gsm_id?", returns: "Everything inside the file, with sizes", key: "No" },
   { name: "get_modalities", input: "gse_id, gsm_id?", returns: "Which modalities the file carries, with Python and R readers for each", key: "No" },
   { name: "get_partial_download", input: "gse_id, gsm_id, file", returns: "Byte range, curl and Python for one file", key: "No" },
-  { name: "export_manifest", input: "query? / filters? / gse_ids?, format", returns: "TSV, JSON, curl, wget, Python or R manifest", key: "No" },
+  { name: "export_manifest", input: "query? / filters? / gse_ids?, include_low_qc?, format", returns: "TSV, JSON, curl, wget, Python or R manifest", key: "No" },
   { name: "find_matched_controls", input: "gse_id, min_samples?, same_assay?", returns: "Candidate control studies with reasons and caveats", key: "No" },
   { name: "compare_studies", input: "gse_ids (2–8)", returns: "Side-by-side fields and their differences", key: "No" },
   { name: "assess_study", input: "gse_id, purpose?", returns: "Deterministic usability report and fit checks", key: "No" },

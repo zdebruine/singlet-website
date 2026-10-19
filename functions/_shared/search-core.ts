@@ -42,6 +42,8 @@ export interface SearchFilters {
   cell_type: string[];
   min_cells: number | null;
   has_bundle: boolean | null;
+  /** Count and list samples flagged low QC too (they are left out by default). */
+  include_low_qc: boolean;
   year_min: number | null;
   year_max: number | null;
   min_file_samples: number | null;
@@ -116,6 +118,8 @@ export interface StudyRow {
   reference_build: string | null;
   /** Samples in the file with usable count data; null = not yet assessed. */
   usable_samples?: number | null;
+  /** Samples in the file that singlet's QC flagged (low QC); left out of usable_samples and every count by default. */
+  low_qc_samples?: number | null;
   /** Species not covered by the reference build. */
   reference_mismatch?: boolean;
   year: number | null;
@@ -360,6 +364,7 @@ export function emptyFilters(): SearchFilters {
     cell_type: [],
     min_cells: null,
     has_bundle: null,
+    include_low_qc: false,
     year_min: null,
     year_max: null,
     min_file_samples: null,
@@ -398,6 +403,7 @@ export function parseSearchParams(url: URL): SearchParams {
     cell_type: multi(url, "cell_type"),
     min_cells: intOrNull(url.searchParams.get("min_cells")),
     has_bundle,
+    include_low_qc: bool("include_low_qc") === true,
     year_min: intOrNull(url.searchParams.get("year_min")),
     year_max: intOrNull(url.searchParams.get("year_max")),
     min_file_samples: intOrNull(url.searchParams.get("min_file_samples")),
@@ -469,6 +475,7 @@ export function canonicalQuery(p: SearchParams | (SearchFilters & Partial<Search
   add("protocol", p.protocol);
   if (p.min_cells != null) sp.set("min_cells", String(p.min_cells));
   if (p.has_bundle != null) sp.set("has_bundle", p.has_bundle ? "1" : "0");
+  if (p.include_low_qc) sp.set("include_low_qc", "1");
   if (p.year_min != null) sp.set("year_min", String(p.year_min));
   if (p.year_max != null) sp.set("year_max", String(p.year_max));
   if (p.min_file_samples != null) sp.set("min_file_samples", String(p.min_file_samples));
@@ -674,7 +681,7 @@ export function buildStudyWhere(f: SearchFilters, opts: StudyWhereOpts = {}): Bu
     clauses.push("m.n_cells >= ?");
     params.push(f.min_cells);
   }
-  if (f.has_bundle === true) clauses.push(DOWNLOADABLE_SQL);
+  if (f.has_bundle === true) clauses.push(downloadableSql(f.include_low_qc));
   if (f.year_min != null && ex !== "year") {
     clauses.push("m.year >= ?");
     params.push(f.year_min);
@@ -753,7 +760,9 @@ export function buildSampleWhere(f: SearchFilters, opts: StudyWhereOpts = {}): B
     clauses.push("s.n_cells >= ?");
     params.push(f.min_cells);
   }
-  if (f.has_bundle === true) clauses.push(DOWNLOADABLE_SQL);
+  if (f.has_bundle === true) clauses.push(downloadableSql(f.include_low_qc));
+  // Samples removed by QC (tier 2) are never listed; low-QC ones (tier 1) only when asked for.
+  clauses.push(`NOT EXISTS (SELECT 1 FROM sample_qc qq WHERE qq.gsm_id = s.gsm_id AND qq.qc_tier >= ${f.include_low_qc ? 2 : 1})`);
   if (f.year_min != null && ex !== "year") {
     clauses.push("m.year >= ?");
     params.push(f.year_min);
@@ -826,6 +835,8 @@ interface StudyDbRow {
   reference_build: string | null;
   n_usable_samples?: number | null;
   n_usable_cells?: number | null;
+  n_lowqc_samples?: number | null;
+  n_lowqc_cells?: number | null;
   reference_mismatch?: number | null;
   n_gsm_failed: number | null;
   s_gse: number | null;
@@ -837,17 +848,26 @@ interface StudyDbRow {
   _cells: number | null;
 }
 
-/** "Downloadable": a file exists, it holds usable count data, and the reference matches the species. */
-export const DOWNLOADABLE_SQL = "(m.has_bundle = 1 AND COALESCE(m.n_usable_samples, 1) > 0 AND COALESCE(m.reference_mismatch, 0) = 0)";
+/**
+ * "Downloadable": a file exists, it holds at least one sample that passed QC (n_usable_samples counts those; low-QC
+ * samples are in n_lowqc_samples), and the reference matches the species. With `includeLow`, a study whose only
+ * samples are low QC counts too.
+ */
+export function downloadableSql(includeLow = false): string {
+  const samples = includeLow ? "COALESCE(m.n_usable_samples, 1) + COALESCE(m.n_lowqc_samples, 0)" : "COALESCE(m.n_usable_samples, 1)";
+  return `(m.has_bundle = 1 AND ${samples} > 0 AND COALESCE(m.reference_mismatch, 0) = 0)`;
+}
+export const DOWNLOADABLE_SQL = downloadableSql(false);
 
-const STUDY_SELECT = `
+/** Cells in the file: samples that passed QC, plus the low-QC ones when asked (removed samples never count). */
+const studySelect = (includeLow: boolean) => `
   m.gse_id, m.organism_primary, m.organisms, m.tissue_groups, m.disease_groups, m.assay_families,
   m.tissues_raw, m.cell_types_raw, m.n_conditions, m.n_done, m.n_total, m.n_cells, m.has_bundle, m.year,
-  m.n_usable_samples, m.n_usable_cells, m.reference_mismatch,
+  m.n_usable_samples, m.n_usable_cells, m.n_lowqc_samples, m.n_lowqc_cells, m.reference_mismatch,
   g.title, g.abstract, g.r2_bundle_bytes, g.r2_bundle_key, g.n_gsm_failed,
   (SELECT b.n_gsms_in_bundle FROM bundle_manifest b WHERE b.gse_id = m.gse_id) AS bundle_n_samples,
   (SELECT b.reference_build FROM bundle_manifest b WHERE b.gse_id = m.gse_id) AS reference_build,
-  (SELECT SUM(q.n_cells_called) FROM sample_qc q WHERE q.gse_id = m.gse_id AND COALESCE(q.usable, 1) = 1) AS file_cells`;
+  (SELECT SUM(q.n_cells_called) FROM sample_qc q WHERE q.gse_id = m.gse_id AND COALESCE(q.usable, 1) = 1 AND COALESCE(q.qc_tier, 0) ${includeLow ? "< 2" : "= 0"}) AS file_cells`;
 
 function studyOrder(sort: Sort, hasQ: boolean): string {
   switch (sort) {
@@ -920,16 +940,19 @@ export function planStudyQuery(p: SearchParams, matchOverride?: string | null, c
   // numbers the home page shows; a search that includes unbuilt studies falls back to catalog counts.
   // n_usable_cells is filled as studies are recomputed; until then the catalog count stands in.
   const fileBasis = p.has_bundle === true;
-  const samplesWin = fileBasis ? "SUM(COALESCE(m.n_usable_samples, 0)) OVER ()" : "SUM(m.n_done) OVER ()";
+  // Default: only samples that passed QC. With include_low_qc the flagged ones are added back.
+  const sAdd = p.include_low_qc ? " + COALESCE(m.n_lowqc_samples, 0)" : "";
+  const cAdd = p.include_low_qc ? " + COALESCE(m.n_lowqc_cells, 0)" : "";
+  const samplesWin = fileBasis ? `SUM(COALESCE(m.n_usable_samples, 0)${sAdd}) OVER ()` : "SUM(m.n_done) OVER ()";
   const cellsWin = fileBasis
-    ? "CASE WHEN COUNT(m.n_usable_cells) OVER () = 0 THEN SUM(m.n_cells) OVER () ELSE SUM(COALESCE(m.n_usable_cells, 0)) OVER () END"
+    ? `CASE WHEN COUNT(m.n_usable_cells) OVER () = 0 THEN SUM(m.n_cells) OVER () ELSE SUM(COALESCE(m.n_usable_cells, 0)${cAdd}) OVER () END`
     : "SUM(m.n_cells) OVER ()";
-  const samplesAgg = fileBasis ? "SUM(COALESCE(m.n_usable_samples, 0))" : "SUM(m.n_done)";
+  const samplesAgg = fileBasis ? `SUM(COALESCE(m.n_usable_samples, 0)${sAdd})` : "SUM(m.n_done)";
   const cellsAgg = fileBasis
-    ? "CASE WHEN COUNT(m.n_usable_cells) = 0 THEN SUM(m.n_cells) ELSE SUM(COALESCE(m.n_usable_cells, 0)) END"
+    ? `CASE WHEN COUNT(m.n_usable_cells) = 0 THEN SUM(m.n_cells) ELSE SUM(COALESCE(m.n_usable_cells, 0)${cAdd}) END`
     : "SUM(m.n_cells)";
   const sql = `${cte}
-    SELECT ${STUDY_SELECT}, ${hitCols} ${scoreExpr} AS score,
+    SELECT ${studySelect(p.include_low_qc)}, ${hitCols} ${scoreExpr} AS score,
            COUNT(*) OVER () AS _total, ${samplesWin} AS _samples, ${cellsWin} AS _cells
       FROM gse_meta m
       ${join}
@@ -990,6 +1013,7 @@ function shapeStudy(r: StudyDbRow): StudyRow {
     file_cells: r.file_cells != null ? Number(r.file_cells) : null,
     reference_build: r.reference_build,
     usable_samples: r.n_usable_samples != null ? Number(r.n_usable_samples) : null,
+    low_qc_samples: r.n_lowqc_samples != null ? Number(r.n_lowqc_samples) : null,
     reference_mismatch: Number(r.reference_mismatch ?? 0) === 1,
     year: r.year != null ? Number(r.year) : null,
     n_conditions: Number(r.n_conditions ?? 0),
@@ -1248,7 +1272,7 @@ export async function runStudySearch(
     candidateAccessions = kept.map((x) => x.row.gse_id);
     groups = { full: kept.filter((x) => x.full).length, partial: kept.filter((x) => !x.full).length };
     total = kept.length;
-    samples = kept.reduce((sum, x) => sum + (x.row.usable_samples ?? x.row.bundle_n_samples ?? x.row.n_done), 0);
+    samples = kept.reduce((sum, x) => sum + (x.row.usable_samples ?? x.row.bundle_n_samples ?? x.row.n_done) + (p.include_low_qc ? x.row.low_qc_samples ?? 0 : 0), 0);
     cells = kept.reduce((sum, x) => sum + (x.row.file_cells ?? x.row.n_cells), 0);
     const start = (p.page - 1) * p.limit;
     rows = kept.slice(start, start + p.limit).map((x) => x.row);
@@ -1788,6 +1812,7 @@ export function pickFilters(p: SearchFilters): SearchFilters {
     cell_type: p.cell_type,
     min_cells: p.min_cells,
     has_bundle: p.has_bundle,
+    include_low_qc: p.include_low_qc,
     year_min: p.year_min,
     year_max: p.year_max,
     min_file_samples: p.min_file_samples,

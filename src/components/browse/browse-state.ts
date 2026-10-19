@@ -62,6 +62,8 @@ export interface BrowseState {
   cell_type: string[];
   min_cells: number | null;
   has_bundle: boolean;
+  /** Count and list samples flagged low QC too (off by default). */
+  include_low_qc: boolean;
   year_min: number | null;
   year_max: number | null;
   min_file_samples: number | null;
@@ -89,6 +91,7 @@ export const DEFAULT_STATE: BrowseState = {
   cell_type: [],
   min_cells: null,
   has_bundle: true,
+  include_low_qc: false,
   year_min: null,
   year_max: null,
   min_file_samples: null,
@@ -138,6 +141,7 @@ export function parseBrowseState(sp: URLSearchParams): BrowseState {
     cell_type: multi(sp, "cell_type"),
     min_cells: intOrNull(sp.get("min_cells")),
     has_bundle: hb == null || hb === "" ? true : hb === "1" || hb === "true",
+    include_low_qc: sp.get("include_low_qc") === "1" || sp.get("include_low_qc") === "true",
     year_min: intOrNull(sp.get("year_min")),
     year_max: intOrNull(sp.get("year_max")),
     min_file_samples: intOrNull(sp.get("min_file_samples")),
@@ -164,6 +168,7 @@ export function serializeBrowseState(s: BrowseState): URLSearchParams {
   for (const f of ARRAY_FIELDS) for (const v of s[f]) sp.append(f, v);
   if (s.min_cells != null) sp.set("min_cells", String(s.min_cells));
   if (!s.has_bundle) sp.set("has_bundle", "0");
+  if (s.include_low_qc) sp.set("include_low_qc", "1");
   if (s.year_min != null) sp.set("year_min", String(s.year_min));
   if (s.year_max != null) sp.set("year_max", String(s.year_max));
   for (const field of ["reference_build", "protocol"] as const) for (const v of s[field]) sp.append(field, v);
@@ -195,7 +200,7 @@ export function hasExplicitFilters(s: BrowseState): boolean {
     s.min_cells != null ||
     s.year_min != null ||
     s.year_max != null ||
-    !s.has_bundle
+    !s.has_bundle || s.include_low_qc
     || s.min_file_samples != null || s.min_file_cells != null || s.reference_build.length > 0 || s.protocol.length > 0
     || s.has_pubmed != null || s.max_file_bytes != null || s.has_conditions != null
   );
@@ -213,6 +218,7 @@ export function toSearchQuery(s: BrowseState, limit = PAGE_SIZE): SearchQuery {
     cell_type: s.cell_type,
     min_cells: s.min_cells ?? undefined,
     has_bundle: s.has_bundle,
+    include_low_qc: s.include_low_qc || undefined,
     year_min: s.year_min ?? undefined,
     year_max: s.year_max ?? undefined,
     min_file_samples: s.min_file_samples ?? undefined,
@@ -241,6 +247,7 @@ export function appliedToQuery(a: AppliedFilters, level: Level): SearchQuery {
     cell_type: a.cell_type,
     min_cells: a.min_cells ?? undefined,
     has_bundle: a.has_bundle ?? true,
+    include_low_qc: a.include_low_qc || undefined,
     year_min: a.year_min ?? undefined,
     year_max: a.year_max ?? undefined,
     min_file_samples: a.min_file_samples ?? undefined,
@@ -271,6 +278,7 @@ export function appliedToState(a: AppliedFilters, base: BrowseState): BrowseStat
     cell_type: [...a.cell_type],
     min_cells: a.min_cells,
     has_bundle: a.has_bundle ?? base.has_bundle,
+    include_low_qc: a.include_low_qc ?? base.include_low_qc,
     year_min: a.year_min,
     year_max: a.year_max,
     min_file_samples: a.min_file_samples,
@@ -310,6 +318,7 @@ export const FIELD_LABEL: Record<string, string> = {
   year_max: "To",
   q: "Keywords",
   has_bundle: "Downloadable",
+  include_low_qc: "Low QC",
   all_filters: "All filters",
 };
 
@@ -337,6 +346,7 @@ export function activeFilters(a: AppliedFilters, organismLabel: (v: string) => s
   if (a.has_pubmed) out.push({ field: "has_pubmed", value: "1", label: "has PubMed" });
   if (a.max_file_bytes != null) out.push({ field: "max_file_bytes", value: String(a.max_file_bytes), label: `≤ ${(a.max_file_bytes / 1073741824).toLocaleString()} GB` });
   if (a.has_conditions) out.push({ field: "has_conditions", value: "1", label: "has conditions" });
+  if (a.include_low_qc) out.push({ field: "include_low_qc", value: "1", label: "includes low-QC samples" });
   if (a.q) out.push({ field: "q", value: a.q, label: `“${a.q}”` });
   return out;
 }
@@ -376,6 +386,9 @@ export function withoutFilter(s: BrowseState, field: string, value: string): Bro
     case "has_bundle":
       next.has_bundle = true;
       break;
+    case "include_low_qc":
+      next.include_low_qc = false;
+      break;
   }
   return next;
 }
@@ -396,6 +409,7 @@ export function stateToApplied(s: BrowseState): AppliedFilters {
     cell_type: s.cell_type,
     min_cells: s.min_cells,
     has_bundle: s.has_bundle,
+    include_low_qc: s.include_low_qc,
     year_min: s.year_min,
     year_max: s.year_max,
     min_file_samples: s.min_file_samples,

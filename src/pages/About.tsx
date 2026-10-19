@@ -120,6 +120,49 @@ const About = () => {
           </section>
 
           {/* ── References ── */}
+          {/* ── Quality control ── */}
+          <section id="qc" className="pb-12 mb-12 border-b border-border scroll-mt-20">
+            <h2>Quality control</h2>
+            <p>
+              Every sample in a published file is measured by the pipeline, and two numbers decide what happens to it: the median
+              number of genes detected per cell, and the fraction of the sample's reads that map to the reference.
+            </p>
+            {(() => {
+              const r = stats?.qc.rules;
+              const rm = r?.removed, low = r?.low_qc;
+              return (
+                <ul>
+                  <li>
+                    <strong>Removed.</strong> Fewer than {Math.round((rm?.max_mapping_rate ?? 0.05) * 100)}% of reads map <em>and</em> fewer than{" "}
+                    {rm?.max_median_genes ?? 10} genes are detected per cell. These are failed runs with nothing in them (a typical cell holds
+                    a handful of UMIs). They are left out of the catalog entirely: not listed, not counted
+                    {stats ? `; ${fmtInt(stats.qc.removed_samples)} so far` : ""}.
+                  </li>
+                  <li>
+                    <strong>Low QC.</strong> Fewer than {low?.min_median_genes ?? 30} genes per cell, <em>or</em> fewer than{" "}
+                    {Math.round((low?.min_mapping_rate ?? 0.2) * 100)}% of reads mapped. singlet's QC algorithms detected an issue with these
+                    samples and it is recommended to proceed with caution
+                    {stats ? `; ${fmtInt(stats.qc.low_qc_samples)} so far` : ""}. They are left out of searches, counts and bulk downloads by
+                    default. Switch on <em>Include low-QC samples</em> in Browse, or pass <Mono>include_low_qc=1</Mono> to the API and the
+                    MCP tools, to see them.
+                  </li>
+                  <li><strong>Everything else</strong> passes.</li>
+                </ul>
+              );
+            })()}
+            <p>
+              The cut points are deliberately conservative. Working samples have a median of several hundred genes per cell and about
+              80% of reads mapped; the usual 200-gene cell filter would flag more than twice as many samples. What the rules catch is a
+              separate population: the failed samples sit in a spike at one gene or fewer, were sequenced as deeply as the samples that
+              worked, and often sit beside healthy samples from the same experiment.
+            </p>
+            <p>
+              Samples stay in each study's <Mono>.singlet</Mono> file, which is one file per study, so a downloaded study still contains
+              them. The study page marks each flagged sample with the reason, and <Mono>get_sample_qc</Mono> reports a QC status for every
+              sample. Counts on this site, in <Mono>/api/stats</Mono> and in manifests cover samples that passed QC unless you ask for more.
+            </p>
+          </section>
+
           <section id="references" className="pb-12 mb-12 border-b border-border scroll-mt-20">
             <h2>References</h2>
             <p>Five reference builds appear in the published files:</p>
@@ -188,9 +231,9 @@ const About = () => {
               These are the same numbers shown on the home page and returned by <Mono>/api/stats</Mono> as{" "}
               <Mono>studies_with_files</Mono>, <Mono>samples_in_files</Mono> and <Mono>cells_in_files</Mono>: studies
               that have a published <Mono>.singlet</Mono> file you can download and use right now, the usable samples in
-              those files, and the cells called in them. A sample is usable when its count matrix is non-empty and it
-              called at least one cell; a study counts when at least one of its samples is usable and its reference matches
-              its species
+              those files that passed QC, and the cells called in them. A sample passes when its count matrix is non-empty, it
+              called at least one cell, and singlet's QC did not remove or flag it (see Quality control above); a study counts
+              when at least one of its samples passes and its reference matches its species
               {stats && stats.studies_withheld > 0
                 ? `. ${fmtInt(stats.files_published)} files are published in all; the other ${fmtInt(stats.studies_withheld)} hold no usable sample or were aligned to the wrong reference, so they are not counted here and do not appear in searches unless you ask for unbuilt studies`
                 : ""}
@@ -200,7 +243,7 @@ const About = () => {
             <dl className="grid grid-cols-2 md:grid-cols-3 gap-3 my-5">
               {[
                 { label: "downloadable studies", value: stats ? fmtInt(stats.studies_with_files) : null },
-                { label: "usable samples in files", value: stats ? fmtInt(stats.samples_in_files) : null },
+                { label: "samples that passed QC", value: stats ? fmtInt(stats.samples_in_files) : null },
                 { label: "cells called in files", value: stats ? fmtCompact(stats.cells_in_files) : null },
               ].map((s) => (
                 <div key={s.label} className="surface px-4 py-3">
@@ -250,8 +293,10 @@ const About = () => {
                       ["In progress", stats.accounting.samples_other],
                       ["Processed, not in a published file yet", stats.accounting.done_not_in_files],
                       ["In a file, empty or no cells called", stats.accounting.in_files_unusable],
-                      ["In a file, usable, but the study is withheld", stats.accounting.in_files_usable_withheld],
-                      ["Usable in a downloadable study", stats.accounting.in_files_usable_downloadable],
+                      ["In a file, failed run (removed by QC)", stats.accounting.in_files_removed],
+                      ["In a file, flagged low QC (left out by default)", stats.accounting.in_files_low_qc],
+                      ["Passed QC, but the study is withheld", stats.accounting.in_files_usable_withheld],
+                      ["Passed QC in a downloadable study", stats.accounting.in_files_usable_downloadable],
                     ].map(([label, n]) => (
                       <tr key={String(label)} className="border-b border-border">
                         <td className="py-1.5 pr-4">{label}</td>
