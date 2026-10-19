@@ -7,6 +7,7 @@ import Footer from "@/components/Footer";
 import { DownloadPanel } from "@/components/DownloadPanel";
 import { ConditionsPanel, type ConditionFilter } from "@/components/study/ConditionsPanel";
 import { StudySamplesTable } from "@/components/study/StudySamplesTable";
+import CompletenessPanel from "@/components/study/CompletenessPanel";
 import { CiteDialog } from "@/components/study/CiteDialog";
 import { FileTreePanel } from "@/components/study/FileTreePanel";
 import { ProvenancePanel } from "@/components/study/ProvenancePanel";
@@ -189,11 +190,6 @@ const StudyDetail = () => {
         })()
       : null;
     const uniq = (pick: (s: GsmRow) => string | null | undefined) => [...new Set(samples.map(pick).filter(Boolean) as string[])];
-    const reasons = failed.reduce((acc, s) => {
-      const k = s.failure_category ?? "unknown";
-      acc[k] = (acc[k] ?? 0) + 1;
-      return acc;
-    }, {} as Record<string, number>);
     const organisms = meta?.organisms?.length ? meta.organisms : uniq((s) => s.organism_primary ?? s.organism);
     const tissueGroups = meta?.tissue_groups?.length ? meta.tissue_groups : uniq((s) => s.tissue_group);
     const diseaseGroups = meta?.disease_groups?.length ? meta.disease_groups : uniq((s) => s.disease_group);
@@ -224,7 +220,6 @@ const StudyDetail = () => {
       nWithCharacteristics,
       year,
       geoTotal,
-      reasons: Object.entries(reasons).sort((a, b) => b[1] - a[1]),
     };
   }, [data]);
 
@@ -321,7 +316,6 @@ const StudyDetail = () => {
     nWithCharacteristics,
     year,
     geoTotal,
-    reasons,
   } = derived;
   const hasQc = avgMR != null || medGenes != null;
 
@@ -463,19 +457,7 @@ const StudyDetail = () => {
       <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-8 items-start">
         {/* Main column */}
         <div className="min-w-0">
-          {/* Failed note */}
-          {failed.length > 0 && (
-            <div className="warning-surface px-4 py-3 mb-4 text-[13.5px]">
-              <p className="font-medium">
-                {failed.length} of {samples.length} samples did not complete processing and are not in the file.
-              </p>
-              {reasons.length > 0 && (
-                <p className="mt-1 text-warning/90">
-                  {reasons.map(([r, n]) => `${failureLabel(r === "unknown" ? null : r)} (${n})`).join(", ")}.
-                </p>
-              )}
-            </div>
-          )}
+          <CompletenessPanel c={data.completeness} />
 
           {/* Facts */}
           <dl className={cn("grid grid-cols-2 md:grid-cols-4 gap-2", hasQc || processed.length === 0 ? "mb-6" : "mb-2")}>

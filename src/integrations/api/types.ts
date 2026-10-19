@@ -387,6 +387,8 @@ export interface GsmRow {
   qc_flag?: QcFlag | null;
   /** Flagged by singlet's QC (few genes or few reads mapped): proceed with caution. */
   low_qc?: boolean;
+  /** Why the sample is not usable; null for processed samples. */
+  exclusion?: Exclusion | null;
   qc_message?: string | null;
   qc_reasons?: string[];
   mapping_rate: number | null;
@@ -434,6 +436,32 @@ export interface StudyMeta {
   year: number | null;
 }
 
+export type ExclusionClass = "not_processable" | "retry" | "qc" | "queued";
+
+export interface Exclusion {
+  class: ExclusionClass;
+  reason: string;
+}
+
+/** Where every GEO sample of a study ended up. */
+export interface Completeness {
+  geo_samples: number;
+  not_queued: number;
+  queued: number;
+  processed: number;
+  file_pending: number;
+  in_file: number | null;
+  passed_qc: number | null;
+  low_qc: number;
+  removed: number;
+  not_processable: number;
+  retry: number;
+  failed_qc: number;
+  reasons: { class: ExclusionClass; reason: string; n: number }[];
+  state: "complete" | "partial" | "file_pending" | "none";
+  notes: string[];
+}
+
 export interface GseDetailResponse {
   series: GseRow;
   meta: StudyMeta | null;
@@ -441,6 +469,7 @@ export interface GseDetailResponse {
   conditions: Condition[];
   conditions_label: string;
   publications: PublicationRow[];
+  completeness: Completeness | null;
 }
 
 export interface GsmDetailResponse {

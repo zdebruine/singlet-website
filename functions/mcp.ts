@@ -62,7 +62,7 @@ const PROTOCOL_VERSIONS = ["2025-06-18", "2025-03-26"] as const;
 const LATEST_PROTOCOL = PROTOCOL_VERSIONS[0];
 const MAX_SAMPLES_IN_STUDY = 60;
 
-const INSTRUCTIONS = `singlet.bio is an open atlas of public single-cell RNA-seq studies from GEO, all reprocessed the same way. One CC0 .singlet file per study (zip64) holding per-sample count matrices and per-sample QC.
+const INSTRUCTIONS = `singlet.bio is an open atlas of public single-cell RNA-seq studies from GEO, reprocessed from raw reads with one pipeline. Coverage is partial: studies whose deposited reads cannot be processed are left out, and get_study reports completeness for each study. One CC0 .singlet file per study (zip64) holding per-sample count matrices and per-sample QC.
 
 Recommended order: search_datasets → assess_study or get_study → get_sample_qc → get_modalities (what is in the file beyond gene counts) → get_download_url (whole study) or get_partial_download (one sample's matrix, by HTTP range) → export_manifest for a cohort. compare_studies and find_matched_controls help pick controls.
 
@@ -113,7 +113,7 @@ const TOOLS = [
         disease: { type: "array", items: { type: "string", enum: DISEASE_GROUPS as unknown as string[] }, description: "Extra canonical disease groups." },
         assay: { type: "array", items: { type: "string", enum: ASSAY_FAMILIES as unknown as string[] }, description: "Extra canonical assay families." },
         min_cells: { type: "integer", minimum: 0, description: "Only studies/samples with at least this many cells." },
-        include_unbuilt: { type: "boolean", default: false, description: "Also return studies whose .singlet file is not built yet." },
+        include_unbuilt: { type: "boolean", default: false, description: "Also return studies whose .singlet file is not published yet." },
         include_low_qc: { type: "boolean", default: false, description: "Also count and return samples singlet's QC flagged (few genes detected or few reads mapped). Left out by default; proceed with caution if you include them." },
       },
       required: ["query"],
@@ -612,7 +612,7 @@ async function searchDatasets(
       lines.push(`- ${s.gse_id} — ${s.title ?? "(untitled)"}`);
       lines.push(`  ${[s.organism, s.tissues.join("/"), s.diseases.join("/"), s.assays.join("/")].filter(Boolean).join(" · ")} · ${fmt(s.n_samples)} samples${s.sample_count_source === "catalog" ? " (catalog)" : " in file"} · ${s.file_cells != null ? fmt(s.file_cells) + " cells in file" : s.n_cells != null ? fmt(s.n_cells) + " cells (catalog)" : "cell count unreliable"}${s.year ? " · " + s.year : ""}`);
       if (s.why) lines.push(`  why: ${s.why}`);
-      lines.push(`  ${s.has_bundle ? `load: singlet.load("${s.gse_id}")` : "file not built yet"} · ${s.study_url}`);
+      lines.push(`  ${s.has_bundle ? `load: singlet.load("${s.gse_id}")` : "file pending"} · ${s.study_url}`);
     }
     if (b.total === 0 && b.suggestions.length) {
       lines.push("");
@@ -686,10 +686,11 @@ function studyText(d: StudyDetail): string {
   lines.push(`${fmt(s.n_gsm_done)} of ${fmt(s.n_gsm_total)} samples processed · ${fmt(s.n_cells)} cells${s.n_gsm_failed ? ` · ${fmt(s.n_gsm_failed)} failed` : ""}`);
   if (d.conditions_label) lines.push(`Conditions: ${d.conditions_label}`);
   if (m?.cell_types_raw.length) lines.push(`Cell types recorded: ${m.cell_types_raw.slice(0, 15).join(", ")}`);
-  lines.push(s.bundle_url ? `File: ${s.bundle_url}${s.bundle_bytes ? ` (${fmtBytes(s.bundle_bytes)})` : ""}` : "File: not built yet");
+  lines.push(s.bundle_url ? `File: ${s.bundle_url}${s.bundle_bytes ? ` (${fmtBytes(s.bundle_bytes)})` : ""}` : "File: pending (samples processed, file not yet published)");
   if (s.bundle_url && s.usable_samples === 0) lines.push("⚠ This file currently contains no usable count data (empty matrices or 0 called cells).");
   else if (s.usable_samples != null && s.assessed_samples != null && s.usable_samples < s.assessed_samples)
     lines.push(`⚠ ${s.assessed_samples - s.usable_samples} of ${s.assessed_samples} samples in the file have no count data: ${s.unusable_gsm_ids.join(", ")}.`);
+  for (const n of d.completeness.notes) lines.push(`Completeness: ${n}`);
   if (s.low_qc_samples) lines.push(`⚠ ${s.low_qc_samples} of the samples in this file are flagged low QC (${s.low_qc_gsm_ids.join(", ")}). singlet's QC algorithms detected an issue with them; proceed with caution.`);
   if (s.reference_mismatch_note) lines.push(`⚠ ${s.reference_mismatch_note}`);
   lines.push(`Load: singlet.load("${s.id}")  /  R: load("${s.id}")`);
