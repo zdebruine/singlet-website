@@ -9,6 +9,7 @@
  */
 import { referenceMismatch } from "./catalog-refresh";
 import { safeList } from "./json";
+import { normalizeModality, sanitizeQcFlag } from "./data-quality";
 import { parseCharacteristics, summarizeConditions, type ConditionSummary } from "./conditions";
 import { cellCountVerdict, type CellCountVerdict } from "./suspect-cells";
 import { statusText } from "./search-core";
@@ -189,7 +190,8 @@ export async function loadStudy(db: D1Database, rawId: string): Promise<StudyDet
       status_text: statusText(r.status as string, r.failure_category as string | null),
       suspect_cells: verdict === "suspect",
       cell_verdict: verdict,
-      qc_flag: (r.qc_flag as string | null) ?? null,
+      qc_flag: sanitizeQcFlag(r.qc_flag),
+      modality: normalizeModality(r.modality, r.assay_family),
       organism_label: organismToCommon((r.organism_primary as string | null) ?? (r.organism as string | null)),
     };
   });

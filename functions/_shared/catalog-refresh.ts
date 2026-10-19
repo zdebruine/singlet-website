@@ -214,9 +214,17 @@ export async function refreshRemaining(db: D1Database): Promise<Record<string, n
   return { gsm_normalize: a, sample_usable: b, sample_usable_no_file: e, bundle_manifest: c, gse_meta: d };
 }
 
-const normOrganism = (raw: string | null): string => {
-  const first = (raw ?? "").split(/[;,]/)[0]?.trim() ?? "";
-  return organismToScientific(first) ?? (first || "Unknown");
+/**
+ * The first part of a "A; B" organism field that names a known species. Taking only the first part turned
+ * "Homo; Homo sapiens" into "Homo", and a bare genus stayed a bare genus ("Mus").
+ */
+export const normOrganism = (raw: string | null): string => {
+  const parts = (raw ?? "").split(/[;,]/).map((p) => p.trim()).filter(Boolean);
+  for (const p of parts) {
+    const sci = organismToScientific(p);
+    if (sci) return sci;
+  }
+  return parts[0] || "Unknown";
 };
 
 /** One bounded refresh step. `n` = studies (and 20 × n gsm rows) per phase. */

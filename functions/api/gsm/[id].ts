@@ -5,6 +5,7 @@
 import { serverError } from "../../_shared/errors";
 import { corsOk, corsErr, handleOptions } from "../../_shared/cors";
 import { safeJson, safeList } from "../../_shared/json";
+import { normalizeModality, sanitizeQcFlag } from "../../_shared/data-quality";
 
 interface Env {
   DB: D1Database;
@@ -16,7 +17,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, params }) => {
     if (!id) return corsErr("Missing id", 400);
 
     const sample = await env.DB.prepare(
-      `SELECT gsm_id, gse_id, organism, protocol, modality, tissue, cell_type, donor_id,
+      `SELECT gsm_id, gse_id, organism, protocol, assay_family, modality, tissue, cell_type, donor_id,
               disease, sex, n_cells, mapping_rate, median_genes, median_umis, mt_pct,
               status, qc_flag, failure_category, failure_detail, singlet_version,
               pipeline_date, pz_size_bytes, title, source, srr_ids, characteristics, last_updated
@@ -43,11 +44,13 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, params }) => {
     return corsOk({
       sample: {
         ...sample,
+        modality: normalizeModality(sample.modality, sample.assay_family),
+        qc_flag: sanitizeQcFlag(sample.qc_flag),
         srr_ids: safeList(sample.srr_ids),
         characteristics: safeJson(sample.characteristics, sample.characteristics ?? null),
       },
       series: seriesRow ?? null,
-      siblings: siblingsResult.results,
+      siblings: siblingsResult.results.map((r) => ({ ...r, qc_flag: sanitizeQcFlag(r.qc_flag) })),
     });
   } catch (e) {
     return serverError(e, "gsm/[id]");
