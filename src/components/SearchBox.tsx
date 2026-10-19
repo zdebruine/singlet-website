@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search } from "lucide-react";
+import { ArrowRight, Search, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { searchDestination } from "@/lib/search-routing";
 
@@ -10,7 +10,7 @@ export const SEARCH_PLACEHOLDER = "Describe what you're looking for — a tissue
 /**
  * Site search. There is exactly one search input per page; this component
  * renders it in two sizes:
- *  - "hero": the home page box (1.5px teal border, attached gradient button)
+ *  - "hero": the home page box, a pill with a soft shadow that lifts on hover and focus
  *  - "compact": the header input on pages that have no search of their own
  * Everything typed here is sent to the same AI-interpreted search (/browse?q=…);
  * accessions go straight to the study.
@@ -69,10 +69,11 @@ export function SearchBox({
   if (variant === "hero") {
     return (
       <form onSubmit={submit} role="search" className={cn("w-full", className)}>
-        <div className="flex items-stretch bg-card rounded overflow-hidden border border-primary focus-within:ring-2 focus-within:ring-[var(--teal-200)]">
+        <div className="flex items-center gap-2 bg-card rounded-full border border-border pl-5 pr-2 h-14 shadow-[0_1px_3px_rgba(15,31,29,0.10)] transition-shadow hover:shadow-[0_2px_10px_rgba(15,31,29,0.16)] focus-within:shadow-[0_2px_12px_rgba(15,31,29,0.20)] focus-within:border-primary/50">
           <label htmlFor={inputId} className="sr-only">
             Search the atlas
           </label>
+          <Search size={18} className="shrink-0 text-muted-foreground" aria-hidden="true" />
           <input
             id={inputId}
             ref={inputRef}
@@ -84,15 +85,27 @@ export function SearchBox({
             onChange={(e) => setValue(e.target.value)}
             onKeyDown={onInputKeyDown}
             placeholder={placeholder ?? SEARCH_PLACEHOLDER}
-            className="flex-1 min-w-0 bg-transparent px-4 h-[52px] text-[15px] text-foreground placeholder:text-muted-foreground focus:outline-none [&::-webkit-search-cancel-button]:appearance-none"
+            className="flex-1 min-w-0 bg-transparent h-full text-[16px] text-foreground placeholder:text-muted-foreground focus:outline-none [&::-webkit-search-cancel-button]:appearance-none"
           />
+          {value && (
+            <button
+              type="button"
+              onClick={() => {
+                setValue("");
+                inputRef.current?.focus();
+              }}
+              className="shrink-0 grid place-items-center h-9 w-9 rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+              aria-label="Clear search"
+            >
+              <X size={16} />
+            </button>
+          )}
           <button
             type="submit"
-            className="btn-primary h-auto rounded-none px-6 text-[15px] shrink-0 border-0"
+            className="shrink-0 grid place-items-center h-10 w-10 rounded-full bg-primary text-primary-foreground hover:brightness-110 transition"
             aria-label="Search"
           >
-            <Search size={16} />
-            <span>Search</span>
+            <ArrowRight size={18} />
           </button>
         </div>
       </form>

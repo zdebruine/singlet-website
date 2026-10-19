@@ -44,18 +44,19 @@ const Index = () => {
 
       <main className="flex-1">
         {/* ── Hero ── */}
-        <section className="container-site pt-16 md:pt-20 pb-10 text-center">
-          <h1 className="type-display text-foreground mx-auto max-w-[760px]">
-            Find single-cell data.
+        <section className="container-site pt-14 md:pt-16 pb-10 text-center">
+          <h1 className="type-display text-foreground mx-auto max-w-[820px]">
+            AI-ready single-cell data,
             <br />
-            Load it in one line.
+            at your fingertips.
           </h1>
           <p className="mt-5 text-[17px] md:text-[19px] leading-relaxed text-muted-foreground mx-auto max-w-[720px]">
-            Public scRNA-seq studies from GEO, reprocessed from raw reads, one file per study. Free, CC0.
+            Public scRNA-seq studies from GEO, reprocessed from raw reads and quality-checked. Search in plain English, load a study
+            in one line, or ask Claude. Free, CC0.
           </p>
 
-          <div className="mt-9 mx-auto max-w-[820px]">
-            <SearchBox variant="hero" />
+          <div className="mt-8 mx-auto max-w-[760px]">
+            <SearchBox variant="hero" placeholder={`Try "${EXAMPLE_QUERIES[0]}"`} />
             <p className="mt-2.5 text-[13px] text-muted-foreground">
               Plain English works. So do GEO accessions (GSE…, GSM…) and keywords.
             </p>
@@ -72,6 +73,25 @@ const Index = () => {
               <Link to="/quickstart" className="text-primary hover:underline">New here? 5-minute quickstart →</Link>
             </p>
           </div>
+
+          <figure className="mt-10 mx-auto max-w-[760px]">
+            <div className="surface overflow-hidden p-0">
+              <picture>
+                <source media="(prefers-reduced-motion: reduce)" srcSet="/demo/singlet-demo-poster.png" />
+                <img
+                  src="/demo/singlet-demo.gif"
+                  width={960}
+                  height={540}
+                  alt="A Python notebook loads study GSE138867 and plots cells per sample; then Claude searches singlet.bio for microglia in the aging mouse brain and finds the largest study."
+                  className="block w-full h-auto"
+                />
+              </picture>
+            </div>
+            <figcaption className="mt-2.5 text-[13px] text-muted-foreground">
+              Load a study in a notebook, or ask Claude to find and load it.{" "}
+              <Link to="/docs/mcp" className="text-primary hover:underline">Connect Claude →</Link>
+            </figcaption>
+          </figure>
         </section>
 
         {/* ── Live stats ── */}
