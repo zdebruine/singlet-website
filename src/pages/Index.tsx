@@ -96,7 +96,7 @@ const Index = () => {
         <section className="container-site pb-14" aria-labelledby="qc-h">
           <div className="mx-auto max-w-[900px] surface p-6 md:p-8">
             <p className="type-mono text-primary">Quality control</p>
-            <h2 id="qc-h" className="type-h2 mt-2">We clean the data before you see it</h2>
+            <h2 id="qc-h" className="type-h2 mt-2">Rigorous quality control</h2>
             <p className="mt-3 type-small text-muted-foreground max-w-[64ch]">
               Public single-cell data is uneven: some samples never aligned and carry almost no signal. singlet measures every sample
               and acts on it. Failed runs are removed. Samples with an issue are flagged low QC, kept out of searches, counts and bulk
@@ -146,7 +146,7 @@ const Index = () => {
         {/* ── Install / load ── */}
         <section className="container-site pb-20">
           <div className="grid md:grid-cols-2 gap-4">
-            <div className="surface p-4">
+            <div className="surface p-4 min-w-0">
               <div className="flex items-baseline justify-between mb-3">
                 <h2 className="text-[17px] font-display">Python</h2>
                 <Link to="/docs#python" className="text-[13px] text-primary hover:underline">Python API →</Link>
@@ -158,7 +158,7 @@ const Index = () => {
                 <Link to="/docs#install" className="text-primary hover:underline">Install details →</Link>
               </p>
             </div>
-            <div className="surface p-4">
+            <div className="surface p-4 min-w-0">
               <div className="flex items-baseline justify-between mb-3">
                 <h2 className="text-[17px] font-display">R</h2>
                 <Link to="/docs#r" className="text-[13px] text-primary hover:underline">R package →</Link>
