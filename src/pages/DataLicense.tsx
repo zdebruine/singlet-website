@@ -4,7 +4,7 @@ import Footer from "@/components/Footer";
 import { usePageMeta } from "@/hooks/usePageMeta";
 
 const DataLicense = () => {
-    usePageMeta({ title: "Data and software license", description: "singlet.bio atlas data is CC0; singlet software is MIT licensed.", path: "/data-license" });
+    usePageMeta({ title: "Data and software license", description: "singlet.bio atlas data and site code are CC0; the singlet client is MIT licensed; Singlet Cloud is a separate commercial service.", path: "/data-license" });
     return (
     <div className="min-h-screen bg-background">
         <Navbar />
@@ -41,6 +41,14 @@ const DataLicense = () => {
                                 <tr className="border-b border-border/50">
                                     <td className="px-4 py-2.5 font-medium text-foreground"><span className="font-mono">singlet</span> software (Python/R/C++)</td>
                                     <td className="px-4 py-2.5 text-muted-foreground text-xs">MIT License</td>
+                                </tr>
+                                <tr className="border-b border-border/50">
+                                    <td className="px-4 py-2.5 font-medium text-foreground">singlet.bio website, catalog API and MCP server</td>
+                                    <td className="px-4 py-2.5 text-muted-foreground text-xs">CC0 1.0</td>
+                                </tr>
+                                <tr className="border-b border-border/50">
+                                    <td className="px-4 py-2.5 font-medium text-foreground">Singlet Cloud (cloud.singlet.bio)</td>
+                                    <td className="px-4 py-2.5 text-muted-foreground text-xs">Commercial service, not open source</td>
                                 </tr>
                             </tbody>
                         </table>

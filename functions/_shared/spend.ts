@@ -274,7 +274,7 @@ export interface AllowanceSnapshot {
 }
 
 export const BILLING_NOTE =
-  "This is your monthly AI allowance. Usage-based billing for accounts that need more is being built; until then AI features pause when it is used up. Searching and downloads never need it.";
+  "This is your monthly AI allowance. For more, Singlet Cloud (https://cloud.singlet.bio) sells credits for AI search and analyses; on singlet.bio, AI features pause when it is used up. Searching and downloads never need it.";
 
 export async function allowanceFor(db: D1Database, env: SpendEnv, subject: string, now: number = Date.now()): Promise<AllowanceSnapshot> {
   const month = monthOf(now);
@@ -311,7 +311,7 @@ export function allowanceMessage(reason: "allowance" | "service_cap" | "anon_poo
   if (reason === "service_cap") return "AI features are paused for everyone until the start of next month. Searching and downloads still work.";
   if (reason === "unavailable") return "AI features are unavailable for a moment. Searching and downloads still work.";
   const when = snap ? snap.resets_at.slice(0, 10) : "the start of next month";
-  return `You have used this month's AI allowance. It renews on ${when}. Usage-based billing for accounts that need more is being built. Searching and downloads still work.`;
+  return `You have used this month's AI allowance. It renews on ${when}. For more AI search and analyses, use Singlet Cloud: https://cloud.singlet.bio. Searching and downloads still work.`;
 }
 
 // ── Request counters (burst limits) ─────────────────────────────────────────

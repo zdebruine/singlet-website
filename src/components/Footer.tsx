@@ -10,6 +10,7 @@ const LINKS: { label: string; to?: string; href?: string }[] = [
   { label: "About the data", to: "/about" },
   { label: "Cite", to: "/about#cite" },
   { label: "GitHub", href: GITHUB_REPO },
+  { label: "Singlet Cloud", href: "https://cloud.singlet.bio" },
 ];
 
 const LEGAL = [
@@ -23,7 +24,7 @@ const Footer = () => (
     <div className="container-site py-7 flex flex-col md:flex-row md:items-center gap-5 md:gap-8">
       <Logo variant="lockup" theme="dark" height={24} />
       <div className="md:flex-1 space-y-1">
-        <p className="text-[13px] text-dark-muted">Data CC0 · Code MIT · No account required</p>
+        <p className="text-[13px] text-dark-muted">Data and site CC0 · No account required</p>
         {/* The support contact for the site, the API and the MCP connector (no email address exists). */}
         <p className="text-[13px] text-dark-muted">
           Contact and support (site, API, MCP connector):{" "}

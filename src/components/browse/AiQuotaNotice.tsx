@@ -40,9 +40,14 @@ export function AiQuotaBadge({ className }: { className?: string }) {
     return (
       <span
         className={cn("inline-flex items-center gap-1.5 text-[11px] text-muted-foreground whitespace-nowrap tabular", className)}
-        title={`Your monthly AI allowance${left.renews ? `, renews ${left.renews.slice(0, 10)}` : ""}. Repeated questions come from cache and use none. Billing for heavier use is coming.`}
+        title={`Your monthly AI allowance${left.renews ? `, renews ${left.renews.slice(0, 10)}` : ""}. Repeated questions come from cache and use none. For more AI search and analyses, use Singlet Cloud (cloud.singlet.bio).`}
       >
         AI allowance: <span className={cn("font-medium", left.pct <= 10 ? "text-warning" : "text-foreground/80")}>{left.pct}% left</span>
+        {left.pct <= 25 && (
+          <a href="https://cloud.singlet.bio" target="_blank" rel="noopener noreferrer" className="text-ai hover:underline underline-offset-2">
+            more on Singlet Cloud
+          </a>
+        )}
       </span>
     );
   }
