@@ -48,7 +48,7 @@ function useHashScroll() {
 const About = () => {
   usePageMeta({
     title: "About the data",
-    description: "How every study in the singlet atlas is processed, which references are used, processing status, license (CC0 data, MIT code) and how to cite.",
+    description: "How every study in the singlet atlas is processed, which references are used, processing status, license (CC0 data and site code) and how to cite.",
     path: "/about",
   });
   useHashScroll();
@@ -329,6 +329,8 @@ const About = () => {
               You can use it for anything, including commercial work, with no attribution requirement. The{" "}
               <Mono>singlet</Mono> software is{" "}
               <a href="https://github.com/Singlet-Bio/singlet/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">MIT licensed</a>.
+              The code of this site, its catalog API and MCP server is CC0 too. Singlet Cloud, the paid AI layer at
+              {" "}<a href="https://cloud.singlet.bio" target="_blank" rel="noopener noreferrer">cloud.singlet.bio</a>, is a separate commercial service.
               Details are on the <Link to="/data-license">license page</Link>.
             </p>
             <h3>How to cite</h3>

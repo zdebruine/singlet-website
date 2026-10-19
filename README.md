@@ -1,6 +1,6 @@
 # singlet.bio
 
-Website, catalog API and MCP server for the **singlet** atlas — public single-cell RNA-seq studies from GEO, reprocessed from raw reads with one pipeline, one `.singlet` file per study. Data is CC0, code is MIT.
+Website, catalog API and MCP server for the **singlet** atlas — public single-cell RNA-seq studies from GEO, reprocessed from raw reads with one pipeline, one `.singlet` file per study. Data and this repository's code are CC0 1.0. Singlet Cloud (cloud.singlet.bio), the paid AI layer, is a separate, closed-source service.
 
 ```bash
 pip install "singlet-bio @ git+https://github.com/Singlet-Bio/singlet"

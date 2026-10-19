@@ -133,7 +133,7 @@ describe("what the caller sees", () => {
     expect(snap.allowance).toMatchObject({ unit: "weighted tokens", limit: 1_000_000, used: 0, remaining: 1_000_000, output_token_weight: 5 });
     expect(snap.resets_at).toBe("2026-11-01T00:00:00.000Z");
     expect(JSON.stringify(snap)).not.toMatch(/\$|usd|dollar|cent/i);
-    expect(snap.billing).toMatch(/billing/i);
+    expect(snap.billing).toMatch(/Singlet Cloud/);
     expect(allowanceMessage("allowance", snap)).not.toMatch(/\$|usd|dollar/i);
     expect(allowanceMessage("allowance", snap)).toMatch(/2026-11-01/);
   });
