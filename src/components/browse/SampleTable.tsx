@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { AlertTriangle, ExternalLink } from "lucide-react";
+import { ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { fmtInt } from "@/lib/catalog-display";
 import type { SampleRow } from "@/integrations/api/types";
@@ -21,15 +21,6 @@ export function conditionPairs(ch: Record<string, string> | null | undefined, ma
   return out;
 }
 
-function StatusCell({ s }: { s: SampleRow }) {
-  if (s.status_code === "DONE") return <span className="status-ok">processed</span>;
-  if (s.status_code === "DONE_QC_WARN") return <span className="flag">QC warning</span>;
-  return (
-    <span className="status-fail" title={s.status}>
-      {s.status.replace(/^failed:\s*/i, "failed · ")}
-    </span>
-  );
-}
 
 const text = (v: string | null | undefined) => <span title={v ?? undefined}>{v || "—"}</span>;
 
@@ -94,13 +85,9 @@ export const SAMPLE_COLUMNS: ColumnDef<SampleRow>[] = [
     align: "right",
     width: "w-[84px]",
     render: (r) => (
-      <span className={cn(r.suspect_cells && "text-warning")}>
-        {r.suspect_cells && <AlertTriangle size={11} className="inline mr-1" aria-label="Implausible cell count — under review" />}
-        {r.n_cells == null ? "—" : fmtInt(r.n_cells)}
-      </span>
+      <span>{r.n_cells == null ? "—" : fmtInt(r.n_cells)}</span>
     ),
   },
-  { key: "status", label: "Status", default: false, width: "w-[110px]", render: (r) => <StatusCell s={r} /> },
   {
     key: "geo",
     label: "GEO",

@@ -46,24 +46,14 @@ interface DownloadPanelProps {
   bundleUrl: string | null | undefined;
   /** Bundle size in bytes */
   bundleBytes: number | null | undefined;
-  /** Number of samples actually present in the bundle, when known. */
-  bundleNSamples?: number | null;
-  /** Number of processed samples in the catalog (for "N of M" messaging). */
-  processedSamples?: number | null;
-  /** Samples with usable count data, and samples assessed (null = unknown). */
-  usableSamples?: number | null;
-  assessedSamples?: number | null;
   /** Single-column layout for a narrow sidebar. */
   stacked?: boolean;
   className?: string;
 }
 
-export function DownloadPanel({ accession, bundleUrl, bundleBytes, bundleNSamples, processedSamples, usableSamples, assessedSamples, stacked = false, className }: DownloadPanelProps) {
+export function DownloadPanel({ accession, bundleUrl, bundleBytes, stacked = false, className }: DownloadPanelProps) {
   const downloadUrl = bundleUrl || null;
   const [lang, setLang] = useLanguage();
-  const hollow = !!downloadUrl && usableSamples === 0;
-  const partlyEmpty = !!downloadUrl && usableSamples != null && assessedSamples != null && usableSamples > 0 && usableSamples < assessedSamples;
-  const showSampleCount = downloadUrl && bundleNSamples != null && processedSamples != null && bundleNSamples !== processedSamples;
   // In the narrow sidebar the trailing comments don't fit; drop them there.
   // Install lines live on /docs#install — a pip command never goes in a Python block.
   const py = stacked
@@ -97,11 +87,6 @@ export function DownloadPanel({ accession, bundleUrl, bundleBytes, bundleNSample
           <span className="flag self-start">File pending</span>
         )}
       </div>
-      {hollow ? (
-        <p role="alert" className="m-4 border border-destructive/40 bg-destructive/10 text-destructive px-3 py-2 text-[13px] font-medium" style={{ borderRadius: 3 }}>
-          This file currently contains no usable count data.
-        </p>
-      ) : (
         // min-w-0 lets each block shrink to its column so long lines scroll inside
         // the block instead of being clipped; the narrow sidebar soft-wraps instead.
         <div className="p-3 space-y-2 [&>*]:min-w-0">
@@ -123,12 +108,8 @@ export function DownloadPanel({ accession, bundleUrl, bundleBytes, bundleNSample
           </div>
           <CodeBlock code={lang === "python" ? py : lang === "r" ? r : curl} label={lang} compact wrap={stacked} />
         </div>
-      )}
-      {hollow ? null : downloadUrl ? (
+      {downloadUrl ? (
         <p className="px-4 pb-3 text-xs text-muted-foreground leading-relaxed">
-          {partlyEmpty
-            ? `Contains ${usableSamples} usable of ${assessedSamples} samples. `
-            : showSampleCount ? `Contains ${bundleNSamples} of ${processedSamples} processed samples. ` : ""}
           One file per study; filter by <code className="code-inline">gsm_id</code> after loading.{" "}
           <Link to="/docs#install" className="text-primary hover:underline">Install</Link> ·{" "}
           <Link to="/docs#singlet-file" className="text-primary hover:underline">What's inside →</Link>

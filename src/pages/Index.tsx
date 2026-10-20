@@ -11,7 +11,8 @@ import { EXAMPLE_QUERIES } from "@/lib/search-routing";
 import { Reveal } from "@/components/landing/Reveal";
 import { StudyAnatomy } from "@/components/landing/StudyAnatomy";
 import { WaysIn } from "@/components/landing/WaysIn";
-import { Columns, FormatSizeChart, H5AD_RATIO, HBars, StackedBar } from "@/components/landing/charts";
+import { Columns, FormatSizeChart, H5AD_RATIO, HBars } from "@/components/landing/charts";
+import { GateFunnel, sampleFunnel } from "@/components/landing/GateFunnel";
 
 // Page plan and the visitor profile behind it: docs/LANDING.md. Few words; the charts carry the message.
 
@@ -82,17 +83,6 @@ const Index = () => {
     highlight: l.key !== "gene_counts",
   }));
 
-  // Every processed sample in a published file, in exactly one bucket (/api/stats accounting).
-  const acc = stats?.accounting ?? {};
-  const qcParts = stats
-    ? [
-        { label: "passed QC", value: acc.in_files_usable_downloadable ?? stats.samples_in_files, className: "bg-primary" },
-        { label: "low QC, kept apart", value: acc.in_files_low_qc ?? stats.qc.low_qc_samples, className: "bg-[var(--chart-warning)]" },
-        { label: "failed, removed", value: acc.in_files_removed ?? stats.qc.removed_samples, className: "bg-[var(--chart-danger)]" },
-        { label: "no count data", value: acc.in_files_unusable ?? 0, className: "bg-[var(--chart-muted)]" },
-        { label: "wrong reference, withheld", value: acc.in_files_usable_withheld ?? 0, className: "bg-[var(--cell)]" },
-      ].filter((p) => p.value > 0)
-    : [];
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -192,14 +182,14 @@ const Index = () => {
         {/* ── QC ── */}
         <section className="container-site py-16" aria-labelledby="qc-h">
           <Reveal>
-            <SectionHead id="qc-h" kicker="Quality control" title="Every sample checked" />
+            <SectionHead id="qc-h" kicker="Quality control" title="Every sample passes the gates" />
             <p className="mt-3 text-[15px] text-muted-foreground">
-              Every processed sample in a published file.{" "}
+              Only approved samples reach you.{" "}
               <Link to="/about#qc" className="text-primary hover:underline">
-                How QC works →
+                The gates →
               </Link>
             </p>
-            <div className="mt-8 max-w-[900px]">{stats ? <StackedBar parts={qcParts} /> : <StatSkeleton w="w-full" />}</div>
+            <div className="mt-8 max-w-[760px]">{stats ? <GateFunnel steps={sampleFunnel(stats.accounting)} /> : <StatSkeleton w="w-full" />}</div>
           </Reveal>
         </section>
 

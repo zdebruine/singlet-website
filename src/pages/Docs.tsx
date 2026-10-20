@@ -500,9 +500,7 @@ if (singlet_has(path, "donor_assignments", gsm))
                 <Mono>GET /api/manifest</Mono> takes the same filters as <Mono>/api/search</Mono> (organism,
                 tissue_group, disease_group, assay_family, cell_type, q, min_cells, year_min/max, has_bundle) and
                 returns every matching study — up to 2,000 — as a manifest or a ready-to-run download script, chosen
-                with <Mono>format=</Mono>. Studies whose only samples are flagged low QC are left out; add{" "}
-                <Mono>include_low_qc=1</Mono> to include them (<Link to="/about#qc">how QC works</Link>). Each row reports{" "}
-                <Mono>n_samples_passing_qc</Mono> and <Mono>n_samples_low_qc</Mono>:
+                with <Mono>format=</Mono>. Each row reports <Mono>n_samples_passing_qc</Mono> (<Link to="/about#qc">the QC gate</Link>):
               </p>
               <table>
                 <thead>
@@ -556,7 +554,7 @@ python load_studies.py`}
                 number from the atlas is always traceable back to how it was made:
               </p>
               <ul>
-                <li><Mono>reference_build</Mono> — the genome build and annotation the sample was mapped to (see <Link to="/about#references">How it's made</Link> for the exact builds per organism). Recorded per cell in <Mono>obs["reference_build"]</Mono> and in <Mono>feature_vocab.json</Mono> inside the bundle.</li>
+                <li><Mono>reference_build</Mono> — the genome build and annotation the sample was mapped to (see <Link to="/about#references">About singlet</Link> for the exact builds per organism). Recorded per cell in <Mono>obs["reference_build"]</Mono> and in <Mono>feature_vocab.json</Mono> inside the bundle.</li>
                 <li><Mono>singlet_version</Mono> — the pipeline release that produced the bundle, in the file's <Mono>manifest.json</Mono>, the study page and <Mono>/api/gse/:id</Mono>.</li>
                 <li><Mono>created_at</Mono> — when the <Mono>.singlet</Mono> file was packed, in the file's <Mono>manifest.json</Mono> (returned as <Mono>created_at</Mono> by <Mono>/api/bundle/:gse/index</Mono> and as <Mono>packed_at</Mono> by <Mono>/api/gse/:id</Mono>), and shown as "Packed" on the study page.</li>
               </ul>
@@ -619,7 +617,7 @@ python load_studies.py`}
                   </tr>
                   <tr>
                     <td>Control over parameters</td>
-                    <td>None — fixed pipeline, documented in <Link to="/about">How it's made</Link></td>
+                    <td>None — fixed pipeline, documented in <Link to="/about">About singlet</Link></td>
                     <td>Full — you choose everything downstream</td>
                     <td>Full — your reference, your parameters, your pipeline version</td>
                   </tr>
@@ -912,7 +910,7 @@ accs <- singlet::find("microglia in the aging mouse brain")`}
                 the reference indexes yourself.
               </p>
               <ul>
-                <li>Build the C++ pipeline with CMake from the repository, following its README. You need a C++17 toolchain, zstd, STAR, and a STAR index for the reference you map to (see <Link to="/about#references">How it's made</Link> for the builds the atlas uses).</li>
+                <li>Build the C++ pipeline with CMake from the repository, following its README. You need a C++17 toolchain, zstd, STAR, and a STAR index for the reference you map to (see <Link to="/about#references">About singlet</Link> for the builds the atlas uses).</li>
                 <li>Plan for alignment-scale compute: tens of GB of RAM for a human or mouse STAR index, and hours per sample on a workstation.</li>
                 <li>The output directory holds the same per-sample matrices listed under <a href="#singlet-file">What's in a .singlet file</a>; <Mono>singlet.load_dir()</Mono> reads it as <Mono>AnnData</Mono>.</li>
                 <li>To keep private results next to the public catalogue, pack them into a <Mono>.singlet</Mono> file and add it under <a href="#private-projects">Private projects</a>.</li>

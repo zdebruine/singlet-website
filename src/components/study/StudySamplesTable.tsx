@@ -17,7 +17,6 @@ import type { GsmRow, SampleQc } from "@/integrations/api/types";
 import type { ConditionFilter } from "./ConditionsPanel";
 
 type SortCol = "gsm_id" | "status" | "n_cells" | "n_cells_called" | "mapping_rate" | "median_genes" | "assay" | "n_input_reads" | "seq_saturation";
-type StatusFilter = "all" | "processed" | "failed";
 
 const INITIAL_ROWS = 150;
 
@@ -56,24 +55,6 @@ function Reads({ n }: { n: number }) {
 function NotComputed({ v }: { v: number | null | undefined }) {
   if (!v) return <span className="text-muted-foreground" title="not computed by this pipeline version">—</span>;
   return <span className="font-mono tabular">{fmtPct(v)}</span>;
-}
-
-function StatusCell({ s }: { s: GsmRow }) {
-  if (s.status === "DONE") return <span className="status-ok">processed</span>;
-  if (s.status === "DONE_QC_WARN") return <span className="flag" title="Processed, but one or more QC metrics are outside the usual range">QC warning</span>;
-  if (isFailed(s.status)) {
-    return (
-      <span className="inline-flex flex-col items-start gap-0.5">
-        <span className="status-fail">failed</span>
-        {s.failure_category && (
-          <span className="text-[11px] text-muted-foreground leading-tight" title={failureDetail(s.failure_category) ?? undefined}>
-            {failureLabel(s.failure_category)}
-          </span>
-        )}
-      </span>
-    );
-  }
-  return <span className="chip h-6 text-xs">{s.status.toLowerCase()}</span>;
 }
 
 function CopyButton({ text, label }: { text: string; label: string }) {
@@ -248,7 +229,6 @@ function ExpandedRow({ s, gseId, studyTitle, colSpan, qc }: { s: GsmRow; gseId: 
 export function StudySamplesTable({ gseId, studyTitle, samples, highlightGsm, condition, onClearCondition, qcByGsm }: Props) {
   const [sortCol, setSortCol] = useState<SortCol>("gsm_id");
   const [sortAsc, setSortAsc] = useState(true);
-  const [status, setStatus] = useState<StatusFilter>("all");
   const [text, setText] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [showAll, setShowAll] = useState(false);
@@ -259,8 +239,6 @@ export function StudySamplesTable({ gseId, studyTitle, samples, highlightGsm, co
   // Saturation was never computed by the pipeline (0/null everywhere); only show the column if a real value exists.
   const hasSaturation = useMemo(() => !!qcByGsm && samples.some((s) => (qcByGsm[s.gsm_id.toUpperCase()]?.sequencing_saturation ?? 0) > 0), [samples, qcByGsm]);
 
-  const nProcessed = useMemo(() => samples.filter((s) => isProcessed(s.status)).length, [samples]);
-  const nFailed = useMemo(() => samples.filter((s) => isFailed(s.status)).length, [samples]);
 
   // Auto-expand and reveal the anchored sample.
   useEffect(() => {
@@ -268,7 +246,6 @@ export function StudySamplesTable({ gseId, studyTitle, samples, highlightGsm, co
     if (!samples.some((s) => s.gsm_id.toUpperCase() === highlightGsm)) return;
     setExpanded((prev) => new Set(prev).add(highlightGsm));
     setShowAll(true);
-    setStatus("all");
   }, [highlightGsm, samples]);
 
   const toggleSort = (col: SortCol) => {
@@ -290,8 +267,6 @@ export function StudySamplesTable({ gseId, studyTitle, samples, highlightGsm, co
   const rows = useMemo(() => {
     const needle = text.trim().toLowerCase();
     let out = samples.filter((s) => {
-      if (status === "processed" && !isProcessed(s.status)) return false;
-      if (status === "failed" && !isFailed(s.status)) return false;
       if (condition) {
         const v = s.characteristics?.[condition.key];
         if (!v || v.toLowerCase() !== condition.value.toLowerCase()) return false;
@@ -352,7 +327,7 @@ export function StudySamplesTable({ gseId, studyTitle, samples, highlightGsm, co
       return sortAsc ? cmp : -cmp;
     });
     return out;
-  }, [samples, status, condition, text, sortCol, sortAsc]);
+  }, [samples, condition, text, sortCol, sortAsc]);
 
   const visible = showAll ? rows : rows.slice(0, INITIAL_ROWS);
   const hidden = rows.length - visible.length;
@@ -364,7 +339,6 @@ export function StudySamplesTable({ gseId, studyTitle, samples, highlightGsm, co
 
   const columns: { col: SortCol | null; label: string; cls?: string; hidden?: boolean }[] = [
     { col: "gsm_id", label: "Sample" },
-    { col: "status", label: "Status" },
     { col: "n_cells", label: hasCellsCalled ? "Cells (catalog)" : "Cells", cls: "num" },
     { col: "n_cells_called", label: "Cells (file)", cls: "num", hidden: !hasCellsCalled },
 
@@ -379,34 +353,12 @@ export function StudySamplesTable({ gseId, studyTitle, samples, highlightGsm, co
   const shownColumns = columns.filter((c) => !c.hidden);
   const colSpan = shownColumns.length + 1;
 
-  const anyFilter = status !== "all" || !!condition || text.trim() !== "";
+  const anyFilter = !!condition || text.trim() !== "";
 
   return (
     <div>
       {/* Controls */}
       <div className="flex flex-wrap items-center gap-2 mb-3">
-        <div role="group" aria-label="Filter by status" className="inline-flex rounded border border-border bg-card overflow-hidden">
-          {(
-            [
-              ["all", `All (${fmtInt(samples.length)})`],
-              ["processed", `Processed (${fmtInt(nProcessed)})`],
-              ["failed", `Failed (${fmtInt(nFailed)})`],
-            ] as [StatusFilter, string][]
-          ).map(([v, label]) => (
-            <button
-              key={v}
-              type="button"
-              onClick={() => setStatus(v)}
-              aria-pressed={status === v}
-              className={cn(
-                "h-8 px-3 text-[13px] border-r border-border last:border-r-0 transition-colors",
-                status === v ? "bg-primary/[0.08] text-primary font-medium" : "text-muted-foreground hover:text-foreground hover:bg-background"
-              )}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
 
         <label className="relative flex-1 min-w-[200px] max-w-[360px]">
           <ListFilter size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
@@ -460,7 +412,6 @@ export function StudySamplesTable({ gseId, studyTitle, samples, highlightGsm, co
               </tr>
             )}
             {visible.map((s) => {
-              const failedRow = isFailed(s.status);
               const hl = highlightGsm === s.gsm_id.toUpperCase();
               const open = expanded.has(s.gsm_id.toUpperCase()) || expanded.has(s.gsm_id);
               const pairs = conditionPairs(s.characteristics, 3);
@@ -471,7 +422,7 @@ export function StudySamplesTable({ gseId, studyTitle, samples, highlightGsm, co
                 <Fragment key={s.gsm_id}>
                   <tr
                     id={s.gsm_id}
-                    className={cn("cursor-pointer scroll-mt-24", hl && "bg-primary/[0.06]", failedRow && "text-muted-foreground")}
+                    className={cn("cursor-pointer scroll-mt-24", hl && "bg-primary/[0.06]")}
                     onClick={() => toggleExpanded(s.gsm_id)}
                   >
                     <td className="!pr-0">
@@ -492,27 +443,6 @@ export function StudySamplesTable({ gseId, studyTitle, samples, highlightGsm, co
                     <td className="whitespace-nowrap">
                       <span className="font-mono text-[12.5px] text-foreground">{s.gsm_id}</span>
                       {s.organism_label && <div className="text-[11px] text-muted-foreground">{s.organism_label}</div>}
-                    </td>
-                    <td>
-                      <StatusCell s={s} />
-                      {s.low_qc && (
-                        <span
-                          className="mt-1 inline-block border border-warning/40 bg-warning/10 text-warning px-1.5 text-[11px] whitespace-nowrap"
-                          style={{ borderRadius: 3 }}
-                          title={`${s.qc_message ?? "singlet's QC algorithms detected an issue with this sample. It is recommended to proceed with caution."}${s.qc_reasons?.length ? ` (${s.qc_reasons.join("; ")})` : ""}`}
-                        >
-                          low QC
-                        </span>
-                      )}
-                      {qc?.usable === 0 && (
-                        <span
-                          className="mt-1 inline-block border border-warning/40 bg-warning/10 text-warning px-1.5 text-[11px] whitespace-nowrap"
-                          style={{ borderRadius: 3 }}
-                          title="Empty matrix or 0 called cells in the published file — this sample loads as empty"
-                        >
-                          no count data
-                        </span>
-                      )}
                     </td>
                     <td className={cn("num text-[12.5px]", s.suspect_cells && "text-warning")}>
                       {s.n_cells == null ? (

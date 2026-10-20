@@ -11,7 +11,7 @@ const NAV = [
   { to: "/my-data", label: "Your data" },
   { to: "/quickstart", label: "Quickstart" },
   { to: "/docs", label: "Docs" },
-  { to: "/about", label: "How it's made" },
+  { to: "/about", label: "About" },
 ];
 
 const GITHUB = "https://github.com/Singlet-Bio/singlet";
