@@ -1,361 +1,235 @@
-import { useEffect } from "react";
-import { Logo } from "@/components/Logo";
+import { useEffect, useState, type ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import { ChevronRight } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { CodeBlock } from "@/components/CodeBlock";
 import { apiClient } from "@/integrations/api/client";
 import { usePageMeta } from "@/hooks/usePageMeta";
-import { fmtCompact, fmtInt, fmtPct } from "@/lib/catalog-display";
-import { QuickStartHubs } from "@/components/QuickStartHubs";
+import { fmtInt } from "@/lib/catalog-display";
+import { cn } from "@/lib/utils";
+import { PipelineMap, type Stop } from "@/components/landing/PipelineMap";
+import { StackedBar } from "@/components/landing/charts";
 
-const Mono = ({ children }: { children: React.ReactNode }) => <code className="code-inline">{children}</code>;
+// One job: show how a sample gets from GEO to your analysis, so you can trust it. Details open on demand.
 
-const STEPS = [
-  {
-    title: "Download",
-    body: "Raw reads for every sample (GSM) in the study are fetched from SRA. Samples whose runs are missing, withdrawn or single-ended for a droplet protocol are recorded as failed at this step, not silently dropped.",
-  },
-  {
-    title: "Protocol detection",
-    body: "The library type (10x 3' v2/v3, 10x 5', Drop-seq, CITE-seq, BD Rhapsody, Smart-seq, …) is detected from the reads and the GEO/SRA metadata so the right barcode and UMI layout is applied. 10x samples whose chemistry version comes only from GEO text, not from the reads, are labelled \"10x (version unconfirmed)\" in the catalog.",
-  },
-  {
-    title: "Alignment and counting",
-    body: "Input is capped at 30,000,000 reads per sample; about 80% of samples reached the cap and were subsampled to it. Reads are mapped to one reference per organism (see below) and counted per cell barcode and feature, separately for exonic and intronic reads, plus splice junctions.",
-  },
-  {
-    title: "Per-sample QC",
-    body: "Cells are called, and each sample gets mapping rate, cells called, and median genes and UMIs per cell. Sequencing saturation and median mitochondrial fraction were not computed, and show as \"—\". A sample that falls under the minimum thresholds is kept in the catalog and marked failed with the reason.",
-  },
-  {
-    title: "One .singlet bundle per study",
-    body: "All processed samples of a study are packed into one .singlet file (a ZIP64 archive of sparse matrices and JSON metadata) and published for free download. Nothing is re-normalised or batch-corrected; you get raw counts.",
-  },
-];
+const Mono = ({ children }: { children: ReactNode }) => <code className="code-inline">{children}</code>;
 
-function useHashScroll() {
+/** A section that stays closed until the reader opens it, or arrives with its #id in the URL. */
+function Fold({ id, title, children }: { id: string; title: string; children: ReactNode }) {
   const { hash } = useLocation();
+  const [open, setOpen] = useState(false);
   useEffect(() => {
-    if (!hash) return;
-    const id = decodeURIComponent(hash.slice(1));
-    const t = setTimeout(() => document.getElementById(id)?.scrollIntoView({ block: "start" }), 40);
-    return () => clearTimeout(t);
-  }, [hash]);
+    if (decodeURIComponent(hash.slice(1)) === id) {
+      setOpen(true);
+      const t = setTimeout(() => document.getElementById(id)?.scrollIntoView({ block: "start" }), 40);
+      return () => clearTimeout(t);
+    }
+  }, [hash, id]);
+  return (
+    <section id={id} className="border-b border-border scroll-mt-20">
+      <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} className="w-full flex items-center gap-2 py-4 text-left">
+        <ChevronRight size={16} className={cn("text-primary transition-transform", open && "rotate-90")} aria-hidden="true" />
+        <h2 className="text-[17px] font-semibold">{title}</h2>
+      </button>
+      {open && <div className="pb-6 pl-6 text-[14.5px] leading-relaxed space-y-3 max-w-[760px]">{children}</div>}
+    </section>
+  );
 }
+
+const REFERENCES = [
+  ["Human", "GRCh38 (2024-A)", "GENCODE v44"],
+  ["Mouse", "GRCm39 (2024-A)", "GENCODE vM33"],
+  ["Rat", "mRatBN7.2", "Ensembl 110"],
+  ["Rhesus macaque", "Mmul_10", "Ensembl"],
+  ["Human + mouse", "GRCh38-GRCm39", "both"],
+];
 
 const About = () => {
   usePageMeta({
-    title: "About the data",
-    description: "How every study in the singlet atlas is processed, which references are used, processing status, license (CC0 data and site code) and how to cite.",
+    title: "How the data is made",
+    description: "Every study on singlet.bio is reprocessed from raw reads: download, protocol detection, alignment, counting, extra layers, QC, one file per study.",
     path: "/about",
   });
-  useHashScroll();
 
   const { data: stats } = useQuery({ queryKey: ["corpus-stats"], queryFn: () => apiClient.stats(), staleTime: 120_000 });
+  const { data: layers } = useQuery({ queryKey: ["stats-layers"], queryFn: () => apiClient.layers(), staleTime: 3_600_000 });
+  const layer = (key: string) => layers?.layers.find((l) => l.key === key);
+  const share = (key: string) => {
+    const l = layer(key);
+    return l && l.of ? `${Math.round((l.studies / l.of) * 100)}%` : "…";
+  };
+  const acc = stats?.accounting ?? {};
+  const rm = stats?.qc.rules.removed;
+  const low = stats?.qc.rules.low_qc;
 
-  const year = new Date().getFullYear();
+  const stops: Stop[] = [
+    {
+      key: "geo",
+      label: "GEO",
+      fact: stats ? `${fmtInt(acc.studies_tracked ?? stats.series_count)} studies tracked` : "…",
+      detail: "Every study starts as a GEO series: its samples, their characteristics and the paper. We keep the GEO text word for word.",
+    },
+    {
+      key: "reads",
+      label: "Raw reads",
+      fact: "FASTQ from SRA",
+      detail: "We download each sample's raw reads, never the authors' processed matrix. Up to 30 million reads per sample.",
+    },
+    {
+      key: "protocol",
+      label: "Protocol",
+      fact: "read from the reads",
+      detail: "The barcode and UMI layout is detected from the reads: 10x 3′ and 5′, Drop-seq, CITE-seq, BD Rhapsody, Smart-seq and more.",
+    },
+    {
+      key: "align",
+      label: "Align",
+      fact: "one reference per species",
+      detail: (
+        <>
+          Human <Mono>GRCh38</Mono>, mouse <Mono>GRCm39</Mono>, rat <Mono>mRatBN7.2</Mono>, macaque <Mono>Mmul_10</Mono>. The build is
+          recorded on every cell.
+        </>
+      ),
+    },
+    {
+      key: "count",
+      label: "Count",
+      fact: `${share("splicing")} splicing-resolved`,
+      detail: "Exonic and intronic reads are counted separately for every cell, with splice junctions and PSI. Ready for RNA velocity.",
+    },
+    {
+      key: "layers",
+      label: "Beyond expression",
+      fact: `mtDNA ${share("mtdna")} · SNPs ${share("snps")}`,
+      detail: (
+        <>
+          Mitochondrial DNA variants, immune receptor (V(D)J) gene usage, SNP genotypes, donor demultiplexing, genetic sex
+          {layer("ancestry") ? <>, and ancestry for {fmtInt(layer("ancestry")!.studies)} human studies</> : null}.
+        </>
+      ),
+    },
+    {
+      key: "qc",
+      label: "QC",
+      fact: stats ? `${fmtInt(stats.qc.removed_samples)} removed · ${fmtInt(stats.qc.low_qc_samples)} flagged` : "…",
+      detail: (
+        <>
+          Every sample is measured. Failed runs are removed; samples with an issue are flagged low QC and left out by default.{" "}
+          <a href="#qc">The rules</a>
+        </>
+      ),
+    },
+    {
+      key: "file",
+      label: "One file",
+      fact: "3.5× smaller than H5AD",
+      detail: (
+        <>
+          All samples of a study in one <Mono>.singlet</Mono> file: raw counts, not normalized or batch-corrected. Free to download,
+          no account.
+        </>
+      ),
+    },
+    {
+      key: "use",
+      label: "Your tool",
+      fact: "Python · R · Claude",
+      detail: (
+        <>
+          <Mono>singlet.load("GSE138867")</Mono> in Python or R, or ask Claude. <Link to="/quickstart">Get started →</Link>
+        </>
+      ),
+    },
+  ];
+
+  const parts = stats
+    ? [
+        { label: "passed QC", value: acc.in_files_usable_downloadable ?? 0, className: "bg-primary" },
+        { label: "low QC", value: acc.in_files_low_qc ?? 0, className: "bg-[var(--chart-warning)]" },
+        { label: "removed", value: acc.in_files_removed ?? 0, className: "bg-[var(--chart-danger)]" },
+        { label: "no count data", value: acc.in_files_unusable ?? 0, className: "bg-[var(--chart-muted)]" },
+        { label: "withheld", value: acc.in_files_usable_withheld ?? 0, className: "bg-[var(--cell)]" },
+        { label: "processed, file pending", value: acc.done_not_in_files ?? 0, className: "bg-[var(--teal-200)]" },
+        { label: "failed processing", value: acc.samples_failed ?? 0, className: "bg-[var(--red-soft)]" },
+        { label: "not ingested yet", value: acc.samples_not_ingested ?? 0, className: "bg-secondary border-l border-border" },
+      ].filter((p) => p.value > 0)
+    : [];
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <Navbar />
-      <main className="container-site flex-1 py-10 md:py-14">
-        <article className="prose-doc max-w-[760px]">
-          <header className="mb-10">
-            <Logo variant="mark" height={28} link={false} className="docs-brand-mark mb-4" />
-              <h1 className="text-[36px] md:text-[42px] mb-3">About the data</h1>
-            <p className="text-[17px] text-muted-foreground">
-              The atlas is public single-cell RNA-seq studies from GEO, reprocessed from raw reads with one open-source
-              pipeline. Not every GEO study is in it yet, and not every catalogued study has a downloadable file; the live
-              counts are under <a href="#status">Processing status</a>.
-            </p>
-          </header>
+      <main className="container-site flex-1 py-12 md:py-16">
+        <header className="max-w-[760px]">
+          <p className="type-mono text-primary">How the data is made</p>
+          <h1 className="mt-2 text-[34px] md:text-[44px] leading-[1.1] font-semibold tracking-tight">We reprocessed every study we serve, from raw reads.</h1>
+          <p className="mt-4 text-[17px] text-muted-foreground">Nine stops from GEO to your notebook. Click one.</p>
+        </header>
 
-          {/* ── Where this comes from ── */}
-          <section id="sources" className="pb-12 mb-12 border-b border-border scroll-mt-20">
-            <h2>Where the catalog and the data come from</h2>
+        <div className="mt-12" id="processing">
+          <PipelineMap stops={stops} />
+        </div>
+
+        <div className="mt-14 border-t border-border">
+          <Fold id="qc" title="Quality control rules">
             <p>
-              Search, facets and the counts shown on this site come from our own reprocessed index — a database built
-              from running every study through the pipeline. The actual data you download is not generated by that
-              index: it is the published <Mono>.singlet</Mono> bundle for the study, produced once and served as-is from
-              <Mono> data.singlet.bio</Mono>. If the two ever disagree (for example the index says a study has a bundle
-              but the file is missing), the file is the source of truth.
+              <strong>Removed:</strong> under {Math.round((rm?.max_mapping_rate ?? 0.05) * 100)}% of reads mapped <em>and</em> under{" "}
+              {rm?.max_median_genes ?? 10} genes per cell. Failed runs; not listed, not counted.
             </p>
             <p>
-              List and export endpoints are capped so the service stays fast and free for everyone: search result pages
-              are paginated, a bulk <Mono>/api/manifest</Mono> export covers at most 2,000 studies per request, and
-              accession exports are capped at 5,000. None of these caps apply to loading or downloading a study you
-              already know the accession for.
+              <strong>Low QC:</strong> under {low?.min_median_genes ?? 30} genes per cell <em>or</em> under{" "}
+              {Math.round((low?.min_mapping_rate ?? 0.2) * 100)}% of reads mapped. Left out by default; switch on <em>Include low-QC samples</em>{" "}
+              in Browse or pass <Mono>include_low_qc=1</Mono>.
             </p>
-          </section>
+            <p className="text-muted-foreground">Flagged samples stay in the study file and are marked on the study page.</p>
+          </Fold>
 
-          {/* ── Quick start ── */}
-          <section id="quick-start" className="pb-12 mb-12 border-b border-border scroll-mt-20">
-            <h2>Jump into the atlas</h2>
-            <p className="mb-4">A few common starting points, with a live study count for each.</p>
-            <QuickStartHubs title="Quick start" />
-          </section>
+          <Fold id="status" title="Where every GEO sample stands">
+            {stats ? (
+              <>
+                <p>
+                  {fmtInt(acc.samples_advertised ?? 0)} samples listed on GEO across {fmtInt(acc.studies_tracked ?? 0)} studies, each in one
+                  bucket:
+                </p>
+                <StackedBar parts={parts} />
+              </>
+            ) : (
+              <p className="text-muted-foreground">Loading…</p>
+            )}
+          </Fold>
 
-          {/* ── Processing ── */}
-          <section id="processing" className="pb-12 mb-12 border-b border-border scroll-mt-20">
-            <h2>What a study goes through</h2>
-            <ol className="!list-none !pl-0 space-y-4 mt-5">
-              {STEPS.map((s, i) => (
-                <li key={s.title} className="flex gap-4">
-                  <span className="font-mono text-[13px] text-primary tabular pt-0.5 w-6 shrink-0">{String(i + 1).padStart(2, "0")}</span>
-                  <div>
-                    <h3 className="!mt-0 !mb-1">{s.title}</h3>
-                    <p className="!mb-0 text-[14.5px]">{s.body}</p>
-                  </div>
-                </li>
-              ))}
-            </ol>
-            <h3>Pipeline versions</h3>
-            <p className="text-[14.5px]">
-              Files were not all made by the same release. As of 30 September 2026, 4,096 published files record pipeline
-              2.0.0, 429 record 1.0.0, and 3,675 (almost all mouse) did not record a version. The version is in each file's{" "}
-              <Mono>manifest.json</Mono> and on its study page. Check it, and the reference build, before merging studies.
-            </p>
-          </section>
-
-          {/* ── References ── */}
-          {/* ── Quality control ── */}
-          <section id="qc" className="pb-12 mb-12 border-b border-border scroll-mt-20">
-            <h2>Quality control</h2>
-            <p>
-              Every sample in a published file is measured by the pipeline, and two numbers decide what happens to it: the median
-              number of genes detected per cell, and the fraction of the sample's reads that map to the reference.
-            </p>
-            {(() => {
-              const r = stats?.qc.rules;
-              const rm = r?.removed, low = r?.low_qc;
-              return (
-                <ul>
-                  <li>
-                    <strong>Removed.</strong> Fewer than {Math.round((rm?.max_mapping_rate ?? 0.05) * 100)}% of reads map <em>and</em> fewer than{" "}
-                    {rm?.max_median_genes ?? 10} genes are detected per cell. These are failed runs with nothing in them (a typical cell holds
-                    a handful of UMIs). They are left out of the catalog entirely: not listed, not counted
-                    {stats ? `; ${fmtInt(stats.qc.removed_samples)} so far` : ""}.
-                  </li>
-                  <li>
-                    <strong>Low QC.</strong> Fewer than {low?.min_median_genes ?? 30} genes per cell, <em>or</em> fewer than{" "}
-                    {Math.round((low?.min_mapping_rate ?? 0.2) * 100)}% of reads mapped. singlet's QC algorithms detected an issue with these
-                    samples and it is recommended to proceed with caution
-                    {stats ? `; ${fmtInt(stats.qc.low_qc_samples)} so far` : ""}. They are left out of searches, counts and bulk downloads by
-                    default. Switch on <em>Include low-QC samples</em> in Browse, or pass <Mono>include_low_qc=1</Mono> to the API and the
-                    MCP tools, to see them.
-                  </li>
-                  <li><strong>Everything else</strong> passes.</li>
-                </ul>
-              );
-            })()}
-            <p>
-              The cut points are deliberately conservative. Working samples have a median of several hundred genes per cell and about
-              80% of reads mapped; the usual 200-gene cell filter would flag more than twice as many samples. What the rules catch is a
-              separate population: the failed samples sit in a spike at one gene or fewer, were sequenced as deeply as the samples that
-              worked, and often sit beside healthy samples from the same experiment.
-            </p>
-            <p>
-              Samples stay in each study's <Mono>.singlet</Mono> file, which is one file per study, so a downloaded study still contains
-              them. The study page marks each flagged sample with the reason, and <Mono>get_sample_qc</Mono> reports a QC status for every
-              sample. Counts on this site, in <Mono>/api/stats</Mono> and in manifests cover samples that passed QC unless you ask for more.
-            </p>
-          </section>
-
-          <section id="references" className="pb-12 mb-12 border-b border-border scroll-mt-20">
-            <h2>References</h2>
-            <p>Five reference builds appear in the published files:</p>
-            <table>
-              <thead>
-                <tr>
-                  <th>Organism</th>
-                  <th>Genome build</th>
-                  <th>Annotation</th>
-                </tr>
-              </thead>
+          <Fold id="references" title="Reference genomes">
+            <table className="text-[14px]">
               <tbody>
-                <tr>
-                  <td>Human</td>
-                  <td><Mono>GRCh38</Mono> (2024-A build)</td>
-                  <td>GENCODE v44 (equivalently Ensembl 110)</td>
-                </tr>
-                <tr>
-                  <td>Mouse</td>
-                  <td><Mono>GRCm39</Mono> (2024-A build)</td>
-                  <td>GENCODE vM33 (equivalently Ensembl 110)</td>
-                </tr>
-                <tr>
-                  <td>Rat</td>
-                  <td><Mono>mRatBN7.2</Mono></td>
-                  <td>Ensembl 110</td>
-                </tr>
-                <tr>
-                  <td>Rhesus macaque</td>
-                  <td><Mono>Mmul_10</Mono></td>
-                  <td>Ensembl</td>
-                </tr>
-                <tr>
-                  <td>Human + mouse mixtures</td>
-                  <td><Mono>GRCh38-GRCm39</Mono> barnyard build</td>
-                  <td>Both of the above</td>
-                </tr>
+                {REFERENCES.map(([org, build, ann]) => (
+                  <tr key={org} className="border-b border-border">
+                    <td className="py-1.5 pr-6">{org}</td>
+                    <td className="py-1.5 pr-6 font-mono text-[13px]">{build}</td>
+                    <td className="py-1.5 text-muted-foreground">{ann}</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
-            <p>
-              There are no files built against any other genome yet. Some studies of other organisms (zebrafish, for
-              example) were aligned to the human or mouse reference; their counts are not meaningful for that species, so
-              they are flagged on the study page and left out of the default Browse view.
+            <p className="text-muted-foreground">
+              Studies of other species aligned to one of these are flagged on their page and left out of default searches. Files record their
+              pipeline version in <Mono>manifest.json</Mono>; check it before merging studies.
             </p>
-            <p>
-              For the human 2024-A build the genome FASTA is taken from Ensembl 109 (GRCh38.p13) rather than 110, because
-              release 110 ships an unmasked pseudoautosomal region on chrY; the GTF is GENCODE v44. Mouse 2024-A uses the
-              Ensembl 110 FASTA with the GENCODE vM33 GTF.
-            </p>
-            <p>
-              The build a sample was mapped to is recorded per cell in <Mono>obs["reference_build"]</Mono> and in the
-              bundle's <Mono>feature_vocab.json</Mono>, so gene ids are always interpretable.
-            </p>
-          </section>
+          </Fold>
 
-          {/* ── Status ── */}
-          <section id="status" className="pb-12 mb-12 border-b border-border scroll-mt-20">
-            <h2>Processing status</h2>
+          <Fold id="cite" title="License and citation">
             <p>
-              Reprocessing runs in campaigns, and none is running right now. Here is where the catalog stands; the numbers
-              update whenever files are published.
-            </p>
-
-            <h3>Available to download now</h3>
-            <p className="text-[14.5px]">
-              These are the same numbers shown on the home page and returned by <Mono>/api/stats</Mono> as{" "}
-              <Mono>studies_with_files</Mono>, <Mono>samples_in_files</Mono> and <Mono>cells_in_files</Mono>: studies
-              that have a published <Mono>.singlet</Mono> file you can download and use right now, the usable samples in
-              those files that passed QC, and the cells called in them. A sample passes when its count matrix is non-empty, it
-              called at least one cell, and singlet's QC did not remove or flag it (see Quality control above); a study counts
-              when at least one of its samples passes and its reference matches its species
-              {stats && stats.studies_withheld > 0
-                ? `. ${fmtInt(stats.files_published)} files are published in all; the other ${fmtInt(stats.studies_withheld)} hold no usable sample or were aligned to the wrong reference, so they are not counted here and do not appear in searches unless you ask for unbuilt studies`
-                : ""}
-              .{" "}
-              Default searches total their results on the same basis.
-            </p>
-            <dl className="grid grid-cols-2 md:grid-cols-3 gap-3 my-5">
-              {[
-                { label: "downloadable studies", value: stats ? fmtInt(stats.studies_with_files) : null },
-                { label: "samples that passed QC", value: stats ? fmtInt(stats.samples_in_files) : null },
-                { label: "cells called in files", value: stats ? fmtCompact(stats.cells_in_files) : null },
-              ].map((s) => (
-                <div key={s.label} className="surface px-4 py-3">
-                  <dd className="font-display font-bold text-[24px] leading-none tabular text-foreground">
-                    {s.value ?? <span className="inline-block h-6 w-16 rounded bg-secondary animate-pulse" />}
-                  </dd>
-                  <dt className="mt-1.5 text-xs text-muted-foreground">{s.label}</dt>
-                </div>
-              ))}
-            </dl>
-
-            <h3>Catalog metadata: processed so far</h3>
-            <p className="text-[14.5px]">
-              What the processing database records, not what is in the published files. Packing and publishing run behind
-              processing, and a processed sample can still turn out unusable in its file, so these numbers are larger than
-              the download numbers above. Catalog cell counts can also differ from a file's own QC; where they disagree,
-              the file is the source of truth. In <Mono>/api/stats</Mono> these are <Mono>series_count</Mono>,{" "}
-              <Mono>success_samples</Mono>, <Mono>total_cells</Mono> and <Mono>success_rate</Mono>.
-            </p>
-            <dl className="grid grid-cols-2 md:grid-cols-4 gap-3 my-5">
-              {[
-                { label: "studies in catalog", value: stats ? fmtInt(stats.series_count) : null },
-                { label: "samples processed (catalog)", value: stats ? fmtInt(stats.success_samples) : null },
-                { label: "cells called (catalog)", value: stats ? fmtCompact(stats.total_cells) : null },
-                { label: "success rate (catalog)", value: stats ? fmtPct(stats.success_rate) : null },
-              ].map((s) => (
-                <div key={s.label} className="surface px-4 py-3">
-                  <dd className="font-display font-bold text-[24px] leading-none tabular text-foreground">
-                    {s.value ?? <span className="inline-block h-6 w-16 rounded bg-secondary animate-pulse" />}
-                  </dd>
-                  <dt className="mt-1.5 text-xs text-muted-foreground">{s.label}</dt>
-                </div>
-              ))}
-            </dl>
-            {stats && stats.accounting.samples_advertised > 0 && (
-              <>
-                <h3>Where every sample stands</h3>
-                <p className="text-[14.5px]">
-                  GEO lists {fmtInt(stats.accounting.samples_advertised)} samples across the {fmtInt(stats.accounting.studies_tracked)}{" "}
-                  studies we track. Each one is in exactly one row below, and the rows add up.
-                </p>
-                <table className="w-full text-[13.5px] my-4">
-                  <tbody>
-                    {[
-                      ["Not ingested yet (or not scRNA-seq)", stats.accounting.samples_not_ingested],
-                      ["Failed processing", stats.accounting.samples_failed],
-                      ["In progress", stats.accounting.samples_other],
-                      ["Processed, not in a published file yet", stats.accounting.done_not_in_files],
-                      ["In a file, empty or no cells called", stats.accounting.in_files_unusable],
-                      ["In a file, failed run (removed by QC)", stats.accounting.in_files_removed],
-                      ["In a file, flagged low QC (left out by default)", stats.accounting.in_files_low_qc],
-                      ["Passed QC, but the study is withheld", stats.accounting.in_files_usable_withheld],
-                      ["Passed QC in a downloadable study", stats.accounting.in_files_usable_downloadable],
-                    ].map(([label, n]) => (
-                      <tr key={String(label)} className="border-b border-border">
-                        <td className="py-1.5 pr-4">{label}</td>
-                        <td className="py-1.5 text-right tabular">{fmtInt(Number(n))}</td>
-                      </tr>
-                    ))}
-                    <tr className="font-medium">
-                      <td className="py-1.5 pr-4">All samples GEO lists</td>
-                      <td className="py-1.5 text-right tabular">{fmtInt(stats.accounting.samples_advertised)}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </>
-            )}
-            {stats && (
-              <p className="text-[13.5px] text-muted-foreground">
-                Catalog means over processed samples: mapping rate {fmtPct(stats.avg_mapping_rate)}; median genes per
-                cell {fmtInt(stats.avg_median_genes)}. Cell counts for a small number of plate-based samples are withheld while
-                a known counting bug is corrected upstream.
-              </p>
-            )}
-          </section>
-
-          {/* ── License & citation ── */}
-          <section id="cite" className="pb-12 mb-12 border-b border-border scroll-mt-20">
-            <h2>License and citation</h2>
-            <p>
-              The atlas data is dedicated to the public domain under{" "}
-              <a href="https://creativecommons.org/publicdomain/zero/1.0/" target="_blank" rel="noopener noreferrer">CC0 1.0</a>.
-              You can use it for anything, including commercial work, with no attribution requirement. The{" "}
-              <Mono>singlet</Mono> software is{" "}
-              <a href="https://github.com/Singlet-Bio/singlet/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">MIT licensed</a>.
-              The code of this site, its catalog API and MCP server is CC0 too. Singlet Cloud, the paid AI layer at
-              {" "}<a href="https://cloud.singlet.bio" target="_blank" rel="noopener noreferrer">cloud.singlet.bio</a>, is a separate commercial service.
-              Details are on the <Link to="/data-license">license page</Link>.
-            </p>
-            <h3>How to cite</h3>
-            <p>
-              Please cite both the original study and the atlas release you used. The original study is the GEO accession
-              and its publication (linked from every study page); the atlas release is the <Mono>singlet_version</Mono>{" "}
-              recorded in the file manifest and on the study page.
+              Data <a href="https://creativecommons.org/publicdomain/zero/1.0/" target="_blank" rel="noopener noreferrer">CC0</a>, code MIT.{" "}
+              <Link to="/data-license">License details</Link>. Cite the original study and the release you used:
             </p>
             <CodeBlock
               label="text"
               code={`<Original authors>. <Title>. GEO accession GSE138867 (<year>).
-Singlet Bio. singlet atlas, release <singlet_version>. https://singlet.bio (accessed ${year}).`}
+Singlet Bio. singlet atlas, release <singlet_version>. https://singlet.bio (accessed ${new Date().getFullYear()}).`}
             />
-          </section>
-
-          {/* ── Contact ── */}
-          <section id="contact" className="scroll-mt-20">
-            <h2>Contact</h2>
-            <p>
-              Questions, a study that looks wrong, or a protocol we should support: open an issue on{" "}
-              <a href="https://github.com/Singlet-Bio/singlet/issues" target="_blank" rel="noopener noreferrer">GitHub Issues</a>.
-              Processing runs on NSF ACCESS allocations; the data is served from our CDN at no cost to you.
-            </p>
-          </section>
-        </article>
+          </Fold>
+        </div>
       </main>
       <Footer />
     </div>

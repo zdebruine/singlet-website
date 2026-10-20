@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { createContext, useContext, useEffect } from "react";
 import { Logo } from "@/components/Logo";
 import { Link, useLocation } from "react-router-dom";
 import Navbar from "@/components/Navbar";
@@ -37,37 +37,48 @@ const MODALITY_GSM = "GSM3681519";
 
 type SectionId = (typeof SECTIONS)[number]["id"];
 
-function useScrollSpy(ids: readonly string[]) {
-  const [active, setActive] = useState<string>(ids[0]);
-  useEffect(() => {
-    const els = ids.map((id) => document.getElementById(id)).filter(Boolean) as HTMLElement[];
-    if (!els.length) return;
-    const obs = new IntersectionObserver(
-      (entries) => {
-        const visible = entries
-          .filter((e) => e.isIntersecting)
-          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
-        if (visible[0]) setActive(visible[0].target.id);
-      },
-      { rootMargin: "-80px 0px -65% 0px", threshold: [0, 1] },
-    );
-    els.forEach((el) => obs.observe(el));
-    return () => obs.disconnect();
-  }, [ids]);
-  return active;
-}
+/** Anchors inside a section, mapped to the section that holds them. */
+const SUB_ANCHORS: Record<string, SectionId> = { modalities: "singlet-file" };
 
-function useHashScroll() {
+/**
+ * One section at a time: the URL hash picks it (default: Install). A hash that names an anchor inside a
+ * section opens that section and scrolls to the anchor.
+ */
+function useSelectedSection(): SectionId {
   const { hash } = useLocation();
+  const raw = decodeURIComponent(hash.slice(1));
+  const ids = SECTIONS.map((x) => x.id) as readonly string[];
+  const sel = (ids.includes(raw) ? raw : SUB_ANCHORS[raw] ?? "install") as SectionId;
   useEffect(() => {
-    if (!hash) return;
-    const id = decodeURIComponent(hash.slice(1));
     const t = setTimeout(() => {
-      document.getElementById(id)?.scrollIntoView({ block: "start" });
+      const target = raw && raw !== sel ? document.getElementById(raw) : null;
+      if (target) target.scrollIntoView({ block: "start" });
+      else window.scrollTo({ top: 0 });
     }, 40);
     return () => clearTimeout(t);
-  }, [hash]);
+  }, [raw, sel]);
+  return sel;
 }
+
+const SelectedSection = createContext<SectionId>("install");
+
+/** Every layer a .singlet file can hold, with the name the bundle API reads it by. */
+const MODALITIES: [string, string][] = [
+  ["Combined raw counts (exon + intron)", "raw_counts()"],
+  ["Per-feature exon / intron matrices", "exon_counts, intron_counts"],
+  ["Splice junctions", "junctions"],
+  ["Percent-spliced-in", "splice_psi"],
+  ["mtDNA heteroplasmy", "mt_heteroplasmy"],
+  ["mtDNA variant calls", "mt_variants"],
+  ["Donor demultiplexing", "donor_assignments"],
+  ["Donor SNP depths", "donor_snp_ad, donor_snp_dp"],
+  ["Allele-specific expression", "ase_counts"],
+  ["Genetic sex and ancestry", "sex_call, ancestry_call"],
+  ["Non-host species", "nonhost_species"],
+  ["V(D)J segment usage", "vdj_gene_usage"],
+  ["Doublets, cell cycle, ambient RNA", "doublet_scores, cell_cycle_scores, ambient_contamination"],
+  ["Per-sample QC", "summary, pileup_stats, provenance"],
+];
 
 const Mono = ({ children }: { children: React.ReactNode }) => <code className="code-inline">{children}</code>;
 
@@ -77,9 +88,10 @@ const Docs = () => {
     description: "Install singlet, load a study as AnnData or SingleCellExperiment in one line, search the atlas, read every modality in a .singlet file, and download just part of a study.",
     path: "/docs",
   });
-  const ids = SECTIONS.map((s) => s.id);
-  const active = useScrollSpy(ids);
-  useHashScroll();
+  const active = useSelectedSection();
+  const idx = SECTIONS.findIndex((x) => x.id === active);
+  const prev = SECTIONS[idx - 1];
+  const next = SECTIONS[idx + 1];
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -115,21 +127,19 @@ const Docs = () => {
             <header className="mb-10">
               <Logo variant="mark" height={28} link={false} className="docs-brand-mark mb-4" />
               <h1 className="text-[36px] md:text-[42px] mb-3">Docs</h1>
-              <p className="text-[17px] text-muted-foreground">
-                Everything on this page is the same for every study in the atlas: install once, load by GEO accession, and the
-                object that comes back is a standard AnnData or SingleCellExperiment.
-              </p>
+              <p className="text-[17px] text-muted-foreground">Reference for the packages, the file and the API. One topic at a time.</p>
               {/* Mobile TOC */}
               <ul className="lg:hidden mt-5 flex flex-wrap gap-2">
                 {SECTIONS.map((s) => (
                   <li key={s.id}>
-                    <a href={`#${s.id}`} className="chip">
+                    <a href={`#${s.id}`} className={cn("chip", active === s.id && "chip-active")}>
                       {s.label}
                     </a>
                   </li>
                 ))}
               </ul>
             </header>
+            <SelectedSection.Provider value={active}>
 
             {/* ── Install ── */}
             <Section id="install" title="Install">
@@ -401,11 +411,24 @@ if (singlet_has(path, "donor_assignments", gsm))
   donors <- singlet_read(path, gsm, "donor_assignments")`}
                 />
               </div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>What</th>
+                    <th>Name</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {MODALITIES.map(([what, name]) => (
+                    <tr key={name}>
+                      <td>{what}</td>
+                      <td><Mono>{name}</Mono></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
               <p className="text-sm text-muted-foreground">
-                The full per-modality table, and how exon and intron features are merged onto genes, is on{" "}
-                <Link to="/quickstart#modalities">Getting started</Link>. From an assistant, the{" "}
-                <Mono>get_modalities</Mono> MCP tool answers the same question and returns the Python and R line for
-                each one.
+                From an assistant, the <Mono>get_modalities</Mono> MCP tool returns the Python and R line for each one.
               </p>
             </Section>
 
@@ -533,7 +556,7 @@ python load_studies.py`}
                 number from the atlas is always traceable back to how it was made:
               </p>
               <ul>
-                <li><Mono>reference_build</Mono> — the genome build and annotation the sample was mapped to (see <Link to="/about#references">About the data</Link> for the exact builds per organism). Recorded per cell in <Mono>obs["reference_build"]</Mono> and in <Mono>feature_vocab.json</Mono> inside the bundle.</li>
+                <li><Mono>reference_build</Mono> — the genome build and annotation the sample was mapped to (see <Link to="/about#references">How it's made</Link> for the exact builds per organism). Recorded per cell in <Mono>obs["reference_build"]</Mono> and in <Mono>feature_vocab.json</Mono> inside the bundle.</li>
                 <li><Mono>singlet_version</Mono> — the pipeline release that produced the bundle, in the file's <Mono>manifest.json</Mono>, the study page and <Mono>/api/gse/:id</Mono>.</li>
                 <li><Mono>created_at</Mono> — when the <Mono>.singlet</Mono> file was packed, in the file's <Mono>manifest.json</Mono> (returned as <Mono>created_at</Mono> by <Mono>/api/bundle/:gse/index</Mono> and as <Mono>packed_at</Mono> by <Mono>/api/gse/:id</Mono>), and shown as "Packed" on the study page.</li>
               </ul>
@@ -596,7 +619,7 @@ python load_studies.py`}
                   </tr>
                   <tr>
                     <td>Control over parameters</td>
-                    <td>None — fixed pipeline, documented in <Link to="/about">About the data</Link></td>
+                    <td>None — fixed pipeline, documented in <Link to="/about">How it's made</Link></td>
                     <td>Full — you choose everything downstream</td>
                     <td>Full — your reference, your parameters, your pipeline version</td>
                   </tr>
@@ -889,13 +912,18 @@ accs <- singlet::find("microglia in the aging mouse brain")`}
                 the reference indexes yourself.
               </p>
               <ul>
-                <li>Build the C++ pipeline with CMake from the repository, following its README. You need a C++17 toolchain, zstd, STAR, and a STAR index for the reference you map to (see <Link to="/about#references">About the data</Link> for the builds the atlas uses).</li>
+                <li>Build the C++ pipeline with CMake from the repository, following its README. You need a C++17 toolchain, zstd, STAR, and a STAR index for the reference you map to (see <Link to="/about#references">How it's made</Link> for the builds the atlas uses).</li>
                 <li>Plan for alignment-scale compute: tens of GB of RAM for a human or mouse STAR index, and hours per sample on a workstation.</li>
                 <li>The output directory holds the same per-sample matrices listed under <a href="#singlet-file">What's in a .singlet file</a>; <Mono>singlet.load_dir()</Mono> reads it as <Mono>AnnData</Mono>.</li>
                 <li>To keep private results next to the public catalogue, pack them into a <Mono>.singlet</Mono> file and add it under <a href="#private-projects">Private projects</a>.</li>
                 <li>Build steps, the CLI reference and known issues are on <a href={GITHUB_REPO} target="_blank" rel="noopener noreferrer">GitHub</a>; questions and bugs go to <a href={GITHUB_ISSUES} target="_blank" rel="noopener noreferrer">GitHub Issues</a>.</li>
               </ul>
             </Section>
+            </SelectedSection.Provider>
+            <nav className="mt-12 pt-6 border-t border-border flex justify-between gap-4 text-[14px]" aria-label="Previous and next topic">
+              {prev ? <a href={`#${prev.id}`} className="text-primary hover:underline">← {prev.label}</a> : <span />}
+              {next ? <a href={`#${next.id}`} className="text-primary hover:underline">{next.label} →</a> : <span />}
+            </nav>
           </article>
         </div>
       </main>
@@ -905,8 +933,9 @@ accs <- singlet::find("microglia in the aging mouse brain")`}
 };
 
 function Section({ id, title, children }: { id: SectionId; title: string; children: React.ReactNode }) {
+  if (useContext(SelectedSection) !== id) return null;
   return (
-    <section id={id} className="pb-12 mb-12 border-b border-border last:border-b-0 last:mb-0 last:pb-0 scroll-mt-20">
+    <section id={id} className="scroll-mt-20">
       <h2>{title}</h2>
       {children}
     </section>

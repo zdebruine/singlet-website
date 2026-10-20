@@ -767,6 +767,18 @@ export const apiClient = {
     return normalizeStats(await get<unknown>("/api/stats"));
   },
 
+  /** GET /api/stats/layers — downloadable studies holding each layer beyond gene counts. */
+  async layers(): Promise<{ studies: number; layers: { key: string; label: string; studies: number; of: number }[] }> {
+    const r = rec(await get<unknown>("/api/stats/layers"));
+    return {
+      studies: num(r.studies),
+      layers: arr<unknown>(r.layers)
+        .map((x) => rec(x))
+        .filter((x) => typeof x.key === "string")
+        .map((x) => ({ key: String(x.key), label: str(x.label), studies: num(x.studies), of: num(x.of, num(r.studies)) })),
+    };
+  },
+
   /** GET /api/facets — contextual counts for the current filter set. */
   async facets(q: SearchQuery = {}, signal?: AbortSignal): Promise<FacetsResponse> {
     const { page: _p, limit: _l, sort: _s, ...rest } = searchParams(q);

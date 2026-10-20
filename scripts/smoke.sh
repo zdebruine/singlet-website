@@ -44,6 +44,7 @@ check "study completeness"   200 "$BASE/api/gse/GSE138867"                  "\"c
 check "library api deployed" 405 "$BASE/api/library"                       "method_not_allowed"
 check "feedback api deployed" 405 "$BASE/api/feedback"                       "method_not_allowed"
 check "hero demo gif"        200 "$BASE/demo/singlet-demo.gif"              ""                     "image/gif"
+check "layer stats"          200 "$BASE/api/stats/layers"                   "\"splicing\""
 check "related"              200 "$BASE/api/gse/GSE138867/related"          "\\["
 check "search"               200 "$BASE/api/search?q=pbmc&limit=3"          "\"data\""
 check "facets"               200 "$BASE/api/facets"                         "organism"
