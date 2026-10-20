@@ -9,7 +9,6 @@ import { ConditionsPanel, type ConditionFilter } from "@/components/study/Condit
 import { StudySamplesTable } from "@/components/study/StudySamplesTable";
 import { AddToLibraryMenu } from "@/components/library/AddToLibraryMenu";
 import { FeedbackButton } from "@/components/FeedbackDialog";
-import CompletenessPanel from "@/components/study/CompletenessPanel";
 import { CiteDialog } from "@/components/study/CiteDialog";
 import { FileTreePanel } from "@/components/study/FileTreePanel";
 import { ProvenancePanel } from "@/components/study/ProvenancePanel";
@@ -17,7 +16,7 @@ import { RelatedStudies } from "@/components/study/RelatedStudies";
 import { apiClient, bundleUrl } from "@/integrations/api/client";
 import type { GseDetailResponse, GsmRow, PublicationRow } from "@/integrations/api/types";
 import { usePageMeta } from "@/hooks/usePageMeta";
-import { failureLabel, fmtCompact, fmtInt, fmtPct, isFailed, isProcessed, organismLabel } from "@/lib/catalog-display";
+import { fmtCompact, fmtInt, fmtPct, isProcessed, organismLabel } from "@/lib/catalog-display";
 import { cn } from "@/lib/utils";
 
 const GEO = (acc: string) => `https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=${acc}`;
@@ -96,13 +95,20 @@ const StudyDetail = () => {
   const { hash } = useLocation();
   const highlightGsm = hash ? decodeURIComponent(hash.slice(1)).toUpperCase() : null;
 
-  const { data, isLoading, error } = useQuery({
+  const { data: rawData, isLoading, error } = useQuery({
     queryKey: ["study", gseId],
     queryFn: () => apiClient.gse(gseId),
     enabled: /^GSE\d+$/.test(gseId),
     staleTime: 300_000,
     retry: 1,
   });
+  // The site shows approved samples only: processed, not flagged low QC, with count data in the file.
+  // Failed and low-QC samples are triaged on the backend and never listed here.
+  const data = useMemo(() => {
+    if (!rawData) return rawData;
+    const empty = new Set(rawData.series.unusable_gsm_ids ?? []);
+    return { ...rawData, samples: rawData.samples.filter((s) => isProcessed(s.status) && !s.low_qc && !empty.has(s.gsm_id)) };
+  }, [rawData]);
 
   const { data: bundleIndex, isLoading: bundleIndexLoading, isError: bundleIndexError } = useQuery({
     queryKey: ["bundle-index", gseId],
@@ -134,15 +140,6 @@ const StudyDetail = () => {
     for (const s of bundleSamples.samples) map[s.gsm_id.toUpperCase()] = s;
     return map;
   }, [bundleSamples]);
-
-  // Usable = non-empty count matrix and ≥ 1 called cell (server-assessed; falls back to the file's own QC rows).
-  const { usableCount, assessedCount, unusableCount } = useMemo(() => {
-    const qcRows = bundleSamples?.samples ?? [];
-    const assessedRows = qcRows.filter((s) => s.usable != null);
-    const assessed = data?.series.assessed_samples ?? (assessedRows.length ? assessedRows.length : null);
-    const usable = data?.series.usable_samples ?? (assessedRows.length ? assessedRows.filter((s) => s.usable === 1).length : null);
-    return { usableCount: usable, assessedCount: assessed, unusableCount: assessed != null && usable != null ? assessed - usable : 0 };
-  }, [bundleSamples, data]);
 
   // Cells actually called in the published file (null when no file QC is known).
   const fileCells = useMemo(() => {
@@ -178,7 +175,6 @@ const StudyDetail = () => {
     if (!data) return null;
     const { samples, meta, series } = data as GseDetailResponse;
     const processed = samples.filter((s) => isProcessed(s.status));
-    const failed = samples.filter((s) => isFailed(s.status));
     const countable = processed.filter((s) => !s.suspect_cells);
     const totalCells = countable.reduce((a, s) => a + (s.n_cells ?? 0), 0);
     const flagged = processed.length - countable.length;
@@ -202,10 +198,8 @@ const StudyDetail = () => {
     const nRuns = samples.reduce((a, s) => a + (s.srr_ids?.length ?? 0), 0);
     const nWithCharacteristics = samples.filter((s) => s.characteristics && Object.keys(s.characteristics).length > 0).length;
     const year = meta?.year ?? (series.submitted_date ? new Date(series.submitted_date).getFullYear() : null);
-    const geoTotal = Math.max(series.n_gsm_total ?? 0, samples.length);
     return {
       processed,
-      failed,
       totalCells,
       flagged,
       avgMR,
@@ -221,7 +215,6 @@ const StudyDetail = () => {
       nRuns,
       nWithCharacteristics,
       year,
-      geoTotal,
     };
   }, [data]);
 
@@ -301,7 +294,6 @@ const StudyDetail = () => {
   const { samples, conditions, publications } = data as GseDetailResponse;
   const {
     processed,
-    failed,
     totalCells,
     flagged,
     avgMR,
@@ -317,7 +309,6 @@ const StudyDetail = () => {
     nRuns,
     nWithCharacteristics,
     year,
-    geoTotal,
   } = derived;
   const hasQc = avgMR != null || medGenes != null;
 
@@ -339,10 +330,9 @@ const StudyDetail = () => {
       value: (
         <>
           {fmtInt(processed.length)}
-          {failed.length > 0 && <span className="text-muted-foreground font-normal"> · {fmtInt(failed.length)} failed</span>}
         </>
       ),
-      title: geoTotal > samples.length ? `${samples.length} of ${geoTotal} GEO samples are catalogued` : `${samples.length} samples`,
+      title: "Samples that passed QC",
     },
     ...(fileCells != null
       ? []
@@ -388,11 +378,6 @@ const StudyDetail = () => {
   return (
     <Shell>
       {/* Header */}
-      {series.bundle_url && usableCount === 0 && (
-        <div role="alert" className="mb-4 border border-destructive/40 bg-destructive/10 text-destructive px-4 py-3 text-[14px] font-medium" style={{ borderRadius: 3 }}>
-          This file currently contains no usable count data.
-        </div>
-      )}
       {series.reference_mismatch_note && (
         <div role="note" className="mb-4 border border-warning/40 bg-warning/10 text-warning px-4 py-3 text-[13px]" style={{ borderRadius: 3 }}>
           {series.reference_mismatch_note}
@@ -443,7 +428,6 @@ const StudyDetail = () => {
       <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-8 items-start">
         {/* Main column */}
         <div className="min-w-0">
-          <CompletenessPanel c={data.completeness} />
 
           {/* Facts */}
           <dl className={cn("grid grid-cols-[repeat(auto-fit,minmax(128px,1fr))] gap-1.5", hasQc || processed.length === 0 ? "mb-4" : "mb-2")}>
@@ -534,7 +518,7 @@ const StudyDetail = () => {
         <aside className="mt-2 lg:mt-0 lg:sticky lg:top-20 space-y-3" aria-labelledby="download-h">
           <h2 id="download-h" className="text-[18px] lg:sr-only">Load or download</h2>
           {processed.length > 0 ? (
-            <DownloadPanel accession={gseId} bundleUrl={series.bundle_url} bundleBytes={series.bundle_bytes} bundleNSamples={series.bundle_n_samples} processedSamples={processed.length} usableSamples={usableCount} assessedSamples={assessedCount} stacked />
+            <DownloadPanel accession={gseId} bundleUrl={series.bundle_url} bundleBytes={series.bundle_bytes} stacked />
           ) : (
             <div className="surface px-4 py-3 text-sm text-muted-foreground">
               No samples in this study completed processing, so there is no <code className="code-inline">.singlet</code> file.
@@ -580,29 +564,10 @@ const StudyDetail = () => {
 
       {/* Samples */}
       <section id="samples" className="mt-8 scroll-mt-20" aria-labelledby="samples-h">
-        {!!series.low_qc_samples && (
-          <div role="note" className="mb-3 border border-warning/40 bg-warning/10 text-warning px-3 py-2 text-[13px]" style={{ borderRadius: 3 }}>
-            {fmtInt(series.low_qc_samples)} {series.low_qc_samples === 1 ? "sample is" : "samples are"} flagged low QC ({series.low_qc_gsm_ids?.slice(0, 6).join(", ")}
-            {(series.low_qc_gsm_ids?.length ?? 0) > 6 ? ", …" : ""}). singlet's QC algorithms detected an issue with {series.low_qc_samples === 1 ? "it" : "them"}; it is recommended to proceed with caution.
-            They stay in the file, and are left out of counts, searches and bulk downloads unless you include low-QC samples.{" "}
-            <Link to="/about#qc" className="underline underline-offset-2">How QC works</Link>
-          </div>
-        )}
-        {!!series.removed_samples && (
-          <div role="note" className="mb-3 border border-border bg-muted/40 text-muted-foreground px-3 py-2 text-[13px]" style={{ borderRadius: 3 }}>
-            {fmtInt(series.removed_samples)} failed {series.removed_samples === 1 ? "sample was" : "samples were"} removed from this list: almost no reads mapped and almost no genes were detected. {series.removed_samples === 1 ? "It is" : "They are"} still present in the downloaded file.
-          </div>
-        )}
-        {unusableCount > 0 && usableCount != null && usableCount > 0 && (
-          <div role="note" className="mb-3 border border-warning/40 bg-warning/10 text-warning px-3 py-2 text-[13px]" style={{ borderRadius: 3 }}>
-            {unusableCount} of {assessedCount} samples in this file have no count data (empty matrix or 0 called cells) and will load as empty.
-          </div>
-        )}
         <div className="flex items-baseline justify-between mb-3 gap-3 flex-wrap">
           <h2 id="samples-h" className="text-[18px]">Samples</h2>
           <span className="text-[12px] text-muted-foreground">
             Click a row for its GEO characteristics, QC and raw-read records.
-            {geoTotal > samples.length ? ` ${fmtInt(samples.length)} of ${fmtInt(geoTotal)} GEO samples are catalogued.` : ""}
             {cappedCount > 0 && (
               <span title="The pipeline processes at most 30,000,000 reads per sample; deeper samples were subsampled to that cap.">
                 {` ${fmtInt(cappedCount)} of ${fmtInt(readsKnown)} samples hit the 30M input-read cap (marked "capped").`}

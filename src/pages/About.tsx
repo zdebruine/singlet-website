@@ -10,7 +10,8 @@ import { usePageMeta } from "@/hooks/usePageMeta";
 import { fmtCompact, fmtInt } from "@/lib/catalog-display";
 import { cn } from "@/lib/utils";
 import { Railway, Station } from "@/components/about/Railway";
-import { FormatSizeChart, H5AD_RATIO, HBars, StackedBar } from "@/components/landing/charts";
+import { FormatSizeChart, H5AD_RATIO, HBars } from "@/components/landing/charts";
+import { GateFunnel, sampleFunnel } from "@/components/landing/GateFunnel";
 import { EXAMPLE_GSE } from "@/lib/install-snippets";
 
 // About singlet: the journey of a sample, one station per claim, each with a visual, a "read more" and a docs link.
@@ -129,37 +130,12 @@ const About = () => {
   const { data: layers } = useQuery({ queryKey: ["stats-layers"], queryFn: () => apiClient.layers(), staleTime: 3_600_000 });
 
   const acc = stats?.accounting ?? {};
-  const rm = stats?.qc.rules.removed;
   const low = stats?.qc.rules.low_qc;
   const layerOf = (key: string) => layers?.layers.find((l) => l.key === key);
   const share = (key: string) => {
     const l = layerOf(key);
     return l && l.of ? Math.round((l.studies / l.of) * 100) : null;
   };
-
-  const funnel = stats
-    ? [
-        { label: "Samples listed on GEO", value: acc.samples_advertised ?? 0 },
-        { label: "Queued for processing", value: (acc.samples_advertised ?? 0) - (acc.samples_not_ingested ?? 0) },
-        { label: "Processed", value: acc.samples_done ?? 0 },
-        { label: "Passed QC, downloadable", value: acc.in_files_usable_downloadable ?? 0, highlight: true },
-      ].map((d) => ({ ...d, display: fmtCompact(d.value) }))
-    : [];
-
-  const allBuckets = stats
-    ? [
-        { label: "passed QC", value: acc.in_files_usable_downloadable ?? 0, className: "bg-primary" },
-        { label: "low QC", value: acc.in_files_low_qc ?? 0, className: "bg-[var(--chart-warning)]" },
-        { label: "removed", value: acc.in_files_removed ?? 0, className: "bg-[var(--chart-danger)]" },
-        { label: "no count data", value: acc.in_files_unusable ?? 0, className: "bg-[var(--chart-muted)]" },
-        { label: "withheld", value: acc.in_files_usable_withheld ?? 0, className: "bg-[var(--cell)]" },
-        { label: "processed, file pending", value: acc.done_not_in_files ?? 0, className: "bg-[var(--teal-200)]" },
-        { label: "failed processing", value: acc.samples_failed ?? 0, className: "bg-[var(--red-soft)]" },
-        { label: "not queued yet", value: acc.samples_not_ingested ?? 0, className: "bg-secondary" },
-      ].filter((p) => p.value > 0)
-    : [];
-
-  const qcParts = allBuckets.slice(0, 5);
 
   const assays = (facets?.assay_family ?? []).filter((o) => o.count > 0).slice(0, 7).map((o) => ({ label: o.value, value: o.count }));
   const refs = (facets?.reference_build ?? []).filter((o) => o.count > 0).slice(0, 6).map((o) => ({ label: o.value, value: o.count }));
@@ -178,7 +154,7 @@ const About = () => {
             <h1 className="mt-3 max-w-[860px] text-[36px] md:text-[52px] leading-[1.06] font-semibold tracking-tight">
               Every study we serve was reprocessed from raw reads.
             </h1>
-            <p className="mt-5 max-w-[620px] text-[18px] text-muted-foreground">Follow one sample from GEO to your notebook. Hover a stop to jump to it.</p>
+            <p className="mt-5 max-w-[620px] text-[18px] text-muted-foreground">Follow one sample from GEO to your notebook.</p>
           </div>
         </header>
 
@@ -189,22 +165,24 @@ const About = () => {
               n={1}
               title="From GEO to raw reads"
               claim="We start from GEO's own records and each sample's raw reads, never the authors' processed matrix."
-              visual={stats ? (<><Caption>Every GEO sample, step by step</Caption><HBars data={funnel} labelWidth="w-[150px] sm:w-[190px]" /></>) : <Loading />}
-              defaultOpen={anchor === "status"}
-              more={
-                <>
-                  <p>
-                    We track {fmtInt(acc.studies_tracked ?? 0)} GEO series. For every sample we fetch the FASTQ files from SRA, up to 30 million
-                    reads. Samples whose runs are missing or withdrawn are recorded with the reason, not dropped.
-                  </p>
-                  {stats && (
-                    <>
-                      <p>Where every one of the {fmtInt(acc.samples_advertised ?? 0)} samples GEO lists stands today:</p>
-                      <StackedBar parts={allBuckets} />
-                    </>
-                  )}
-                </>
+              visual={
+                stats ? (
+                  <div className="grid grid-cols-2 gap-6">
+                    <div>
+                      <p className="font-mono text-[34px] leading-none font-medium tabular">{fmtInt(acc.studies_tracked ?? 0)}</p>
+                      <p className="mt-2 text-[13px] text-muted-foreground">GEO series tracked</p>
+                    </div>
+                    <div>
+                      <p className="font-mono text-[34px] leading-none font-medium tabular">{fmtCompact(acc.samples_advertised ?? 0)}</p>
+                      <p className="mt-2 text-[13px] text-muted-foreground">samples listed</p>
+                    </div>
+                    <p className="col-span-2 rounded bg-[var(--teal-50)] px-3 py-2 font-mono text-[12.5px]">GEO record → SRA run → FASTQ</p>
+                  </div>
+                ) : (
+                  <Loading />
+                )
               }
+              detail={<p>Up to 30 million reads per sample. Sample characteristics from GEO are kept word for word.</p>}
               link={{ to: "/docs#provenance", label: "Provenance in the docs" }}
             />
 
@@ -214,15 +192,7 @@ const About = () => {
               title="Protocol detected from the reads"
               claim="The barcode and UMI layout is read from the reads themselves, so each library is counted the way it was built."
               visual={facets ? (<><Caption>Studies by assay</Caption><HBars data={assays} labelWidth="w-[150px] sm:w-[190px]" /></>) : <Loading />}
-              more={
-                <>
-                  <p>10x 3′ (v2, v3, v4), 10x 5′, Multiome, Drop-seq, inDrop, CITE-seq, BD Rhapsody, Smart-seq and more.</p>
-                  <p>
-                    When a 10x chemistry version comes only from GEO text, not from the reads, the study is labelled{" "}
-                    <em>10x (version unconfirmed)</em>.
-                  </p>
-                </>
-              }
+              detail={<p>10x 3′ and 5′, Multiome, Drop-seq, inDrop, CITE-seq, BD Rhapsody, Smart-seq and more.</p>}
               link={{ to: "/browse", label: "Filter by assay in Browse" }}
             />
 
@@ -232,25 +202,13 @@ const About = () => {
               title="Aligned and counted, splicing included"
               claim="One reference per species. Exonic and intronic reads are counted separately for every cell, with splice junctions."
               visual={facets ? (<><Caption>Studies by reference genome</Caption><HBars data={refs} labelWidth="w-[150px] sm:w-[190px]" /></>) : <Loading />}
-              defaultOpen={anchor === "references"}
-              more={
+              detail={
                 <>
-                  <table className="text-[14px]">
-                    <tbody>
-                      {REFERENCES.map(([org, build, ann]) => (
-                        <tr key={org} className="border-b border-border">
-                          <td className="py-1.5 pr-5">{org}</td>
-                          <td className="py-1.5 pr-5 font-mono text-[13px]">{build}</td>
-                          <td className="py-1.5 text-muted-foreground">{ann}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
                   <p>
-                    Spliced and unspliced counts make RNA velocity possible without going back to the reads. The build is recorded on every cell
-                    (<Mono>obs["reference_build"]</Mono>). Studies of other species aligned to one of these are flagged and left out of default
-                    searches.
+                    Human GRCh38 (GENCODE v44), mouse GRCm39 (vM33), rat mRatBN7.2, macaque Mmul_10, zebrafish GRCz11. The build is recorded on
+                    every cell.
                   </p>
+                  <p>Spliced and unspliced counts are ready for RNA velocity.</p>
                 </>
               }
               link={{ to: "/docs#provenance", label: "References and versions" }}
@@ -262,19 +220,16 @@ const About = () => {
               title="More than gene expression"
               claim={
                 <>
-                  Every file also holds mitochondrial DNA variants and immune receptor genes; {share("snps") ?? "about half"}% add SNP genotypes,
-                  donors and genetic sex.
+                  Every file holds mitochondrial DNA variants and immune receptor genes; {share("snps") ?? "about half"}% add SNP genotypes, donors
+                  and genetic sex.
                 </>
               }
               visual={layers ? (<><Caption>Share of downloadable studies with each layer</Caption><HBars data={layerBars} max={100} labelWidth="w-[150px] sm:w-[210px]" /></>) : <Loading />}
-              more={
-                <>
-                  <p>
-                    mtDNA heteroplasmy supports lineage tracing; SNPs and donor demultiplexing separate pooled donors; genetic sex and, for{" "}
-                    {fmtInt(layerOf("ancestry")?.studies ?? 0)} human studies, continental ancestry are called from the reads.
-                  </p>
-                  <p>Newer files add per-cell doublet scores, cell cycle and ambient RNA estimates. Older files have fewer layers; check before you rely on one.</p>
-                </>
+              detail={
+                <p>
+                  mtDNA variants support lineage tracing; SNPs separate pooled donors; continental ancestry is called for{" "}
+                  {fmtInt(layerOf("ancestry")?.studies ?? 0)} human studies.
+                </p>
               }
               link={{ to: "/docs#modalities", label: "Read every layer" }}
             />
@@ -282,25 +237,14 @@ const About = () => {
             <Station
               id="qc"
               n={5}
-              title="Every sample checked"
-              claim="Failed runs are removed. Samples with an issue are flagged low QC and left out by default, one click away."
-              visual={stats ? (<><Caption>Every processed sample in a published file</Caption><StackedBar parts={qcParts} /></>) : <Loading />}
-              defaultOpen={anchor === "qc"}
-              more={
-                <>
-                  <p>
-                    <strong>Removed:</strong> under {Math.round((rm?.max_mapping_rate ?? 0.05) * 100)}% of reads mapped <em>and</em> under{" "}
-                    {rm?.max_median_genes ?? 10} genes per cell.
-                  </p>
-                  <p>
-                    <strong>Low QC:</strong> under {low?.min_median_genes ?? 30} genes per cell <em>or</em> under{" "}
-                    {Math.round((low?.min_mapping_rate ?? 0.2) * 100)}% of reads mapped. Turn on <em>Include low-QC samples</em> in Browse or pass{" "}
-                    <Mono>include_low_qc=1</Mono>.
-                  </p>
-                  <p className="text-muted-foreground">
-                    The cut points are conservative: working samples have several hundred genes per cell and about 80% of reads mapped.
-                  </p>
-                </>
+              title="Every sample passes the gates"
+              claim="A sample reaches you only after its reads align, its study file is built and it passes QC."
+              visual={stats ? (<><Caption>From GEO to approved samples</Caption><GateFunnel steps={sampleFunnel(acc)} /></>) : <Loading />}
+              detail={
+                <p>
+                  The QC gate: at least {Math.round((low?.min_mapping_rate ?? 0.2) * 100)}% of reads map and the median cell has{" "}
+                  {low?.min_median_genes ?? 30} or more genes.
+                </p>
               }
               link={{ to: `/study/${EXAMPLE_GSE}`, label: "See QC on a study page" }}
             />
@@ -311,14 +255,10 @@ const About = () => {
               title="One small file per study"
               claim={<>All samples of a study in one <Mono>.singlet</Mono> file: raw counts, {H5AD_RATIO.toFixed(1)}× smaller than H5AD. Free, no account.</>}
               visual={<><Caption>Size of the same count matrix (uncompressed = 100%)</Caption><FormatSizeChart /></>}
-              more={
+              detail={
                 <>
-                  <p>
-                    A zip64 archive with one folder per sample (<Mono>exon_counts.1pz</Mono>, <Mono>intron_counts.1pz</Mono>,{" "}
-                    <Mono>cell_calls.tsv</Mono>, QC and provenance JSON) and a <Mono>manifest.json</Mono> with checksums and the pipeline version.
-                  </p>
-                  <p>Nothing is normalised or batch-corrected. One sample can be read on its own over HTTP range requests.</p>
-                  <p className="text-muted-foreground">Sizes are medians from the .1pz format benchmark (3,198 datasets for .1pz, 89 for H5AD).</p>
+                  <p>Per sample: exon and intron counts, cell calls, QC and provenance. Nothing is normalised or batch-corrected.</p>
+                  <p>One sample can be read on its own over HTTP range requests.</p>
                 </>
               }
               link={{ to: "/docs#singlet-file", label: "What's in a .singlet file" }}
@@ -330,17 +270,10 @@ const About = () => {
               title="Search in plain English"
               claim="Type a question the way you would ask a colleague. It becomes exact filters you can see and change."
               visual={<SearchDiagram />}
-              more={
+              detail={
                 <>
-                  <p>
-                    A fixed vocabulary reads the question first: species, tissue, disease, assay, cell type, cell counts and years. It is free and
-                    instant. Only words it cannot place go to a language model, once per question; the answer is cached and checked against the
-                    same vocabulary.
-                  </p>
-                  <p>
-                    Species is a hard filter and comes only from words like "mouse" or "patients", never from an abstract. A disease never implies
-                    a tissue: "melanoma" is cancer, not skin. Every filter shows as a chip you can remove.
-                  </p>
+                  <p>A fixed vocabulary reads the question first, free and instant. Only words it cannot place go to a language model, once; the answer is cached and checked against the vocabulary.</p>
+                  <p>Species comes only from words like "mouse" or "patients". A disease never implies a tissue: "melanoma" is cancer, not skin.</p>
                 </>
               }
               link={{ to: "/docs#search", label: "Search in the docs" }}
@@ -352,7 +285,7 @@ const About = () => {
               title="Into your tool"
               claim="One line in Python or R, or ask Claude to find, check and load it for you."
               visual={<ToolsVisual />}
-              more={<p>Python returns AnnData, R a SingleCellExperiment or Seurat object, with sample metadata attached. Claude uses the singlet.bio MCP server with a free API key.</p>}
+              detail={<p>AnnData in Python; SingleCellExperiment or Seurat in R; sample metadata attached.</p>}
               link={{ to: "/quickstart", label: "Get started" }}
             />
           </Railway>

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { AlertTriangle, Check, Copy, Download } from "lucide-react";
+import { Check, Copy, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AddToLibraryMenu } from "@/components/library/AddToLibraryMenu";
 import { fmtCompact, fmtInt } from "@/lib/catalog-display";
@@ -56,7 +56,6 @@ function LoadSnippet({ gseId }: { gseId: string }) {
 export function StudyCard({ row, selected, onToggle, ai, why, aiWhy }: Props) {
   const conditions = row.conditions.slice(0, 3);
   const explanation = why ?? row.why;
-  const failed = row.n_failed ?? Math.max(0, row.n_total - row.n_done);
   const orderedFacets = [...row.match.facets].sort((a, b) => {
     const order = ["organism", "tissue_group", "disease_group", "assay_family", "cell_type"];
     return order.indexOf(a.key) - order.indexOf(b.key);
@@ -123,16 +122,6 @@ export function StudyCard({ row, selected, onToggle, ai, why, aiWhy }: Props) {
                 {p}
               </span>
             ))}
-            {row.has_bundle && !!row.low_qc_samples && (
-              <span className="ml-1.5 inline-flex items-center gap-1 text-warning" title="singlet's QC algorithms detected an issue with these samples. It is recommended to proceed with caution. They are left out of counts and bulk downloads unless low-QC samples are included.">
-                <AlertTriangle size={12} /> {fmtInt(row.low_qc_samples)} low QC
-              </span>
-            )}
-            {row.suspect_cells && (
-              <span className="ml-1.5 inline-flex items-center gap-1 text-warning" title="Cell counts for some plate-based samples in this study are implausible and are under review.">
-                <AlertTriangle size={12} /> flagged counts
-              </span>
-            )}
           </p>
 
           {(row.match.facets.length > 0 || row.match.keywords.length > 0) && (
@@ -152,7 +141,7 @@ export function StudyCard({ row, selected, onToggle, ai, why, aiWhy }: Props) {
 
           {row.abstract && <p className="mt-2 text-[13px] leading-relaxed text-foreground/75 line-clamp-2">{row.abstract}</p>}
 
-          {(conditions.length > 0 || failed > 0) && (
+          {conditions.length > 0 && (
             <ul className="mt-2.5 flex flex-wrap gap-1.5" aria-label="Conditions">
               {conditions.map((c) => (
                 <li
@@ -169,11 +158,6 @@ export function StudyCard({ row, selected, onToggle, ai, why, aiWhy }: Props) {
               ))}
               {row.n_conditions > conditions.length && (
                 <li className="chip h-6 text-[12px] text-muted-foreground">+{row.n_conditions - conditions.length} more</li>
-              )}
-              {failed > 0 && (
-                <li className="chip h-6 text-[12px] text-muted-foreground" title="Samples the pipeline could not process">
-                  {fmtInt(failed)} failed
-                </li>
               )}
             </ul>
           )}

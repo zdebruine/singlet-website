@@ -1,26 +1,20 @@
 import { Link } from "react-router-dom";
-import { AlertTriangle, ArrowDown, BookOpen, Download, ExternalLink } from "lucide-react";
+import { ArrowDown, BookOpen, Download, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { fmtCompact, fmtInt } from "@/lib/catalog-display";
 import { bundleUrl } from "@/integrations/api/client";
 import type { Sort, StudyRow } from "@/integrations/api/types";
 import type { ColumnDef } from "./columns";
 
-/** Plain-words state of a study's file, for the optional Status column. */
+/** Whether the study's file can be downloaded yet, for the optional Status column. */
 export function studyStatus(r: StudyRow): string {
-  if (!r.has_bundle) return r.n_done > 0 ? "File pending" : "Not processed";
-  const inFile = r.bundle_n_samples ?? r.n_done;
-  if (r.n_total > inFile) return `${fmtInt(inFile)} of ${fmtInt(r.n_total)} samples`;
-  return "Complete";
+  return r.has_bundle ? "Downloadable" : "File pending";
 }
 
-/** Samples that count for the study: passed QC in the file, else what the file or catalog holds. */
-function sampleCount(r: StudyRow): { n: number; title: string } {
-  if (r.has_bundle && r.usable_samples != null) {
-    return { n: r.usable_samples, title: `Passed QC${r.low_qc_samples ? `; ${fmtInt(r.low_qc_samples)} more flagged low QC` : ""}` };
-  }
-  if (r.bundle_n_samples != null) return { n: r.bundle_n_samples, title: "Samples in the file" };
-  return { n: r.n_done, title: "Samples processed (catalog)" };
+/** Samples that passed QC in the file, else what the file or catalog holds. */
+function sampleCount(r: StudyRow): number {
+  if (r.has_bundle && r.usable_samples != null) return r.usable_samples;
+  return r.bundle_n_samples ?? r.n_done;
 }
 
 export const STUDY_COLUMNS: ColumnDef<StudyRow>[] = [
@@ -73,10 +67,7 @@ export const STUDY_COLUMNS: ColumnDef<StudyRow>[] = [
     default: true,
     align: "right",
     width: "w-[84px]",
-    render: (r) => {
-      const { n, title } = sampleCount(r);
-      return <span title={title}>{fmtInt(n)}</span>;
-    },
+    render: (r) => <span title="Samples that passed QC">{fmtInt(sampleCount(r))}</span>,
   },
   {
     key: "cells",
@@ -86,7 +77,6 @@ export const STUDY_COLUMNS: ColumnDef<StudyRow>[] = [
     width: "w-[72px]",
     render: (r) => (
       <span title={r.file_cells != null ? "Cells called in the file" : "Cells recorded in the catalog"}>
-        {r.suspect_cells && <AlertTriangle size={11} className="inline mr-1 text-warning" aria-label="Some counts flagged" />}
         {fmtCompact(r.file_cells ?? r.n_cells)}
       </span>
     ),

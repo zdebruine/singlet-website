@@ -764,6 +764,11 @@ export function buildSampleWhere(f: SearchFilters, opts: StudyWhereOpts = {}): B
   if (f.has_bundle === true) clauses.push(downloadableSql(f.include_low_qc));
   // Samples removed by QC (tier 2) are never listed; low-QC ones (tier 1) only when asked for.
   clauses.push(`NOT EXISTS (SELECT 1 FROM sample_qc qq WHERE qq.gsm_id = s.gsm_id AND qq.qc_tier >= ${f.include_low_qc ? 2 : 1})`);
+  // Default sample results list approved samples only: processed, with count data in the file.
+  if (f.has_bundle === true && !f.include_low_qc) {
+    clauses.push(`s.status IN ('DONE', 'DONE_QC_WARN')`);
+    clauses.push(`NOT EXISTS (SELECT 1 FROM sample_qc qu WHERE qu.gsm_id = s.gsm_id AND qu.usable = 0)`);
+  }
   if (f.year_min != null && ex !== "year") {
     clauses.push("m.year >= ?");
     params.push(f.year_min);
