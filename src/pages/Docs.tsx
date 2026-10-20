@@ -67,7 +67,7 @@ const MODALITIES: [string, string][] = [
   ["Combined raw counts (exon + intron)", "raw_counts()"],
   ["Per-feature exon / intron matrices", "exon_counts, intron_counts"],
   ["Splice junctions", "junctions"],
-  ["Percent-spliced-in", "splice_psi"],
+  ["Exon inclusion (percent spliced in)", "splice_psi"],
   ["mtDNA heteroplasmy", "mt_heteroplasmy"],
   ["mtDNA variant calls", "mt_variants"],
   ["Donor demultiplexing", "donor_assignments"],
@@ -500,7 +500,7 @@ if (singlet_has(path, "donor_assignments", gsm))
                 <Mono>GET /api/manifest</Mono> takes the same filters as <Mono>/api/search</Mono> (organism,
                 tissue_group, disease_group, assay_family, cell_type, q, min_cells, year_min/max, has_bundle) and
                 returns every matching study — up to 2,000 — as a manifest or a ready-to-run download script, chosen
-                with <Mono>format=</Mono>. Each row reports <Mono>n_samples_passing_qc</Mono> (<Link to="/about#qc">the QC gate</Link>):
+                with <Mono>format=</Mono>. Each row reports <Mono>n_samples_passing_qc</Mono> (<Link to="/about#qc">how QC works</Link>):
               </p>
               <table>
                 <thead>

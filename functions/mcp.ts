@@ -66,7 +66,7 @@ const INSTRUCTIONS = `singlet.bio is an open atlas of public single-cell RNA-seq
 
 Recommended order: search_datasets → assess_study or get_study → get_sample_qc → get_modalities (what is in the file beyond gene counts) → get_download_url (whole study) or get_partial_download (one sample's matrix, by HTTP range) → export_manifest for a cohort. compare_studies and find_matched_controls help pick controls.
 
-A .singlet file is not just gene counts: it can also carry splice junctions and PSI, mitochondrial heteroplasmy and chrM variants, genotype-free donor demultiplexing, non-host (microbial/viral) abundance, V(D)J usage and per-cell doublet/cell-cycle/ambient annotations. Older bundles have fewer of these — call get_modalities before telling a user a modality is available.
+A .singlet file is not just gene counts: it can also carry splice junctions and exon inclusion (percent spliced in), mitochondrial heteroplasmy and chrM variants, genotype-free donor demultiplexing, non-host (microbial/viral) abundance, V(D)J usage and per-cell doublet/cell-cycle/ambient annotations. Older bundles have fewer of these — call get_modalities before telling a user a modality is available.
 
 Every number and every "why" string is computed, not generated — quote them, don't paraphrase. Catalog cell counts can differ from the file's own QC; the file is the truth. Every tool call needs a free personal API key from ${ACCOUNT_URL}; calls are counted per key. Downloads themselves (the data.singlet.bio links) never need one. Searches the built-in vocabulary can read cost no AI tokens; a question that needs the AI reading uses your monthly AI token allowance (shown in \`_meta.allowance\`).`;
 
