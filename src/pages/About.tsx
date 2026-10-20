@@ -30,6 +30,7 @@ const REFERENCES = [
   ["Mouse", "GRCm39 (2024-A)", "GENCODE vM33"],
   ["Rat", "mRatBN7.2", "Ensembl 110"],
   ["Rhesus macaque", "Mmul_10", "Ensembl"],
+  ["Zebrafish", "GRCz11", "Ensembl"],
   ["Human + mouse", "GRCh38-GRCm39", "both"],
 ];
 
