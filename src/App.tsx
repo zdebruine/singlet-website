@@ -12,7 +12,6 @@ import Docs from "./pages/Docs.tsx";
 import DocsMcp from "./pages/DocsMcp.tsx";
 import About from "./pages/About.tsx";
 import Browse from "./pages/Browse.tsx";
-import Quickstart from "./pages/Quickstart.tsx";
 import StudyDetail from "./pages/StudyDetail.tsx";
 import SampleRedirect from "./pages/SampleRedirect.tsx";
 import DataLicense from "./pages/DataLicense.tsx";
@@ -87,7 +86,7 @@ const App = () => (
             <Routes>
               <Route path="/" element={<Index />} />
               <Route path="/browse" element={<Browse />} />
-              <Route path="/quickstart" element={<Quickstart />} />
+              <Route path="/quickstart" element={<Navigate to="/#get-started" replace />} />
               <Route path="/study/:gse" element={<StudyDetail />} />
               <Route path="/docs" element={<Docs />} />
               <Route path="/docs/mcp" element={<DocsMcp />} />

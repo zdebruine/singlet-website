@@ -1,250 +1,190 @@
-import { Link } from "react-router-dom";
+import { useEffect, type ReactNode } from "react";
+import { Link, useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { BookOpen, Search } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import { Logo } from "@/components/Logo";
 import { SearchBox } from "@/components/SearchBox";
 import { apiClient } from "@/integrations/api/client";
 import { usePageMeta } from "@/hooks/usePageMeta";
 import { fmtCompact, fmtInt } from "@/lib/catalog-display";
 import { EXAMPLE_QUERIES } from "@/lib/search-routing";
-import { Reveal } from "@/components/landing/Reveal";
-import { StudyAnatomy } from "@/components/landing/StudyAnatomy";
-import { WaysIn } from "@/components/landing/WaysIn";
+import { cn } from "@/lib/utils";
 import { Columns, FormatSizeChart, H5AD_RATIO, HBars } from "@/components/landing/charts";
 import { GateFunnel, sampleFunnel } from "@/components/landing/GateFunnel";
+import { GetStarted } from "@/components/landing/GetStarted";
 
-// Page plan and the visitor profile behind it: docs/LANDING.md. Few words; the charts carry the message.
+// One message per browser view. Each screen fills the visible window (below the header) up to a cap, so a large
+// monitor does not stretch it, and stacks naturally on a phone. Plan: docs/LANDING.md.
 
-function StatSkeleton({ w = "w-16" }: { w?: string }) {
-  return <span className={`inline-block h-7 ${w} rounded bg-secondary animate-pulse align-middle`} aria-hidden="true" />;
+/** One browser view: at least the window height under the header, at most 960px, content centred. */
+function Screen({ id, children, className, label }: { id: string; children: ReactNode; className?: string; label: string }) {
+  return (
+    <section
+      id={id}
+      aria-label={label}
+      className={cn("scroll-mt-14 flex items-center py-16 md:py-20 min-h-[min(calc(100svh-3.5rem),960px)] border-b border-border last:border-b-0", className)}
+    >
+      <div className="container-site w-full">{children}</div>
+    </section>
+  );
 }
 
-function SectionHead({ id, kicker, title }: { id: string; kicker: string; title: string }) {
+function Title({ children, sub }: { children: ReactNode; sub?: ReactNode }) {
   return (
-    <div className="max-w-[720px]">
-      <p className="type-mono text-primary">{kicker}</p>
-      <h2 id={id} className="mt-2 text-[26px] md:text-[32px] leading-tight font-semibold tracking-tight">
-        {title}
-      </h2>
+    <div className="text-center max-w-[760px] mx-auto">
+      <h2 className="text-[32px] md:text-[44px] leading-[1.08] font-semibold tracking-tight">{children}</h2>
+      {sub && <p className="mt-4 text-[17px] md:text-[19px] text-muted-foreground">{sub}</p>}
     </div>
   );
 }
 
-/** A big number with a short label, for the line above a chart. */
-function Fact({ value, label }: { value: string | null; label: string }) {
-  return (
-    <div>
-      <div className="font-mono font-medium text-[30px] md:text-[36px] leading-none tabular text-foreground">{value ?? <StatSkeleton w="w-20" />}</div>
-      <div className="mt-1.5 text-[13px] text-muted-foreground">{label}</div>
-    </div>
-  );
+function Skeleton({ h = "h-48" }: { h?: string }) {
+  return <div className={cn("rounded bg-secondary animate-pulse", h)} aria-hidden="true" />;
 }
-
-const OPEN = ["CC0 data", "MIT code", "No account to download", "Python · R · Claude"];
-
-const focusSearch = () => {
-  const el = document.getElementById("hero-search") as HTMLInputElement | null;
-  el?.scrollIntoView({ behavior: "smooth", block: "center" });
-  el?.focus({ preventScroll: true });
-};
 
 const pct = (n: number, of: number) => (of > 0 ? Math.round((n / of) * 100) : 0);
 
+/** Links to every screen, under the hero search, so a visitor sees what is here. */
+const JUMPS = [
+  { href: "#demo", label: "See it work" },
+  { href: "#coverage", label: "Coverage" },
+  { href: "#layers", label: "What's in a file" },
+  { href: "#qc", label: "Quality control" },
+  { href: "#get-started", label: "Get started" },
+];
+
 const Index = () => {
   usePageMeta({ path: "/" });
+  const { hash } = useLocation();
 
   const { data: stats } = useQuery({ queryKey: ["corpus-stats"], queryFn: () => apiClient.stats(), staleTime: 120_000 });
   const { data: facets } = useQuery({ queryKey: ["facets", "landing"], queryFn: () => apiClient.facets({ level: "gse" }), staleTime: 300_000 });
   const { data: layers } = useQuery({ queryKey: ["stats-layers"], queryFn: () => apiClient.layers(), staleTime: 3_600_000 });
 
-  // Tissues with a downloadable study (the default facet basis); "Other" and mixed groups are not tissues.
-  const tissueOptions = (facets?.tissue_group ?? []).filter((o) => o.count > 0 && !/^(Other|Multiple)/.test(o.value));
+  // /#get-started (and the old /quickstart, which redirects here) lands on its screen.
+  useEffect(() => {
+    if (!hash) return;
+    const t = setTimeout(() => document.getElementById(decodeURIComponent(hash.slice(1)))?.scrollIntoView({ block: "start" }), 60);
+    return () => clearTimeout(t);
+  }, [hash]);
+
+  const tissues = (facets?.tissue_group ?? []).filter((o) => o.count > 0 && !/^(Other|Multiple)/.test(o.value));
   const thisYear = new Date().getFullYear();
   const years = (facets?.year ?? [])
     .map((y) => ({ label: y.value, value: y.count }))
     .filter((y) => Number(y.label) >= 2015 && Number(y.label) <= thisYear)
     .sort((a, b) => Number(a.label) - Number(b.label));
 
-  // Headline numbers count what a visitor can download (CLAUDE.md, "Data model and invariants").
-  const statItems = [
-    { value: stats ? fmtInt(stats.studies_with_files) : null, label: "studies" },
-    { value: stats ? fmtInt(stats.samples_in_files) : null, label: "samples passed QC" },
-    { value: stats ? fmtCompact(stats.cells_in_files) : null, label: "cells" },
-    { value: facets ? fmtInt(tissueOptions.length) : null, label: "tissue groups" },
-  ];
-
   const layerBy = Object.fromEntries((layers?.layers ?? []).map((l) => [l.key, l]));
-  const share = (key: string) => (layerBy[key] ? `${pct(layerBy[key].studies, layerBy[key].of)}%` : null);
-  const layerBars = (layers?.layers ?? []).map((l) => ({
-    label: l.label,
-    value: pct(l.studies, l.of),
-    display: `${pct(l.studies, l.of)}%`,
-    highlight: l.key !== "gene_counts",
-  }));
-
+  const share = (key: string) => (layerBy[key] ? `${pct(layerBy[key].studies, layerBy[key].of)}%` : "…");
+  const layerBars = (layers?.layers ?? [])
+    .filter((l) => l.key !== "gene_counts")
+    .map((l) => ({ label: l.label, value: pct(l.studies, l.of), display: `${pct(l.studies, l.of)}%`, highlight: true }));
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <Navbar />
 
       <main className="flex-1">
-        {/* ── Hero ── */}
-        <section className="relative overflow-hidden">
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-x-0 top-0 h-[520px] bg-[radial-gradient(60%_60%_at_50%_0%,rgba(46,191,174,0.12),transparent_70%)]"
-          />
-          <div className="container-site relative pt-12 md:pt-16 pb-14 grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] gap-10 lg:gap-12 items-center">
-            <div className="text-center lg:text-left min-w-0">
-              <h1 className="type-display text-foreground !text-[36px] !leading-[1.1] md:!text-[46px] md:!leading-[1.08]">
-                AI-ready single-cell data, at your fingertips.
-              </h1>
-              <p className="mt-5 text-[17px] md:text-[18px] leading-relaxed text-muted-foreground max-w-[540px] mx-auto lg:mx-0">
-                Public scRNA-seq from GEO, realigned from raw reads and quality-checked. Ready to load in one line.
-              </p>
-
-              <div className="mt-7 max-w-[620px] mx-auto lg:mx-0">
-                <SearchBox variant="hero" placeholder={`Try "${EXAMPLE_QUERIES[0]}"`} />
-              </div>
-
-              <dl className="mt-8 grid grid-cols-4 gap-2 max-w-[560px] mx-auto lg:mx-0">
-                {statItems.map((s) => (
-                  <div key={s.label} className="min-w-0">
-                    <dd className="font-mono font-medium text-[20px] sm:text-[26px] leading-none tabular text-foreground">{s.value ?? <StatSkeleton />}</dd>
-                    <dt className="mt-1.5 text-[12px] text-muted-foreground leading-tight">{s.label}</dt>
-                  </div>
-                ))}
-              </dl>
-            </div>
-
-            <figure className="min-w-0">
-              <div className="surface overflow-hidden p-0 shadow-[0_12px_40px_-12px_rgba(15,31,29,0.25)]">
-                <picture>
-                  <source media="(prefers-reduced-motion: reduce)" srcSet="/demo/singlet-demo-poster.png" />
-                  <img
-                    src="/demo/singlet-demo.gif"
-                    width={960}
-                    height={540}
-                    alt="Python loads study GSE138867 and plots cells per sample; R lists the layers in its file and loads it; Claude searches singlet.bio for microglia in the aging mouse brain and loads the largest study."
-                    className="block w-full h-auto"
-                  />
-                </picture>
-              </div>
-              <figcaption className="mt-2.5 text-[12.5px] text-muted-foreground text-center lg:text-left">Python, R or Claude: the same data, one line.</figcaption>
-            </figure>
-          </div>
-        </section>
-
-        {/* ── Coverage ── */}
-        <section className="container-site py-16 border-t border-border" aria-labelledby="coverage-h">
-          <Reveal>
-            <SectionHead id="coverage-h" kicker="Coverage" title="Your tissue is probably here" />
-            <div className="mt-10 grid lg:grid-cols-2 gap-10 lg:gap-14">
-              <div>
-                <p className="text-[13px] font-medium mb-3">Studies by tissue</p>
-                <HBars
-                  data={tissueOptions.slice(0, 10).map((o) => ({ label: o.value, value: o.count, href: `/browse?tissue_group=${encodeURIComponent(o.value)}` }))}
-                  labelWidth="w-[130px] sm:w-[170px]"
-                />
-              </div>
-              <div>
-                <p className="text-[13px] font-medium mb-3">Studies by year of GEO release</p>
-                <Columns data={years} partialLast={years.at(-1)?.label === String(thisYear)} />
-                {years.at(-1)?.label === String(thisYear) && <p className="mt-2 text-[11.5px] text-muted-foreground">* {thisYear} so far</p>}
-              </div>
-            </div>
-          </Reveal>
-        </section>
-
-        {/* ── Layers ── */}
-        <section className="py-16 bg-secondary/40 border-y border-border" aria-labelledby="layers-h">
-          <div className="container-site">
-            <Reveal>
-              <SectionHead id="layers-h" kicker="Inside every file" title="More than a count matrix" />
-              <div className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-6">
-                <Fact value={share("splicing")} label="of studies splicing-resolved" />
-                <Fact value={share("mtdna")} label="with mitochondrial DNA variants" />
-                <Fact value={share("snps")} label="with SNP genotypes" />
-                <Fact value={layerBy.ancestry ? fmtInt(layerBy.ancestry.studies) : null} label="human studies with genetic ancestry" />
-              </div>
-              <div className="mt-10 grid lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] gap-10 items-start">
-                <div>
-                  <p className="text-[13px] font-medium mb-3">Share of downloadable studies with each layer (ancestry: of human studies)</p>
-                  <HBars data={layerBars} max={100} labelWidth="w-[150px] sm:w-[210px]" />
-                </div>
-                <StudyAnatomy />
-              </div>
-            </Reveal>
-          </div>
-        </section>
-
-        {/* ── QC ── */}
-        <section className="container-site py-16" aria-labelledby="qc-h">
-          <Reveal>
-            <SectionHead id="qc-h" kicker="Quality control" title="Every sample passes the gates" />
-            <p className="mt-3 text-[15px] text-muted-foreground">
-              Only approved samples reach you.{" "}
-              <Link to="/about#qc" className="text-primary hover:underline">
-                The gates →
-              </Link>
+        {/* 1 · Search: the whole atlas behind one box */}
+        <section aria-label="Search" className="relative flex flex-col items-center justify-center min-h-[min(calc(100svh-3.5rem),960px)] py-16 border-b border-border">
+          <div className="container-site w-full flex flex-col items-center text-center">
+            <h1 className="sr-only">singlet.bio: AI-ready single-cell data</h1>
+            <Logo variant="lockup" theme="auto" height={52} link={false} />
+            <p className="mt-6 text-[18px] md:text-[20px] text-muted-foreground">
+              Search {stats ? fmtCompact(stats.cells_in_files) : "millions of"} single cells in plain English.
             </p>
-            <div className="mt-8 max-w-[760px]">{stats ? <GateFunnel steps={sampleFunnel(stats.accounting)} /> : <StatSkeleton w="w-full" />}</div>
-          </Reveal>
-        </section>
-
-        {/* ── File size ── */}
-        <section className="container-site py-16 border-t border-border" aria-labelledby="size-h">
-          <Reveal>
-            <div className="grid lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] gap-10 items-center">
-              <div>
-                <SectionHead id="size-h" kicker="Format" title="Small files, fast loads" />
-                <div className="mt-6 flex gap-8">
-                  <Fact value={`${H5AD_RATIO.toFixed(1)}×`} label="smaller than AnnData (H5AD)" />
-                  <Fact value="3×" label="faster to read" />
-                </div>
-              </div>
-              <div>
-                <p className="text-[13px] font-medium mb-3">Size of the same count matrix (uncompressed = 100%)</p>
-                <FormatSizeChart />
-                <p className="mt-3 text-[11.5px] text-muted-foreground">
-                  Medians from the .1pz format benchmark: 3,198 datasets for .1pz, 89 for H5AD, 10x HDF5 and npz, 20 for RDS and BPCells.
-                  Read speed: median 3.1× faster decode than H5AD.
-                </p>
-              </div>
+            <div className="mt-8 w-full max-w-[680px]">
+              <SearchBox variant="hero" placeholder={`Try "${EXAMPLE_QUERIES[0]}"`} />
             </div>
-          </Reveal>
-        </section>
-
-        {/* ── Three ways in ── */}
-        <section className="container-site py-16 border-t border-border" aria-labelledby="ways-h">
-          <Reveal>
-            <SectionHead id="ways-h" kicker="Use it your way" title="Three ways in" />
-            <div className="mt-8">
-              <WaysIn />
-            </div>
-          </Reveal>
-        </section>
-
-        {/* ── Close ── */}
-        <section className="surface-dark">
-          <div className="container-site py-14 text-center">
-            <h2 className="text-[26px] md:text-[30px] font-semibold tracking-tight text-dark-foreground">Find your next dataset.</h2>
-            <ul className="mt-3 flex flex-wrap justify-center gap-x-5 gap-y-1 text-[13.5px] text-dark-muted">
-              {OPEN.map((o) => (
-                <li key={o}>{o}</li>
-              ))}
-            </ul>
             <div className="mt-6 flex flex-wrap justify-center gap-3">
-              <button type="button" onClick={focusSearch} className="btn-primary">
-                <Search size={16} /> Search the atlas
-              </button>
-              <Link to="/quickstart" className="btn-secondary">
-                <BookOpen size={16} /> Quickstart
+              <Link to="/browse" className="btn-secondary">
+                Browse {stats ? fmtInt(stats.studies_with_files) : ""} studies
               </Link>
+              <a href="#get-started" className="btn-secondary">
+                Get started
+              </a>
             </div>
+            <nav aria-label="On this page" className="mt-8 flex flex-wrap justify-center gap-x-5 gap-y-2 text-[13.5px] text-muted-foreground">
+              {JUMPS.map((j) => (
+                <a key={j.href} href={j.href} className="hover:text-foreground">
+                  {j.label}
+                </a>
+              ))}
+            </nav>
           </div>
+          <a href="#demo" aria-label="Scroll to the demo" className="absolute bottom-6 text-muted-foreground hover:text-foreground motion-safe:animate-bounce">
+            <ChevronDown size={24} />
+          </a>
         </section>
+
+        {/* 2 · It is easy */}
+        <Screen id="demo" label="Demo">
+          <Title sub="Python, R or Claude. The same study, one line.">Load any study in one line.</Title>
+          <figure className="mt-10 mx-auto max-w-[960px]">
+            <div className="overflow-hidden rounded-lg border border-border shadow-[0_24px_60px_-28px_rgba(15,31,29,0.35)]">
+              <picture>
+                <source media="(prefers-reduced-motion: reduce)" srcSet="/demo/singlet-demo-poster.png" />
+                <img
+                  src="/demo/singlet-demo.gif"
+                  width={960}
+                  height={540}
+                  alt="Python loads study GSE138867 and plots cells per sample; R lists the layers in its file and loads it; Claude searches singlet.bio for microglia in the aging mouse brain and loads the largest study."
+                  className="block w-full h-auto"
+                />
+              </picture>
+            </div>
+          </figure>
+        </Screen>
+
+        {/* 3 · It covers your biology */}
+        <Screen id="coverage" label="Coverage">
+          <Title sub={stats ? `${fmtInt(stats.studies_with_files)} studies, ${fmtInt(stats.samples_in_files)} samples, more every month.` : undefined}>
+            Your tissue is probably here.
+          </Title>
+          <div className="mt-12 grid lg:grid-cols-2 gap-12 max-w-[1100px] mx-auto">
+            {facets ? (
+              <HBars
+                data={tissues.slice(0, 10).map((o) => ({ label: o.value, value: o.count, href: `/browse?tissue_group=${encodeURIComponent(o.value)}` }))}
+                labelWidth="w-[130px] sm:w-[170px]"
+              />
+            ) : (
+              <Skeleton />
+            )}
+            {facets ? <Columns data={years} partialLast={years.at(-1)?.label === String(thisYear)} /> : <Skeleton />}
+          </div>
+        </Screen>
+
+        {/* 4 · It holds more than counts */}
+        <Screen id="layers" label="What is in a file">
+          <Title sub={`Splicing in every study. Mitochondrial DNA in every study. SNP genotypes in ${share("snps")}.`}>More than a count matrix.</Title>
+          <div className="mt-12 max-w-[760px] mx-auto">{layers ? <HBars data={layerBars} max={100} labelWidth="w-[150px] sm:w-[230px]" /> : <Skeleton />}</div>
+        </Screen>
+
+        {/* 5 · It is clean */}
+        <Screen id="qc" label="Quality control">
+          <Title sub="Only approved samples reach you.">Every sample passes the gates.</Title>
+          <div className="mt-12 max-w-[760px] mx-auto">{stats ? <GateFunnel steps={sampleFunnel(stats.accounting)} /> : <Skeleton />}</div>
+        </Screen>
+
+        {/* 6 · It is small */}
+        <Screen id="format" label="File size">
+          <Title sub="The same count matrix, compared with common formats.">{H5AD_RATIO.toFixed(1)}× smaller than AnnData.</Title>
+          <div className="mt-12 max-w-[760px] mx-auto">
+            <FormatSizeChart />
+            <p className="mt-4 text-center text-[12px] text-muted-foreground">Medians from the .1pz format benchmark (3,198 datasets).</p>
+          </div>
+        </Screen>
+
+        {/* 7 · Start */}
+        <Screen id="get-started" label="Get started">
+          <Title sub="Pick your tool.">Get started</Title>
+          <div className="mt-12">
+            <GetStarted />
+          </div>
+        </Screen>
       </main>
 
       <Footer />

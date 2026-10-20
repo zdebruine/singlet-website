@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowRight, ChevronRight } from "lucide-react";
+import { ArrowRight, ChevronDown, ChevronRight } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { CodeBlock } from "@/components/CodeBlock";
@@ -147,14 +147,19 @@ const About = () => {
     <div className="min-h-screen flex flex-col bg-background">
       <Navbar />
       <main className="flex-1">
-        <header className="relative overflow-hidden">
-          <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[radial-gradient(50%_70%_at_20%_0%,rgba(46,191,174,0.14),transparent_70%)]" />
-          <div className="container-site relative pt-14 md:pt-20 pb-6">
+        <header className="relative flex items-center min-h-[min(calc(100svh-3.5rem),880px)] py-16 border-b border-border">
+          <div className="container-site text-center">
             <p className="type-mono text-primary">About singlet</p>
-            <h1 className="mt-3 max-w-[860px] text-[36px] md:text-[52px] leading-[1.06] font-semibold tracking-tight">
-              Every study we serve was reprocessed from raw reads.
+            <h1 className="mt-4 mx-auto max-w-[900px] text-[38px] md:text-[60px] leading-[1.04] font-semibold tracking-tight">
+              Every study, reprocessed from raw reads.
             </h1>
-            <p className="mt-5 max-w-[620px] text-[18px] text-muted-foreground">Follow one sample from GEO to your notebook.</p>
+            <p className="mt-6 mx-auto max-w-[620px] text-[18px] md:text-[20px] text-muted-foreground">
+              Eight steps take a GEO sample to an AI-ready file you can load in one line.
+            </p>
+            <a href="#sources" className="mt-10 inline-flex flex-col items-center gap-1 text-[13px] text-muted-foreground hover:text-foreground">
+              Follow a sample
+              <ChevronDown size={20} className="motion-safe:animate-bounce" aria-hidden="true" />
+            </a>
           </div>
         </header>
 

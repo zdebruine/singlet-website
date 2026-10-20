@@ -99,28 +99,30 @@ export function Station({
   }, [id, register]);
 
   return (
-    <li ref={ref} id={id} className="relative pl-14 md:pl-20 py-12 md:py-16 scroll-mt-24">
-      <span
-        aria-hidden="true"
-        className={cn(
-          "absolute left-0 top-12 md:top-16 grid place-items-center h-10 w-10 md:h-12 md:w-12 -ml-0 md:-ml-0 rounded-full border-2 font-mono text-[14px] font-semibold transition-colors duration-500",
-          on ? "bg-primary border-primary text-primary-foreground" : "bg-card border-[var(--teal-200)] text-muted-foreground"
-        )}
-      >
-        {n}
-      </span>
-      <div className="grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-8 lg:gap-14 items-start">
-        <div className="min-w-0 pt-1 md:pt-2">
-          <h2 className="text-[26px] md:text-[32px] leading-tight font-semibold tracking-tight">{title}</h2>
-          <p className="mt-3 text-[17px] leading-relaxed text-foreground/85 max-w-[540px]">{claim}</p>
-          {detail && <div className="mt-4 space-y-2 text-[14px] leading-relaxed text-muted-foreground max-w-[540px]">{detail}</div>}
-          {link && (
-            <Link to={link.to} className="mt-5 inline-flex items-center gap-1.5 text-[14px] font-medium text-primary hover:underline">
-              {link.label} <ArrowRight size={14} aria-hidden="true" />
-            </Link>
+    <li ref={ref} id={id} className="relative pl-14 md:pl-20 py-12 md:py-16 scroll-mt-14 flex items-center min-h-[min(calc(100svh-3.5rem),880px)]">
+      <div className="relative w-full">
+        <span
+          aria-hidden="true"
+          className={cn(
+            "absolute -left-14 md:-left-20 top-0 grid place-items-center h-10 w-10 md:h-12 md:w-12 rounded-full border-2 font-mono text-[14px] font-semibold transition-colors duration-500",
+            on ? "bg-primary border-primary text-primary-foreground" : "bg-card border-[var(--teal-200)] text-muted-foreground"
           )}
+        >
+          {n}
+        </span>
+        <div className="grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-8 lg:gap-14 items-center">
+          <div className="min-w-0">
+            <h2 className="text-[28px] md:text-[38px] leading-tight font-semibold tracking-tight">{title}</h2>
+            <p className="mt-4 text-[17px] md:text-[18px] leading-relaxed text-foreground/85 max-w-[540px]">{claim}</p>
+            {detail && <div className="mt-4 space-y-2 text-[14px] leading-relaxed text-muted-foreground max-w-[540px]">{detail}</div>}
+            {link && (
+              <Link to={link.to} className="mt-6 inline-flex items-center gap-1.5 text-[14px] font-medium text-primary hover:underline">
+                {link.label} <ArrowRight size={14} aria-hidden="true" />
+              </Link>
+            )}
+          </div>
+          <div className="min-w-0 rounded-lg border border-border p-5 md:p-7 shadow-[0_18px_44px_-26px_rgba(15,31,29,0.35)]">{visual}</div>
         </div>
-        <div className="min-w-0 surface p-5 md:p-6 shadow-[0_10px_30px_-18px_rgba(15,31,29,0.35)]">{visual}</div>
       </div>
     </li>
   );

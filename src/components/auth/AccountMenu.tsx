@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { KeyRound, Loader2, LogOut, UserRound } from "lucide-react";
+import { FolderLock, KeyRound, Loader2, LogOut, UserRound } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { fmtInt } from "@/lib/catalog-display";
@@ -148,6 +148,10 @@ export function AccountMenu({ className, variant = "nav" }: { className?: string
           <Link to="/account" onClick={() => setOpen(false)} className="btn-ghost w-full justify-start">
             <UserRound size={14} />
             Account
+          </Link>
+          <Link to="/my-data" onClick={() => setOpen(false)} className="btn-ghost w-full justify-start">
+            <FolderLock size={14} />
+            Your data
           </Link>
           <Link to="/account#api-keys" onClick={() => setOpen(false)} className="btn-ghost w-full justify-start">
             <KeyRound size={14} />
