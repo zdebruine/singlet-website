@@ -1,7 +1,7 @@
 import { useEffect, type ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronDown, Sparkles } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { Logo } from "@/components/Logo";
@@ -56,9 +56,9 @@ const JUMPS = [
 
 /** Hero buttons that open the matching tab of the Get started screen. */
 const TOOL_LINKS = [
-  { id: "python", label: "Python", icon: <span className="font-mono text-[12px] font-semibold">Py</span> },
-  { id: "r", label: "R", icon: <span className="font-mono text-[12px] font-semibold">R</span> },
-  { id: "claude", label: "Claude", icon: <Sparkles size={15} aria-hidden="true" /> },
+  { id: "python", label: "Python", dot: "#3776AB" },
+  { id: "r", label: "R", dot: "#276DC3" },
+  { id: "claude", label: "Claude", dot: "#D97757" },
 ] as const;
 
 const Index = () => {
@@ -108,7 +108,7 @@ const Index = () => {
               <span className="mx-1 hidden sm:block h-6 w-px bg-border" aria-hidden="true" />
               {TOOL_LINKS.map((t) => (
                 <a key={t.id} href={`#get-started/${t.id}`} aria-label={`Get started with ${t.label}`} title={t.label} className="btn-secondary !px-3 gap-2">
-                  {t.icon}
+                  <span className="h-2.5 w-2.5 rounded-full" style={{ background: t.dot }} aria-hidden="true" />
                   <span>{t.label}</span>
                 </a>
               ))}
