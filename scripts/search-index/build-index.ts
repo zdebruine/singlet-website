@@ -1,21 +1,18 @@
 /**
  * Builds the bit index (layout: functions/_shared/bitindex.ts) from a D1 export.
  *
- *   wrangler d1 execute singlet-catalog --remote --json --file=scripts/search-index/export-samples.sql > samples.json
+ *   SINGLET_INGEST_TOKEN=... node scripts/search-index/fetch-export.mjs dist/export   (samples.json + facts.json)
  *   node scripts/search-index/build-index.ts --samples samples.json [--facts facts.jsonl] --out dist/search-index
  *
  * Needs Node >= 22.18 (runs TypeScript directly). Writes `index.json` (dictionary) and `index.<version>.sbix`
- * into --out and prints the sizes. Upload both to the data bucket under search-index/v1/ (the binary first, then
- * index.json, so a reader never sees a dictionary whose binary is missing):
+ * into --out and prints the sizes. scripts/search-index/upload.mjs publishes both (binary first, then index.json,
+ * so a reader never sees a dictionary whose binary is missing); publish.sh runs export, build and upload.
  *
- *   wrangler r2 object put singlet-data/search-index/v1/index.<version>.sbix --file=dist/search-index/index.<version>.sbix
- *   wrangler r2 object put singlet-data/search-index/v1/index.json --file=dist/search-index/index.json
- *
- * --samples  wrangler `--json` output ([{results: [...]}]), a JSON array, or JSON lines. One row per sample with
+ * --samples  a JSON array (fetch-export.mjs), wrangler `--json` output ([{results: [...]}]) or JSON lines. One row per sample with
  *            gsm_id, gse_id, n_cells and one column per attribute in functions/_shared/cohort-schema.ts. A cell
  *            may hold several values separated by `|`. Empty and null mean unknown.
  * --facts    optional sample_attr rows ({gsm_id, attr, value_norm, value_num, source, confidence}) added on top, as
- *            JSON lines or the wrangler `--json` output of scripts/search-index/export-facts.sql. Numeric attributes
+ *            a JSON array (fetch-export.mjs) or JSON lines. Numeric attributes
  *            (age) read value_num, in years; rows whose unit is not years or whose value_num is empty are skipped
  *            (E-days and postnatal days are not comparable with years). `model` rows land in the high or low band by
  *            confidence. A catalog value (a gsm column in the samples export) wins: a geo fact is only added for

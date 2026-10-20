@@ -1,11 +1,11 @@
 name: Search index
 
-# Nightly rebuild of the cohort bit index (docs/COHORT-QUERY.md section 1) from production D1 and upload to the
-# data bucket (singlet-data, search-index/v1/). /api/cohort/resolve and /api/cohort/manifest read it through
-# data.singlet.bio and pick up a new version within about five minutes. scripts/search-index/publish.sh does the work:
-# export gsm + sample_qc + bundle_index layers, export sample_attr, build, upload the binary, then index.json.
-# Runs after the 3-hourly catalog crank, so the night's QC and usable flags are in. Read-only on D1.
-# Needs the repository secrets CLOUDFLARE_API_TOKEN (D1 read, R2 write) and CLOUDFLARE_ACCOUNT_ID.
+# Nightly rebuild of the cohort bit index (docs/COHORT-QUERY.md section 1), published to the data bucket
+# (singlet-data, search-index/v1/). /api/cohort/resolve and /api/cohort/manifest read it through data.singlet.bio and
+# pick up a new version within about five minutes. scripts/search-index/publish.sh does the work through the site's
+# ingest API only: it pages GET /api/ingest/export (samples, studies, sample_attr), builds, then POSTs the binary and
+# index.json to /api/ingest/search-index. Runs after the 3-hourly catalog crank, so the night's QC and usable flags are in.
+# Needs the repository secret SINGLET_INGEST_TOKEN; no Cloudflare credentials.
 
 on:
   schedule:
@@ -24,8 +24,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      SINGLET_INGEST_TOKEN: ${{ secrets.SINGLET_INGEST_TOKEN }}
+      SITE_URL: https://singlet.bio
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -39,7 +39,7 @@ jobs:
         run: |
           sleep 20
           for i in 1 2 3 4 5 6; do
-            code=$(curl -s -m 60 -o body.json -w '%{http_code}' "https://singlet.bio/api/cohort/resolve?organism=Homo%20sapiens&facets=0&what_if=0")
+            code=$(curl -s -m 60 -o body.json -w '%{http_code}' "$SITE_URL/api/cohort/resolve?organism=Homo%20sapiens&facets=0&what_if=0")
             [ "$code" = 200 ] && break
             sleep 20
           done
