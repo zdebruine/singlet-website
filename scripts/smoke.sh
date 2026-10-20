@@ -57,6 +57,8 @@ check "nl-search organism"   200 "$BASE/api/nl-search?q=microglia%20in%20the%20a
 check "cohort resolve"       200 "$BASE/api/cohort/resolve?organism=Homo%20sapiens&tissue_group=Brain&facets=0" "\"totals\""
 check "cohort manifest"      200 "$BASE/api/cohort/manifest?organism=Mus%20musculus&max_cells=10000&limit=2" "\"downsample\""
 check "bundle index"         200 "$BASE/api/bundle/GSE138867/index"         "exon_counts"
+# The file listing never shows members held back from the public product (functions/_shared/restricted.ts).
+if printf '%s' "$body" | grep -q -E 'snp_(ad|dp)|\.vcf|ase_counts|mt_events|_coverage'; then bad "bundle index lists a restricted member"; else ok "bundle index lists no restricted member"; fi
 check "manifest tsv"         200 "$BASE/api/manifest?gse=GSE138867&format=tsv" "GSE138867"
 check "auth me (signed out)" 200 "$BASE/api/auth/me"                        "\"user\": *null|\"user\":null"
 check "unknown api is JSON 404" 404 "$BASE/api/definitely-not-a-route"      "\"error\": *\"not_found\"" "json"

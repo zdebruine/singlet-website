@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Fingerprint, GitBranch, Scissors, Shield, Dna } from "lucide-react";
+import { GitBranch, Scissors, Shield, Dna } from "lucide-react";
 import type { ReactNode } from "react";
 
 /** A true modality: a distinct measurement stored in the file, not a score derived from another one. */
@@ -32,12 +32,6 @@ export const MODALITIES: Modality[] = [
     note: "select studies",
   },
   {
-    icon: <Fingerprint {...ICON} />,
-    name: "SNP genotypes",
-    what: "Per-cell reference and alternate read depth on a SNP panel, to tell donors apart.",
-    note: "select studies",
-  },
-  {
     icon: <Shield {...ICON} />,
     name: "V(D)J segments",
     what: "Per-cell counts of immune receptor V, D and J gene segments, informative in T and B cells.",
@@ -45,7 +39,7 @@ export const MODALITIES: Modality[] = [
   },
 ];
 
-/** The five modalities, then a line about everything else we compute from the transcriptome. */
+/** The modalities, then a line about everything else we compute from the transcriptome. */
 export function ModalityGrid() {
   return (
     <div>

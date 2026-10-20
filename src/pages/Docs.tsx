@@ -71,8 +71,6 @@ const MODALITIES: [string, string][] = [
   ["mtDNA heteroplasmy", "mt_heteroplasmy"],
   ["mtDNA variant calls", "mt_variants"],
   ["Donor demultiplexing", "donor_assignments"],
-  ["Donor SNP depths", "donor_snp_ad, donor_snp_dp"],
-  ["Allele-specific expression", "ase_counts"],
   ["Genetic sex and ancestry", "sex_call, ancestry_call"],
   ["Non-host species", "nonhost_species"],
   ["V(D)J segment usage", "vdj_gene_usage"],
@@ -379,7 +377,7 @@ studies = pd.read_csv(url, sep="\\t")`}
               <p>
                 <Mono>load()</Mono> returns the gene-level matrix. Everything else is addressable by name through the
                 bundle API, which reads one member at a time from the downloaded file. The splicing, heteroplasmy and
-                V(D)J matrices are in bundles from every pipeline version; the donor, non-host, allele-specific and
+                V(D)J matrices are in bundles from every pipeline version; the donor, non-host and
                 per-cell annotation outputs are only in some bundles, so check rather than assume. The example below uses{" "}
                 <Link to={`/study/${MODALITY_GSE}`}>{MODALITY_GSE}</Link>, which has them.
               </p>

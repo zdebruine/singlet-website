@@ -15,6 +15,7 @@
  */
 import type { ZipEntry } from "./bundle-reader";
 import { bundleUrl } from "./study-core";
+import { publicEntries } from "./restricted";
 
 export const DEFAULT_MIN_CELLS_PER_SAMPLE = 50;
 export const DEFAULT_FILES = ["exon_counts.1pz", "intron_counts.1pz"];
@@ -366,7 +367,7 @@ export async function loadEntries(db: D1Database, gses: string[]): Promise<Map<s
       .catch(() => ({ results: [] as { gse_id: string; entries: string }[] }));
     for (const r of rs.results ?? []) {
       try {
-        out.set(r.gse_id, JSON.parse(r.entries) as IndexedEntry[]);
+        out.set(r.gse_id, publicEntries(JSON.parse(r.entries) as IndexedEntry[]));
       } catch {
         /* unreadable row: treated as not indexed */
       }

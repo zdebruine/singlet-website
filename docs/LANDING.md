@@ -38,7 +38,7 @@ and short on time.
 **Rest of the page, 15 to 30 s.** Few words; each section is a title that carries the message and a chart that
 passes the "grandma test":
 1. *Coverage*: studies by tissue (each bar opens Browse) and studies by year.
-2. *Inside every file*: four big facts (splicing-resolved, mtDNA variants, SNP genotypes, human studies with ancestry), a bar
+2. *Inside every file*: three big facts (splicing-resolved, mtDNA variants, human studies with ancestry), a bar
    per layer, and a real study (GSE138867) laid out the way the site shows it.
 3. *Quality control*: one stacked bar of every sample in the published files: passed, low QC, removed.
 4. *Format*: the size of the same count matrix in H5AD, 10x HDF5, npz, RDS, BPCells and .1pz (published benchmark).

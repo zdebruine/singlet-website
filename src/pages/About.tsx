@@ -170,7 +170,7 @@ const About = () => {
               id="layers"
               n={4}
               title="More than gene expression"
-              claim="Each file stores five modalities, not just a count matrix."
+              claim="Each file stores four modalities, not just a count matrix."
               visual={
                 <ul className="space-y-4">
                   {MODALITIES.map((m) => (

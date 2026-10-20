@@ -6,6 +6,7 @@
  */
 import { GSE_RE, bundleUrl, loadStudy, type StudyDetail } from "./study-core";
 import { getBundleIndex, ensureSampleQcTable, entryRange, MAX_INFLATE_BYTES, type ZipEntry } from "./bundle-reader";
+import { publicEntries } from "./restricted";
 import { bundleIndexResponse, loadSampleQc, normalizeQc, SAMPLE_QC_COLUMNS, type SampleQc } from "./bundle-core";
 import {
   buildManifestFromIds,
@@ -369,7 +370,7 @@ export async function getPartialDownload(ctx: SampleQcArgs, args: Record<string,
   }
 
   const prefix = `samples/${gsm}/`;
-  const inSample = index.entries.filter((e: ZipEntry) => e.p.startsWith(prefix) && !e.p.endsWith("/"));
+  const inSample = publicEntries(index.entries).filter((e: ZipEntry) => e.p.startsWith(prefix) && !e.p.endsWith("/"));
   if (!inSample.length) return toolError(`${gsm} is not in ${gse}.singlet. Use list_bundle_files to see which samples are.`);
   const entry =
     inSample.find((e) => e.p === file) ??

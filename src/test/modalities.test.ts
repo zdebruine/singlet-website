@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { MODALITIES, MODALITY_BY_NAME, resolveModalities } from "../../functions/_shared/modalities";
+import { isRestrictedMember } from "../../functions/_shared/restricted";
 
 /**
  * The registry is duplicated three times on purpose — TypeScript for the MCP
@@ -28,6 +29,10 @@ describe("modality registry", () => {
     }
   });
 
+  it("lists no member that is held back from the public product", () => {
+    for (const m of MODALITIES) for (const member of m.members) expect(isRestrictedMember(member), `${m.name}: ${member}`).toBe(false);
+  });
+
   it("covers the modalities the quickstart page promises", () => {
     for (const name of [
       "exon_counts",
@@ -37,9 +42,6 @@ describe("modality registry", () => {
       "mt_heteroplasmy",
       "mt_variants",
       "donor_assignments",
-      "donor_snp_ad",
-      "donor_snp_dp",
-      "ase_counts",
       "sex_call",
       "ancestry_call",
       "nonhost_species",

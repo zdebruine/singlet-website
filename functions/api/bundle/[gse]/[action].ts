@@ -15,6 +15,7 @@ import { checkIngestToken } from "../../../_shared/ingest-auth";
 import { cachedJson } from "../../../_shared/cache";
 import { GSE_RE, bundleUrl } from "../../../_shared/study-core";
 import { getBundleIndex, readEntry, entryRange, MAX_INFLATE_BYTES } from "../../../_shared/bundle-reader";
+import { publicEntries } from "../../../_shared/restricted";
 import { bundleIndexResponse, loadSampleQc } from "../../../_shared/bundle-core";
 
 interface Env {
@@ -57,7 +58,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, params, request, w
           return serverError(e, `bundle index ${gse}`, {}, 502);
         }
       },
-      { ttl: DAY, key: "v=1" } // one cache entry per study: extra query parameters must not mint new ones
+      { ttl: DAY, key: "v=2" } // one cache entry per study: extra query parameters must not mint new ones
     );
   }
 
@@ -84,7 +85,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, params, request, w
     const produce = async (): Promise<Response> => {
     try {
       const index = await getBundleIndex(env.DB, gse, { waitUntil });
-      const entry = index.entries.find((e) => e.p === path);
+      const entry = publicEntries(index.entries).find((e) => e.p === path);
       if (!entry) return corsErr(`No entry '${path}' in ${gse}.singlet`, 404);
 
       if (entry.u > MAX_INFLATE_BYTES) {
