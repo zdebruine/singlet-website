@@ -1,16 +1,13 @@
 import { Link } from "react-router-dom";
-import { Logo } from "@/components/Logo";
 import { FeedbackButton } from "@/components/FeedbackDialog";
 import { GITHUB_ISSUES, GITHUB_REPO } from "@/lib/install-snippets";
 
 const LINKS: { label: string; to?: string; href?: string }[] = [
   { label: "Docs", to: "/docs" },
   { label: "MCP", to: "/docs/mcp" },
-  { label: "Brand", to: "/brand" },
   { label: "About", to: "/about" },
   { label: "Cite", to: "/about#cite" },
   { label: "GitHub", href: GITHUB_REPO },
-  { label: "Singlet Cloud", href: "https://cloud.singlet.bio" },
 ];
 
 const LEGAL = [
@@ -22,7 +19,6 @@ const LEGAL = [
 const Footer = () => (
   <footer className="mt-auto border-t border-border bg-background">
     <div className="container-site py-7 flex flex-col md:flex-row md:items-center gap-5 md:gap-8">
-      <Logo variant="lockup" theme="auto" height={22} />
       <div className="md:flex-1 space-y-1">
         <p className="text-[13px] text-muted-foreground">Data and site CC0 · No account required</p>
         {/* The support contact for the site, the API and the MCP connector (no email address exists). */}
