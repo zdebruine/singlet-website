@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Globe, Sparkles } from "lucide-react";
+import { Globe } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CodeBlock } from "@/components/CodeBlock";
 import { BUILD_DEPS, EXAMPLE_GSE, PY_INSTALL, R_INSTALL_STANDALONE } from "@/lib/install-snippets";
@@ -11,16 +11,13 @@ const TOOL_IDS: Tool[] = ["web", "python", "r", "claude"];
 
 const KEY = "sk_live_…";
 
-/** A letter badge for tools that have no icon of their own. */
-const Badge = ({ children }: { children: ReactNode }) => (
-  <span className="grid place-items-center h-7 w-7 rounded-md bg-foreground text-background font-mono text-[13px] font-semibold">{children}</span>
-);
+const Logo = ({ src }: { src: string }) => <img src={src} alt="" width={30} height={30} className="h-[30px] w-[30px] object-contain" />;
 
 const TOOLS: { id: Tool; label: string; icon: ReactNode }[] = [
-  { id: "web", label: "Web app", icon: <Globe size={26} strokeWidth={1.6} /> },
-  { id: "python", label: "Python", icon: <Badge>Py</Badge> },
-  { id: "r", label: "R", icon: <Badge>R</Badge> },
-  { id: "claude", label: "Claude", icon: <Sparkles size={26} strokeWidth={1.6} /> },
+  { id: "web", label: "Web app", icon: <Globe size={28} strokeWidth={1.6} /> },
+  { id: "python", label: "Python", icon: <Logo src="/logos/python.png" /> },
+  { id: "r", label: "R", icon: <Logo src="/logos/r.png" /> },
+  { id: "claude", label: "Claude", icon: <Logo src="/logos/claude.png" /> },
 ];
 
 function Step({ n, title, children }: { n: number; title: string; children: ReactNode }) {

@@ -11,8 +11,9 @@ import { fmtCompact, fmtInt } from "@/lib/catalog-display";
 import { cn } from "@/lib/utils";
 import { Railway, Station } from "@/components/about/Railway";
 import { FormatSizeChart, H5AD_RATIO, HBars } from "@/components/landing/charts";
-import { GateFunnel, sampleFunnel } from "@/components/landing/GateFunnel";
+import { QcFunnel, sampleFunnel } from "@/components/landing/QcFunnel";
 import { QueryParse } from "@/components/landing/QueryParse";
+import { MODALITIES } from "@/components/landing/Modalities";
 import { EXAMPLE_GSE } from "@/lib/install-snippets";
 
 // About singlet: the journey of a sample, one station per claim, each with a visual, a "read more" and a docs link.
@@ -83,21 +84,11 @@ const About = () => {
 
   const { data: stats } = useQuery({ queryKey: ["corpus-stats"], queryFn: () => apiClient.stats(), staleTime: 120_000 });
   const { data: facets } = useQuery({ queryKey: ["facets", "landing"], queryFn: () => apiClient.facets({ level: "gse" }), staleTime: 300_000 });
-  const { data: layers } = useQuery({ queryKey: ["stats-layers"], queryFn: () => apiClient.layers(), staleTime: 3_600_000 });
 
   const acc = stats?.accounting ?? {};
   const low = stats?.qc.rules.low_qc;
-  const layerOf = (key: string) => layers?.layers.find((l) => l.key === key);
-  const share = (key: string) => {
-    const l = layerOf(key);
-    return l && l.of ? Math.round((l.studies / l.of) * 100) : null;
-  };
-
   const assays = (facets?.assay_family ?? []).filter((o) => o.count > 0).slice(0, 7).map((o) => ({ label: o.value, value: o.count }));
   const refs = (facets?.reference_build ?? []).filter((o) => o.count > 0).slice(0, 6).map((o) => ({ label: o.value, value: o.count }));
-  const layerBars = (layers?.layers ?? [])
-    .filter((l) => l.key !== "gene_counts")
-    .map((l) => ({ label: l.label, value: l.of ? Math.round((l.studies / l.of) * 100) : 0, display: `${l.of ? Math.round((l.studies / l.of) * 100) : 0}%`, highlight: true }));
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -179,31 +170,33 @@ const About = () => {
               id="layers"
               n={4}
               title="More than gene expression"
-              claim={
-                <>
-                  Every file holds mitochondrial DNA variants and immune receptor genes; {share("snps") ?? "about half"}% add SNP genotypes, donors
-                  and genetic sex.
-                </>
+              claim="Each file stores five modalities, not just a count matrix."
+              visual={
+                <ul className="space-y-4">
+                  {MODALITIES.map((m) => (
+                    <li key={m.name} className="flex gap-3">
+                      <span className="shrink-0 grid place-items-center h-10 w-10 rounded-lg bg-[var(--teal-50)] text-primary">{m.icon}</span>
+                      <div className="min-w-0">
+                        <p className="text-[14.5px] font-semibold leading-snug">{m.name}</p>
+                        <p className="text-[13px] leading-snug text-muted-foreground">{m.what}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
               }
-              visual={layers ? (<><Caption>Share of downloadable studies with each layer</Caption><HBars data={layerBars} max={100} labelWidth="w-[150px] sm:w-[210px]" /></>) : <Loading />}
-              detail={
-                <p>
-                  mtDNA variants support lineage tracing; SNPs separate pooled donors; continental ancestry is called for{" "}
-                  {fmtInt(layerOf("ancestry")?.studies ?? 0)} human studies.
-                </p>
-              }
+              detail={<p>We also compute doublet scores, cell-cycle phase, ambient RNA and sample-level calls from the transcriptome. All of it is free.</p>}
               link={{ to: "/docs#modalities", label: "Every modality in the docs" }}
             />
 
             <Station
               id="qc"
               n={5}
-              title="Every sample passes the gates"
-              claim="A sample reaches you only after its reads align, its study file is built and it passes QC."
-              visual={stats ? (<><Caption>From GEO to approved samples</Caption><GateFunnel steps={sampleFunnel(acc)} /></>) : <Loading />}
+              title="Rigorous quality control"
+              claim="Every sample is measured. Only high-quality samples are included."
+              visual={stats ? (<><Caption>From GEO to approved samples</Caption><QcFunnel steps={sampleFunnel(acc)} /></>) : <Loading />}
               detail={
                 <p>
-                  The QC gate: at least {Math.round((low?.min_mapping_rate ?? 0.2) * 100)}% of reads map and the median cell has{" "}
+                  The quality cut-off: at least {Math.round((low?.min_mapping_rate ?? 0.2) * 100)}% of reads map and the median cell has{" "}
                   {low?.min_median_genes ?? 30} or more genes.
                 </p>
               }

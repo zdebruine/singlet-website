@@ -12,8 +12,9 @@ import { fmtCompact, fmtInt } from "@/lib/catalog-display";
 import { EXAMPLE_QUERIES } from "@/lib/search-routing";
 import { cn } from "@/lib/utils";
 import { FormatSizeChart, H5AD_RATIO, HBars } from "@/components/landing/charts";
-import { GateFunnel, sampleFunnel } from "@/components/landing/GateFunnel";
+import { QcFunnel, sampleFunnel } from "@/components/landing/QcFunnel";
 import { GetStarted } from "@/components/landing/GetStarted";
+import { ModalityGrid } from "@/components/landing/Modalities";
 
 // One message per browser view. Each screen fills the visible window (below the header) up to a cap, so a large
 // monitor does not stretch it, and stacks naturally on a phone. Plan: docs/LANDING.md.
@@ -44,8 +45,6 @@ function Skeleton({ h = "h-48" }: { h?: string }) {
   return <div className={cn("rounded bg-secondary animate-pulse", h)} aria-hidden="true" />;
 }
 
-const pct = (n: number, of: number) => (of > 0 ? Math.round((n / of) * 100) : 0);
-
 /** Links to every screen, under the hero search, so a visitor sees what is here. */
 const JUMPS = [
   { href: "#demo", label: "See it work" },
@@ -56,9 +55,9 @@ const JUMPS = [
 
 /** Hero buttons that open the matching tab of the Get started screen. */
 const TOOL_LINKS = [
-  { id: "python", label: "Python", dot: "#3776AB" },
-  { id: "r", label: "R", dot: "#276DC3" },
-  { id: "claude", label: "Claude", dot: "#D97757" },
+  { id: "python", label: "Python", logo: "/logos/python.png" },
+  { id: "r", label: "R", logo: "/logos/r.png" },
+  { id: "claude", label: "Claude", logo: "/logos/claude.png" },
 ] as const;
 
 const Index = () => {
@@ -67,7 +66,6 @@ const Index = () => {
 
   const { data: stats } = useQuery({ queryKey: ["corpus-stats"], queryFn: () => apiClient.stats(), staleTime: 120_000 });
   const { data: facets } = useQuery({ queryKey: ["facets", "landing"], queryFn: () => apiClient.facets({ level: "gse" }), staleTime: 300_000 });
-  const { data: layers } = useQuery({ queryKey: ["stats-layers"], queryFn: () => apiClient.layers(), staleTime: 3_600_000 });
 
   // /#get-started (and the old /quickstart, which redirects here) lands on its screen.
   useEffect(() => {
@@ -78,12 +76,6 @@ const Index = () => {
   }, [hash]);
 
   const tissues = (facets?.tissue_group ?? []).filter((o) => o.count > 0 && !/^(Other|Multiple)/.test(o.value));
-
-  const layerBy = Object.fromEntries((layers?.layers ?? []).map((l) => [l.key, l]));
-  const share = (key: string) => (layerBy[key] ? `${pct(layerBy[key].studies, layerBy[key].of)}%` : "…");
-  const layerBars = (layers?.layers ?? [])
-    .filter((l) => l.key !== "gene_counts")
-    .map((l) => ({ label: l.label, value: pct(l.studies, l.of), display: `${pct(l.studies, l.of)}%`, highlight: true }));
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -108,7 +100,7 @@ const Index = () => {
               <span className="mx-1 hidden sm:block h-6 w-px bg-border" aria-hidden="true" />
               {TOOL_LINKS.map((t) => (
                 <a key={t.id} href={`#get-started/${t.id}`} aria-label={`Get started with ${t.label}`} title={t.label} className="btn-secondary !px-3 gap-2">
-                  <span className="h-2.5 w-2.5 rounded-full" style={{ background: t.dot }} aria-hidden="true" />
+                  <img src={t.logo} alt="" width={18} height={18} className="h-[18px] w-[18px] object-contain" />
                   <span>{t.label}</span>
                 </a>
               ))}
@@ -164,14 +156,16 @@ const Index = () => {
 
         {/* 4 · It holds more than counts */}
         <Screen id="layers" label="Modalities">
-          <Title sub={`Splicing and mitochondrial DNA in every study. SNP genotypes in ${share("snps")}.`}>Every modality, one file.</Title>
-          <div className="mt-12 max-w-[760px] mx-auto">{layers ? <HBars data={layerBars} max={100} labelWidth="w-[150px] sm:w-[230px]" /> : <Skeleton />}</div>
+          <Title sub="Beyond gene expression, in every study file.">Every modality, one file.</Title>
+          <div className="mt-12">
+            <ModalityGrid />
+          </div>
         </Screen>
 
         {/* 5 · It is clean */}
         <Screen id="qc" label="Quality control">
-          <Title sub="Only approved samples reach you.">Every sample passes the gates.</Title>
-          <div className="mt-12 max-w-[760px] mx-auto">{stats ? <GateFunnel steps={sampleFunnel(stats.accounting)} /> : <Skeleton />}</div>
+          <Title sub="Only high-quality samples are included.">Rigorous quality control.</Title>
+          <div className="mt-12 max-w-[760px] mx-auto">{stats ? <QcFunnel steps={sampleFunnel(stats.accounting)} /> : <Skeleton />}</div>
         </Screen>
 
         {/* 6 · It is small */}
@@ -185,7 +179,7 @@ const Index = () => {
 
         {/* 7 · Start */}
         <Screen id="get-started" label="Get started">
-          <Title sub="Pick your tool.">Load it where you work.</Title>
+          <Title sub="Pick your tool.">Load singlet into your workspace.</Title>
           <div className="mt-12">
             <GetStarted />
           </div>

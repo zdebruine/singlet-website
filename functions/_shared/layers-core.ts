@@ -26,7 +26,7 @@ export interface LayerStats {
 export const LAYER_FILES: { key: string; label: string; file: string; humanOnly?: boolean }[] = [
   { key: "gene_counts", label: "Gene counts", file: "exon_counts.1pz" },
   { key: "splicing", label: "Spliced and unspliced reads", file: "intron_counts.1pz" },
-  { key: "junctions", label: "Splice junctions and PSI", file: "sj_counts.1pz" },
+  { key: "junctions", label: "Splice junctions and exon inclusion", file: "sj_counts.1pz" },
   { key: "mtdna", label: "Mitochondrial DNA variants", file: "mt_heteroplasmy.1pz" },
   { key: "vdj", label: "Immune receptor genes (V(D)J)", file: "vdj_gene_usage.1pz" },
   { key: "snps", label: "SNP genotypes", file: "snp_ad.1pz" },
