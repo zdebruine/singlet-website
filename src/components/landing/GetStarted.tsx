@@ -1,12 +1,13 @@
-import { useState, type ReactNode } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useState, type ReactNode } from "react";
+import { Link, useLocation } from "react-router-dom";
 import { Globe, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CodeBlock } from "@/components/CodeBlock";
 import { BUILD_DEPS, EXAMPLE_GSE, PY_INSTALL, R_INSTALL_STANDALONE } from "@/lib/install-snippets";
 import { MCP_URL, claudeCodeConfig } from "@/lib/mcp-snippets";
 
-type Tool = "web" | "python" | "r" | "claude";
+export type Tool = "web" | "python" | "r" | "claude";
+const TOOL_IDS: Tool[] = ["web", "python", "r", "claude"];
 
 const KEY = "sk_live_…";
 
@@ -37,6 +38,12 @@ function Step({ n, title, children }: { n: number; title: string; children: Reac
 /** Pick a tool, see three steps. Replaces the old /quickstart page. */
 export function GetStarted() {
   const [tool, setTool] = useState<Tool>("python");
+  const { hash } = useLocation();
+  // #get-started/r (from the hero icons) selects the R tab.
+  useEffect(() => {
+    const want = decodeURIComponent(hash.slice(1)).split("/")[1] as Tool | undefined;
+    if (want && TOOL_IDS.includes(want)) setTool(want);
+  }, [hash]);
 
   return (
     <div>

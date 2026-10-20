@@ -6,6 +6,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AuthProvider } from "@/components/auth/AuthProvider";
+import AiSearch from "./pages/AiSearch.tsx";
 import Index from "./pages/Index.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import Docs from "./pages/Docs.tsx";
@@ -86,6 +87,7 @@ const App = () => (
             <Routes>
               <Route path="/" element={<Index />} />
               <Route path="/browse" element={<Browse />} />
+              <Route path="/ai-search" element={<AiSearch />} />
               <Route path="/quickstart" element={<Navigate to="/#get-started" replace />} />
               <Route path="/study/:gse" element={<StudyDetail />} />
               <Route path="/docs" element={<Docs />} />

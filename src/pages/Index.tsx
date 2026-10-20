@@ -1,7 +1,7 @@
 import { useEffect, type ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Sparkles } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { Logo } from "@/components/Logo";
@@ -50,10 +50,16 @@ const pct = (n: number, of: number) => (of > 0 ? Math.round((n / of) * 100) : 0)
 const JUMPS = [
   { href: "#demo", label: "See it work" },
   { href: "#coverage", label: "Coverage" },
-  { href: "#layers", label: "What's in a file" },
+  { href: "#layers", label: "Modalities" },
   { href: "#qc", label: "Quality control" },
-  { href: "#get-started", label: "Get started" },
 ];
+
+/** Hero buttons that open the matching tab of the Get started screen. */
+const TOOL_LINKS = [
+  { id: "python", label: "Python", icon: <span className="font-mono text-[12px] font-semibold">Py</span> },
+  { id: "r", label: "R", icon: <span className="font-mono text-[12px] font-semibold">R</span> },
+  { id: "claude", label: "Claude", icon: <Sparkles size={15} aria-hidden="true" /> },
+] as const;
 
 const Index = () => {
   usePageMeta({ path: "/" });
@@ -66,7 +72,8 @@ const Index = () => {
   // /#get-started (and the old /quickstart, which redirects here) lands on its screen.
   useEffect(() => {
     if (!hash) return;
-    const t = setTimeout(() => document.getElementById(decodeURIComponent(hash.slice(1)))?.scrollIntoView({ block: "start" }), 60);
+    const id = decodeURIComponent(hash.slice(1)).split("/")[0];
+    const t = setTimeout(() => document.getElementById(id)?.scrollIntoView({ block: "start" }), 60);
     return () => clearTimeout(t);
   }, [hash]);
 
@@ -94,13 +101,17 @@ const Index = () => {
                 {stats ? `${fmtCompact(stats.cells_in_files)} single-cell transcriptomes` : "\u00a0"}
               </p>
             </div>
-            <div className="mt-6 flex flex-wrap justify-center gap-3">
+            <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
               <Link to="/browse" className="btn-secondary">
                 Browse {stats ? fmtInt(stats.studies_with_files) : ""} studies
               </Link>
-              <a href="#get-started" className="btn-secondary">
-                Get started
-              </a>
+              <span className="mx-1 hidden sm:block h-6 w-px bg-border" aria-hidden="true" />
+              {TOOL_LINKS.map((t) => (
+                <a key={t.id} href={`#get-started/${t.id}`} aria-label={`Get started with ${t.label}`} title={t.label} className="btn-secondary !px-3 gap-2">
+                  {t.icon}
+                  <span>{t.label}</span>
+                </a>
+              ))}
             </div>
             <nav aria-label="On this page" className="mt-8 flex flex-wrap justify-center gap-x-5 gap-y-2 text-[13.5px] text-muted-foreground">
               {JUMPS.map((j) => (
@@ -152,8 +163,8 @@ const Index = () => {
         </Screen>
 
         {/* 4 · It holds more than counts */}
-        <Screen id="layers" label="What is in a file">
-          <Title sub={`Splicing in every study. Mitochondrial DNA in every study. SNP genotypes in ${share("snps")}.`}>More than a count matrix.</Title>
+        <Screen id="layers" label="Modalities">
+          <Title sub={`Splicing and mitochondrial DNA in every study. SNP genotypes in ${share("snps")}.`}>Every modality, one file.</Title>
           <div className="mt-12 max-w-[760px] mx-auto">{layers ? <HBars data={layerBars} max={100} labelWidth="w-[150px] sm:w-[230px]" /> : <Skeleton />}</div>
         </Screen>
 
@@ -174,7 +185,7 @@ const Index = () => {
 
         {/* 7 · Start */}
         <Screen id="get-started" label="Get started">
-          <Title sub="Pick your tool.">Get started</Title>
+          <Title sub="Pick your tool.">Load it where you work.</Title>
           <div className="mt-12">
             <GetStarted />
           </div>
