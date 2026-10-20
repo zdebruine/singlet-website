@@ -98,7 +98,9 @@ def main():
             if not sp or (g["strategy"] and g["strategy"] != "RNA-Seq"):
                 n_skip += 1
                 continue
-            rs = sorted([r for r in runs.get(g["srx"], []) if r[0] > 0], reverse=True)
+            allr_ = runs.get(g["srx"], [])
+            # ENA often has read_count 0 for recent runs although the run exists and downloads fine: keep those too
+            rs = sorted([r for r in allr_ if r[0] > 0], reverse=True) or sorted(allr_, key=lambda r: r[1])
             if not rs:
                 n_pend += 1
                 if pend:
