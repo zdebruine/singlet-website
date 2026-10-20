@@ -10,6 +10,7 @@ import { StudySamplesTable } from "@/components/study/StudySamplesTable";
 import { AddToLibraryMenu } from "@/components/library/AddToLibraryMenu";
 import { FeedbackButton } from "@/components/FeedbackDialog";
 import { CiteDialog } from "@/components/study/CiteDialog";
+import { DataSummary } from "@/components/study/DataSummary";
 import { FileTreePanel } from "@/components/study/FileTreePanel";
 import { ProvenancePanel } from "@/components/study/ProvenancePanel";
 import { RelatedStudies } from "@/components/study/RelatedStudies";
@@ -477,6 +478,8 @@ const StudyDetail = () => {
               </dl>
             )}
           </section>
+
+          <DataSummary data={data} index={bundleIndex} />
 
           {/* Abstract */}
           {series.abstract && (
