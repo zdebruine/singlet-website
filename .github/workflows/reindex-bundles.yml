@@ -1,0 +1,44 @@
+name: Reindex bundles
+
+# Re-reads the zip directory of the listed studies' files into D1 (`bundle_index`) after the files were re-packed.
+# The cached index holds byte offsets, so a re-packed file must be re-indexed before partial downloads and
+# cohort manifests read from it. The crank only indexes studies that have no row, so it does not do this.
+# Needs the repository secret SINGLET_INGEST_TOKEN. Idempotent. Run by hand: Actions → Reindex bundles.
+
+on:
+  workflow_dispatch:
+    inputs:
+      gses:
+        description: "GEO series accessions, separated by spaces or newlines"
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: reindex-bundles
+  cancel-in-progress: false
+
+jobs:
+  reindex:
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    env:
+      BASE: https://singlet.bio
+      SINGLET_INGEST_TOKEN: ${{ secrets.SINGLET_INGEST_TOKEN }}
+      GSES: ${{ inputs.gses }}
+    steps:
+      - name: refresh each study's index
+        shell: bash
+        run: |
+          set -u
+          ok=0; bad=0
+          for g in $GSES; do
+            [[ "$g" =~ ^GSE[0-9]+$ ]] || { echo "skip $g"; continue; }
+            code=$(curl -s -m 60 -o /dev/null -w '%{http_code}' -H "X-Ingest-Token: $SINGLET_INGEST_TOKEN" "$BASE/api/bundle/$g/index?refresh=1" || echo 000)
+            if [ "$code" = 200 ]; then ok=$((ok+1)); else bad=$((bad+1)); echo "$g -> HTTP $code"; fi
+            sleep 0.3
+          done
+          echo "refreshed $ok, failed $bad"
+          # a few unreadable files are listed above; most failing means something is wrong
+          [ "$bad" -le $(( (ok + bad) / 50 + 3 )) ]
