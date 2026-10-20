@@ -48,19 +48,19 @@ aligned blobs: GSM numbers, study index per sample, study start offsets, cells c
 code column and bitsets. The dictionary gives each blob's offset and length. The same layout holds for cells instead
 of samples once per-cell labels exist (`study_start` becomes the sample starts); `cell_type` clauses are rejected until then.
 
-Build and publish:
+Build and publish (needs only the ingest token):
 
 ```
-node scripts/search-index/d1-export.mjs scripts/search-index/export-samples.sql samples.json
-node scripts/search-index/build-index.ts --samples samples.json --out dist/search-index
-wrangler r2 object put singlet-data/search-index/v1/index.<version>.sbix --file=dist/search-index/index.<version>.sbix
-wrangler r2 object put singlet-data/search-index/v1/index.json --file=dist/search-index/index.json
+SINGLET_INGEST_TOKEN=... scripts/search-index/publish.sh
 ```
 
-`scripts/search-index/publish.sh` does all of this (including `export-facts.sql`, the `sample_attr` rows) and
-`.github/workflows/search-index.yml` runs it nightly; a catalog `geo` value wins over a `sample_attr` row for the same
-sample and attribute. The facts are filled by `npm run enrich:cards -- --all` and `npm run enrich:ingest`
-(`scripts/enrich/`), which write `sample_attr` and `study_card` through `POST /api/ingest/<table>`.
+`publish.sh` pages `GET /api/ingest/export?table=samples|studies|sample_attr` (token-gated, keyset cursors, read-only),
+runs `build-index.ts`, then `POST /api/ingest/search-index?part=bin&name=index.<version>.sbix` and `?part=dict`
+(`functions/api/ingest/search-index.ts`). The upload checks the magic, header length and FNV-1a against the file name,
+keeps the old dictionary as `search-index/v1/previous.index.json` (its binary is kept too; rollback is copying that file
+over `index.json`) and deletes older binaries. `.github/workflows/search-index.yml` runs it nightly; a catalog `geo` value
+wins over a `sample_attr` row for the same sample and attribute. The facts are filled by `npm run enrich:cards -- --all` and
+`npm run enrich:ingest` (`scripts/enrich/`), which write `sample_attr` and `study_card` through `POST /api/ingest/<table>`.
 
 `SEARCH_INDEX_BASE` (Pages variable) overrides the base URL. Until the files exist the endpoints answer 503.
 `npx vite-node scripts/search-index/bench.ts` times queries on a synthetic 100k-sample catalog.
