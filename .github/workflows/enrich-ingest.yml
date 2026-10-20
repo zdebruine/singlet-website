@@ -24,8 +24,6 @@ jobs:
     env:
       SINGLET_INGEST_TOKEN: ${{ secrets.SINGLET_INGEST_TOKEN }}
       GH_TOKEN: ${{ github.token }}
-      RUN_DIR: ${{ runner.temp }}/enrich-run
-      CACHE_DIR: ${{ runner.temp }}/enrich-studies
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -33,6 +31,10 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Work directories
+        run: |
+          echo "RUN_DIR=$RUNNER_TEMP/enrich-run" >> "$GITHUB_ENV"
+          echo "CACHE_DIR=$RUNNER_TEMP/enrich-studies" >> "$GITHUB_ENV"
       - name: Extract facts and cards
         run: npm run enrich:cards -- --all --cache "$CACHE_DIR" --out "$RUN_DIR"
       - name: Ingest sample_attr and study_card
