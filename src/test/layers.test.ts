@@ -23,7 +23,8 @@ describe("computeLayerStats", () => {
     const by = Object.fromEntries(s.layers.map((l) => [l.key, l]));
     expect(by.gene_counts.studies).toBe(3);
     expect(by.splicing.studies).toBe(2);
-    expect(by.snps.studies).toBe(1);
+    // The donor genotype member is in GSE1's listing but is not a public layer.
+    expect(by.snps).toBeUndefined();
     expect(by.mtdna.studies).toBe(0);
     // Ancestry counts human studies only: GSE5 (mouse) has the file but is not counted.
     expect(by.ancestry).toMatchObject({ studies: 1, of: 1 });

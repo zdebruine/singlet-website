@@ -3,6 +3,7 @@
  * HTTP Range requests, plus the D1 mirror of the per-sample QC summaries.
  */
 import { applyUsable, isUsable, matrixBytesByGsm } from "./catalog-refresh";
+import { publicEntries } from "./restricted";
 import {
   getBundleIndex,
   readEntryText,
@@ -54,7 +55,7 @@ export async function bundleIndexResponse(
 
   const bySample = new Map<string, BundleFile[]>();
   const studyFiles: BundleFile[] = [];
-  for (const e of index.entries) {
+  for (const e of publicEntries(index.entries)) {
     const gsm = sampleOf(e.p);
     if (!gsm) {
       studyFiles.push(file(e));

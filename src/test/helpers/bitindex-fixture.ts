@@ -42,7 +42,7 @@ export function syntheticRows(n: number, seed = 1): SampleRow[] {
       pipeline_version: `v${1 + pick(5, 3)}`,
       year: 2012 + pick(14, 0.7),
       n_cells: cells,
-      layer: ["gene_counts", ...(r() < 0.6 ? ["splicing"] : []), ...(r() < 0.2 ? ["snps"] : []), ...(r() < 0.05 ? ["vdj"] : [])],
+      layer: ["gene_counts", ...(r() < 0.6 ? ["splicing"] : []), ...(r() < 0.2 ? ["mtdna"] : []), ...(r() < 0.05 ? ["vdj"] : [])],
       chemistry: `chem${pick(12, 2)}`,
     };
     if (r() < 0.6) facts.tissue_group = `tissue_group_${pick(28, 1.5)}`;

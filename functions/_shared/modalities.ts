@@ -7,6 +7,8 @@
  * in step — the names here are the names users pass to `bundle.read(...)` /
  * `singlet_read(...)`.
  *
+ * Layers that carry per-donor germline information are not in this registry; see ./restricted.
+ *
  * `members` lists candidate archive paths inside `samples/<GSM>/` in priority
  * order, because the layout changed across pipeline versions (e.g. donor
  * outputs moved from the sample root into a `donor/` subdirectory).
@@ -66,24 +68,12 @@ export const MODALITIES: Modality[] = [
   M("mt_variants", "table", "Mitochondrial", ["mt_variants.tsv", "mt/mt_summary.tsv"],
     "Called chrM variants with depth, allele counts and annotation.",
     `b.read("mt_variants", gsm)`, `singlet_read(path, gsm, "mt_variants")`),
-  M("mt_events", "matrix", "Mitochondrial", ["mt/mt_events.1pz"],
-    "Per-cell chrM allele-support matrix used for lineage tracing.",
-    `b.read("mt_events", gsm)`, `singlet_read(path, gsm, "mt_events")`),
-  // ── Donor / genotype ──────────────────────────────────────────────────────
+  // ── Donor ─────────────────────────────────────────────────────────────────
   M("donor_assignments", "table", "Donor", ["donor/donor_assignments.tsv", "donor_assignments.tsv"],
     "Genotype-free donor demultiplexing: barcode → donor, with doublet calls.",
     `b.donors(gsm)`, `singlet_read(path, gsm, "donor_assignments")`),
-  M("donor_snp_ad", "matrix", "Donor", ["donor/snp_ad.1pz"],
-    "Per-cell alternate-allele depth over the SNP panel.",
-    `b.read("donor_snp_ad", gsm)`, `singlet_read(path, gsm, "donor_snp_ad")`),
-  M("donor_snp_dp", "matrix", "Donor", ["donor/snp_dp.1pz"],
-    "Per-cell total read depth over the SNP panel (denominator for snp_ad).",
-    `b.read("donor_snp_dp", gsm)`, `singlet_read(path, gsm, "donor_snp_dp")`),
-  M("ase_counts", "table", "Donor", ["ase_counts.tsv"],
-    "Allele-specific expression counts per gene.",
-    `b.read("ase_counts", gsm)`, `singlet_read(path, gsm, "ase_counts")`),
   M("ancestry_call", "json", "Donor", ["ancestry_call.json"],
-    "Continental ancestry estimate from the SNP panel.",
+    "Continental ancestry group with a confidence.",
     `b.read("ancestry_call", gsm)`, `singlet_read(path, gsm, "ancestry_call")`),
   M("sex_call", "json", "Donor", ["sex_call.json"],
     "Genetic sex call from chrX/chrY expression and coverage.",

@@ -17,7 +17,6 @@ WITH lay AS (
       CASE WHEN entries LIKE '%sj_counts.1pz%'         THEN 'junctions|'   ELSE '' END ||
       CASE WHEN entries LIKE '%mt_heteroplasmy.1pz%'   THEN 'mtdna|'       ELSE '' END ||
       CASE WHEN entries LIKE '%vdj_gene_usage.1pz%'    THEN 'vdj|'         ELSE '' END ||
-      CASE WHEN entries LIKE '%snp_ad.1pz%'            THEN 'snps|'        ELSE '' END ||
       CASE WHEN entries LIKE '%donor_assignments.tsv%' THEN 'donors|'      ELSE '' END ||
       CASE WHEN entries LIKE '%sex_call.json%'         THEN 'sex|'         ELSE '' END ||
       CASE WHEN entries LIKE '%doublet_scores.tsv%'    THEN 'doublets|'    ELSE '' END,

@@ -29,7 +29,6 @@ export const LAYER_FILES: { key: string; label: string; file: string; humanOnly?
   { key: "junctions", label: "Splice junctions and exon inclusion", file: "sj_counts.1pz" },
   { key: "mtdna", label: "Mitochondrial DNA variants", file: "mt_heteroplasmy.1pz" },
   { key: "vdj", label: "Immune receptor genes (V(D)J)", file: "vdj_gene_usage.1pz" },
-  { key: "snps", label: "SNP genotypes", file: "snp_ad.1pz" },
   { key: "donors", label: "Donor demultiplexing", file: "donor_assignments.tsv" },
   // Continental ancestry is a human call; other species' files carry the same name, so count humans only.
   { key: "ancestry", label: "Genetic ancestry (human)", file: "ancestry_call.json", humanOnly: true },

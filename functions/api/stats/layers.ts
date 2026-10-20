@@ -1,6 +1,6 @@
 /**
  * GET /api/stats/layers — how many downloadable studies hold each layer beyond gene counts
- * (splicing, mitochondrial variants, SNPs, ancestry, …). See ../../_shared/layers-core.
+ * (splicing, mitochondrial variants, ancestry, …). See ../../_shared/layers-core.
  *
  * Computed at most every 12 h (meta_cache) and cached at the edge for an hour. Public.
  */
@@ -21,13 +21,13 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request, waitUntil
     waitUntil,
     async () => {
       try {
-        return corsOk(await metaCached(env.DB, waitUntil, "stats:layers:v2", MAX_AGE_MS, () => computeLayerStats(env.DB)));
+        return corsOk(await metaCached(env.DB, waitUntil, "stats:layers:v3", MAX_AGE_MS, () => computeLayerStats(env.DB)));
       } catch (e) {
         return serverError(e, "stats/layers");
       }
     },
     // The key carries the payload version, so a change of shape never meets an old cached copy.
-    { ttl: 3600, key: "v2" },
+    { ttl: 3600, key: "v3" },
   );
 
 export const onRequestOptions: PagesFunction<Env> = async () => handleOptions();

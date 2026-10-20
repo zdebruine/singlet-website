@@ -19,7 +19,7 @@ const rows = [
   sample("GSE1", 2, { tissue_group: "Brain", sex: "male", age: 70 }),
   sample("GSE1", 3, { tissue_group: "Blood", age: 5 }),
   sample("GSE2", 4, { tissue_group: ["Blood", "Brain"], sex: { v: "female", s: "model", c: 0.9 } }),
-  sample("GSE2", 5, { sex: { v: "male", s: "model", c: 0.4 }, layer: ["snps", "vdj"] }),
+  sample("GSE2", 5, { sex: { v: "male", s: "model", c: 0.4 }, layer: ["mtdna", "vdj"] }),
   sample("GSE2", 6, { tissue_group: "Lung", sex_genetic: { v: "female", s: "pipeline" } }),
 ];
 
@@ -96,7 +96,7 @@ describe("BitIndex", () => {
 
   it("holds several values per sample in a multi-valued attribute", () => {
     const m = (v: string) => bits(index.valueMask("layer", [index.valueId("layer", v)], ALL_SOURCES));
-    expect(m("snps")).toEqual([4]);
+    expect(m("mtdna")).toEqual([4]);
     expect(m("vdj")).toEqual([4]);
     expect(() => index.codeAt("layer", 0)).toThrow(/several values/);
   });
@@ -127,7 +127,7 @@ describe("BitIndex", () => {
     expect(top[0].score).toBeCloseTo(1);
     expect(top.map((t) => t.index)).toContain(1); // brain, male: half the weight
     expect(top.every((t, i) => i === 0 || top[i - 1].score >= t.score)).toBe(true);
-    expect(() => index.rank(index.all(), [{ attr: "layer", values: ["snps"] }], 3)).toThrow();
+    expect(() => index.rank(index.all(), [{ attr: "layer", values: ["mtdna"] }], 3)).toThrow();
   });
 
   it("stores rare values as id lists and common ones as words", () => {
