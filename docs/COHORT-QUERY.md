@@ -26,7 +26,7 @@ similarity between a weighted query vector and each candidate's one-hot profile 
 
 Attributes: organism, tissue_group, tissue, disease_group, disease, disease_state, sex, sex_genetic,
 ancestry_genetic, life_stage, sample_type, chemistry, nuclei, treatment_status, layer (several per sample: gene_counts,
-splicing, junctions, mtdna, vdj, snps, donors, sex, doublets), qc_tier, pipeline_version, downloadable, usable, and the
+splicing, junctions, mtdna, vdj, donors, sex, doublets), qc_tier, pipeline_version, downloadable, usable, and the
 numeric year, age (years) and n_cells. Numeric values are quantised to bins (`cohort-schema.ts` has the edges); a range
 snaps outward to bin edges and the response says to which (`snapped`). `min_cells` is exact.
 
