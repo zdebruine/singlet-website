@@ -32,7 +32,7 @@ export function QcFunnel({ steps }: { steps: FunnelStep[] }) {
             <div className="flex justify-center">
               <div
                 className={cn(
-                  "flex items-center justify-between gap-3 rounded-[4px] px-3 h-10 transition-[width] duration-1000 ease-out motion-reduce:transition-none",
+                  "flex items-center justify-between gap-3 rounded-[4px] px-3 h-10 min-w-[210px] max-w-full transition-[width] duration-1000 ease-out motion-reduce:transition-none",
                   last ? "bg-primary text-primary-foreground" : "bg-[var(--teal-100)] text-foreground"
                 )}
                 style={{ width: inView ? `${pct}%` : "14%", transitionDelay: `${i * 120}ms` }}
