@@ -14,9 +14,12 @@
  * --samples  wrangler `--json` output ([{results: [...]}]), a JSON array, or JSON lines. One row per sample with
  *            gsm_id, gse_id, n_cells and one column per attribute in functions/_shared/cohort-schema.ts. A cell
  *            may hold several values separated by `|`. Empty and null mean unknown.
- * --facts    optional JSON lines of sample_attr rows ({gsm_id, attr, value_norm, source, confidence}) added on top
- *            (after schema/030_search_facts.sql is applied and filled). `model` rows land in the high or low band
- *            by confidence.
+ * --facts    optional sample_attr rows ({gsm_id, attr, value_norm, value_num, source, confidence}) added on top, as
+ *            JSON lines or the wrangler `--json` output of scripts/search-index/export-facts.sql. Numeric attributes
+ *            (age) read value_num, in years; rows whose unit is not years or whose value_num is empty are skipped
+ *            (E-days and postnatal days are not comparable with years). `model` rows land in the high or low band by
+ *            confidence. A catalog value (a gsm column in the samples export) wins: a geo fact is only added for
+ *            a sample and attribute the export left empty.
  * --out      output directory (default dist/search-index).
  */
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
@@ -61,13 +64,30 @@ function main() {
   }
   const rows = rowsFromFlat(readRows(values.samples));
   let extra = 0;
+  let shadowed = 0;
   if (values.facts) {
-    const known = new Set(ATTRS.map((a) => a.key));
+    const byKey = new Map(ATTRS.map((a) => [a.key, a]));
+    const fromCatalog = new Set<string>();
+    for (const r of rows.values()) for (const k of Object.keys(r.facts)) fromCatalog.add(`${r.gsm}|${k}`);
     for (const f of readRows(values.facts)) {
       const row = rows.get(String(f.gsm_id));
       const attr = String(f.attr);
-      if (!row || !known.has(attr) || f.value_norm == null || f.value_norm === "") continue;
-      const fact: FactValue = { v: f.value_norm as string | number, s: String(f.source ?? "geo"), c: f.confidence == null ? undefined : Number(f.confidence) };
+      const spec = byKey.get(attr);
+      if (!row || !spec) continue;
+      const source = String(f.source ?? "geo");
+      let v: string | number;
+      if (spec.kind === "num") {
+        if (f.value_num == null || (f.unit != null && f.unit !== "years")) continue;
+        v = Number(f.value_num);
+      } else {
+        if (f.value_norm == null || f.value_norm === "") continue;
+        v = f.value_norm as string;
+      }
+      if (source === "geo" && fromCatalog.has(`${row.gsm}|${attr}`)) {
+        shadowed++;
+        continue;
+      }
+      const fact: FactValue = { v, s: source, c: f.confidence == null ? undefined : Number(f.confidence) };
       const cur = row.facts[attr];
       row.facts[attr] = cur == null ? [fact] : Array.isArray(cur) ? [...cur, fact] : [cur, fact];
       extra++;
@@ -79,7 +99,7 @@ function main() {
   mkdirSync(values.out!, { recursive: true });
   writeFileSync(join(values.out!, dict.bin), bin);
   writeFileSync(join(values.out!, "index.json"), dictText);
-  console.log(`samples ${dict.n_samples}, studies ${dict.n_studies}, extra facts ${extra}`);
+  console.log(`samples ${dict.n_samples}, studies ${dict.n_studies}, extra facts ${extra} (${shadowed} geo facts left out where the catalog has the value)`);
   console.log(`binary ${bin.byteLength} bytes, dictionary ${dictText.length} bytes, built in ${Math.round(performance.now() - t0)} ms`);
   for (const a of dict.attrs) console.log(`  ${a.key.padEnd(18)} ${String(a.values.length).padStart(6)} values`);
   console.log(`version ${dict.index_version} -> ${join(values.out!, dict.bin)}`);

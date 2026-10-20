@@ -88,12 +88,18 @@ interface TableSpec {
   stamp: string;
   /** Primary key column (also the ON CONFLICT target). */
   pk?: string;
+  /** Composite ON CONFLICT target, when the key is more than `pk` (pk then names the id column validated). */
+  conflict?: string[];
+  /** Skip the gse/gse_meta follow-up updates (the table is not part of the GEO enrichment). */
+  noDerived?: boolean;
   /** Physical table written to, when it differs from the route name. */
   target?: string;
   /** UPDATE existing rows only — never INSERT. For writing onto `gsm`. */
   updateOnly?: boolean;
   /** Closed value sets, enforced before any SQL runs. */
   enums?: Record<string, readonly string[]>;
+  /** Columns every row must carry (the table has NOT NULL columns without a default). */
+  required?: string[];
   /** Created on demand — the table is not part of the original catalog schema. */
   ensure?: (db: D1Database) => Promise<void>;
 }
@@ -157,6 +163,60 @@ const TABLES: Record<string, TableSpec> = {
     },
     stamp: "updated_at",
     ensure: ensureSampleQcTable,
+  },
+  // Search facts (schema/030_search_facts.sql, docs/SEARCH-ROADMAP.md). Tables are created by the schema file,
+  // not on demand; a missing table is a 500 from the batch. Idempotent: re-sending a row overwrites it.
+  sample_attr: {
+    pk: "gsm_id",
+    conflict: ["gsm_id", "attr", "source", "value_norm"],
+    noDerived: true,
+    columns: {
+      gsm_id: "text",
+      gse_id: "text",
+      attr: "text",
+      value_raw: "text",
+      value_norm: "text",
+      ontology_id: "text",
+      unit: "text",
+      value_num: "real",
+      source: "text",
+      confidence: "real",
+      evidence: "text",
+      extractor_version: "text",
+    },
+    stamp: "updated_at",
+    enums: { source: ["geo", "pipeline", "model"] },
+    required: ["gse_id", "attr", "value_norm", "source", "extractor_version"],
+  },
+  study_card: {
+    noDerived: true,
+    columns: {
+      gse_id: "text",
+      card_json: "text",
+      summary_text: "text",
+      extractor_version: "text",
+      model: "text",
+      grounded: "int",
+    },
+    stamp: "updated_at",
+    required: ["card_json", "extractor_version"],
+  },
+  pz_chunk_index: {
+    pk: "gsm_id",
+    conflict: ["gsm_id", "file"],
+    noDerived: true,
+    columns: {
+      gsm_id: "text",
+      gse_id: "text",
+      file: "text",
+      n_cols: "int",
+      chunk_cols: "int",
+      chunk_offsets: "text",
+      perm_present: "int",
+      extractor_version: "text",
+    },
+    stamp: "indexed_at",
+    required: ["gse_id", "file", "n_cols", "chunk_cols", "chunk_offsets"],
   },
   // Per-sample QC verdict computed on the HPC side. Writes onto the existing
   // `gsm` row — never creates one, so a GSM absent from the catalog is a no-op.
@@ -311,6 +371,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, params }
         out[key] = s;
       }
     }
+    for (const key of spec.required ?? []) {
+      if (out[key] == null || out[key] === "") return json({ error: `Row ${i}: '${key}' is required` }, 400, origin);
+    }
     if (spec.pk === "gsm_id") {
       const gsmId = out.gsm_id;
       if (typeof gsmId !== "string" || !GSM_RE.test(gsmId)) {
@@ -347,10 +410,11 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, params }
     }
     const allCols = [...cols, spec.stamp];
     const placeholders = allCols.map(() => "?").join(", ");
-    const updates = [...cols.filter((c) => c !== pk), spec.stamp].map((c) => `${c} = excluded.${c}`).join(", ");
+    const keyCols = spec.conflict ?? [pk];
+    const updates = [...cols.filter((c) => !keyCols.includes(c)), spec.stamp].map((c) => `${c} = excluded.${c}`).join(", ");
     const sql =
       `INSERT INTO ${target} (${allCols.join(", ")}) VALUES (${placeholders}) ` +
-      `ON CONFLICT(${pk}) DO UPDATE SET ${updates}`;
+      `ON CONFLICT(${keyCols.join(", ")}) DO UPDATE SET ${updates}`;
     statements.push(env.DB.prepare(sql).bind(...cols.map((c) => row[c]), stamp));
   }
 
@@ -363,7 +427,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, params }
     }
 
     // ── Derived catalog columns for the ids in this batch ───────────────────
-    const ids = table === "sample_qc" || spec.updateOnly ? [] : clean.map((r) => String(r.gse_id));
+    const ids = table === "sample_qc" || spec.updateOnly || spec.noDerived ? [] : clean.map((r) => String(r.gse_id));
     for (let i = 0; i < ids.length; i += BATCH_SIZE) {
       const chunk = ids.slice(i, i + BATCH_SIZE);
       const inList = chunk.map(() => "?").join(", ");

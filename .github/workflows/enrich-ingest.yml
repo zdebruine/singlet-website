@@ -1,0 +1,51 @@
+name: Enrich ingest
+
+# Manual run: extract sample facts and study cards for every downloadable study from the public API
+# (deterministic rules, no model calls, concurrency 4), write them to D1 through POST /api/ingest/<table>
+# with the ingest token, then start the Search index rebuild so the bit index picks the facts up.
+# Idempotent: the ingest upserts on the table keys, so a re-run overwrites rather than duplicates.
+# The run directory (sample_attr.jsonl, study_card.jsonl, reports) is kept as an artifact.
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: enrich-ingest
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      SINGLET_INGEST_TOKEN: ${{ secrets.SINGLET_INGEST_TOKEN }}
+      GH_TOKEN: ${{ github.token }}
+      RUN_DIR: ${{ runner.temp }}/enrich-run
+      CACHE_DIR: ${{ runner.temp }}/enrich-studies
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Extract facts and cards
+        run: npm run enrich:cards -- --all --cache "$CACHE_DIR" --out "$RUN_DIR"
+      - name: Ingest sample_attr and study_card
+        run: npm run enrich:ingest -- --dir "$RUN_DIR" --tables sample_attr,study_card
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: enrich-run
+          path: |
+            ${{ runner.temp }}/enrich-run/report.json
+            ${{ runner.temp }}/enrich-run/attr-coverage.json
+            ${{ runner.temp }}/enrich-run/unplaced-values.tsv
+            ${{ runner.temp }}/enrich-run/sample_attr.jsonl
+            ${{ runner.temp }}/enrich-run/study_card.jsonl
+      - name: Rebuild the search index
+        run: gh workflow run search-index.yml --ref "${{ github.event.repository.default_branch }}"

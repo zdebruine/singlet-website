@@ -4,16 +4,19 @@
  *
  *   npm run enrich:cards -- --sample 200 --seed 20261020 --out scripts/enrich/sample-run [--cache /tmp/studies]
  *   npm run enrich:cards -- --studies GSE138867 --out /tmp/cards
+ *   npm run enrich:cards -- --all --cache /tmp/studies --out /tmp/run     (every downloadable study; re-runs reuse the cache)
  *
  * Output in <out>: cards.jsonl (one card per study), sample-lines.jsonl (first studies only),
  * summaries.tsv (gse, grounded, summary), report.json (coverage, grounding, top unplaced values).
+ * With --all (or any run) also: sample_attr.jsonl and study_card.jsonl (ingest-ready, see scripts/enrich/ingest.ts),
+ * unplaced-values.tsv (every raw value the rules could not place: attr, count, value) and attr-coverage.json.
  * The ingest shape for `study_card` is { gse_id, card_json, summary_text, extractor_version, model: null, grounded }.
  */
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { arg, listDownloadableStudies, loadStudyInput, pool, sampleIds } from "./api";
+import { arg, flag, listDownloadableStudies, loadStudyInput, pool, sampleIds } from "./api";
 import { extractStudy } from "./batch";
-import { EXTRACTOR_VERSION } from "../../functions/_shared/attr-extract";
+import { EXTRACTOR_VERSION, type AttrRow } from "../../functions/_shared/attr-extract";
 import { approvedSamples, buildStudyCard, CARD_VERSION, sampleLine, type StudyCard } from "../../functions/_shared/study-card";
 
 const out = arg("out", "scripts/enrich/sample-run");
@@ -23,12 +26,15 @@ const LINE_STUDIES = 5;
 
 const ids = explicit
   ? explicit.split(",").map((s) => s.trim().toUpperCase())
+  : flag("all")
+  ? (await listDownloadableStudies()).sort()
   : sampleIds(await listDownloadableStudies(), Number(arg("sample", "200")), Number(arg("seed", "20261020")));
 
 mkdirSync(out, { recursive: true });
 
 interface Result {
   card: StudyCard;
+  rows: AttrRow[];
   lines: { gsm_id: string; line: string }[];
   samples: number;
   have: Record<string, number>;
@@ -47,6 +53,7 @@ const results = (
     for (const a of ["tissue", "disease", "treatment", "age", "sex", "donor", "genotype", "cell_type_sorted"]) have[a] = card.coverage[a] ?? 0;
     return {
       card,
+      rows: e.rows,
       lines: approved.map((s) => ({ gsm_id: s.gsm_id, line: sampleLine(s, e.rows) })),
       samples: approved.length,
       have,
@@ -110,6 +117,48 @@ const report = {
   samples_in_model_batches: results.reduce((t, r) => t + r.batchLines, 0),
 };
 
+// ── ingest-ready files and the full unplaced list ───────────────────────────
+const allRows = results.flatMap((r) => r.rows);
+allRows.sort((a, b) => a.gsm_id.localeCompare(b.gsm_id) || a.attr.localeCompare(b.attr) || a.value_norm.localeCompare(b.value_norm));
+writeFileSync(join(out, "sample_attr.jsonl"), allRows.map((r) => JSON.stringify({ ...r, ontology_id: null })).join("\n") + "\n");
+writeFileSync(
+  join(out, "study_card.jsonl"),
+  results
+    .map((r) =>
+      JSON.stringify({
+        gse_id: r.card.gse_id,
+        card_json: JSON.stringify(r.card),
+        summary_text: r.card.summary_text,
+        extractor_version: CARD_VERSION,
+        model: null,
+        grounded: r.card.grounded ? 1 : 0,
+      }),
+    )
+    .join("\n") + "\n",
+);
+const attrCov: Record<string, { rows: number; samples: number; samples_pct: number; studies: number }> = {};
+for (const a of [...new Set(allRows.map((r) => r.attr))].sort()) {
+  const mine = allRows.filter((r) => r.attr === a);
+  attrCov[a] = {
+    rows: mine.length,
+    samples: new Set(mine.map((r) => r.gsm_id)).size,
+    samples_pct: share(new Set(mine.map((r) => r.gsm_id)).size, nSamples),
+    studies: new Set(mine.map((r) => r.gse_id)).size,
+  };
+}
+writeFileSync(join(out, "attr-coverage.json"), JSON.stringify({ approved_samples: nSamples, studies: withSamples.length, attrs: attrCov }, null, 2) + "\n");
+{
+  const m = new Map<string, number>();
+  for (const r of results) for (const u of r.unplaced) {
+    const k = `${u.attr}\t${u.value.toLowerCase()}`;
+    m.set(k, (m.get(k) ?? 0) + 1);
+  }
+  const lines = [...m.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([k, n]) => {
+    const [attr, value] = k.split("\t");
+    return `${attr}\t${n}\t${value}`;
+  });
+  writeFileSync(join(out, "unplaced-values.tsv"), "attr\tn\tvalue\n" + lines.join("\n") + "\n");
+}
 writeFileSync(join(out, "report.json"), JSON.stringify(report, null, 2) + "\n");
 writeFileSync(join(out, "cards.jsonl"), results.map((r) => JSON.stringify(r.card)).join("\n") + "\n");
 writeFileSync(
