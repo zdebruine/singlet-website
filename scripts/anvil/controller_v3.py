@@ -21,7 +21,7 @@ ST = f"{R}/state_v3"
 RES = os.environ.get("SINGLET_RESULTS_DIR", "/anvil/scratch/x-zdebruine/results_v3")
 DRY = os.environ.get("CONTROLLER_DRY") == "1"
 TIERS = [("A", f"{ST}/targets/tierA.tsv"), ("C", f"{ST}/targets/tierC.tsv")]  # tier C opens only after A published cleanly
-MIN_BALANCE = float(os.environ.get("MIN_BALANCE", 30000))
+MIN_BALANCE = float(os.environ.get("MIN_BALANCE", 94100))   # spend cap 20,000 SU from the 114,109.8 start balance (2026-10-20); a wave is held if balance - in-flight estimates - wave estimate would cross it
 CUTOFF = dt.date.fromisoformat(os.environ.get("CUTOFF", "2026-11-05"))
 # ---- sizing (measured by the smoke runs; see README-v3.md). Slurm bills max(cores, mem/1.896 GB) and MaxMemPerCPU is 1896 MB,
 # so the cores requested are derived from the memory: asking for less memory than the index needs fails, more is wasted SU.
