@@ -29,16 +29,17 @@ const PROVIDERS: { id: OAuthProviderName; label: string; icon: ReactNode }[] = [
   { id: "github", label: "GitHub", icon: <Github size={16} aria-hidden="true" /> },
 ];
 
-export function SignInDialog({ open, reason, onOpenChange, providers, signInWithOAuth }: Props) {
+/** The provider buttons with their busy and error state; used by the dialog and the AI Search page. */
+export function OAuthButtons({ providers, signInWithOAuth, active = true }: { providers: AuthProviders; signInWithOAuth: Props["signInWithOAuth"]; active?: boolean }) {
   const [busy, setBusy] = useState<OAuthProviderName | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!open) {
+    if (!active) {
       setBusy(null);
       setError(null);
     }
-  }, [open]);
+  }, [active]);
 
   // Coming back with the browser's Back button restores this page from cache
   // with the spinner still running; reset it.
@@ -64,6 +65,27 @@ export function SignInDialog({ open, reason, onOpenChange, providers, signInWith
   const noneAvailable = !providers.google && !providers.github;
 
   return (
+    <>
+      <div className="space-y-2">
+        {PROVIDERS.filter(({ id }) => providers[id]).map(({ id, label, icon }) => (
+          <button key={id} type="button" onClick={() => oauth(id)} disabled={busy !== null} className="btn-secondary w-full h-10">
+            {busy === id ? <Loader2 size={15} className="animate-spin" /> : icon}
+            Continue with {label}
+          </button>
+        ))}
+      </div>
+      {noneAvailable && <p className="mt-3 text-[12.5px] leading-snug text-muted-foreground">Sign-in is not open yet. Everything else works without an account.</p>}
+      {error && (
+        <p role="alert" className="mt-3 text-[13px] leading-snug text-destructive">
+          {error}
+        </p>
+      )}
+    </>
+  );
+}
+
+export function SignInDialog({ open, reason, onOpenChange, providers, signInWithOAuth }: Props) {
+  return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="dialog-surface max-w-[400px] border-border p-6 gap-0">
         <DialogHeader className="text-left space-y-1.5">
@@ -75,32 +97,9 @@ export function SignInDialog({ open, reason, onOpenChange, providers, signInWith
           </DialogDescription>
         </DialogHeader>
 
-        <div className="mt-5 space-y-2">
-          {PROVIDERS.filter(({ id }) => providers[id]).map(({ id, label, icon }) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => oauth(id)}
-              disabled={busy !== null}
-              className="btn-secondary w-full h-10"
-            >
-              {busy === id ? <Loader2 size={15} className="animate-spin" /> : icon}
-              Continue with {label}
-            </button>
-          ))}
+        <div className="mt-5">
+          <OAuthButtons providers={providers} signInWithOAuth={signInWithOAuth} active={open} />
         </div>
-
-        {noneAvailable && (
-          <p className="text-[12.5px] leading-snug text-muted-foreground">
-            Sign-in is not open yet. Everything else works without an account.
-          </p>
-        )}
-
-        {error && (
-          <p role="alert" className="mt-3 text-[13px] leading-snug text-destructive">
-            {error}
-          </p>
-        )}
 
         <p className="mt-5 text-[11.5px] leading-relaxed text-muted-foreground">
           <Link to="/privacy" className="underline underline-offset-2 hover:text-foreground" onClick={() => onOpenChange(false)}>

@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowRight, ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { CodeBlock } from "@/components/CodeBlock";
@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { Railway, Station } from "@/components/about/Railway";
 import { FormatSizeChart, H5AD_RATIO, HBars } from "@/components/landing/charts";
 import { GateFunnel, sampleFunnel } from "@/components/landing/GateFunnel";
+import { QueryParse } from "@/components/landing/QueryParse";
 import { EXAMPLE_GSE } from "@/lib/install-snippets";
 
 // About singlet: the journey of a sample, one station per claim, each with a visual, a "read more" and a docs link.
@@ -34,51 +35,6 @@ const REFERENCES = [
   ["Zebrafish", "GRCz11", "Ensembl"],
   ["Human + mouse", "GRCh38-GRCm39", "both"],
 ];
-
-/** A real reading of a real query by /api/nl-search (vocabulary only, no model needed). */
-const NL_EXAMPLE = {
-  q: "microglia in the aging mouse brain",
-  parts: [
-    { word: "microglia", field: "cell type", value: "microglia" },
-    { word: "aging", field: "keyword", value: "aging" },
-    { word: "mouse", field: "organism", value: "Mus musculus" },
-    { word: "brain", field: "tissue", value: "Brain / CNS" },
-  ],
-};
-
-function SearchDiagram() {
-  return (
-    <div>
-      <Caption>How a question becomes filters</Caption>
-      <div className="rounded-full border border-border bg-background px-4 py-2.5 text-[14px]">
-        {NL_EXAMPLE.q.split(" ").map((w, i) => {
-          const hit = NL_EXAMPLE.parts.find((p) => p.word === w);
-          return (
-            <span key={i} className={cn(hit && "font-semibold text-primary")}>
-              {w}{" "}
-            </span>
-          );
-        })}
-      </div>
-      <div className="my-3 flex justify-center text-muted-foreground" aria-hidden="true">
-        ↓
-      </div>
-      <ul className="grid grid-cols-2 gap-2">
-        {NL_EXAMPLE.parts.map((p) => (
-          <li key={p.field} className="rounded border border-border px-3 py-2">
-            <span className="block text-[11px] uppercase tracking-wider text-muted-foreground">{p.field}</span>
-            <span className="text-[14px] font-medium">{p.value}</span>
-          </li>
-        ))}
-      </ul>
-      <div className="mt-4 flex items-center gap-2 text-[12.5px] text-muted-foreground">
-        <span className="rounded bg-[var(--teal-50)] px-2 py-1 text-foreground">vocabulary</span>
-        <ArrowRight size={13} aria-hidden="true" />
-        <span className="rounded border border-dashed border-border px-2 py-1">model, only for words it cannot place</span>
-      </div>
-    </div>
-  );
-}
 
 function ToolsVisual() {
   return (
@@ -236,7 +192,7 @@ const About = () => {
                   {fmtInt(layerOf("ancestry")?.studies ?? 0)} human studies.
                 </p>
               }
-              link={{ to: "/docs#modalities", label: "Read every layer" }}
+              link={{ to: "/docs#modalities", label: "Every modality in the docs" }}
             />
 
             <Station
@@ -266,7 +222,7 @@ const About = () => {
                   <p>One sample can be read on its own over HTTP range requests.</p>
                 </>
               }
-              link={{ to: "/docs#singlet-file", label: "What's in a .singlet file" }}
+              link={{ to: "/docs#singlet-file", label: "Modalities and files" }}
             />
 
             <Station
@@ -274,14 +230,14 @@ const About = () => {
               n={7}
               title="Search in plain English"
               claim="Type a question the way you would ask a colleague. It becomes exact filters you can see and change."
-              visual={<SearchDiagram />}
+              visual={<QueryParse />}
               detail={
                 <>
                   <p>A fixed vocabulary reads the question first, free and instant. Only words it cannot place go to a language model, once; the answer is cached and checked against the vocabulary.</p>
                   <p>Species comes only from words like "mouse" or "patients". A disease never implies a tissue: "melanoma" is cancer, not skin.</p>
                 </>
               }
-              link={{ to: "/docs#search", label: "Search in the docs" }}
+              link={{ to: "/ai-search", label: "What AI Search adds" }}
             />
 
             <Station

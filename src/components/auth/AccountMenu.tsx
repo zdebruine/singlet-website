@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { FolderLock, KeyRound, Loader2, LogOut, UserRound } from "lucide-react";
+import { CircleUserRound, KeyRound, Loader2, LogOut, UserRound } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { fmtInt } from "@/lib/catalog-display";
@@ -84,13 +84,21 @@ export function AccountMenu({ className, variant = "nav" }: { className?: string
 
   if (!user) {
     return (
-      <button
-        type="button"
-        onClick={() => openSignIn()}
-        className={cn("text-[13px] text-muted-foreground hover:text-foreground transition-colors rounded px-1", className)}
-      >
-        Sign in
-      </button>
+      <span className={cn("inline-flex items-center gap-4", variant === "menu" && "flex-col items-start gap-3")}>
+        <Link to="/ai-search" className={cn("text-[14px] text-muted-foreground hover:text-foreground transition-colors", className)}>
+          AI Search
+        </Link>
+        <button
+          type="button"
+          onClick={() => openSignIn()}
+          aria-label="Sign in"
+          title="Sign in"
+          className={cn("inline-flex items-center gap-2 rounded-full text-muted-foreground hover:text-foreground transition-colors", className)}
+        >
+          <CircleUserRound size={26} strokeWidth={1.5} />
+          {variant === "menu" && <span className="text-[14px]">Sign in</span>}
+        </button>
+      </span>
     );
   }
 
@@ -102,6 +110,10 @@ export function AccountMenu({ className, variant = "nav" }: { className?: string
   const explainUsed = usage?.explain ?? (explainQuota?.kind === "user" ? explainQuota.used : null);
 
   return (
+    <span className={cn("inline-flex items-center gap-4", variant === "menu" && "flex-col items-start gap-3")}>
+    <Link to="/my-data" className={cn("text-[14px] text-muted-foreground hover:text-foreground transition-colors", className)}>
+      Your data
+    </Link>
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <button
@@ -149,10 +161,6 @@ export function AccountMenu({ className, variant = "nav" }: { className?: string
             <UserRound size={14} />
             Account
           </Link>
-          <Link to="/my-data" onClick={() => setOpen(false)} className="btn-ghost w-full justify-start">
-            <FolderLock size={14} />
-            Your data
-          </Link>
           <Link to="/account#api-keys" onClick={() => setOpen(false)} className="btn-ghost w-full justify-start">
             <KeyRound size={14} />
             API keys
@@ -169,6 +177,7 @@ export function AccountMenu({ className, variant = "nav" }: { className?: string
         </div>
       </PopoverContent>
     </Popover>
+    </span>
   );
 }
 

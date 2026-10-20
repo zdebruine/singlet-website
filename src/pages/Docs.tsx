@@ -12,7 +12,7 @@ const SECTIONS = [
   { id: "install", label: "Install" },
   { id: "load", label: "Load a study" },
   { id: "search", label: "Search" },
-  { id: "singlet-file", label: "What's in a .singlet file" },
+  { id: "singlet-file", label: "Modalities and files" },
   { id: "partial-download", label: "Download just part of a study" },
   { id: "bulk-manifests", label: "Bulk downloads and manifests" },
   { id: "provenance", label: "Provenance and versioning" },

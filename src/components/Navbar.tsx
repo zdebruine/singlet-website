@@ -31,14 +31,11 @@ const Navbar = ({ search = true }: { search?: boolean }) => {
   const isActive = (to: string) => location.pathname === to || location.pathname.startsWith(to + "/");
 
   return (
-    <header className="site-navbar sticky top-0 z-40 bg-background border-b border-border">
+    <header className={cn("site-navbar sticky top-0 z-40 bg-background", !isHome && "border-b border-border")}>
       <nav className="container-site h-14 flex items-center gap-6" aria-label="Main">
         {!isHome && <Logo variant="lockup" theme="auto" height={24} />}
 
-        <div className="flex-1" />
-
         <div className="hidden md:flex items-center gap-6">
-          {showSearch && <SearchBox variant="compact" className="w-64 lg:w-72" />}
           {NAV.map((l) => (
             <Link
               key={l.to}
@@ -48,6 +45,12 @@ const Navbar = ({ search = true }: { search?: boolean }) => {
               {l.label}
             </Link>
           ))}
+        </div>
+
+        <div className="flex-1" />
+
+        <div className="hidden md:flex items-center gap-6">
+          {showSearch && <SearchBox variant="compact" className="w-64 lg:w-72" />}
           <AccountMenu className="navbar-account" />
         </div>
 
