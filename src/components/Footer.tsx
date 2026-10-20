@@ -8,7 +8,7 @@ const LINKS: { label: string; to?: string; href?: string }[] = [
   { label: "MCP", to: "/docs/mcp" },
   { label: "Your data", to: "/my-data" },
   { label: "Brand", to: "/brand" },
-  { label: "How it's made", to: "/about" },
+  { label: "About", to: "/about" },
   { label: "Cite", to: "/about#cite" },
   { label: "GitHub", href: GITHUB_REPO },
   { label: "Singlet Cloud", href: "https://cloud.singlet.bio" },
