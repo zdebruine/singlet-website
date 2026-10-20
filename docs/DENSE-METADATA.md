@@ -90,8 +90,10 @@ measurements of this job.
 
 **Kept reads (checked 2026-10-20).** On Anvil, the campaign's per-sample result folders were emptied by the 30-day
 scratch purge; what remains is 3,333 partial SRA download caches (4.5 TB), 223 encoded-read (`.1fq`) files and 62
-BAMs, not enough to skip realignment. The Clipper check (where the 2.0.0 human campaign ran) is still to be run as a
-Slurm job.
+BAMs, not enough to skip realignment. On Clipper, where the 2.0.0 human campaign ran, the lab project space holds
+535 BAMs (1.5 TB, 78 of them in the campaign's recovery scratch), 306 encoded-read files (372 GB), 161 SRA files and
+185 FASTQ files: a few hundred samples, not the 32,879. The 4,762 `.singlet` files (1.4 TB) are the published
+outputs. (Search depth 6 below `/mnt/projects/debruinz_project`.)
 
 **Where it runs.** Clipper is free and is used first: the count-only layers, the larger SNP panel and the pileup
 code are developed and benchmarked there on a few hundred samples. Anvil (NSF ACCESS allocation, billed in service
