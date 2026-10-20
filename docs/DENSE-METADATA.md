@@ -80,18 +80,29 @@ G2/M gene scores. Both need only the count matrix.
 |---|---|---|---|
 | Doublets, cell cycle, sex (fixed), per sample | the published files only (3.5 TB) | 54,199 approved samples | a few hundred core-hours; about a day on Clipper |
 | Sex and expression facts per donor | the above plus donor ids | studies with donor ids | negligible once donors exist |
-| SNP pileup at ~10⁵ exonic SNPs, donor demultiplexing, chrM pileup | reads | the 32,879 samples in 2.0.0 files (917 G reads) | if BAMs from the 2.0.0 run were kept: pileup only, roughly 0.3 to 0.5 core-hours per sample, about 10 to 15 k core-hours, 1 to 2 days on the 576-core CPU partition. If not: download and realign again, roughly 2 to 4 core-hours per sample, 65 to 130 k core-hours, 5 to 11 days at ~500 cores, plus about 30 to 60 TB of downloads from SRA |
+| SNP pileup at ~10⁵ exonic SNPs, donor demultiplexing, chrM pileup | reads | the 32,879 samples in 2.0.0 files (917 G reads) | no kept BAMs on Anvil (see below), so download and realign again. The Anvil mouse campaign measured about 1 SU per sample (4 cores x 15 min); with retries about 40 k SU. The end-to-end runs suggest up to 2 to 4 core-hours per sample, 65 to 130 k SU. Plus about 30 to 60 TB of SRA downloads (Anvil scratch is 100 TB) |
 | Same pileup with the larger SNP panel on the older files | reads, unless their BAMs exist | 21,320 samples | same per-sample costs |
 | Cross-GSM donor matching, ancestry projection, haplogroups | the pileup outputs | all donors | small: minutes per study |
 
 The per-sample figures come from the end-to-end runs recorded in `singlet-agents/state/e2e_results.md` (5 to 12
-minutes wall on 16 to 24 threads at the 30 M read cap) and are estimates, not measurements of this job. The
-single biggest unknown is whether the 2.0.0 campaign kept BAMs or the encoded reads.
+minutes wall on 16 to 24 threads at the 30 M read cap) and the Anvil mouse campaign; they are estimates, not
+measurements of this job.
+
+**Kept reads (checked 2026-10-20).** On Anvil, the campaign's per-sample result folders were emptied by the 30-day
+scratch purge; what remains is 3,333 partial SRA download caches (4.5 TB), 223 encoded-read (`.1fq`) files and 62
+BAMs, not enough to skip realignment. The Clipper check (where the 2.0.0 human campaign ran) is still to be run as a
+Slurm job.
+
+**Where it runs.** Clipper is free and is used first: the count-only layers, the larger SNP panel and the pileup
+code are developed and benchmarked there on a few hundred samples. Anvil (NSF ACCESS allocation, billed in service
+units: 1 SU = 1 core-hour at up to ~1.9 GB per core on the shared partition) takes the catalog-wide pass once the
+per-sample cost is measured. Its balance on 2026-10-20 is 114 k SU, enough for the 2.0.0 pass at the measured rate,
+not at the upper estimate.
 
 ## 5. Recommendations
 
 1. Run the count-only layers (doublets, cell cycle, corrected sex) on every published file now.
-2. Decide on BAM retention, then run one combined pass (expanded SNP panel, donor demultiplexing, chrM pileup)
+2. Decide where the realignment's BAMs or encoded reads are kept (Anvil scratch purges after 30 days), then run one combined pass (expanded SNP panel, donor demultiplexing, chrM pileup)
    over the 2.0.0 samples, followed by the older ones.
 3. Add cross-GSM donor matching, then per-donor ancestry, sex and haplogroup, written as `pipeline` facts into the
    `sample_attr` table planned in `SEARCH-ROADMAP.md`.
