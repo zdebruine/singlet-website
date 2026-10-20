@@ -11,7 +11,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { ChevronRight, LayoutGrid, List, Loader2, LockKeyhole, Search, SlidersHorizontal, Sparkles } from "lucide-react";
+import { ArrowRight, ChevronRight, LayoutGrid, List, Loader2, LockKeyhole, Search, SlidersHorizontal, Sparkles, X } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { cn } from "@/lib/utils";
@@ -316,8 +316,8 @@ const Browse = () => {
       {/* Sticky search */}
       <div className="sticky top-14 z-20 bg-background/95 backdrop-blur border-b border-border">
         <form onSubmit={submit} role="search" className="container-site py-3 flex items-center gap-2">
-          <div className="relative flex-1 min-w-0">
-            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+          <div className="flex-1 min-w-0 flex items-center gap-2 bg-card rounded-full border border-border pl-4 pr-1.5 h-12 shadow-[0_1px_3px_rgba(15,31,29,0.10)] transition-shadow hover:shadow-[0_2px_10px_rgba(15,31,29,0.16)] focus-within:shadow-[0_2px_12px_rgba(15,31,29,0.20)] focus-within:border-primary/50">
+            <Search size={17} className="shrink-0 text-muted-foreground" aria-hidden="true" />
             <label htmlFor="browse-search" className="sr-only">
               Search studies
             </label>
@@ -330,16 +330,26 @@ const Browse = () => {
               onChange={(e) => setText(e.target.value)}
               placeholder={SEARCH_PLACEHOLDER}
               title={SEARCH_PLACEHOLDER}
-              className="input h-10 pl-9 pr-3 text-[14px] [&::-webkit-search-cancel-button]:appearance-none"
+              className="flex-1 min-w-0 bg-transparent h-full text-[15px] text-foreground placeholder:text-muted-foreground focus:outline-none [&::-webkit-search-cancel-button]:appearance-none"
             />
+            {text && (
+              <button
+                type="button"
+                onClick={() => setText("")}
+                className="shrink-0 grid place-items-center h-8 w-8 rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+                aria-label="Clear search"
+              >
+                <X size={15} />
+              </button>
+            )}
+            <button type="submit" className="shrink-0 grid place-items-center h-9 w-9 rounded-full bg-primary text-primary-foreground hover:brightness-110 transition" aria-label="Search">
+              <ArrowRight size={17} />
+            </button>
           </div>
-          <button type="submit" className="btn-primary h-10 px-5">
-            Search
-          </button>
           <button
             type="button"
             aria-pressed={mine}
-            className={cn("btn-secondary h-10 px-3", mine && "!border-primary !text-primary")}
+            className={cn("btn-secondary h-12 px-4 !rounded-full", mine && "!border-primary !text-primary")}
             onClick={() => user ? setMine((v) => !v) : openSignIn()}
             title="Search studies in your private projects"
           >
@@ -347,7 +357,7 @@ const Browse = () => {
           </button>
           <button
             type="button"
-            className="btn-secondary h-10 px-3 lg:hidden"
+            className="btn-secondary h-12 px-4 !rounded-full lg:hidden"
             onClick={() => setRailOpen(true)}
             aria-expanded={railOpen}
             aria-controls="browse-filters"

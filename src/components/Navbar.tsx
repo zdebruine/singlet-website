@@ -33,7 +33,7 @@ const Navbar = ({ search = true }: { search?: boolean }) => {
   return (
     <header className="site-navbar sticky top-0 z-40 bg-background border-b border-border">
       <nav className="container-site h-14 flex items-center gap-6" aria-label="Main">
-        <Logo variant="lockup" theme="auto" height={24} />
+        {!isHome && <Logo variant="lockup" theme="auto" height={24} />}
 
         <div className="flex-1" />
 

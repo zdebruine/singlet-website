@@ -11,7 +11,7 @@ import { usePageMeta } from "@/hooks/usePageMeta";
 import { fmtCompact, fmtInt } from "@/lib/catalog-display";
 import { EXAMPLE_QUERIES } from "@/lib/search-routing";
 import { cn } from "@/lib/utils";
-import { Columns, FormatSizeChart, H5AD_RATIO, HBars } from "@/components/landing/charts";
+import { FormatSizeChart, H5AD_RATIO, HBars } from "@/components/landing/charts";
 import { GateFunnel, sampleFunnel } from "@/components/landing/GateFunnel";
 import { GetStarted } from "@/components/landing/GetStarted";
 
@@ -71,11 +71,6 @@ const Index = () => {
   }, [hash]);
 
   const tissues = (facets?.tissue_group ?? []).filter((o) => o.count > 0 && !/^(Other|Multiple)/.test(o.value));
-  const thisYear = new Date().getFullYear();
-  const years = (facets?.year ?? [])
-    .map((y) => ({ label: y.value, value: y.count }))
-    .filter((y) => Number(y.label) >= 2015 && Number(y.label) <= thisYear)
-    .sort((a, b) => Number(a.label) - Number(b.label));
 
   const layerBy = Object.fromEntries((layers?.layers ?? []).map((l) => [l.key, l]));
   const share = (key: string) => (layerBy[key] ? `${pct(layerBy[key].studies, layerBy[key].of)}%` : "…");
@@ -93,11 +88,11 @@ const Index = () => {
           <div className="container-site w-full flex flex-col items-center text-center">
             <h1 className="sr-only">singlet.bio: AI-ready single-cell data</h1>
             <Logo variant="lockup" theme="auto" height={52} link={false} />
-            <p className="mt-6 text-[18px] md:text-[20px] text-muted-foreground">
-              Search {stats ? fmtCompact(stats.cells_in_files) : "millions of"} single cells in plain English.
-            </p>
-            <div className="mt-8 w-full max-w-[680px]">
+            <div className="mt-10 w-full max-w-[680px]">
               <SearchBox variant="hero" placeholder={`Try "${EXAMPLE_QUERIES[0]}"`} />
+              <p className="mt-3 text-[13px] text-muted-foreground tabular">
+                {stats ? `${fmtCompact(stats.cells_in_files)} single-cell transcriptomes` : "\u00a0"}
+              </p>
             </div>
             <div className="mt-6 flex flex-wrap justify-center gap-3">
               <Link to="/browse" className="btn-secondary">
@@ -141,10 +136,10 @@ const Index = () => {
 
         {/* 3 · It covers your biology */}
         <Screen id="coverage" label="Coverage">
-          <Title sub={stats ? `${fmtInt(stats.studies_with_files)} studies, ${fmtInt(stats.samples_in_files)} samples, more every month.` : undefined}>
-            Your tissue is probably here.
+          <Title sub={stats ? `${fmtInt(stats.studies_with_files)} studies, ${fmtInt(stats.samples_in_files)} samples.` : undefined}>
+            Search {facets ? fmtInt(tissues.length) : ""} tissues.
           </Title>
-          <div className="mt-12 grid lg:grid-cols-2 gap-12 max-w-[1100px] mx-auto">
+          <div className="mt-12 max-w-[760px] mx-auto">
             {facets ? (
               <HBars
                 data={tissues.slice(0, 10).map((o) => ({ label: o.value, value: o.count, href: `/browse?tissue_group=${encodeURIComponent(o.value)}` }))}
@@ -153,7 +148,6 @@ const Index = () => {
             ) : (
               <Skeleton />
             )}
-            {facets ? <Columns data={years} partialLast={years.at(-1)?.label === String(thisYear)} /> : <Skeleton />}
           </div>
         </Screen>
 
