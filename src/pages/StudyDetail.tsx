@@ -521,7 +521,7 @@ const StudyDetail = () => {
         <aside className="mt-2 lg:mt-0 lg:sticky lg:top-20 space-y-3" aria-labelledby="download-h">
           <h2 id="download-h" className="text-[18px] lg:sr-only">Load or download</h2>
           {processed.length > 0 ? (
-            <DownloadPanel accession={gseId} bundleUrl={series.bundle_url} bundleBytes={series.bundle_bytes} stacked />
+            <DownloadPanel accession={gseId} bundleUrl={series.bundle_url} bundleBytes={series.bundle_bytes} v2={series.v2} stacked />
           ) : (
             <div className="surface px-4 py-3 text-sm text-muted-foreground">
               No samples in this study completed processing, so there is no <code className="code-inline">.singlet</code> file.

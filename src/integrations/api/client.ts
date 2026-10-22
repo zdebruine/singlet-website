@@ -41,6 +41,7 @@ import type {
   StudyRow,
   ProductDashboard,
   ShareVisibility,
+  StudyV2,
 } from "./types";
 import { aiQuotaStore, parseQuota } from "@/lib/ai-quota";
 
@@ -429,9 +430,23 @@ function normalizeSample(raw: unknown): GsmRow | null {
   };
 }
 
+function normalizeStudyV2(raw: unknown): StudyV2 | null {
+  const v = rec(raw);
+  if (v.format !== "singlet-v2" || typeof v.manifest_url !== "string" || !v.manifest_url) return null;
+  return {
+    format: "singlet-v2",
+    rev: str(v.rev),
+    manifest_url: v.manifest_url,
+    n_samples: num(v.n_samples),
+    bytes: numOrNull(v.bytes),
+    legacy_available: v.legacy_available !== false,
+  };
+}
+
 export function normalizeGseDetail(raw: unknown): GseDetailResponse {
   const r = rec(raw);
   const s = rec(r.series);
+  const v2 = normalizeStudyV2(s.v2);
   if (typeof s.id !== "string") throw new ApiError(502, "The catalog returned a study without an accession.");
   const m = r.meta ? rec(r.meta) : null;
   const samples = arr<unknown>(r.samples).map(normalizeSample).filter((x): x is GsmRow => x !== null);
@@ -448,7 +463,9 @@ export function normalizeGseDetail(raw: unknown): GseDetailResponse {
       pubmed_ids: strArr(s.pubmed_ids),
       bundle_key: strOrNull(s.bundle_key) ?? strOrNull(s.r2_bundle_key),
       bundle_bytes: numOrNull(s.bundle_bytes) ?? numOrNull(s.r2_bundle_bytes),
-      bundle_url: strOrNull(s.bundle_url) ?? (strOrNull(s.bundle_key) ?? strOrNull(s.r2_bundle_key) ? bundleUrl(s.id) : null),
+      // Once the legacy file is retired the API says so (v2.legacy_available) and the old URL must not be rebuilt from the key.
+      bundle_url: v2 && !v2.legacy_available ? null : strOrNull(s.bundle_url) ?? (strOrNull(s.bundle_key) ?? strOrNull(s.r2_bundle_key) ? bundleUrl(s.id) : null),
+      v2,
       bundle_n_samples: numOrNull(s.bundle_n_samples) ?? numOrNull(s.r2_bundle_n_gsms) ?? null,
       reference_build: typeof s.reference_build === "string" && s.reference_build ? s.reference_build : null,
       singlet_version: strOrNull(s.singlet_version),
@@ -1000,6 +1017,7 @@ export function normalizeBundleIndex(raw: unknown): BundleIndexResponse {
         total_bytes: num(s.total_bytes),
       })),
     study_files: arr<unknown>(r.study_files).map(normalizeBundleFile).filter((f): f is NonNullable<typeof f> => f !== null),
+    ...(r.format === "singlet-v2" ? { format: "singlet-v2" as const, manifest_url: strOrNull(r.manifest_url), files_truncated: r.files_truncated === true } : {}),
   };
 }
 

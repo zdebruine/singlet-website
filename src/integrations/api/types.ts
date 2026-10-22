@@ -322,6 +322,17 @@ export interface CorpusStats {
 
 // ── Study / sample detail (/api/gse/:id, /api/gsm/:id) ──────────────────────
 
+/** A study stored in the v2 per-sample layout: one immutable object per sample plus a manifest. */
+export interface StudyV2 {
+  format: "singlet-v2";
+  rev: string;
+  manifest_url: string;
+  n_samples: number;
+  bytes: number | null;
+  /** The old single .singlet file still exists next to the per-sample objects. */
+  legacy_available: boolean;
+}
+
 export interface GseRow {
   id: string;
   title: string | null;
@@ -339,6 +350,8 @@ export interface GseRow {
   bundle_url: string | null;
   /** Number of samples actually present in the bundle, when indexed by the packing job. */
   bundle_n_samples: number | null;
+  /** Set when the study is stored in the v2 per-sample layout. */
+  v2?: StudyV2 | null;
   reference_build: string | null;
   /** Pipeline version that packed the file, from the bundle manifest. */
   singlet_version: string | null;
@@ -632,6 +645,11 @@ export interface BundleSampleFiles {
 export interface BundleIndexResponse {
   gse_id: string;
   bytes: number;
+  /** "singlet-v2" when the listing comes from the per-sample layout (one object per sample). */
+  format?: "singlet-v2";
+  manifest_url?: string | null;
+  /** v2 listings: more samples are listed than their files are. */
+  files_truncated?: boolean;
   reference_build: string | null;
   singlet_version: string | null;
   created_at: string | null;
