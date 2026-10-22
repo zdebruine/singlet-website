@@ -1,0 +1,25 @@
+# data.singlet.bio/v2/*: read-only front for the v2 objects in R2 (docs/format-v2.md). See README.md.
+# Pattern: workers/alpha-proxy. Deployed by the owner, never by CI: `npx wrangler deploy` from this directory.
+name = "singlet-data-v2"
+main = "src/index.ts"
+compatibility_date = "2026-09-01"   # newest date the pinned wrangler 4.102 accepts; deployed 2026-10-22
+account_id = "2f8a8cc95b6bc0be84ac611fe2e5c3c2"
+workers_dev = false
+
+# Route in front of the existing R2 custom domain. A route needs the hostname to be a proxied DNS record, which an R2
+# custom domain is. OWNER CHECK before the first deploy (the docs say a route "runs in front of an existing origin"
+# and do not say whether it also wins over an R2 custom-domain binding; test on the real hostname):
+#   deploy, then `curl -sI https://data.singlet.bio/v2/ref/index.json` must show `x-served-by: data-v2`.
+# If it does not, remove the route and use a Workers Custom Domain on a new hostname instead (the Worker is then the
+# origin and Cloudflare creates the DNS record and certificate):
+#   routes = [{ pattern = "dv2.singlet.bio", custom_domain = true }]
+# and point clients (website Pages variable V2_ORIGIN, Python/R loaders) at https://dv2.singlet.bio/v2/.
+routes = [{ pattern = "data.singlet.bio/v2/*", zone_name = "singlet.bio" }]
+
+# Read-only: the Worker only calls get() and head().
+[[r2_buckets]]
+binding = "DATA"
+bucket_name = "singlet-data"
+
+[observability]
+enabled = true
