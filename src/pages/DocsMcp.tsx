@@ -48,6 +48,16 @@ const EXAMPLES: { ask: string; tools: string; gets: string }[] = [
     gets: "A byte range, a curl command and a Python snippet that fetch that one file (count matrices need no inflate step).",
   },
   {
+    ask: "Which cells in GSE296768 have more than 5,000 UMIs? Give me just their counts.",
+    tools: "find_cells, slice_cells",
+    gets: "Studies stored per sample only: the matching cells as column runs per sample, then the byte ranges that cover just those cells' matrix chunks.",
+  },
+  {
+    ask: "What are rows 10, 11 and 12 of that matrix?",
+    tools: "resolve_features",
+    gets: "Studies stored per sample only: the feature names for row numbers, from the reference pack the matrix names.",
+  },
+  {
     ask: "Find healthy control studies that match GSE200901.",
     tools: "find_matched_controls",
     gets: "Candidate studies with the reason they match, plus honest caveats about study-level labels.",
@@ -67,18 +77,21 @@ const EXAMPLES: { ask: string; tools: string; gets: string }[] = [
 const TOOLS: { name: string; input: string; returns: string; key: string }[] = [
   { name: "search_datasets", input: "query, level?, limit?, page?, organism?, tissue?, disease?, assay?, min_cells?, include_unbuilt?", returns: "Matching studies or samples with a reason for each match. The only tool that can call a language model, and only when the built-in vocabulary cannot read the question; only those fresh AI readings are metered", key: "No — 10 AI readings a day without, 200 with" },
   { name: "get_study", input: "gse_id, known_rev?", returns: "Title, abstract, groups, conditions, samples (first 60), file URL, and a rev", key: "No" },
-  { name: "get_download_url", input: "gse_id", returns: "The .singlet URL, size and loader lines", key: "No" },
+  { name: "get_download_url", input: "gse_id, include_samples?, limit?, after?", returns: "The .singlet URL, size and loader lines; for a study stored per sample, its manifest and optionally its sample objects", key: "No" },
   { name: "get_atlas_stats", input: "—", returns: "Studies, usable samples and cells in published files (the site's headline numbers), plus catalog metadata: samples processed, cells recorded, species, failure reasons", key: "No" },
   { name: "get_sample_qc", input: "gse_id, gsm_ids?, known_rev?", returns: "Per-sample QC from the file itself, totals and warnings", key: "No" },
-  { name: "list_bundle_files", input: "gse_id, gsm_id?, known_rev?", returns: "Everything inside the file, with sizes", key: "No" },
+  { name: "list_bundle_files", input: "gse_id, gsm_id?, detail?, limit?, after?, known_rev?", returns: "Everything inside the file, with sizes; for a study stored per sample, a grouped summary and one sample's files with their byte ranges", key: "No" },
   { name: "get_modalities", input: "gse_id, gsm_id?, known_rev?", returns: "Which modalities the file carries, with Python and R readers for each", key: "No" },
-  { name: "get_partial_download", input: "gse_id, gsm_id, file, known_rev?", returns: "Byte range, curl and Python for one file", key: "No" },
+  { name: "get_partial_download", input: "gse_id, gsm_id, file, known_rev?", returns: "Byte range, curl and Python for one file; for a study stored per sample, the member's range inside the sample's immutable object", key: "No" },
   { name: "export_manifest", input: "query? / filters? / gse_ids?, format", returns: "TSV, JSON, curl, wget, Python or R manifest", key: "No" },
   { name: "find_matched_controls", input: "gse_id, min_samples?, same_assay?", returns: "Candidate control studies with reasons and caveats", key: "No" },
   { name: "compare_studies", input: "gse_ids (2–8)", returns: "Side-by-side fields and their differences", key: "No" },
   { name: "assess_study", input: "gse_id, purpose?", returns: "Deterministic usability report and fit checks", key: "No" },
   { name: "get_cohort", input: "id, token?", returns: "A saved, version-pinned cohort and its studies", key: "Yes for private and workspace cohorts; a share-link token (sco_…) alone opens a link cohort" },
   { name: "save_cohort", input: "name, gse_ids, notes?, visibility?, workspace_id?", returns: "Saves up to 2,000 studies as a cohort pinned to the current catalogue", key: "Yes" },
+  { name: "find_cells", input: "gse_ids? / gsm_ids? / sample_filter?, cell_filter?, limit_samples?, after?", returns: "Per sample, the cells matching a filter on called status, UMIs, features or any numeric cells-table column, as column runs. Studies stored per sample only; reads at most 25 samples a call", key: "No" },
+  { name: "slice_cells", input: "gse_id, gsm_id, file?, runs? / indices? / range?", returns: "The byte ranges that cover just those cells in a sample's count matrices (a prefix once, then chunk runs). Studies stored per sample only", key: "No" },
+  { name: "resolve_features", input: "indices, pack? / gse_id, gsm_id, file?", returns: "Feature names for matrix row numbers (or barcodes for whitelist column numbers). Studies stored per sample only", key: "No" },
 ];
 
 function Section({ id, title, children, collapsible }: { id: string; title: string; children: React.ReactNode; collapsible?: boolean }) {
