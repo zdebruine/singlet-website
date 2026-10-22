@@ -57,6 +57,12 @@ export interface AppEnv {
   AI_PRICE_OUT_USD_PER_M?: string;
   /** MCP calls per minute per API key (default 60). */
   MCP_RATE_PER_MIN?: string;
+  /** "1" shortens MCP result texts and makes `verbose` meaningful (the response diet, off by default; see _shared/mcp-core.ts). */
+  MCP_DIET?: string;
+  /** "1" lists find_cells, slice_cells and resolve_features in tools/list before any study is served from v2. */
+  V2_TOOLS?: string;
+  /** Origin that serves the v2 objects (default https://data.singlet.bio); set only if the data Worker runs on another hostname. */
+  V2_ORIGIN?: string;
 
   /** Secret salt for hashing anonymous visitors' addresses (default: a public constant). */
   ANON_IP_SALT?: string;

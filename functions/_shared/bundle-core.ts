@@ -4,11 +4,15 @@
  */
 import { applyUsable, isUsable, matrixBytesByGsm } from "./catalog-refresh";
 import { publicEntries } from "./restricted";
+import { getV2Samples, listV2Samples, parseJsonObject, type V2State } from "./v2-catalog";
+import { describeMembers } from "./v2-serve";
+import { v2ManifestUrl } from "./v2-urls";
 import {
-  getBundleIndex,
+  StaleBundleError,
   readEntryText,
   ensureSampleQcTable,
   sampleOf,
+  withIndexRetry,
   type BundleIndex,
   type ZipEntry,
 } from "./bundle-reader";
@@ -28,6 +32,8 @@ export interface BundleSampleFiles {
 export interface BundleIndexResponse {
   gse_id: string;
   bytes: number;
+  /** ETag of the file the listing was read from (null for rows indexed before schema/031). Send as If-Match with a range. */
+  etag: string | null;
   reference_build: string | null;
   singlet_version: string | null;
   created_at: string | null;
@@ -77,6 +83,7 @@ export async function bundleIndexResponse(
   return {
     gse_id: gse,
     bytes: index.bytes,
+    etag: index.etag ?? null,
     reference_build: manifest?.reference_build ?? null,
     singlet_version: manifest?.singlet_version ?? null,
     created_at: manifest?.manifest_created_at ?? null,
@@ -84,6 +91,54 @@ export async function bundleIndexResponse(
     n_samples: samples.length,
     samples,
     study_files: studyFiles.sort((a, b) => a.path.localeCompare(b.path)),
+  };
+}
+
+/** Samples whose files are listed in a v2 index; beyond this only the sample and its size are (the listing is edge-cached for a day). */
+const V2_INDEX_FILE_SAMPLES = 100;
+
+export interface V2BundleIndexResponse extends BundleIndexResponse {
+  format: "singlet-v2";
+  rev: string;
+  manifest_url: string;
+  /** True when more samples are listed than their files are. */
+  files_truncated: boolean;
+}
+
+/**
+ * The same shape as bundleIndexResponse for a study served from v2: `bytes` is the total of the sample objects, a sample's `files` are its
+ * members (`bytes_compressed` = bytes stored, `bytes_uncompressed` = the file's size once regenerated, for stored and derived members) and
+ * `study_files` is the manifest object. Reads one page of light sample rows and at most two member-list reads.
+ */
+export async function v2BundleIndexResponse(db: D1Database, gse: string, state: V2State): Promise<V2BundleIndexResponse> {
+  const s = state.study;
+  const rows = await listV2Samples(db, gse, s.rev, { limit: 500 });
+  const withFiles = rows.slice(0, V2_INDEX_FILE_SAMPLES);
+  const filesBy = new Map<string, BundleFile[]>();
+  for (let i = 0; i < withFiles.length; i += 50) {
+    for (const full of await getV2Samples(db, gse, withFiles.slice(i, i + 50).map((r) => r.gsm_id), s.rev)) {
+      filesBy.set(
+        full.gsm_id,
+        describeMembers(full).map((m) => ({ path: `samples/${full.gsm_id}/${m.name}`, bytes_compressed: m.bytes, bytes_uncompressed: m.legacy_bytes ?? m.bytes }))
+      );
+    }
+  }
+  const pipeline = parseJsonObject(s.pipeline_json);
+  return {
+    gse_id: gse,
+    bytes: s.bytes ?? 0,
+    etag: null,
+    reference_build: s.reference_build,
+    singlet_version: typeof pipeline?.singlet_version === "string" ? pipeline.singlet_version : null,
+    created_at: s.created_at,
+    indexed_at: s.updated_at,
+    n_samples: s.n_samples,
+    samples: rows.map((r) => ({ gsm_id: r.gsm_id, files: filesBy.get(r.gsm_id) ?? [], total_bytes: r.bytes ?? 0 })),
+    study_files: s.manifest_bytes ? [{ path: `v2/m/${gse}.json`, bytes_compressed: s.manifest_bytes, bytes_uncompressed: s.manifest_bytes }] : [],
+    format: "singlet-v2",
+    rev: s.rev,
+    manifest_url: v2ManifestUrl(gse),
+    files_truncated: rows.length > V2_INDEX_FILE_SAMPLES || s.n_samples > rows.length,
   };
 }
 
@@ -187,7 +242,11 @@ export function upsertSampleQcStatement(db: D1Database, row: Record<string, unkn
     .bind(...values, stamp);
 }
 
-/** Read every `samples/<GSM>/summary.json` in the bundle (bounded concurrency). */
+/**
+ * Read every `samples/<GSM>/summary.json` in the bundle (bounded concurrency). A summary that cannot be read is
+ * left out; a StaleBundleError is not swallowed, because it means the index no longer matches the file and
+ * every other read is suspect too (callers refresh the index and retry, see withIndexRetry).
+ */
 export async function readSampleSummaries(gse: string, index: BundleIndex): Promise<SampleQc[]> {
   const targets = index.entries.filter((e) => /^samples\/GSM\d+\/summary\.json$/.test(e.p));
   const out: SampleQc[] = [];
@@ -197,9 +256,10 @@ export async function readSampleSummaries(gse: string, index: BundleIndex): Prom
     const parts = await Promise.all(
       chunk.map(async (e) => {
         try {
-          const text = await readEntryText(gse, e);
+          const text = await readEntryText(gse, e, index);
           return shapeSummary(gse, sampleOf(e.p)!, JSON.parse(text) as Record<string, unknown>);
-        } catch {
+        } catch (err) {
+          if (err instanceof StaleBundleError) throw err;
           return null;
         }
       })
@@ -227,8 +287,10 @@ export async function loadSampleQc(
     if (rows?.results?.length) return { source: "d1", samples: rows.results.map(normalizeQc) };
   }
 
-  const index = await getBundleIndex(db, gse, { waitUntil: opts.waitUntil });
-  const samples = await readSampleSummaries(gse, index);
+  const { index, samples } = await withIndexRetry(db, gse, { waitUntil: opts.waitUntil }, async (index) => ({
+    index,
+    samples: await readSampleSummaries(gse, index),
+  }));
   const mb = matrixBytesByGsm(index);
   for (const s of samples) {
     s.matrix_bytes = mb.get(s.gsm_id) ?? 0;

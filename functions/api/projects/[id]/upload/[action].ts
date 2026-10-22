@@ -135,7 +135,7 @@ export const onRequestPost: PagesFunction<AppEnv> = async ({ request, env, param
       const begun = await beginFile(ctx, uid, { project_id: projectId, filename: url.pathname.split("/").pop() ?? "", bytes, kind: "url", source_url: url.toString() });
       try {
         const etag = head.headers.get("etag")?.slice(0, 500) ?? null;
-        const done = await indexAndFinish(ctx, uid, httpBundleSource(url.toString(), { noRedirects: true }), { id: begun.file.id, filename: begun.file.filename, etag }, waitUntil);
+        const done = await indexAndFinish(ctx, uid, httpBundleSource(url.toString(), { noRedirects: true, userHost: true }), { id: begun.file.id, filename: begun.file.filename, etag }, waitUntil);
         return json({ ok: true, file_id: begun.file.id, ...done });
       } catch (e) {
         await markFileFailed(ctx, uid, { file_id: begun.file.id, error: String(e) }).catch(() => undefined);

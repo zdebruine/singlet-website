@@ -5,9 +5,9 @@
  * an assistant can quote the output verbatim.
  */
 import { GSE_RE, bundleUrl, loadStudy, type StudyDetail } from "./study-core";
-import { getBundleIndex, ensureSampleQcTable, entryRange, MAX_INFLATE_BYTES, type ZipEntry } from "./bundle-reader";
+import { StaleBundleError, getBundleIndex, ensureSampleQcTable, entryRange, strongEtag, withIndexRetry, MAX_INFLATE_BYTES, type ZipEntry } from "./bundle-reader";
 import { publicEntries } from "./restricted";
-import { bundleIndexResponse, loadSampleQc, normalizeQc, SAMPLE_QC_COLUMNS, type SampleQc } from "./bundle-core";
+import { bundleIndexResponse, loadSampleQc, normalizeQc, SAMPLE_QC_COLUMNS, v2BundleIndexResponse, type SampleQc } from "./bundle-core";
 import {
   buildManifestFromIds,
   buildManifestFromSearch,
@@ -21,42 +21,11 @@ import { loadRules, organismToCommon } from "./vocab";
 import { safeList } from "./json";
 import { QC_LOW_MESSAGE, QC_RULES, qcReasons, qcStatus } from "./qc-rules";
 
-export const SITE = "https://singlet.bio";
-export const ACCOUNT_URL = `${SITE}/account`;
-const GSM_RE = /^GSM\d+$/;
-
-// ── result helpers ──────────────────────────────────────────────────────────
-
-export interface ToolResult {
-  content: { type: "text"; text: string }[];
-  structuredContent?: unknown;
-  isError?: boolean;
-  _meta?: Record<string, unknown>;
-}
-
-export function toolResult(text: string, structured: unknown, meta?: Record<string, unknown>): ToolResult {
-  return { content: [{ type: "text", text }], structuredContent: structured, ...(meta ? { _meta: meta } : {}) };
-}
-
-export function toolError(text: string, extra?: Record<string, unknown>): ToolResult {
-  return { content: [{ type: "text", text }], isError: true, ...(extra ? { _meta: extra } : {}) };
-}
-
-export const fmt = (n: number | null | undefined) => (n == null ? "—" : n.toLocaleString("en-US"));
-
-export function fmtBytes(n: number | null | undefined): string {
-  if (n == null) return "—";
-  if (n >= 1e9) return `${(n / 1e9).toFixed(n >= 1e10 ? 0 : 1)} GB`;
-  if (n >= 1e6) return `${(n / 1e6).toFixed(n >= 1e8 ? 0 : 1)} MB`;
-  return `${Math.max(1, Math.round(n / 1e3))} KB`;
-}
-
-// R uses singlet::load — attaching the package masks base::load, so a bare
-// load() in a user's script is ambiguous.
-export const LOADERS = (gse: string) => ({
-  python: `import singlet\nadata = singlet.load("${gse}")   # AnnData`,
-  r: `library(singlet)\nsce <- singlet::load("${gse}")   # SingleCellExperiment`,
-});
+import { ACCOUNT_URL, GSM_RE, LOADERS, SITE, fmt, fmtBytes, toolError, toolResult, type ToolResult } from "./mcp-core";
+import { combineRev, fileRev, knownRev, legacyRev, unchangedBody } from "./rev";
+import { getV2State } from "./v2-catalog";
+import { v2ListFiles, v2Modalities, v2PartialDownload } from "./mcp-v2";
+export { ACCOUNT_URL, LOADERS, SITE, fmt, fmtBytes, toolError, toolResult, type ToolResult };
 
 /** Summary fields are stored as either a fraction (0–1) or a percentage. */
 function pct(v: number | null | undefined): number | null {
@@ -107,6 +76,15 @@ export async function getSampleQc(ctx: SampleQcArgs, args: Record<string, unknow
     return toolError(`Could not read per-sample QC for ${gse}: ${String(e).slice(0, 200)}. The .singlet file may not be built yet.`);
   }
   if (!samples.length) return toolError(`No per-sample QC recorded for ${gse}. Its .singlet file may not be built yet — check get_study.`);
+
+  // rev: the file, plus when the QC rows last changed
+  const stamp = await ctx.db
+    .prepare(`SELECT COUNT(*) AS n, MAX(updated_at) AS u FROM sample_qc WHERE gse_id = ?`)
+    .bind(gse)
+    .first<{ n: number; u: string | null }>()
+    .catch(() => null);
+  const rev = await combineRev([(await fileRev(ctx.db, gse))?.rev, stamp?.n, stamp?.u]);
+  if (knownRev(args) === rev) return toolResult(`${gse}: per-sample QC is unchanged since rev ${rev}.`, unchangedBody(gse, rev));
 
   const rows = (wanted ? samples.filter((s) => wanted.has(s.gsm_id)) : samples).map((s) => ({
     ...s,
@@ -174,6 +152,7 @@ export async function getSampleQc(ctx: SampleQcArgs, args: Record<string, unknow
 
   return toolResult(lines.join("\n"), {
     gse_id: gse,
+    rev,
     source,
     samples: rows,
     totals,
@@ -192,12 +171,19 @@ export async function listBundleFiles(ctx: SampleQcArgs, args: Record<string, un
   const gsm = typeof args.gsm_id === "string" ? args.gsm_id.trim().toUpperCase() : "";
   if (gsm && !GSM_RE.test(gsm)) return toolError("`gsm_id` must be a GEO sample accession like GSM4746717.");
 
+  // A migrated study is answered from the v2 catalog; everything below is the legacy bundle.
+  const v2 = await getV2State(ctx.db, gse);
+  if (v2) return v2ListFiles(ctx, gse, gsm, v2, args);
+
   let index;
   try {
-    index = await bundleIndexResponse(ctx.db, gse, await getBundleIndex(ctx.db, gse, { waitUntil: ctx.waitUntil }), ctx.waitUntil);
+    // verify: the size and listing reported here must be those of the file as it is now.
+    index = await bundleIndexResponse(ctx.db, gse, await getBundleIndex(ctx.db, gse, { verify: true, waitUntil: ctx.waitUntil }), ctx.waitUntil);
   } catch (e) {
     return toolError(`Could not read ${gse}.singlet: ${String(e).slice(0, 200)}. The file may not be built yet.`);
   }
+  const rev = await legacyRev(index.etag, index.bytes);
+  if (knownRev(args) === rev) return toolResult(`${gse}: this study's file listing is unchanged since rev ${rev}.`, unchangedBody(gse, rev));
 
   const samples = gsm ? index.samples.filter((s) => s.gsm_id === gsm) : index.samples;
   if (gsm && !samples.length)
@@ -222,6 +208,7 @@ export async function listBundleFiles(ctx: SampleQcArgs, args: Record<string, un
 
   return toolResult(lines.join("\n"), {
     gse_id: gse,
+    rev,
     bytes: index.bytes,
     reference_build: index.reference_build,
     singlet_version: index.singlet_version,
@@ -249,12 +236,17 @@ export async function getModalities(ctx: SampleQcArgs, args: Record<string, unkn
   const gsm = typeof args.gsm_id === "string" ? args.gsm_id.trim().toUpperCase() : "";
   if (gsm && !GSM_RE.test(gsm)) return toolError("`gsm_id` must be a GEO sample accession like GSM4746717.");
 
+  const v2 = await getV2State(ctx.db, gse);
+  if (v2) return v2Modalities(ctx, gse, gsm, v2, args);
+
   let index;
   try {
     index = await bundleIndexResponse(ctx.db, gse, await getBundleIndex(ctx.db, gse, { waitUntil: ctx.waitUntil }), ctx.waitUntil);
   } catch (e) {
     return toolError(`Could not read ${gse}.singlet: ${String(e).slice(0, 200)}. The file may not be built yet.`);
   }
+  const rev = await legacyRev(index.etag, index.bytes);
+  if (knownRev(args) === rev) return toolResult(`${gse}: this study's modalities are unchanged since rev ${rev}.`, unchangedBody(gse, rev));
 
   const samples = gsm ? index.samples.filter((s) => s.gsm_id === gsm) : index.samples;
   if (!samples.length)
@@ -319,6 +311,7 @@ export async function getModalities(ctx: SampleQcArgs, args: Record<string, unkn
 
   return toolResult(lines.join("\n"), {
     gse_id: gse,
+    rev,
     n_samples: samples.length,
     reference_build: index.reference_build,
     singlet_version: index.singlet_version,
@@ -336,19 +329,21 @@ export async function getModalities(ctx: SampleQcArgs, args: Record<string, unkn
 
 // ── 4. get_partial_download ─────────────────────────────────────────────────
 
-function pythonSnippet(url: string, start: number, end: number, method: string, outName: string): string {
+function pythonSnippet(url: string, start: number, end: number, method: string, outName: string, etag: string | null): string {
+  // If-Match: the read fails with 412 if the file was overwritten since the range was computed, instead of returning other bytes.
+  const headers = etag ? `{"Range": "bytes=${start}-${end}", "If-Match": '${etag}'}` : `{"Range": "bytes=${start}-${end}"}`;
   if (method === "stored") {
     return `import requests
 
 url = "${url}"
-r = requests.get(url, headers={"Range": "bytes=${start}-${end}"}, timeout=600)
+r = requests.get(url, headers=${headers}, timeout=600)
 r.raise_for_status()
 open("${outName}", "wb").write(r.content)`;
   }
   return `import requests, zlib
 
 url = "${url}"
-r = requests.get(url, headers={"Range": "bytes=${start}-${end}"}, timeout=600)
+r = requests.get(url, headers=${headers}, timeout=600)
 r.raise_for_status()
 data = zlib.decompressobj(-15).decompress(r.content)   # -15 = raw deflate, no zlib header
 open("${outName}", "wb").write(data)`;
@@ -362,45 +357,60 @@ export async function getPartialDownload(ctx: SampleQcArgs, args: Record<string,
   const file = typeof args.file === "string" ? args.file.trim() : "";
   if (!file) return toolError("`file` is required — e.g. exon_counts.1pz. Use list_bundle_files to see what is in the study.");
 
-  let index;
-  try {
-    index = await getBundleIndex(ctx.db, gse, { waitUntil: ctx.waitUntil });
-  } catch (e) {
-    return toolError(`Could not read ${gse}.singlet: ${String(e).slice(0, 200)}.`);
-  }
+  const v2 = await getV2State(ctx.db, gse);
+  if (v2) return v2PartialDownload(ctx, gse, gsm, file, v2, args);
 
   const prefix = `samples/${gsm}/`;
-  const inSample = publicEntries(index.entries).filter((e: ZipEntry) => e.p.startsWith(prefix) && !e.p.endsWith("/"));
-  if (!inSample.length) return toolError(`${gsm} is not in ${gse}.singlet. Use list_bundle_files to see which samples are.`);
-  const entry =
-    inSample.find((e) => e.p === file) ??
-    inSample.find((e) => e.p === `${prefix}${file}`) ??
-    inSample.find((e) => e.p.endsWith(`/${file}`)) ??
-    null;
-  if (!entry)
-    return toolError(
-      `No file '${file}' for ${gsm} in ${gse}.singlet. Files for this sample: ${inSample.map((e) => e.p.slice(prefix.length)).join(", ")}.`
-    );
+  type Found = { err: string } | { unchanged: string } | { entry: ZipEntry; range: Awaited<ReturnType<typeof entryRange>>; etag: string | null; rev: string };
+  let found: Found;
+  try {
+    // The cached index can be stale (the file was overwritten): entryRange checks the zip header at the offset
+    // and withIndexRetry re-reads the central directory once if it does not match.
+    found = await withIndexRetry(ctx.db, gse, { waitUntil: ctx.waitUntil }, async (index): Promise<Found> => {
+      const rev = await legacyRev(index.etag, index.bytes);
+      if (knownRev(args) === rev) return { unchanged: rev };
+      const inSample = publicEntries(index.entries).filter((e: ZipEntry) => e.p.startsWith(prefix) && !e.p.endsWith("/"));
+      if (!inSample.length) return { err: `${gsm} is not in ${gse}.singlet. Use list_bundle_files to see which samples are.` };
+      const entry =
+        inSample.find((e) => e.p === file) ??
+        inSample.find((e) => e.p === `${prefix}${file}`) ??
+        inSample.find((e) => e.p.endsWith(`/${file}`)) ??
+        null;
+      if (!entry)
+        return { err: `No file '${file}' for ${gsm} in ${gse}.singlet. Files for this sample: ${inSample.map((e) => e.p.slice(prefix.length)).join(", ")}.` };
+      const range = await entryRange(gse, entry, index);
+      return { entry, range, etag: strongEtag(range.etag ?? index.etag), rev };
+    });
+  } catch (e) {
+    if (e instanceof StaleBundleError) return toolError(`The index of ${gse}.singlet did not match the file and was refreshed; try again in a minute.`);
+    return toolError(`Could not read ${gse}.singlet: ${String(e).slice(0, 200)}.`);
+  }
+  if ("err" in found) return toolError(found.err);
+  if ("unchanged" in found) return toolResult(`${gse}: this study's files are unchanged since rev ${found.unchanged}.`, unchangedBody(gse, found.unchanged));
+  const { entry, range, etag, rev } = found;
 
-  const { url, start, end } = await entryRange(gse, entry);
+  const { url, start, end } = range;
   const method = entry.n === 8 ? "deflate-raw" : "stored";
   const outName = entry.p.split("/").pop() ?? file;
+  const ifMatch = etag ? ` -H 'If-Match: ${etag}'` : "";
   const curl =
     method === "stored"
-      ? `curl -r ${start}-${end} "${url}" -o ${outName}`
-      : `curl -s -r ${start}-${end} "${url}" | python3 -c "import sys,zlib; sys.stdout.buffer.write(zlib.decompress(sys.stdin.buffer.read(), -15))" > ${outName}`;
+      ? `curl${ifMatch} -r ${start}-${end} "${url}" -o ${outName}`
+      : `curl -s${ifMatch} -r ${start}-${end} "${url}" | python3 -c "import sys,zlib; sys.stdout.buffer.write(zlib.decompress(sys.stdin.buffer.read(), -15))" > ${outName}`;
 
   const structured = {
     gse_id: gse,
     gsm_id: gsm,
+    rev,
     path: entry.p,
     url,
     range: `bytes=${start}-${end}`,
+    etag,
     method,
     bytes_compressed: entry.c,
     bytes_uncompressed: entry.u,
     curl,
-    python: pythonSnippet(url, start, end, method, outName),
+    python: pythonSnippet(url, start, end, method, outName, etag),
     inflatable_at_edge: entry.u <= MAX_INFLATE_BYTES,
     edge_url: entry.u <= MAX_INFLATE_BYTES ? `${SITE}/api/bundle/${gse}/entry?path=${encodeURIComponent(entry.p)}` : null,
   };
@@ -409,7 +419,7 @@ export async function getPartialDownload(ctx: SampleQcArgs, args: Record<string,
     `${gse} / ${gsm} / ${entry.p}`,
     `Range request: ${fmtBytes(entry.c)} of the ${gse}.singlet file (${fmtBytes(entry.u)} once inflated) — you never download the rest of the study.`,
     `${url}`,
-    `Range: bytes=${start}-${end} · compression: ${method}`,
+    `Range: bytes=${start}-${end} · compression: ${method}${etag ? ` · If-Match: ${etag} (the read fails with 412 if the file has been replaced)` : ""}`,
     "",
     curl,
     "",
@@ -828,9 +838,13 @@ export async function assessStudy(ctx: SampleQcArgs, args: Record<string, unknow
 
   let qc: SampleQc[] = await sampleQcFromD1(ctx.db, gse);
   let index: Awaited<ReturnType<typeof bundleIndexResponse>> | null = null;
+  const v2 = d.series.v2;
   try {
-    const raw = await getBundleIndex(ctx.db, gse, { waitUntil: ctx.waitUntil });
-    index = await bundleIndexResponse(ctx.db, gse, raw, ctx.waitUntil);
+    // A study stored in the v2 layout is described from the v2 catalog, the others from the legacy bundle's central directory.
+    const v2State = v2 ? await getV2State(ctx.db, gse) : null;
+    index = v2State
+      ? await v2BundleIndexResponse(ctx.db, gse, v2State)
+      : await bundleIndexResponse(ctx.db, gse, await getBundleIndex(ctx.db, gse, { waitUntil: ctx.waitUntil }), ctx.waitUntil);
     if (!qc.length) qc = (await loadSampleQc(ctx.db, gse, { waitUntil: ctx.waitUntil })).samples;
   } catch {
     index = null;
@@ -931,7 +945,8 @@ export async function assessStudy(ctx: SampleQcArgs, args: Record<string, unknow
   const unusable = qc.filter((s) => s.usable === 0).map((s) => s.gsm_id);
   const usableCount = d.series.usable_samples ?? (qc.some((s) => s.usable != null) ? qc.filter((s) => s.usable === 1).length : null);
   const integrity: string[] = [];
-  if (d.series.bundle_url && usableCount === 0)
+  const hasFile = !!d.series.bundle_url || !!v2;
+  if (hasFile && usableCount === 0)
     integrity.push("HOLLOW FILE: this file currently contains no usable count data (every sample has an empty matrix or 0 called cells). Do not use it.");
   else if (unusable.length)
     integrity.push(`${unusable.length} of ${qc.length} samples have no count data (empty matrix or 0 called cells) and load as empty: ${unusable.join(", ")}.`);
@@ -946,9 +961,10 @@ export async function assessStudy(ctx: SampleQcArgs, args: Record<string, unknow
     reference_mismatch: d.series.reference_mismatch,
     integrity_flags: integrity,
     file: {
-      available: !!d.series.bundle_url,
-      url: d.series.bundle_url,
-      bytes: d.series.bundle_bytes,
+      available: hasFile,
+      url: d.series.bundle_url ?? v2?.manifest_url ?? null,
+      format: v2 ? "singlet-v2" : "singlet-v1",
+      bytes: d.series.bundle_url ? d.series.bundle_bytes : (v2?.bytes ?? d.series.bundle_bytes),
       n_samples_in_file: index?.n_samples ?? d.series.bundle_n_samples,
       reference_build: index?.reference_build ?? d.series.reference_build,
       singlet_version: index?.singlet_version ?? d.series.singlet_version,
@@ -991,7 +1007,7 @@ export async function assessStudy(ctx: SampleQcArgs, args: Record<string, unknow
     `${[d.series.organism_label, d.meta?.tissue_groups.join("/"), d.meta?.disease_groups.join("/"), d.meta?.assay_families.join("/"), d.meta?.year].filter(Boolean).join(" · ")}`
   );
   lines.push(
-    `File: ${d.series.bundle_url ? `${fmtBytes(d.series.bundle_bytes)}, ${fmt(structured.file.n_samples_in_file)} samples${structured.file.reference_build ? `, reference ${structured.file.reference_build}` : ""}` : "file pending (samples processed, file not yet published)"}.`
+    `File: ${hasFile ? `${fmtBytes(structured.file.bytes)}, ${fmt(structured.file.n_samples_in_file)} samples${structured.file.reference_build ? `, reference ${structured.file.reference_build}` : ""}` : "file pending (samples processed, file not yet published)"}.`
   );
   if (structured.file.per_sample_files.length) lines.push(`Per sample: ${structured.file.per_sample_files.join(", ")}.`);
   lines.push(`Samples: ${fmt(d.series.n_gsm_done)} processed of ${fmt(d.series.n_gsm_total)} on GEO${d.series.n_gsm_failed ? `, ${fmt(d.series.n_gsm_failed)} failed` : ""}.`);

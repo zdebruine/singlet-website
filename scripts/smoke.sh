@@ -59,6 +59,44 @@ check "cohort manifest"      200 "$BASE/api/cohort/manifest?organism=Mus%20muscu
 check "bundle index"         200 "$BASE/api/bundle/GSE138867/index"         "exon_counts"
 # The file listing never shows members held back from the public product (functions/_shared/restricted.ts).
 if printf '%s' "$body" | grep -q -E 'snp_(ad|dp)|\.vcf|ase_counts|mt_events|_coverage'; then bad "bundle index lists a restricted member"; else ok "bundle index lists no restricted member"; fi
+
+# The cached member index must describe the file as it is now. A bundle overwritten in place (a repack, the 2026-10
+# restricted-sidecar migration) leaves its cached offsets pointing into other bytes. For one study that was rewritten
+# in place (GSE111113) and one original upload (GSE138867): the index lists the size HEAD reports, and the first four
+# bytes of a sample's exon matrix, read by Range from where the API says they start, are the .1pz magic "TP1Z".
+# Update the accessions when those studies are re-packed into the v2 layout and the legacy bundles are retired.
+smoke_bundle_offsets() { # gse
+  local gse="$1" idx idxbytes path tmp ct start range url live magic
+  fetch "$BASE/api/bundle/$gse/index"
+  idx=$(printf '%s' "$body" | tr -d ' \r\n')
+  # A study served from the v2 layout has no legacy bundle to compare: its index lists v2 objects.
+  if [ "$code" = 200 ] && printf '%s' "$idx" | grep -q '"format":"singlet-v2"'; then ok "bundle offsets $gse skipped (served from v2)"; return; fi
+  idxbytes=$(printf '%s' "$idx" | grep -o '"bytes":[0-9]*' | head -n 1 | grep -o '[0-9]*$')
+  path=$(printf '%s' "$idx" | grep -o 'samples/GSM[0-9]*/exon_counts\.1pz' | head -n 1)
+  if [ "$code" != 200 ] || [ -z "$idxbytes" ] || [ -z "$path" ]; then bad "bundle offsets $gse (index $code, bytes '${idxbytes:-?}', matrix '${path:-none}')"; return; fi
+  url="https://data.singlet.bio/data/$gse/$gse.singlet"
+  # The legacy file is gone (retired after the study moved to v2): nothing to compare.
+  if [ "$(curl -s -o /dev/null -m 30 -I -w '%{http_code}' "$url")" = 404 ]; then ok "bundle offsets $gse skipped (legacy file retired)"; return; fi
+  live=$(curl -sI -m 30 "$url" | tr -d '\r' | grep -i '^content-length:' | head -n 1 | grep -o '[0-9]*$')
+  if [ "$live" = "$idxbytes" ]; then ok "bundle size $gse matches the object ($live)"; else bad "bundle size $gse (index $idxbytes, object ${live:-?})"; fi
+  tmp=$(mktemp)
+  ct=$(curl -s -m 60 -o "$tmp" -w '%{content_type}' "$BASE/api/bundle/$gse/entry?path=$path")
+  if printf '%s' "$ct" | grep -q -i json; then
+    # larger than the edge inflates: a range recipe
+    range=$(tr -d ' \r\n' < "$tmp" | grep -o '"range":"bytes=[0-9]*-[0-9]*"' | head -n 1 | grep -o '[0-9]*-' | head -n 1 | tr -d '-')
+    url=$(tr -d ' \r\n' < "$tmp" | grep -o '"url":"[^"]*"' | head -n 1 | sed 's/"url":"//; s/"$//')
+    start="$range"
+    if [ -n "$start" ] && [ -n "$url" ]; then magic=$(curl -s -m 30 -r "$start-$((start+3))" "$url" | head -c 4); else magic=""; fi
+  else
+    # small enough to be served inflated: the body itself starts with the magic
+    magic=$(head -c 4 "$tmp")
+  fi
+  rm -f "$tmp"
+  if [ "$magic" = "TP1Z" ]; then ok "bundle offsets $gse (exon matrix starts with TP1Z)"; else bad "bundle offsets $gse (read '${magic:-nothing}' at the matrix start, want TP1Z)"; fi
+}
+smoke_bundle_offsets GSE111113
+smoke_bundle_offsets GSE138867
+
 check "manifest tsv"         200 "$BASE/api/manifest?gse=GSE138867&format=tsv" "GSE138867"
 check "auth me (signed out)" 200 "$BASE/api/auth/me"                        "\"user\": *null|\"user\":null"
 check "unknown api is JSON 404" 404 "$BASE/api/definitely-not-a-route"      "\"error\": *\"not_found\"" "json"
@@ -93,12 +131,12 @@ fi
 xfo=$(curl -s -m 30 -o /dev/null -D - "$BASE/" | tr -d '\r' | grep -i '^x-frame-options:' | head -n 1)
 if printf '%s' "$xfo" | grep -q -i -E '^x-frame-options: *DENY$'; then ok "x-frame-options on /"; else bad "x-frame-options on / (got '${xfo:-none}')"; fi
 
-# MCP: tools/list must return 14 tools.
+# MCP: tools/list returns the original 14 tools, or 17 once a study is served from v2 (find_cells, slice_cells, resolve_features are listed only then).
 mcp=$(curl -s -m 30 -X POST "$BASE/mcp" -H 'content-type: application/json' \
   -H 'accept: application/json, text/event-stream' \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}')
 n=$(printf '%s' "$mcp" | grep -o '"name":"[a-z_]*","title"' | wc -l | tr -d ' ')
-if [ "$n" = "14" ]; then ok "mcp tools/list (14)"; else bad "mcp tools/list ($n tools)"; fi
+if [ "$n" = "14" ] || [ "$n" = "17" ]; then ok "mcp tools/list ($n)"; else bad "mcp tools/list ($n tools, want 14 or 17)"; fi
 
 # MCP tool calls need a key: without one a call is a tool error that says so (not an answer, not a 500).
 mcpcall=$(curl -s -m 30 -X POST "$BASE/mcp" -H 'content-type: application/json'   -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"get_atlas_stats","arguments":{}}}')

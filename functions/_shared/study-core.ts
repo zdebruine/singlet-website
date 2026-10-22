@@ -16,12 +16,24 @@ import { exclusionFor, studyCompleteness, type Completeness, type Exclusion } fr
 import { cellCountVerdict, type CellCountVerdict } from "./suspect-cells";
 import { statusText } from "./search-core";
 import { organismToCommon } from "./vocab";
+import { getV2State } from "./v2-catalog";
+import { v2ManifestUrl } from "./v2-urls";
 
 /** Public base for per-study bundles; one `.singlet` file per GSE. */
 export const DATA_BASE = "https://data.singlet.bio";
 
 export function bundleUrl(gse: string): string {
   return `${DATA_BASE}/data/${gse}/${gse}.singlet`;
+}
+
+/** A study stored in the v2 per-sample layout (schema/032): the manifest, its revision, and whether the old single file still exists. */
+export interface StudyV2 {
+  format: "singlet-v2";
+  rev: string;
+  manifest_url: string;
+  n_samples: number;
+  bytes: number | null;
+  legacy_available: boolean;
 }
 
 export interface StudySeries {
@@ -46,6 +58,8 @@ export interface StudySeries {
   singlet_version: string | null;
   /** When the bundle was packed (manifest_created_at). */
   packed_at: string | null;
+  /** Set when the study is served from the v2 per-sample layout; null for a study that is still one .singlet file. */
+  v2: StudyV2 | null;
   /** Reserved: study DOI, once one is derivable. Always null today. */
   doi: string | null;
   submitted_date: string | null;
@@ -246,6 +260,8 @@ export async function loadStudy(db: D1Database, rawId: string): Promise<StudyDet
       ? manifestRow.reference_build
       : null;
 
+  const v2State = await getV2State(db, id);
+  const legacyAlive = v2State ? v2State.migration?.status !== "retired" : true;
   const usableRow = await usablePromise;
   const assessed = usableRow && Number(usableRow.n) > 0 && Number(usableRow.unknown ?? 0) === 0 ? Number(usableRow.n) : null;
   const organismForRef = (metaRow?.organism_primary as string | null) ?? (seriesRow.organism as string | null);
@@ -264,7 +280,18 @@ export async function loadStudy(db: D1Database, rawId: string): Promise<StudyDet
     pubmed_ids: safeList(seriesRow.pubmed_ids),
     bundle_key: bundleKey,
     bundle_bytes: bundleBytes,
-    bundle_url: hasBundle ? bundleUrl(id) : null,
+    // Once the legacy file is retired its URL is dead; the v2 block says where the data is.
+    bundle_url: hasBundle && legacyAlive ? bundleUrl(id) : null,
+    v2: v2State
+      ? {
+          format: "singlet-v2",
+          rev: v2State.study.rev,
+          manifest_url: v2ManifestUrl(id),
+          n_samples: v2State.study.n_samples,
+          bytes: v2State.study.bytes,
+          legacy_available: legacyAlive,
+        }
+      : null,
     bundle_n_samples: bundleNSamples != null && !Number.isNaN(bundleNSamples) ? bundleNSamples : null,
     reference_build: referenceBuild,
     singlet_version:
@@ -312,7 +339,7 @@ export async function loadStudy(db: D1Database, rawId: string): Promise<StudyDet
   const completeness = studyCompleteness({
     nGsmTotal: series.n_gsm_total,
     samples: samplesResult.results.map((r) => ({ status: r.status as string | null, failure_category: r.failure_category as string | null })),
-    hasFile: hasBundle,
+    hasFile: hasBundle || !!v2State,
     bundleSamples: bundleNSamples != null && !Number.isNaN(bundleNSamples) ? bundleNSamples : null,
     passedQc: assessed != null ? Math.max(0, Number(usableRow?.ok ?? 0) - lowById.size - removedIds.size) : null,
     lowQc: lowById.size,

@@ -7,7 +7,7 @@
  *   initialize                → capabilities + serverInfo + instructions
  *   notifications/initialized → 202
  *   ping                      → {}
- *   tools/list                → the fourteen tools below
+ *   tools/list                → the seventeen tools below (find_cells, slice_cells and resolve_features are v2-only)
  *   tools/call                → needs a personal API key (Authorization: Bearer
  *                               sk_live_… or X-API-Key; free at /account). Each
  *                               call is counted per key and month, and a key is
@@ -36,6 +36,12 @@ import { TISSUE_GROUPS, DISEASE_GROUPS, ASSAY_FAMILIES } from "./_shared/vocab";
 import { MANIFEST_FORMATS } from "./_shared/manifest-core";
 import type { StudyRow, SampleRow } from "./_shared/search-core";
 import { getCohort, saveCohort, ProductError, type ProductCtx } from "./_shared/product";
+import { dietEnabled, diet } from "./_shared/mcp-core";
+import { v2ToolsVisible } from "./_shared/v2-gate";
+import { findCells, resolveFeatures, sliceCells, v2DownloadUrl } from "./_shared/mcp-v2";
+import { combineRev, fileRev, knownRev, unchangedBody } from "./_shared/rev";
+import { getV2State } from "./_shared/v2-catalog";
+import { configureV2, v2ManifestUrl } from "./_shared/v2-urls";
 import {
   ACCOUNT_URL,
   LOADERS,
@@ -57,12 +63,14 @@ import {
 
 type Env = AppEnv;
 
-const SERVER_INFO = { name: "singlet-bio", title: "singlet.bio atlas", version: "1.0.0" };
+// 1.1.0: results carry their data in structuredContent and a short text (verbose=true restores the full text); studies migrated to v2 are
+// answered from the v2 catalog; find_cells, slice_cells and resolve_features; rev / known_rev.
+const SERVER_INFO = { name: "singlet-bio", title: "singlet.bio atlas", version: "1.1.0" };
 const PROTOCOL_VERSIONS = ["2025-06-18", "2025-03-26"] as const;
 const LATEST_PROTOCOL = PROTOCOL_VERSIONS[0];
 const MAX_SAMPLES_IN_STUDY = 60;
 
-const INSTRUCTIONS = `singlet.bio is an open atlas of public single-cell RNA-seq studies from GEO, reprocessed from raw reads with one pipeline. Coverage is partial: studies whose deposited reads cannot be processed are left out, and get_study reports completeness for each study. One CC0 .singlet file per study (zip64) holding per-sample count matrices and per-sample QC.
+const INSTRUCTIONS_BASE = `singlet.bio is an open atlas of public single-cell RNA-seq studies from GEO, reprocessed from raw reads with one pipeline. Coverage is partial: studies whose deposited reads cannot be processed are left out, and get_study reports completeness for each study. One CC0 .singlet file per study (zip64) holding per-sample count matrices and per-sample QC.
 
 Recommended order: search_datasets → assess_study or get_study → get_sample_qc → get_modalities (what is in the file beyond gene counts) → get_download_url (whole study) or get_partial_download (one sample's matrix, by HTTP range) → export_manifest for a cohort. compare_studies and find_matched_controls help pick controls.
 
@@ -70,6 +78,16 @@ A .singlet file is not just gene counts: it can also carry splice junctions and 
 
 Every number and every "why" string is computed, not generated — quote them, don't paraphrase. Catalog cell counts can differ from the file's own QC; the file is the truth. Every tool call needs a free personal API key from ${ACCOUNT_URL}; calls are counted per key. Downloads themselves (the data.singlet.bio links) never need one. Searches the built-in vocabulary can read cost no AI tokens; a question that needs the AI reading uses your monthly AI token allowance (shown in \`_meta.allowance\`).`;
 
+
+/** Added to the instructions only once some study is served from v2 (see _shared/v2-gate). */
+const V2_INSTRUCTIONS = `Studies are being moved to a per-sample format (format "singlet-v2": one immutable object per sample plus a manifest). For those studies get_download_url returns the manifest, list_bundle_files and get_partial_download give byte ranges inside the sample objects, find_cells searches cells by their per-cell statistics, slice_cells gives the byte ranges of just those cells' matrix chunks, and resolve_features turns row numbers into feature names. Studies not moved yet keep the single .singlet file.`;
+const REV_INSTRUCTIONS = `Answers about a study carry a \`rev\`; send it back as \`known_rev\` to get {unchanged: true} instead of the same answer again.`;
+const DIET_INSTRUCTIONS = `Results hold their data in structuredContent with a short text; pass verbose=true for the full text too.`;
+
+function instructions(v2: boolean, diet: boolean): string {
+  const extra = [v2 ? V2_INSTRUCTIONS : null, REV_INSTRUCTIONS, diet ? DIET_INSTRUCTIONS : null].filter(Boolean).join(" ");
+  return INSTRUCTIONS_BASE.replace("\n\nA .singlet file is not just gene counts:", `\n\n${extra}\n\nA .singlet file is not just gene counts:`);
+}
 
 // ── JSON-RPC plumbing ───────────────────────────────────────────────────────
 
@@ -315,6 +333,146 @@ const TOOLS = [
     annotations: { title: "Save a cohort", readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
   },
 ];
+
+const V2_ONLY = "Only studies already moved to the v2 format are searched or sliced. Not metered.";
+
+const NEW_TOOLS = [
+  {
+    name: "find_cells",
+    title: "Find cells by their statistics",
+    description:
+      "Find cells in v2-format samples by per-cell statistics. Pick samples (gse_ids, gsm_ids, or a sample_filter), then filter their cells (called, UMIs, features, any numeric cells-table column). Returns per sample the matching cells as [start, length] column runs for slice_cells. At most 25 samples and 40 reads of the data host per call; continue with `after`. " + V2_ONLY,
+    inputSchema: {
+      type: "object",
+      properties: {
+        gse_ids: { type: "array", items: { type: "string", pattern: "^GSE\\d+$" }, maxItems: 20, description: "Studies to look in." },
+        gsm_ids: { type: "array", items: { type: "string", pattern: "^GSM\\d+$" }, maxItems: 50, description: "Samples to look in." },
+        sample_filter: {
+          type: "object",
+          description: "Catalog filters; the group fields take search_datasets' canonical names.",
+          properties: {
+            organism: { type: "string" },
+            tissue_group: { type: "string" },
+            disease_group: { type: "string" },
+            assay_family: { type: "string" },
+            min_called: { type: "integer", minimum: 0, description: "At least this many called cells in the sample." },
+            max_called: { type: "integer", minimum: 0 },
+            min_median_umi: { type: "number" },
+            min_median_genes: { type: "number" },
+            include_low_qc: { type: "boolean", default: false },
+          },
+          additionalProperties: false,
+        },
+        cell_filter: {
+          type: "object",
+          description: "ANDed. umi = exon + intron UMIs; features = the larger of exon and intron genes detected.",
+          properties: {
+            called_only: { type: "boolean", default: true, description: "Only cells called as real cells." },
+            min_umi: { type: "number" },
+            max_umi: { type: "number" },
+            min_features: { type: "number" },
+            max_features: { type: "number" },
+            where: {
+              type: "array",
+              maxItems: 6,
+              description: "Conditions on any numeric column of the cells table.",
+              items: {
+                type: "object",
+                properties: { column: { type: "string" }, op: { type: "string", enum: [">=", "<=", ">", "<", "==", "!="] }, value: { type: "number" } },
+                required: ["column", "op", "value"],
+                additionalProperties: false,
+              },
+            },
+          },
+          additionalProperties: false,
+        },
+        limit_samples: { type: "integer", minimum: 1, maximum: 25, default: 10 },
+        max_runs_per_sample: { type: "integer", minimum: 1, maximum: 500, default: 100 },
+        after: { type: "string", description: "next_after from the previous call." },
+      },
+      additionalProperties: false,
+    },
+    annotations: { title: "Find cells by their statistics", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  },
+  {
+    name: "slice_cells",
+    title: "Byte ranges for some cells",
+    description:
+      "Byte ranges (HTTP Range on the sample object) to read only some cells of one v2 sample's count matrices: a prefix a decoder needs once, and the chunk runs covering the cells. Name cells as `runs` ([start, length] pairs, as find_cells returns), `indices` or `range` [start, end); none means every chunk. " + V2_ONLY,
+    inputSchema: {
+      type: "object",
+      properties: {
+        gse_id: { type: "string", pattern: "^GSE\\d+$" },
+        gsm_id: { type: "string", pattern: "^GSM\\d+$" },
+        file: { type: "string", description: "One matrix file, e.g. exon_counts.1pz. Default: exon and intron counts." },
+        runs: { type: "array", items: { type: "array", items: { type: "integer", minimum: 0 }, minItems: 2, maxItems: 2 }, maxItems: 2000, description: "[start, length] pairs of matrix columns." },
+        indices: { type: "array", items: { type: "integer", minimum: 0 }, maxItems: 50000 },
+        range: { type: "array", items: { type: "integer", minimum: 0 }, minItems: 2, maxItems: 2, description: "[start, end) matrix columns." },
+        max_ranges: { type: "integer", minimum: 1, maximum: 200, default: 64, description: "Join neighbouring chunk runs to stay within this many ranges." },
+      },
+      required: ["gse_id", "gsm_id"],
+      additionalProperties: false,
+    },
+    annotations: { title: "Byte ranges for some cells", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  },
+  {
+    name: "resolve_features",
+    title: "Row numbers to feature names",
+    description:
+      "Row numbers of a v2 count matrix to feature names (or whitelist column numbers to barcodes). Give a `pack` id (from get_partial_download or slice_cells), or gse_id, gsm_id and file. Up to 500 numbers. Not metered.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        pack: { type: "string", description: "Pack id: 16 to 32 hex characters." },
+        gse_id: { type: "string", pattern: "^GSE\\d+$" },
+        gsm_id: { type: "string", pattern: "^GSM\\d+$" },
+        file: { type: "string", description: "Matrix file, default exon_counts.1pz." },
+        axis: { type: "string", enum: ["rows", "cols"], default: "rows" },
+        indices: { type: "array", items: { type: "integer", minimum: 0 }, minItems: 1, maxItems: 500 },
+      },
+      required: ["indices"],
+      additionalProperties: false,
+    },
+    annotations: { title: "Row numbers to feature names", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  },
+];
+
+const VERBOSE_PROP = { type: "boolean", description: "Also return the full text (the data is always in structuredContent)." };
+const KNOWN_REV_PROP = { type: "string", description: "rev of an earlier answer; {unchanged: true} if it is still current." };
+/** Inputs that work for every study: the rev of an answer can be sent back. */
+const REV_PROPS: Record<string, Record<string, unknown>> = {
+  get_study: { known_rev: KNOWN_REV_PROP },
+  get_sample_qc: { known_rev: KNOWN_REV_PROP },
+  list_bundle_files: { known_rev: KNOWN_REV_PROP },
+  get_modalities: { known_rev: KNOWN_REV_PROP },
+  get_partial_download: { known_rev: KNOWN_REV_PROP },
+};
+/** Inputs that only mean something for a study stored per sample; listed with the v2 tools. */
+const V2_PROPS: Record<string, Record<string, unknown>> = {
+  get_download_url: {
+    include_samples: { type: "boolean", description: "v2 studies: also list the sample objects." },
+    limit: { type: "integer", minimum: 1, maximum: 200 },
+    after: { type: "string", description: "next_after of the last page." },
+  },
+  list_bundle_files: {
+    detail: { type: "boolean", description: "v2 studies: every sample's files, 25 samples a page." },
+    limit: { type: "integer", minimum: 1, maximum: 500 },
+    after: { type: "string", description: "next_after of the last page." },
+  },
+};
+
+const ALL_TOOL_NAMES = new Set([...TOOLS, ...NEW_TOOLS].map((t) => t.name));
+
+/**
+ * The tools as advertised. The original fourteen always, each with `known_rev` where it applies; `verbose` only when the response diet is on
+ * (MCP_DIET=1); the v2 tools and the v2-only inputs only once some study is served from v2 (or V2_TOOLS=1, see _shared/v2-gate).
+ */
+function toolList(opts: { v2: boolean; diet: boolean }) {
+  return (opts.v2 ? [...TOOLS, ...NEW_TOOLS] : TOOLS).map((t) => {
+    const extra = { ...(REV_PROPS[t.name] ?? {}), ...(opts.v2 ? (V2_PROPS[t.name] ?? {}) : {}), ...(opts.diet ? { verbose: VERBOSE_PROP } : {}) };
+    return Object.keys(extra).length ? { ...t, inputSchema: { ...t.inputSchema, properties: { ...t.inputSchema.properties, ...extra } } } : t;
+  });
+}
 
 /** MCP calls per minute and key (override with MCP_RATE_PER_MIN). */
 const DEFAULT_MCP_RATE_PER_MIN = 60;
@@ -686,8 +844,14 @@ function studyText(d: StudyDetail): string {
   lines.push(`${fmt(s.n_gsm_done)} of ${fmt(s.n_gsm_total)} samples processed · ${fmt(s.n_cells)} cells${s.n_gsm_failed ? ` · ${fmt(s.n_gsm_failed)} failed` : ""}`);
   if (d.conditions_label) lines.push(`Conditions: ${d.conditions_label}`);
   if (m?.cell_types_raw.length) lines.push(`Cell types recorded: ${m.cell_types_raw.slice(0, 15).join(", ")}`);
-  lines.push(s.bundle_url ? `File: ${s.bundle_url}${s.bundle_bytes ? ` (${fmtBytes(s.bundle_bytes)})` : ""}` : "File: pending (samples processed, file not yet published)");
-  if (s.bundle_url && s.usable_samples === 0) lines.push("⚠ This file currently contains no usable count data (empty matrices or 0 called cells).");
+  lines.push(
+    s.bundle_url
+      ? `File: ${s.bundle_url}${s.bundle_bytes ? ` (${fmtBytes(s.bundle_bytes)})` : ""}`
+      : s.v2
+        ? `Files: ${s.v2.manifest_url} (${fmt(s.v2.n_samples)} sample objects${s.v2.bytes ? `, ${fmtBytes(s.v2.bytes)}` : ""})`
+        : "File: pending (samples processed, file not yet published)"
+  );
+  if ((s.bundle_url || s.v2) && s.usable_samples === 0) lines.push("⚠ This file currently contains no usable count data (empty matrices or 0 called cells).");
   else if (s.usable_samples != null && s.assessed_samples != null && s.usable_samples < s.assessed_samples)
     lines.push(`⚠ ${s.assessed_samples - s.usable_samples} of ${s.assessed_samples} samples in the file have no count data: ${s.unusable_gsm_ids.join(", ")}.`);
   for (const n of d.completeness.notes) lines.push(`Completeness: ${n}`);
@@ -708,6 +872,12 @@ async function getStudy(env: Env, args: Record<string, unknown>) {
   const d = await loadStudy(env.DB, id);
   if (!d) return toolError(`${id} is not in the atlas. It may not be single-cell RNA-seq, or it has not been processed yet. Try search_datasets.`);
 
+  const v2 = await getV2State(env.DB, id);
+  const file = await fileRev(env.DB, id, v2?.study.rev ?? null);
+  const newest = d.samples.reduce((m, x) => (String(x.last_updated ?? "") > m ? String(x.last_updated) : m), "");
+  const rev = await combineRev([file?.rev, d.series.last_updated, newest, d.series.n_gsm_done, d.series.n_cells, d.series.usable_samples, d.series.bundle_bytes]);
+  if (knownRev(args) === rev) return toolResult(`${id} is unchanged since rev ${rev}.`, unchangedBody(id, rev));
+
   const samples = d.samples.slice(0, MAX_SAMPLES_IN_STUDY).map((s) => ({
     gsm_id: s.gsm_id,
     title: s.title ?? null,
@@ -723,6 +893,8 @@ async function getStudy(env: Env, args: Record<string, unknown>) {
 
   const structured = {
     gse_id: d.series.id,
+    rev,
+    v2: v2 ? { format: "singlet-v2", rev: v2.study.rev, manifest_url: v2ManifestUrl(id), n_samples: v2.study.n_samples, bytes: v2.study.bytes } : null,
     title: d.series.title,
     abstract: d.series.abstract,
     organism: d.series.organism_label,
@@ -739,7 +911,7 @@ async function getStudy(env: Env, args: Record<string, unknown>) {
     n_cells: d.series.n_cells,
     conditions: d.conditions,
     conditions_label: d.conditions_label,
-    has_bundle: !!d.series.bundle_url,
+    has_bundle: !!d.series.bundle_url || !!d.series.v2,
     bundle_url: d.series.bundle_url,
     bundle_bytes: d.series.bundle_bytes,
     usable_samples: d.series.usable_samples,
@@ -769,6 +941,8 @@ async function getDownloadUrl(env: Env, args: Record<string, unknown>) {
     .bind(id)
     .first<{ id: string; title: string | null; bundle_bytes: number | null; has_bundle: number }>();
   if (!row) return toolError(`${id} is not in the atlas.`);
+  const v2 = await getV2State(env.DB, id);
+  if (v2) return v2DownloadUrl({ db: env.DB, waitUntil: () => undefined }, id, row.title, v2, args);
   const available = Number(row.has_bundle) === 1;
   const url = bundleUrl(id);
   const structured = {
@@ -829,9 +1003,16 @@ async function productTool(ctx: CallContext, meta: Record<string, unknown>, run:
 }
 
 async function callTool(ctx: CallContext, params: Record<string, unknown>) {
+  const r = await callToolInner(ctx, params);
+  if (!("result" in r) || !r.result) return r;
+  const args = (params.arguments && typeof params.arguments === "object" ? params.arguments : {}) as Record<string, unknown>;
+  return { result: diet(r.result, args, ctx.env) };
+}
+
+async function callToolInner(ctx: CallContext, params: Record<string, unknown>) {
   const name = typeof params.name === "string" ? params.name : "";
   const args = (params.arguments && typeof params.arguments === "object" ? params.arguments : {}) as Record<string, unknown>;
-  if (!TOOLS.some((t) => t.name === name)) return { error: rpcError(null, -32602, `Unknown tool: ${name}`) };
+  if (!ALL_TOOL_NAMES.has(name)) return { error: rpcError(null, -32602, `Unknown tool: ${name}`) };
 
   const hasKey = ctx.auth.ok;
   // A key that was sent but is wrong or revoked is always an error, whatever
@@ -887,6 +1068,12 @@ async function callTool(ctx: CallContext, params: Record<string, unknown>) {
         return { result: withQuota(await compareStudies(db, args), meta) };
       case "assess_study":
         return { result: withQuota(await assessStudy(db, args), meta) };
+      case "find_cells":
+        return { result: withQuota(await findCells(db, args), meta) };
+      case "slice_cells":
+        return { result: withQuota(await sliceCells(db, args), meta) };
+      case "resolve_features":
+        return { result: withQuota(await resolveFeatures(db, args), meta) };
       case "get_cohort": {
         // Every tool here already needs a key; a link cohort additionally opens with its share token.
         return { result: await productTool(ctx, meta, (p) => getCohort(p, uid, { id: args.id, token: args.token })) };
@@ -922,7 +1109,7 @@ async function handleMessage(ctx: CallContext, msg: JsonRpcRequest): Promise<unk
         protocolVersion,
         capabilities: { tools: { listChanged: false }, prompts: { listChanged: false }, resources: { listChanged: false, subscribe: false } },
         serverInfo: SERVER_INFO,
-        instructions: INSTRUCTIONS,
+        instructions: instructions(await v2ToolsVisible(ctx.env), dietEnabled(ctx.env)),
       });
     }
     case "notifications/initialized":
@@ -932,7 +1119,7 @@ async function handleMessage(ctx: CallContext, msg: JsonRpcRequest): Promise<unk
     case "ping":
       return rpcResult(id, {});
     case "tools/list":
-      return rpcResult(id, { tools: TOOLS });
+      return rpcResult(id, { tools: toolList({ v2: await v2ToolsVisible(ctx.env), diet: dietEnabled(ctx.env) }) });
     case "tools/call": {
       const r = await callTool(ctx, params);
       if ("error" in r && r.error) return { ...r.error, id };
@@ -986,6 +1173,7 @@ async function authFor(env: Env, request: Request, waitUntil: (p: Promise<unknow
 }
 
 export const onRequestPost: PagesFunction<Env> = async ({ env, request, waitUntil }) => {
+  configureV2(env);
   await ensureCatalogColumns(env.DB).catch(() => undefined);
   const version = (request.headers.get("MCP-Protocol-Version") ?? "").trim();
   if (version && !(PROTOCOL_VERSIONS as readonly string[]).includes(version)) {
@@ -1035,14 +1223,14 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request, waitUnti
   return json(body, 200, { "MCP-Protocol-Version": version || "2025-03-26" });
 };
 
-export const onRequestGet: PagesFunction<Env> = async () =>
+export const onRequestGet: PagesFunction<Env> = async ({ env }) =>
   json(
     {
       name: SERVER_INFO.name,
       transport: "streamable-http",
       endpoint: `${SITE}/mcp`,
       protocol_versions: PROTOCOL_VERSIONS,
-      tools: TOOLS.map((t) => t.name),
+      tools: toolList({ v2: await v2ToolsVisible(env), diet: false }).map((t) => t.name),
       docs: `${SITE}/docs#mcp`,
       note: "POST JSON-RPC 2.0 messages to this URL. Server-initiated streams are not offered.",
     },
