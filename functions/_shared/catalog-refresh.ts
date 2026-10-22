@@ -292,7 +292,7 @@ export async function refreshNext(db: D1Database, n: number): Promise<{ done: Re
       const idx = await getBundleIndex(db, gse_id, { refresh: true });
       const entry = idx.entries.find((e) => e.p === "manifest.json");
       let man: Record<string, unknown> = {};
-      if (entry) man = JSON.parse(await readEntryText(gse_id, entry)) as Record<string, unknown>;
+      if (entry) man = JSON.parse(await readEntryText(gse_id, entry, idx)) as Record<string, unknown>;
       const inBundle = new Set<string>();
       for (const e of idx.entries) {
         const m = /^samples\/(GSM\d+)\//.exec(e.p);

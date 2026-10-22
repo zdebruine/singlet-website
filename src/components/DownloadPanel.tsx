@@ -1,14 +1,15 @@
 /**
- * DownloadPanel — download UX for a study's .singlet bundle.
+ * DownloadPanel — download UX for a study.
  *
- * Shows the bundle size, license note, a Download button (public data URL),
- * and copy-able Python / R / curl one-liners. Only per-study (GSE) bundles exist.
+ * A study is one `.singlet` file, or (once migrated) one object per sample plus a manifest. Shows the license note, a
+ * Download button (public data URL) and copy-able Python / R / curl one-liners. singlet.load reads either layout.
  */
 import { useState } from "react";
 import { Download } from "lucide-react";
 import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { CodeBlock } from "@/components/CodeBlock";
+import type { StudyV2 } from "@/integrations/api/types";
 
 type Lang = "python" | "r" | "curl";
 const LANGS: { id: Lang; label: string }[] = [
@@ -46,13 +47,17 @@ interface DownloadPanelProps {
   bundleUrl: string | null | undefined;
   /** Bundle size in bytes */
   bundleBytes: number | null | undefined;
+  /** Set when the study is stored as one object per sample plus a manifest. */
+  v2?: StudyV2 | null;
   /** Single-column layout for a narrow sidebar. */
   stacked?: boolean;
   className?: string;
 }
 
-export function DownloadPanel({ accession, bundleUrl, bundleBytes, stacked = false, className }: DownloadPanelProps) {
+export function DownloadPanel({ accession, bundleUrl, bundleBytes, v2 = null, stacked = false, className }: DownloadPanelProps) {
   const downloadUrl = bundleUrl || null;
+  // The old single file is gone once the study is retired from it: then the manifest is what there is to download.
+  const manifestUrl = !downloadUrl && v2 ? v2.manifest_url : null;
   const [lang, setLang] = useLanguage();
   // In the narrow sidebar the trailing comments don't fit; drop them there.
   // Install lines live on /docs#install — a pip command never goes in a Python block.
@@ -63,13 +68,17 @@ export function DownloadPanel({ accession, bundleUrl, bundleBytes, stacked = fal
   const r = stacked
     ? `library(singlet)\nsce <- singlet::load("${accession}")`
     : `library(singlet)\nsce <- singlet::load("${accession}")   # SingleCellExperiment`;
-  const curl = downloadUrl ? `curl -L "${downloadUrl}" -o "${accession}.singlet"` : `# No bundle published yet for ${accession}`;
+  const curl = downloadUrl
+    ? `curl -L "${downloadUrl}" -o "${accession}.singlet"`
+    : manifestUrl
+      ? `curl -L "${manifestUrl}" -o "${accession}.manifest.json"   # lists one object per sample`
+      : `# No bundle published yet for ${accession}`;
 
   return (
     <div className={cn("surface overflow-hidden", className)}>
       <div className={cn("px-4 py-3 border-b border-border flex gap-3", stacked ? "flex-col" : "items-center justify-between flex-wrap")}>
         <div className="flex items-center gap-x-3 gap-y-1 flex-wrap text-[13px] text-muted-foreground min-w-0">
-          <span className="font-mono text-foreground truncate">{accession}.singlet</span>
+          <span className="font-mono text-foreground truncate">{manifestUrl ? `${accession} · ${v2!.n_samples} sample file${v2!.n_samples === 1 ? "" : "s"}` : `${accession}.singlet`}</span>
           <span aria-hidden="true">·</span>
           <Link to="/data-license" className="hover:text-foreground">CC0</Link>
           {!stacked && (
@@ -82,6 +91,10 @@ export function DownloadPanel({ accession, bundleUrl, bundleBytes, stacked = fal
         {downloadUrl ? (
           <a href={downloadUrl} download className={cn("btn-primary", stacked ? "w-full" : "btn-sm")}>
             <Download size={14} /> Download
+          </a>
+        ) : manifestUrl ? (
+          <a href={manifestUrl} download className={cn("btn-primary", stacked ? "w-full" : "btn-sm")}>
+            <Download size={14} /> Manifest
           </a>
         ) : (
           <span className="flag self-start">File pending</span>
@@ -108,9 +121,16 @@ export function DownloadPanel({ accession, bundleUrl, bundleBytes, stacked = fal
           </div>
           <CodeBlock code={lang === "python" ? py : lang === "r" ? r : curl} label={lang} compact wrap={stacked} />
         </div>
-      {downloadUrl ? (
+      {manifestUrl ? (
         <p className="px-4 pb-3 text-xs text-muted-foreground leading-relaxed">
-          One file per study; filter by <code className="code-inline">gsm_id</code> after loading.{" "}
+          Stored as one file per sample plus a manifest that lists them. <code className="code-inline">singlet.load("{accession}")</code> fetches
+          only what it needs; the manifest holds each member's byte range for your own tools.{" "}
+          <Link to="/docs#install" className="text-primary hover:underline">Install</Link> ·{" "}
+          <Link to="/docs#singlet-file" className="text-primary hover:underline">What's inside →</Link>
+        </p>
+      ) : downloadUrl ? (
+        <p className="px-4 pb-3 text-xs text-muted-foreground leading-relaxed">
+          One file per study; filter by <code className="code-inline">gsm_id</code> after loading.{v2 ? " Also stored as one file per sample (see the manifest)." : ""}{" "}
           <Link to="/docs#install" className="text-primary hover:underline">Install</Link> ·{" "}
           <Link to="/docs#singlet-file" className="text-primary hover:underline">What's inside →</Link>
         </p>

@@ -28,6 +28,12 @@ export interface CachedJsonOpts {
 export const NO_CACHE_HEADER = "X-Singlet-No-Cache";
 
 /**
+ * A producer sets this header (seconds) on a 200 whose answer may change sooner than the TTL the route asked for, e.g. a study that is being
+ * moved to another storage layout. cachedJson then stores and serves it for the shorter of the two. Stripped before sending.
+ */
+export const CACHE_TTL_HEADER = "X-Singlet-Cache-Ttl";
+
+/**
  * Headers that describe the *requesting visitor* rather than the result
  * (their remaining AI budget). Kept on the live response, never stored, so a
  * cache hit can't show one visitor another visitor's counter.
@@ -36,9 +42,15 @@ const PRIVATE_HEADERS = ["X-Singlet-Quota"];
 
 /** Strip the internal no-cache marker and mark the response as uncacheable. */
 function bypass(res: Response): Response {
-  if (!res.headers.has(NO_CACHE_HEADER)) return res;
+  if (!res.headers.has(NO_CACHE_HEADER)) {
+    if (!res.headers.has(CACHE_TTL_HEADER)) return res;
+    const headers = new Headers(res.headers);
+    headers.delete(CACHE_TTL_HEADER);
+    return new Response(res.body, { status: res.status, headers });
+  }
   const headers = new Headers(res.headers);
   headers.delete(NO_CACHE_HEADER);
+  headers.delete(CACHE_TTL_HEADER);
   headers.set("Cache-Control", "no-store");
   headers.set("X-Edge-Cache", "BYPASS");
   return new Response(res.body, { status: res.status, headers });
@@ -84,7 +96,10 @@ export async function cachedJson(
   if (fresh.status === 200) {
     if (fresh.headers.has(NO_CACHE_HEADER)) return bypass(fresh);
     const headers = new Headers(fresh.headers);
-    headers.set("Cache-Control", `public, max-age=${ttl}, s-maxage=${ttl}`);
+    const asked = Number(headers.get(CACHE_TTL_HEADER));
+    headers.delete(CACHE_TTL_HEADER);
+    const effective = Number.isFinite(asked) && asked > 0 ? Math.min(ttl, Math.floor(asked)) : ttl;
+    headers.set("Cache-Control", `public, max-age=${effective}, s-maxage=${effective}`);
     const cacheHeaders = new Headers(headers);
     for (const h of PRIVATE_HEADERS) cacheHeaders.delete(h);
     const toCache = new Response(fresh.clone().body, { status: 200, headers: cacheHeaders });

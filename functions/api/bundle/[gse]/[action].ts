@@ -7,23 +7,38 @@
  *                             pulled out of a multi-GB study file
  *
  * The bundle is read over HTTP Range requests against data.singlet.bio; the
- * central directory is memoised in D1 (`bundle_index`).
+ * central directory is memoised in D1 (`bundle_index`). A cached index can outlive the file it
+ * describes (the object is overwritten in place), so every entry read checks the zip local header
+ * and sends If-Match; on a mismatch the index is re-read once (bundle-reader.ts, withIndexRetry).
+ *
+ * Edge-cache keys carry a version: bump it whenever cached answers may be wrong (v2 of `entry`
+ * and v2 of `samples` drop the recipes cached from stale offsets; `index` was already v2).
  */
 import { corsOk, corsErr, handleOptions, CORS_HEADERS } from "../../../_shared/cors";
 import { serverError } from "../../../_shared/errors";
 import { checkIngestToken } from "../../../_shared/ingest-auth";
-import { cachedJson } from "../../../_shared/cache";
+import { CACHE_TTL_HEADER, cachedJson } from "../../../_shared/cache";
 import { GSE_RE, bundleUrl } from "../../../_shared/study-core";
-import { getBundleIndex, readEntry, entryRange, MAX_INFLATE_BYTES } from "../../../_shared/bundle-reader";
+import { StaleBundleError, getBundleIndex, readEntry, entryRange, strongEtag, withIndexRetry, MAX_INFLATE_BYTES } from "../../../_shared/bundle-reader";
 import { publicEntries } from "../../../_shared/restricted";
-import { bundleIndexResponse, loadSampleQc } from "../../../_shared/bundle-core";
+import { bundleIndexResponse, loadSampleQc, v2BundleIndexResponse } from "../../../_shared/bundle-core";
+import { getV2Presence, getV2Sample, parseMembers, servedState, type V2Presence } from "../../../_shared/v2-catalog";
+import { describeMember, findMember, sampleObjectUrl } from "../../../_shared/v2-serve";
+import { configureV2 } from "../../../_shared/v2-urls";
 
 interface Env {
   DB: D1Database;
   INGEST_TOKEN_SHA256?: string;
+  V2_ORIGIN?: string;
 }
 
 const DAY = 86400;
+/**
+ * A study that has a row in the v2 catalog, served or still being moved, is cached at the edge for five minutes and not a day: its answer changes
+ * when the migration is verified or retired. (The keys carry no v2 rev: that would cost a D1 read before every cache lookup.)
+ */
+const V2_EDGE_TTL = 300;
+const ttlFor = (p: V2Presence): Record<string, string> => (p.study || p.migration ? { [CACHE_TTL_HEADER]: String(V2_EDGE_TTL) } : {});
 
 function contentTypeFor(path: string): string {
   if (path.endsWith(".json")) return "application/json; charset=utf-8";
@@ -38,6 +53,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, params, request, w
   const action = String(params.action ?? "");
   if (!GSE_RE.test(gse)) return corsErr("Invalid series id", 400);
 
+  configureV2(env);
   const url = new URL(request.url);
   // ?refresh=1 re-reads the file and rewrites the cached index. It is for the
   // catalog crank, so it needs the ingest token; for everyone else it is ignored.
@@ -52,13 +68,19 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, params, request, w
       waitUntil,
       async () => {
         try {
-          const index = await getBundleIndex(env.DB, gse, { refresh, waitUntil });
-          return corsOk(await bundleIndexResponse(env.DB, gse, index, waitUntil));
+          // A study stored in the v2 layout is listed from the v2 catalog.
+          const pres = await getV2Presence(env.DB, gse);
+          const v2 = servedState(pres);
+          if (v2) return corsOk(await v2BundleIndexResponse(env.DB, gse, v2), { headers: ttlFor(pres) });
+          // verify: one HEAD compares the cached row with the live object, so the size and listing are not
+          // those of a file that has since been overwritten. The answer is edge-cached for a day.
+          const index = await getBundleIndex(env.DB, gse, { refresh, verify: true, waitUntil });
+          return corsOk(await bundleIndexResponse(env.DB, gse, index, waitUntil), { headers: ttlFor(pres) });
         } catch (e) {
           return serverError(e, `bundle index ${gse}`, {}, 502);
         }
       },
-      { ttl: DAY, key: "v=2" } // one cache entry per study: extra query parameters must not mint new ones
+      { ttl: DAY, key: "v=3" } // one cache entry per study: extra query parameters must not mint new ones
     );
   }
 
@@ -74,7 +96,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, params, request, w
           return serverError(e, `bundle samples ${gse}`, {}, 502);
         }
       },
-      { ttl: DAY, key: "v=1" }
+      { ttl: DAY, key: "v=2" }
     );
   }
 
@@ -83,49 +105,92 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, params, request, w
     if (!path) return corsErr("path is required", 400);
     // An entry never changes under the same study file, so one cache entry per (study, path).
     const produce = async (): Promise<Response> => {
-    try {
-      const index = await getBundleIndex(env.DB, gse, { waitUntil });
-      const entry = publicEntries(index.entries).find((e) => e.p === path);
-      if (!entry) return corsErr(`No entry '${path}' in ${gse}.singlet`, 404);
-
-      if (entry.u > MAX_INFLATE_BYTES) {
-        const { url: fileUrl, start, end } = await entryRange(gse, entry);
-        const method = entry.n === 8 ? "deflate-raw" : "stored";
-        const how =
-          method === "stored"
-            ? `curl -r ${start}-${end} "${fileUrl}" -o ${path.split("/").pop()}`
-            : `curl -r ${start}-${end} "${fileUrl}" | python -c "import sys,zlib; sys.stdout.buffer.write(zlib.decompress(sys.stdin.buffer.read(), -15))" > ${path.split("/").pop()}`;
-        return corsOk({
-          gse_id: gse,
-          path,
-          url: fileUrl,
-          range: `bytes=${start}-${end}`,
-          method,
-          bytes_compressed: entry.c,
-          bytes_uncompressed: entry.u,
-          how,
-          note: "Too large to return at the edge. Pull just this byte range — you never download the whole study file. The Python and R packages always download the whole study; this endpoint is the way to take one sample.",
+      try {
+        const pres = await getV2Presence(env.DB, gse);
+        const v2 = servedState(pres);
+        if (v2) return await v2Entry(env.DB, gse, v2.study.rev, path, ttlFor(pres));
+        const found = await withIndexRetry(env.DB, gse, { waitUntil }, async (index) => {
+          const entry = publicEntries(index.entries).find((e) => e.p === path);
+          if (!entry) return null;
+          if (entry.u > MAX_INFLATE_BYTES) return { entry, index, range: await entryRange(gse, entry, index), body: null };
+          return { entry, index, range: null, body: await readEntry(gse, entry, index) };
         });
-      }
+        if (!found) return corsErr(`No entry '${path}' in ${gse}.singlet`, 404);
+        const { entry, index, range, body } = found;
 
-      const body = await readEntry(gse, entry);
-      return new Response(body as unknown as ArrayBuffer, {
-        status: 200,
-        headers: {
-          ...CORS_HEADERS,
-          "Content-Type": contentTypeFor(path),
-          "Cache-Control": `public, max-age=${DAY}, s-maxage=${DAY}`,
-        },
-      });
-    } catch (e) {
-      return serverError(e, `bundle entry ${gse}`, {}, 502);
-    }
+        if (range) {
+          const { url: fileUrl, start, end } = range;
+          const method = entry.n === 8 ? "deflate-raw" : "stored";
+          const how =
+            method === "stored"
+              ? `curl -r ${start}-${end} "${fileUrl}" -o ${path.split("/").pop()}`
+              : `curl -r ${start}-${end} "${fileUrl}" | python -c "import sys,zlib; sys.stdout.buffer.write(zlib.decompress(sys.stdin.buffer.read(), -15))" > ${path.split("/").pop()}`;
+          return corsOk({
+            gse_id: gse,
+            path,
+            url: fileUrl,
+            range: `bytes=${start}-${end}`,
+            method,
+            bytes_compressed: entry.c,
+            bytes_uncompressed: entry.u,
+            // Send as `If-Match` with the range: if the file is overwritten later, the read fails (412) instead of returning other bytes.
+            etag: strongEtag(range.etag ?? index.etag),
+            how,
+            note: "Too large to return at the edge. Pull just this byte range — you never download the whole study file. The Python and R packages always download the whole study; this endpoint is the way to take one sample.",
+          }, { headers: ttlFor(pres) });
+        }
+
+        return new Response(body as unknown as ArrayBuffer, {
+          status: 200,
+          headers: {
+            ...CORS_HEADERS,
+            "Content-Type": contentTypeFor(path),
+            "Cache-Control": `public, max-age=${DAY}, s-maxage=${DAY}`,
+            ...ttlFor(pres),
+          },
+        });
+      } catch (e) {
+        // The index and the file still disagree after one refresh: the file is being replaced. Not cached; retry shortly.
+        if (e instanceof StaleBundleError) {
+          return corsErr(`The index of ${gse}.singlet did not match the file and was refreshed; retry in a minute.`, 409);
+        }
+        return serverError(e, `bundle entry ${gse}`, {}, 502);
+      }
     };
-    return cachedJson(request, waitUntil, produce, { ttl: DAY, key: `path=${encodeURIComponent(path)}` });
+    return cachedJson(request, waitUntil, produce, { ttl: DAY, key: `v=2&path=${encodeURIComponent(path)}` });
   }
 
   return corsErr(`Unknown bundle action '${action}'. Use index, samples or entry.`, 400);
 };
+
+/**
+ * An entry of a study stored in the v2 layout: no inflating at the edge (the members are zstd or pz2), just where the bytes are. A derived
+ * member (regenerated by a recipe) has none; the singlet package rebuilds it.
+ */
+async function v2Entry(db: D1Database, gse: string, rev: string, path: string, ttl: Record<string, string>): Promise<Response> {
+  const m = /^samples\/(GSM\d+)\/(.+)$/.exec(path);
+  if (!m) return corsErr(`No entry '${path}' in ${gse}: study-level files are inside the v2 manifest (v2/m/${gse}.json).`, 404);
+  const sample = await getV2Sample(db, gse, m[1], rev);
+  const members = parseMembers(sample?.members_json);
+  const name = sample ? findMember(members, m[2]) : null;
+  if (!sample || !name) return corsErr(`No entry '${path}' in ${gse}`, 404);
+  const d = describeMember(name, members[name]);
+  return corsOk({
+    gse_id: gse,
+    path,
+    format: "singlet-v2",
+    url: sampleObjectUrl(sample.key),
+    range: d.range,
+    method: d.kind === 1 ? "pz2" : d.kind === 3 ? "zstd" : d.kind === 5 ? "stored" : "derived",
+    bytes_compressed: d.bytes,
+    bytes_uncompressed: d.legacy_bytes ?? null,
+    member: d,
+    note:
+      d.kind === 4
+        ? "Nothing is stored for this file: it is regenerated from other members by the singlet package."
+        : "The sample object is immutable, so this range never changes. Decode with the singlet package (singlet.load) or see the MCP tools get_partial_download and slice_cells.",
+  }, { headers: ttl });
+}
 
 export const onRequestOptions: PagesFunction<Env> = async () => handleOptions();
 

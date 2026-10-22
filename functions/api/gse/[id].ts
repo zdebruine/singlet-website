@@ -14,14 +14,17 @@ import { corsOk, corsErr, handleOptions } from "../../_shared/cors";
 import { cachedJson } from "../../_shared/cache";
 import { resolveIdentity } from "../../_shared/identity";
 import { GSE_RE, loadStudy } from "../../_shared/study-core";
+import { configureV2 } from "../../_shared/v2-urls";
 
 interface Env {
   DB: D1Database;
+  V2_ORIGIN?: string;
 }
 
 const DETAIL_TTL = 300;
 
 export const onRequestGet: PagesFunction<Env> = async ({ env, params, request, waitUntil }) => {
+  configureV2(env);
   const identity = await resolveIdentity(request, env, waitUntil);
   if (!identity.ok) return identity.response;
 

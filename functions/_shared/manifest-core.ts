@@ -9,6 +9,7 @@ import { safeList } from "./json";
 import { bundleUrl } from "./study-core";
 import { organismToCommon } from "./vocab";
 import { exportStudyAccessions, type Ctx, type SearchFilters } from "./search-core";
+import { v2Facts } from "./v2-serve";
 
 export const MAX_MANIFEST_STUDIES = 2000;
 export const MANIFEST_FORMATS = ["tsv", "json", "curl", "wget", "python", "r"] as const;
@@ -34,8 +35,15 @@ export interface ManifestRow {
   pubmed_ids: string[];
   reference_build: string | null;
   bytes: number | null;
+  /** The legacy single file while it exists; the v2 manifest once the legacy bundle is retired. */
   download_url: string;
   license: "CC0";
+  /** "singlet-v2" when the study is served from the v2 per-sample layout (schema/032), else "singlet-v1". */
+  format: "singlet-v1" | "singlet-v2";
+  v2_manifest_url: string | null;
+  v2_rev: string | null;
+  /** Total size of the v2 sample objects. */
+  v2_bytes: number | null;
 }
 
 export async function manifestRows(db: D1Database, ids: string[]): Promise<ManifestRow[]> {
@@ -76,7 +84,25 @@ export async function manifestRows(db: D1Database, ids: string[]): Promise<Manif
         bytes: r.b_bytes != null ? Number(r.b_bytes) : r.r2_bundle_bytes != null ? Number(r.r2_bundle_bytes) : null,
         download_url: bundleUrl(String(r.gse_id)),
         license: "CC0",
+        format: "singlet-v1",
+        v2_manifest_url: null,
+        v2_rev: null,
+        v2_bytes: null,
       });
+    }
+  }
+  // Studies served from v2 say so; once their legacy bundle is retired the manifest URL and v2 size stand in for the old file.
+  const facts = await v2Facts(db, out.map((r) => r.gse_id));
+  for (const row of out) {
+    const f = facts.get(row.gse_id);
+    if (!f) continue;
+    row.format = "singlet-v2";
+    row.v2_manifest_url = f.manifest_url;
+    row.v2_rev = f.rev;
+    row.v2_bytes = f.bytes;
+    if (!f.legacy_alive) {
+      row.download_url = f.manifest_url;
+      row.bytes = f.bytes;
     }
   }
   const order = new Map(ids.map((id, i) => [id, i]));
@@ -100,6 +126,9 @@ const TSV_COLUMNS = [
   "bytes",
   "download_url",
   "license",
+  "format",
+  "v2_manifest_url",
+  "v2_rev",
 ] as const;
 
 function tsvCell(v: unknown): string {
@@ -126,7 +155,13 @@ function header(rows: ManifestRow[], total: number): string[] {
 function renderCurl(rows: ManifestRow[], total: number): string {
   return (
     ["#!/usr/bin/env bash", "set -euo pipefail", ...header(rows, total), ""]
-      .concat(rows.map((r) => `curl -fL --retry 3 -C - -o "${r.gse_id}.singlet" "${r.download_url}"`))
+      .concat(
+        rows.map((r) =>
+          r.format === "singlet-v2" && r.download_url === r.v2_manifest_url
+            ? `curl -fL --retry 3 -C - -o "${r.gse_id}.manifest.json" "${r.download_url}"  # one object per sample, listed in this manifest`
+            : `curl -fL --retry 3 -C - -o "${r.gse_id}.singlet" "${r.download_url}"`
+        )
+      )
       .join("\n") + "\n"
   );
 }

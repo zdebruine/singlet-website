@@ -47,7 +47,7 @@
  */
 
 
-import { getBundleIndex, ensureSampleQcTable } from "../../_shared/bundle-reader";
+import { StaleBundleError, getBundleIndex, ensureSampleQcTable } from "../../_shared/bundle-reader";
 import { readSampleSummaries, upsertSampleQcStatement } from "../../_shared/bundle-core";
 import {
   UNREADABLE_FILE_ERRORS,
@@ -561,8 +561,18 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env, params })
         // offsets may predate a re-pack — and re-read the summaries only when
         // the file actually changed.
         let index = await getBundleIndex(env.DB, gse_id, { refresh: !cached });
-        let samples = await readSampleSummaries(gse_id, index);
-        if (cached && samples.length < summaryCount(index)) {
+        let samples: Awaited<ReturnType<typeof readSampleSummaries>>;
+        let reread = !cached;
+        try {
+          samples = await readSampleSummaries(gse_id, index);
+        } catch (e) {
+          // The stored offsets no longer match the file (it was overwritten): read the central directory again.
+          if (!cached || !(e instanceof StaleBundleError)) throw e;
+          index = await getBundleIndex(env.DB, gse_id, { refresh: true });
+          reread = true;
+          samples = await readSampleSummaries(gse_id, index);
+        }
+        if (!reread && samples.length < summaryCount(index)) {
           // The re-read is only a check. If it fails itself (5xx, timeout,
           // subrequest budget), keep the stored index and the summaries
           // already read, with a warning, instead of parking the study and
