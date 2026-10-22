@@ -14,6 +14,7 @@ import {
   GSE_RE,
   getV2Sample,
   getV2State,
+  isLegacyAlive,
   listV2Samples,
   parseJsonObject,
   parseMembers,
@@ -85,7 +86,7 @@ const unchanged = (gse: string, rev: string, what: string): ToolResult =>
 
 export async function v2DownloadUrl(ctx: V2ToolCtx, id: string, title: string | null, state: V2State, args: Record<string, unknown>): Promise<ToolResult> {
   const s = state.study;
-  const legacyAlive = state.migration?.status !== "retired";
+  const legacyAlive = isLegacyAlive(state.migration);
   const includeSamples = args.include_samples === true;
   let samples: { gsm_id: string; url: string; bytes: number | null; sha256: string | null; n_called: number | null }[] | undefined;
   let nextAfter: string | null = null;
@@ -284,7 +285,8 @@ export async function findCells(ctx: V2ToolCtx, args: Record<string, unknown>, o
 
   // 1. the samples, in D1
   const where: string[] = [
-    `NOT EXISTS (SELECT 1 FROM v2_migration m WHERE m.gse_id = s.gse_id AND m.status NOT IN ('verified', 'retired'))`,
+    // served only: a migration row that says verified or retired (a study with no migration row is not served)
+    `EXISTS (SELECT 1 FROM v2_migration m WHERE m.gse_id = s.gse_id AND m.status IN ('verified', 'retired'))`,
   ];
   const bind: (string | number)[] = [];
   if (gseIds.length) {

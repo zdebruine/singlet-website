@@ -36,6 +36,29 @@ export const LAYER_FILES: { key: string; label: string; file: string; humanOnly?
   { key: "doublets", label: "Doublet scores", file: "doublet_scores.tsv" },
 ];
 
+/** Layer counts over downloadable studies that are served from v2 and have no bundle_index row; null before schema/032 or when there are none. */
+async function v2OnlyLayerRow(db: D1Database): Promise<Record<string, number | null> | null> {
+  const human = "m.organism_primary = 'Homo sapiens'";
+  const sums = LAYER_FILES.map(
+    (l, i) => `COUNT(DISTINCT CASE WHEN s.members_json LIKE ?${i + 1}${l.humanOnly ? ` AND ${human}` : ""} THEN m.gse_id END) AS l${i}`,
+  ).join(", ");
+  try {
+    return await db
+      .prepare(
+        `SELECT COUNT(DISTINCT m.gse_id) AS n, COUNT(DISTINCT CASE WHEN ${human} THEN m.gse_id END) AS n_human, ${sums}
+           FROM gse_meta m
+           JOIN v2_study vs ON vs.gse_id = m.gse_id
+           JOIN v2_migration vm ON vm.gse_id = vs.gse_id AND vm.status IN ('verified', 'retired')
+           JOIN v2_sample s ON s.gse_id = vs.gse_id AND s.rev = vs.rev
+          WHERE ${DOWNLOADABLE_SQL} AND NOT EXISTS (SELECT 1 FROM bundle_index b WHERE b.gse_id = m.gse_id)`,
+      )
+      .bind(...LAYER_FILES.map((l) => `%${l.file}%`))
+      .first<Record<string, number | null>>();
+  } catch {
+    return null;
+  }
+}
+
 export async function computeLayerStats(db: D1Database): Promise<LayerStats> {
   const human = "m.organism_primary = 'Homo sapiens'";
   const sums = LAYER_FILES.map(
@@ -45,13 +68,17 @@ export async function computeLayerStats(db: D1Database): Promise<LayerStats> {
     .prepare(`SELECT COUNT(*) AS n, SUM(CASE WHEN ${human} THEN 1 ELSE 0 END) AS n_human, ${sums} FROM gse_meta m JOIN bundle_index b ON b.gse_id = m.gse_id WHERE ${DOWNLOADABLE_SQL}`)
     .bind(...LAYER_FILES.map((l) => `%${l.file}%`))
     .first<Record<string, number | null>>();
+  // Studies served from v2 that have no legacy index (never had one) are counted from the files their samples hold. A retired study keeps its
+  // legacy bundle_index row, so it is counted above.
+  const v2 = await v2OnlyLayerRow(db);
+  const total = (key: string) => Number(row?.[key] ?? 0) + Number(v2?.[key] ?? 0);
   return {
-    studies: Number(row?.n ?? 0),
+    studies: total("n"),
     layers: LAYER_FILES.map((l, i) => ({
       key: l.key,
       label: l.label,
-      studies: Number(row?.[`l${i}`] ?? 0),
-      of: Number((l.humanOnly ? row?.n_human : row?.n) ?? 0),
+      studies: total(`l${i}`),
+      of: l.humanOnly ? total("n_human") : total("n"),
     })),
     computed_at: new Date().toISOString().replace(/\.\d{3}Z$/, "Z"),
   };

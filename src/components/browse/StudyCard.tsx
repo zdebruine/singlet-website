@@ -4,7 +4,7 @@ import { Check, Copy, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AddToLibraryMenu } from "@/components/library/AddToLibraryMenu";
 import { fmtCompact, fmtInt } from "@/lib/catalog-display";
-import { bundleUrl } from "@/integrations/api/client";
+import { isManifestFile, studyFileUrl } from "@/integrations/api/client";
 import type { StudyRow } from "@/integrations/api/types";
 
 interface Props {
@@ -95,10 +95,10 @@ export function StudyCard({ row, selected, onToggle, ai, why, aiWhy }: Props) {
                 </span>
                 {row.has_bundle ? (
                   <a
-                    href={bundleUrl(row.gse_id)}
+                    href={studyFileUrl(row.gse_id, row.v2)}
                     className="relative z-10 inline-flex items-center text-primary hover:text-foreground"
                     download
-                    title="Download .singlet"
+                    title={isManifestFile(row.v2) ? "Download the manifest of this study's per-sample files" : "Download .singlet"}
                     aria-label={`Download ${row.gse_id}`}
                   >
                     <Download size={15} />

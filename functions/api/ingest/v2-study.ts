@@ -60,6 +60,7 @@ const HEADERS = {
 };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: HEADERS });
 const nowIso = () => new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
+const SERVED = new Set(["verified", "retired"]);
 
 /** What D1 says this post cost: the sum of meta.rows_written (table and index rows) over every statement, or null when the binding does not report it. */
 function rowsWritten(results: unknown[]): number | null {
@@ -100,6 +101,14 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     for (const batch of batches) results.push(...(await env.DB.batch(batch)));
     // The tail is one atomic batch: the v2_study row (the flip), the removal of the other revs' sample rows, the migration row.
     if (tail.length) results.push(...(await env.DB.batch(tail)));
+    // A study that is now served from v2 but has no legacy file (gse_meta.has_bundle = 0) is queued for the catalog crank, which recomputes
+    // has_bundle from the v2 tables. Best effort and no write at all for a study with a legacy file (the WHERE matches nothing).
+    if (parsed.final && parsed.migration && SERVED.has(parsed.migration.status)) {
+      await env.DB.prepare(`UPDATE gse_meta SET n_usable_samples = NULL WHERE gse_id = ? AND COALESCE(has_bundle, 0) = 0`)
+        .bind(parsed.gse)
+        .run()
+        .catch(() => undefined);
+    }
     return json({
       ok: true,
       gse_id: parsed.gse,

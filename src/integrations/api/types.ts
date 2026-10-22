@@ -65,7 +65,10 @@ export interface StudyRow {
   suspect_cells: boolean;
   has_bundle: boolean;
   bundle_bytes: number | null;
+  /** Key of the legacy single file; null once it is retired (deleted). */
   bundle_key: string | null;
+  /** Set when the study is stored in the v2 per-sample layout; `legacy_available: false` means the single file is gone. */
+  v2?: StudyV2 | null;
   bundle_n_samples: number | null;
   file_cells: number | null;
   reference_build: string | null;

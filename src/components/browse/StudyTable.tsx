@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import { ArrowDown, BookOpen, Download, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { fmtCompact, fmtInt } from "@/lib/catalog-display";
-import { bundleUrl } from "@/integrations/api/client";
+import { isManifestFile, studyFileUrl } from "@/integrations/api/client";
 import type { Sort, StudyRow } from "@/integrations/api/types";
 import type { ColumnDef } from "./columns";
 
@@ -136,7 +136,13 @@ export const STUDY_COLUMNS: ColumnDef<StudyRow>[] = [
     width: "w-[52px]",
     render: (r) =>
       r.has_bundle ? (
-        <a href={bundleUrl(r.gse_id)} download className="inline-flex text-primary hover:text-foreground" title="Download .singlet" aria-label={`Download ${r.gse_id}`}>
+        <a
+          href={studyFileUrl(r.gse_id, r.v2)}
+          download
+          className="inline-flex text-primary hover:text-foreground"
+          title={isManifestFile(r.v2) ? "Download the manifest of this study's per-sample files" : "Download .singlet"}
+          aria-label={`Download ${r.gse_id}`}
+        >
           <Download size={14} />
         </a>
       ) : (

@@ -5,6 +5,7 @@
  * an assistant can quote the output verbatim.
  */
 import { GSE_RE, bundleUrl, loadStudy, type StudyDetail } from "./study-core";
+import { downloadUrl, studyV2Map } from "./file-facts";
 import { StaleBundleError, getBundleIndex, ensureSampleQcTable, entryRange, strongEtag, withIndexRetry, MAX_INFLATE_BYTES, type ZipEntry } from "./bundle-reader";
 import { publicEntries } from "./restricted";
 import { bundleIndexResponse, loadSampleQc, normalizeQc, SAMPLE_QC_COLUMNS, v2BundleIndexResponse, type SampleQc } from "./bundle-core";
@@ -572,7 +573,7 @@ export async function findMatchedControls(ctx: SampleQcArgs, args: Record<string
     .bind(gse, organism, `%"${tissue}"%`)
     .all<CandidateRow>();
 
-  const candidates = rows.results
+  const ranked = rows.results
     .map((r) => {
       const diseases = safeList(r.disease_groups);
       const rowAssays = safeList(r.assay_families);
@@ -595,8 +596,13 @@ export async function findMatchedControls(ctx: SampleQcArgs, args: Record<string
         (Number(b.r.year ?? 0) - Number(a.r.year ?? 0)) ||
         a.r.gse_id.localeCompare(b.r.gse_id)
     )
-    .slice(0, 10)
+    .slice(0, 10);
+
+  // Where each candidate's files are: the legacy single file only while it exists, else the v2 manifest.
+  const facts = await studyV2Map(ctx.db, ranked.map((c) => c.r.gse_id));
+  const candidates = ranked
     .map((c) => {
+      const v2 = facts.get(c.r.gse_id) ?? null;
       const healthy = c.diseases.some((d) => HEALTHY_GROUPS.has(d));
       const why = [
         `same organism (${organismToCommon(organism)})`,
@@ -622,8 +628,9 @@ export async function findMatchedControls(ctx: SampleQcArgs, args: Record<string
         reference_build: c.r.reference_build,
         same_assay: c.assayMatch,
         same_reference_build: c.buildMatch,
-        bytes: c.r.bytes != null ? Number(c.r.bytes) : null,
-        download_url: bundleUrl(c.r.gse_id),
+        bytes: v2 && !v2.legacy_available && v2.bytes != null ? v2.bytes : c.r.bytes != null ? Number(c.r.bytes) : null,
+        format: v2 ? v2.format : "singlet-v1",
+        download_url: downloadUrl(c.r.gse_id, v2),
         study_url: `${SITE}/study/${c.r.gse_id}`,
         why,
         loader: `singlet.load("${c.r.gse_id}")`,
