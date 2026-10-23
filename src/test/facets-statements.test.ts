@@ -33,6 +33,8 @@ const empty: SearchFilters = {
   has_pubmed: null,
   max_file_bytes: null,
   has_conditions: null,
+  terms: {},
+  term_exact: false,
   match_mode: {},
 };
 
@@ -55,6 +57,8 @@ const everything: SearchFilters = {
   has_pubmed: true,
   max_file_bytes: 10_737_418_240,
   has_conditions: true,
+  terms: {},
+  term_exact: false,
   match_mode: {},
 };
 

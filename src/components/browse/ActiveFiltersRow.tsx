@@ -16,6 +16,8 @@ interface Props {
   onRemove: (field: string, value: string) => void;
   onAddFilter: () => void;
   onClear: () => void;
+  /** Labels for ontology ids in the term filters. */
+  termLabels?: Map<string, string>;
   className?: string;
 }
 
@@ -23,8 +25,8 @@ interface Props {
  * "We read that as …" row. Violet only when the chips are AI-derived; explicit
  * filters use the teal active-chip style.
  */
-export function ActiveFiltersRow({ applied, ai, dropped, note, trailing, onRemove, onAddFilter, onClear, className }: Props) {
-  const chips = activeFilters(applied, organismLabel);
+export function ActiveFiltersRow({ applied, ai, dropped, note, trailing, onRemove, onAddFilter, onClear, termLabels, className }: Props) {
+  const chips = activeFilters(applied, organismLabel, termLabels);
   if (!chips.length && !note && !dropped?.length) return null;
 
   return (

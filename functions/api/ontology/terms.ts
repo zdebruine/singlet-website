@@ -4,7 +4,7 @@
  * Terms for the ontology filters (`<filter>_term` on /api/search and /api/nl-search), with the downloadable
  * samples and studies under each term, descendants included (ontology_term_count, the headline basis).
  *
- *   no q      the terms samples are mapped to directly, most studies first
+ *   no q      the terms most samples are mapped to directly (counts still include descendants)
  *   q         terms whose label or exact synonym contains q (an id finds itself), exact and prefix matches first;
  *             ancestors with no direct samples are included ("T cell" when samples say "CD4 T cell")
  *   values    resolve filter values (ids or labels) to terms, in order; unresolved values come back with id null
@@ -55,7 +55,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request, waitUntil
         if (!q) {
           terms = (await env.DB.prepare(
             `SELECT ${COLS} FROM ontology_term_count c JOIN ontology_term t ON t.term_id = c.term_id
-             WHERE c.attr = ?1 AND c.n_direct > 0 ORDER BY c.n_studies DESC, c.n_samples DESC, t.label LIMIT ?2`
+             WHERE c.attr = ?1 AND c.n_direct > 0 ORDER BY c.n_direct DESC, c.n_studies DESC, t.label LIMIT ?2`
           ).bind(spec.attr, limit).all<TermRow>()).results;
         } else {
           const asId = canonicalTermId(q);

@@ -196,6 +196,8 @@ describe("developmental stage from age", () => {
     expect(age("Homo sapiens", "6 weeks", "weeks", "6 pcw")).not.toBeNull();
     expect(age("Danio rerio", "3 months", "months")).toBeNull();
     expect(age("Homo sapiens", "18-30", null)).toBeNull();
+    expect(age("Homo sapiens", "12 pcw", null)).toMatchObject({ why: "post conception" });
+    expect(age("Homo sapiens", "17 pcw", "pcw", "17pcw")).toMatchObject({ why: "post conception" });
   });
 });
 
@@ -353,7 +355,7 @@ describe("GET /api/ontology/terms", () => {
   it("lists directly mapped terms, searches labels and resolves values", async () => {
     const db = await setup();
     const top = await get(db, "filter=tissue");
-    expect((top.body.terms as { id: string }[]).map((t) => t.id)).toEqual(["UBERON:0002048", "UBERON:0000178", "UBERON:0008952"]);
+    expect((top.body.terms as { id: string }[]).map((t) => t.id)).toEqual(["UBERON:0000178", "UBERON:0002048", "UBERON:0008952"]) // one direct sample each: by studies, then label;
     const search = await get(db, "filter=cell_type&q=t%20cel");
     // prefix matches first, then substring matches ("cd4 positive alpha beta t cell")
     expect(search.body.terms).toEqual([

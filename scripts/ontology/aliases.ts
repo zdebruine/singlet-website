@@ -67,7 +67,10 @@ export const ALIASES: Alias[] = [
   { attr: "disease", values: ["gbm"], term: "MONDO:0018177", label: "glioblastoma", note: "glioblastoma" },
   { attr: "disease", values: ["coeliac", "coeliac disease"], term: "MONDO:0005130", label: "celiac disease", note: "celiac disease" },
 
-  // ancestry -> HANCESTRO (the US census categories GEO submitters use)
+  // ancestry -> HANCESTRO (the US census categories GEO submitters use). Only children of HANCESTRO:0004 "ancestry
+  // category", the terms the per-cell inferred ancestry uses, not the geography-based "Asian" (HANCESTRO:0847).
+  { attr: "ancestry", values: ["asian", "asian american", "asian unspecified"], term: "HANCESTRO:0008", label: "Asian ancestry", note: "Asian ancestry" },
+  { attr: "ancestry", values: ["german"], term: "HANCESTRO:0005", label: "European ancestry", note: "European ancestry", confidence: 0.85 },
   { attr: "ancestry", values: ["white", "caucasian", "caucacian", "casusasian", "white or caucasian", "white or caucasion", "white not hispanic or latino", "european", "european american"], term: "HANCESTRO:0005", label: "European ancestry", note: "European ancestry (\"white\", \"Caucasian\" are exact synonyms)" },
   { attr: "ancestry", values: ["black", "black or african american", "black african american", "black african american aa", "african american", "black not hispanic or latino", "america african", "aa"], term: "HANCESTRO:0016", label: "African American or Afro-Caribbean ancestry", note: "African American or Afro-Caribbean ancestry", confidence: 0.85 },
   { attr: "ancestry", values: ["afro carribean", "afro caribbean"], term: "HANCESTRO:0016", label: "African American or Afro-Caribbean ancestry", note: "African American or Afro-Caribbean ancestry" },

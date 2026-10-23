@@ -266,8 +266,10 @@ export function ageRange(f: AgeFact): { lo: number; hi: number; why: string } | 
   const human = f.organism === "Homo sapiens";
   const mouse = f.organism === "Mus musculus";
   if (!human && !mouse) return null;
-  const unit = (f.unit ?? "").toLowerCase();
-  const prenatal = /post.?conception|\bpcw\b|gestation|\bgw\b|fetal|foetal|embryonic|\bpcd\b/.test(raw);
+  // "12 pcw" / "12pcw": post-conception weeks, stored with unit "pcw" or none.
+  const pcw = /\d\s*pcw\b|\bpcw\b/.test(raw) || (f.unit ?? "").toLowerCase() === "pcw";
+  const unit = pcw ? "weeks" : (f.unit ?? "").toLowerCase();
+  const prenatal = pcw || /post.?conception|gestation|\bgw\b|fetal|foetal|embryonic|\bpcd\b/.test(raw);
   const postnatal = /post.?natal|\bpnd\b|after birth|\bp\d/.test(raw);
   const gest = human ? GESTATION_DAYS.HsapDv : GESTATION_DAYS.MmusDv;
   if (unit === "e-days") return mouse ? { lo: lo0 - gest, hi: hi0 - gest, why: "embryonic day" } : null;

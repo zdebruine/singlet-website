@@ -146,7 +146,20 @@ export interface AppliedFilters {
   has_pubmed: boolean | null;
   max_file_bytes: number | null;
   has_conditions: boolean | null;
+  /** Ontology filters by name (tissue, cell_type, development_stage, disease, ancestry, sex): ids or labels. */
+  terms?: Record<string, string[]>;
+  /** Match only the named terms, not their descendants. */
+  term_exact?: boolean;
   match_mode: Record<string, "any" | "all">;
+}
+
+/** One term from GET /api/ontology/terms, with downloadable samples and studies under it (descendants included). */
+export interface OntologyTerm {
+  id: string;
+  label: string;
+  ontology: string;
+  n_samples: number;
+  n_studies: number;
 }
 
 export interface DroppedValue {
@@ -525,6 +538,8 @@ export interface SearchQuery {
   has_pubmed?: boolean;
   max_file_bytes?: number;
   has_conditions?: boolean;
+  terms?: Record<string, string[]>;
+  term_exact?: boolean;
   match_mode?: Record<string, "any" | "all">;
   sort?: Sort;
   page?: number;

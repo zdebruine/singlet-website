@@ -4,7 +4,8 @@ import { ChevronRight, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { fmtInt, organismLabel } from "@/lib/catalog-display";
 import type { AppliedFilters, FacetOption, FacetsResponse, Level } from "@/integrations/api/types";
-import type { MultiField } from "./browse-state";
+import type { MultiField, TermField } from "./browse-state";
+import { OntologyFilters } from "./OntologyFilters";
 
 const TOP_N = 8;
 
@@ -33,6 +34,9 @@ interface Props {
   onFileCells: (n: number | null) => void;
   onFileSize: (n: number | null) => void;
   onBoolean: (field: "has_pubmed" | "has_conditions", value: boolean | null) => void;
+  onTermToggle: (name: TermField, value: string) => void;
+  /** Labels for the ontology ids in `current.terms`. */
+  termLabels: Map<string, string>;
   className?: string;
 }
 
@@ -244,6 +248,8 @@ export function FilterRail({
   onFileCells,
   onFileSize,
   onBoolean,
+  onTermToggle,
+  termLabels,
   className,
 }: Props) {
   const years = useMemo(() => {
@@ -320,6 +326,9 @@ export function FilterRail({
       <Section title="Cell type">
         {modeControl("cell_type", current.cell_type)}
         <CellTypeSection options={facets?.cell_type ?? []} selected={current.cell_type} onAdd={onAddCellType} onToggle={onToggle} />
+      </Section>
+      <Section title="Ontology terms">
+        <OntologyFilters current={current} labels={termLabels} onToggle={onTermToggle} />
       </Section>
       <Section title="Year" hint={years.length ? undefined : "few studies dated"}>
         {years.length > 0 && (

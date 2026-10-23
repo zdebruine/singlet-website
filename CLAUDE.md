@@ -32,6 +32,10 @@ either back.
   samples only: no low-QC, removed, failed or empty samples, toggles or counts. Show QC as gates crossed (`GateFunnel`), never as failures.
   Headline numbers count what a visitor can download: studies passing `DOWNLOADABLE_SQL` (`studies_with_files`), their usable samples and the cells called in them (`/api/stats` samples_in_files, cells_in_files). `files_published` is every file, `studies_withheld` the difference. Default searches total on the same basis (`totals.basis = "file"`), and `accounting` places every sample in exactly one bucket; label
   catalog metadata as such.
+- Ontology filters (`docs/ONTOLOGY.md`): `sample_term` maps samples to UBERON/CL/MONDO/PATO/HsapDv/MmusDv/HANCESTRO terms through
+  `ontology_value_map`; `<name>_term` filters expand descendants through `ontology_closure`. Built offline by `scripts/ontology/`
+  and refreshed with `scripts/ontology/refresh.sql`; samples added since the last refresh have no terms. Cell-level labels use the
+  same ontologies.
 - The catalog crank (`/api/ingest/refresh-next`, `/api/ingest/index-next`) is idempotent and runs every 3 h
   from `catalog-crank.yml`. Both are public GETs that write production D1.
 - D1 limits: never `json_each` over all of `bundle_index` (chunk by `gse_id`); ≤ 100 bound parameters per

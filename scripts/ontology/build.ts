@@ -205,6 +205,14 @@ function main() {
     ancestorsMemo.set(id, out);
     return out;
   };
+  // Ancestry stays in the "ancestry category" tree the per-cell inferred ancestry uses (cell-label interchange notes);
+  // population, ethnicity and geography-based terms ("German", "Jewish Israeli", "Asian" HANCESTRO:0847) are dropped.
+  for (let i = map.length - 1; i >= 0; i--) {
+    if (map[i].attr === "ancestry" && !ancestors(map[i].term_id).has("HANCESTRO:0004")) {
+      console.error(`ancestry "${map[i].value_norm}" -> ${map[i].term_id} is outside HANCESTRO:0004; left unmapped`);
+      map.splice(i, 1);
+    }
+  }
   const used = new Set(map.map((r) => r.term_id));
   const slice = new Set<string>();
   for (const id of used) for (const a of ancestors(id).keys()) slice.add(a);
