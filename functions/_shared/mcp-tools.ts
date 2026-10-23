@@ -355,10 +355,15 @@ export async function getPartialDownload(ctx: SampleQcArgs, args: Record<string,
   const gsm = typeof args.gsm_id === "string" ? args.gsm_id.trim().toUpperCase() : "";
   if (!GSM_RE.test(gsm)) return toolError("`gsm_id` must be a GEO sample accession like GSM8976273.");
   const file = typeof args.file === "string" ? args.file.trim() : "";
-  if (!file) return toolError("`file` is required — e.g. exon_counts.1pz. Use list_bundle_files to see what is in the study.");
+  const byModalities = args.modalities !== undefined && args.modalities !== null;
+  if (!file && !byModalities) return toolError("`file` is required — e.g. exon_counts.1pz (or `modalities`, e.g. [\"spliced\"]). Use list_bundle_files to see what is in the study.");
 
   const v2 = await getV2State(ctx.db, gse);
   if (v2) return v2PartialDownload(ctx, gse, gsm, file, v2, args);
+  if (!file) {
+    // a legacy bundle is one ZIP: each matrix is its own entry, asked for by name
+    return toolError(`${gse} is still a single .singlet bundle, so \`modalities\` cannot be answered in one call: ask for each file by name (counts = exon_counts.1pz + intron_counts.1pz, spliced = exon_counts.1pz, unspliced = intron_counts.1pz, splice_junctions / psi = sj_counts.1pz).`);
+  }
 
   const prefix = `samples/${gsm}/`;
   type Found = { err: string } | { unchanged: string } | { entry: ZipEntry; range: Awaited<ReturnType<typeof entryRange>>; etag: string | null; rev: string };
