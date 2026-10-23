@@ -23,6 +23,7 @@ import {
   type GroupField,
   type VocabRule,
 } from "./vocab";
+import { TERM_FILTER_NAMES, termKeys, termMatchSql, type TermFilter } from "./ontology";
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -53,7 +54,10 @@ export interface SearchFilters {
   has_pubmed: boolean | null;
   max_file_bytes: number | null;
   has_conditions: boolean | null;
-  match_mode: Partial<Record<ArrayFilterField | "reference_build" | "protocol", "any" | "all">>;
+  /** Ontology filters (`<name>_term`): ids or labels, descendants included unless `term_exact` (./ontology). */
+  terms: Partial<Record<TermFilter, string[]>>;
+  term_exact: boolean;
+  match_mode: Partial<Record<ArrayFilterField | "reference_build" | "protocol" | `${TermFilter}_term`, "any" | "all">>;
 }
 
 export interface SoftSignals {
@@ -375,6 +379,8 @@ export function emptyFilters(): SearchFilters {
     has_pubmed: null,
     max_file_bytes: null,
     has_conditions: null,
+    terms: {},
+    term_exact: false,
     match_mode: {},
   };
 }
@@ -392,8 +398,13 @@ export function parseSearchParams(url: URL): SearchParams {
     return value == null || value === "" ? null : value === "1" || value === "true";
   };
   const mode: SearchFilters["match_mode"] = {};
-  for (const field of [...ARRAY_FILTER_FIELDS, "reference_build", "protocol"] as const) {
+  for (const field of [...ARRAY_FILTER_FIELDS, "reference_build", "protocol", ...TERM_FILTER_NAMES.map((n) => `${n}_term` as const)] as const) {
     if (url.searchParams.get(`${field}_mode`) === "all") mode[field] = "all";
+  }
+  const terms: SearchFilters["terms"] = {};
+  for (const name of TERM_FILTER_NAMES) {
+    const values = multi(url, `${name}_term`).flatMap((v) => v.split("|")).map((v) => v.trim()).filter(Boolean);
+    if (values.length) terms[name] = values;
   }
   return {
     q: (url.searchParams.get("q") ?? "").trim(),
@@ -414,6 +425,8 @@ export function parseSearchParams(url: URL): SearchParams {
     has_pubmed: bool("has_pubmed"),
     max_file_bytes: intOrNull(url.searchParams.get("max_file_bytes")),
     has_conditions: bool("has_conditions"),
+    terms,
+    term_exact: url.searchParams.get("term_expand") === "none",
     match_mode: mode,
     level,
     sort,
@@ -484,6 +497,8 @@ export function canonicalQuery(p: SearchParams | (SearchFilters & Partial<Search
   if (p.has_pubmed != null) sp.set("has_pubmed", p.has_pubmed ? "1" : "0");
   if (p.max_file_bytes != null) sp.set("max_file_bytes", String(p.max_file_bytes));
   if (p.has_conditions != null) sp.set("has_conditions", p.has_conditions ? "1" : "0");
+  for (const name of TERM_FILTER_NAMES) add(`${name}_term`, p.terms?.[name] ?? []);
+  if (p.term_exact) sp.set("term_expand", "none");
   for (const [field, mode] of Object.entries(p.match_mode)) if (mode === "all") sp.set(`${field}_mode`, "all");
   if (p.level) sp.set("level", p.level);
   if (p.sort) sp.set("sort", p.sort);
@@ -506,7 +521,31 @@ export function hasAnyFilter(f: SearchFilters): boolean {
     f.year_max != null
     || f.min_file_samples != null || f.min_file_cells != null || f.reference_build.length > 0 || f.protocol.length > 0
     || f.has_pubmed != null || f.max_file_bytes != null || f.has_conditions != null
+    || hasTermFilter(f)
   );
+}
+
+export function hasTermFilter(f: SearchFilters): boolean {
+  return TERM_FILTER_NAMES.some((name) => (f.terms?.[name]?.length ?? 0) > 0);
+}
+
+/**
+ * `<col> IN (sample_term ...)` clauses for the ontology filters: OR within a filter (one clause per value with
+ * `_mode=all`), AND across filters. A value no label resolves matches nothing.
+ */
+function termClauses(f: SearchFilters, col: string, key: "gsm_id" | "gse_id", ex: StudyWhereOpts["exclude"]): Built {
+  const clauses: string[] = [];
+  const params: (string | number)[] = [];
+  for (const name of TERM_FILTER_NAMES) {
+    const values = f.terms?.[name] ?? [];
+    if (!values.length || ex === `${name}_term`) continue;
+    const groups = f.match_mode[`${name}_term`] === "all" ? values.map((v) => [v]) : [values];
+    for (const group of groups) {
+      clauses.push(`${col} IN (${termMatchSql(name, key, f.term_exact)})`);
+      params.push(JSON.stringify(termKeys(group)));
+    }
+  }
+  return { clauses, params };
 }
 
 // ── FTS helpers ─────────────────────────────────────────────────────────────
@@ -635,7 +674,7 @@ export interface Built {
 
 export interface StudyWhereOpts {
   /** Facet field whose own constraint should be skipped (contextual facet counts). */
-  exclude?: ArrayFilterField | "year" | "min_cells" | "q" | "reference_build" | "protocol" | "file_samples" | "file_cells" | "file_size";
+  exclude?: ArrayFilterField | "year" | "min_cells" | "q" | "reference_build" | "protocol" | "file_samples" | "file_cells" | "file_size" | `${TermFilter}_term`;
   /** Restrict to these gse_ids (JSON array string is built here). */
   gseIds?: string[] | null;
 }
@@ -722,6 +761,9 @@ export function buildStudyWhere(f: SearchFilters, opts: StudyWhereOpts = {}): Bu
     params.push(f.max_file_bytes);
   }
   if (f.has_conditions === true) clauses.push("m.n_conditions >= 1");
+  const terms = termClauses(f, "m.gse_id", "gse_id", ex);
+  clauses.push(...terms.clauses);
+  params.push(...terms.params);
   if (opts.gseIds) {
     clauses.push("m.gse_id IN (SELECT value FROM json_each(?))");
     params.push(jsonArray(opts.gseIds));
@@ -777,6 +819,9 @@ export function buildSampleWhere(f: SearchFilters, opts: StudyWhereOpts = {}): B
     clauses.push("m.year <= ?");
     params.push(f.year_max);
   }
+  const terms = termClauses(f, "s.gsm_id", "gsm_id", ex);
+  clauses.push(...terms.clauses);
+  params.push(...terms.params);
   if (opts.gseIds) {
     clauses.push("s.gse_id IN (SELECT value FROM json_each(?))");
     params.push(jsonArray(opts.gseIds));
@@ -1830,6 +1875,8 @@ export function pickFilters(p: SearchFilters): SearchFilters {
     has_pubmed: p.has_pubmed,
     max_file_bytes: p.max_file_bytes,
     has_conditions: p.has_conditions,
+    terms: p.terms ?? {},
+    term_exact: p.term_exact ?? false,
     match_mode: p.match_mode,
   };
 }
