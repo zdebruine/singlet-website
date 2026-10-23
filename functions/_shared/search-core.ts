@@ -23,7 +23,7 @@ import {
   type GroupField,
   type VocabRule,
 } from "./vocab";
-import { TERM_FILTER_NAMES, termKeys, termMatchSql, type TermFilter } from "./ontology";
+import { SAMPLE_PROPERTIES, SAMPLE_PROPERTY_NAMES, TERM_FILTER_NAMES, propertyMatchSql, termKeys, termMatchSql, type SampleProperty, type TermFilter } from "./ontology";
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -57,6 +57,8 @@ export interface SearchFilters {
   /** Ontology filters (`<name>_term`): ids or labels, descendants included unless `term_exact` (./ontology). */
   terms: Partial<Record<TermFilter, string[]>>;
   term_exact: boolean;
+  /** Derived sample properties (`donor_status=healthy`, `perturbation=treated`, `sample_kind=organoid`; ./ontology). */
+  props: Partial<Record<SampleProperty, string[]>>;
   match_mode: Partial<Record<ArrayFilterField | "reference_build" | "protocol" | `${TermFilter}_term`, "any" | "all">>;
 }
 
@@ -381,6 +383,7 @@ export function emptyFilters(): SearchFilters {
     has_conditions: null,
     terms: {},
     term_exact: false,
+    props: {},
     match_mode: {},
   };
 }
@@ -406,6 +409,12 @@ export function parseSearchParams(url: URL): SearchParams {
     const values = multi(url, `${name}_term`).flatMap((v) => v.split("|")).map((v) => v.trim()).filter(Boolean);
     if (values.length) terms[name] = values;
   }
+  const props: SearchFilters["props"] = {};
+  for (const name of SAMPLE_PROPERTY_NAMES) {
+    const allowed = SAMPLE_PROPERTIES[name] as readonly string[];
+    const values = multi(url, name).flatMap((v) => v.split("|")).map((v) => v.trim().toLowerCase()).filter((v) => allowed.includes(v));
+    if (values.length) props[name] = [...new Set(values)];
+  }
   return {
     q: (url.searchParams.get("q") ?? "").trim(),
     organism: multi(url, "organism"),
@@ -427,6 +436,7 @@ export function parseSearchParams(url: URL): SearchParams {
     has_conditions: bool("has_conditions"),
     terms,
     term_exact: url.searchParams.get("term_expand") === "none",
+    props,
     match_mode: mode,
     level,
     sort,
@@ -498,6 +508,7 @@ export function canonicalQuery(p: SearchParams | (SearchFilters & Partial<Search
   if (p.max_file_bytes != null) sp.set("max_file_bytes", String(p.max_file_bytes));
   if (p.has_conditions != null) sp.set("has_conditions", p.has_conditions ? "1" : "0");
   for (const name of TERM_FILTER_NAMES) add(`${name}_term`, p.terms?.[name] ?? []);
+  for (const name of SAMPLE_PROPERTY_NAMES) add(name, p.props?.[name] ?? []);
   if (p.term_exact) sp.set("term_expand", "none");
   for (const [field, mode] of Object.entries(p.match_mode)) if (mode === "all") sp.set(`${field}_mode`, "all");
   if (p.level) sp.set("level", p.level);
@@ -526,7 +537,7 @@ export function hasAnyFilter(f: SearchFilters): boolean {
 }
 
 export function hasTermFilter(f: SearchFilters): boolean {
-  return TERM_FILTER_NAMES.some((name) => (f.terms?.[name]?.length ?? 0) > 0);
+  return TERM_FILTER_NAMES.some((name) => (f.terms?.[name]?.length ?? 0) > 0) || SAMPLE_PROPERTY_NAMES.some((name) => (f.props?.[name]?.length ?? 0) > 0);
 }
 
 /**
@@ -544,6 +555,13 @@ function termClauses(f: SearchFilters, col: string, key: "gsm_id" | "gse_id", ex
       clauses.push(`${col} IN (${termMatchSql(name, key, f.term_exact)})`);
       params.push(JSON.stringify(termKeys(group)));
     }
+  }
+  // Derived sample properties (donor_status, perturbation, sample_kind): OR within, AND across.
+  for (const name of SAMPLE_PROPERTY_NAMES) {
+    const values = f.props?.[name] ?? [];
+    if (!values.length || ex === name) continue;
+    clauses.push(`${col} IN (${propertyMatchSql(name, key)})`);
+    params.push(JSON.stringify(values));
   }
   return { clauses, params };
 }
@@ -674,7 +692,7 @@ export interface Built {
 
 export interface StudyWhereOpts {
   /** Facet field whose own constraint should be skipped (contextual facet counts). */
-  exclude?: ArrayFilterField | "year" | "min_cells" | "q" | "reference_build" | "protocol" | "file_samples" | "file_cells" | "file_size" | `${TermFilter}_term`;
+  exclude?: ArrayFilterField | "year" | "min_cells" | "q" | "reference_build" | "protocol" | "file_samples" | "file_cells" | "file_size" | `${TermFilter}_term` | SampleProperty;
   /** Restrict to these gse_ids (JSON array string is built here). */
   gseIds?: string[] | null;
 }
@@ -1877,6 +1895,7 @@ export function pickFilters(p: SearchFilters): SearchFilters {
     has_conditions: p.has_conditions,
     terms: p.terms ?? {},
     term_exact: p.term_exact ?? false,
+    props: p.props ?? {},
     match_mode: p.match_mode,
   };
 }

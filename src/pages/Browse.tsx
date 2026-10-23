@@ -40,10 +40,12 @@ import {
   stateFromParams,
   stateToApplied,
   toSearchQuery,
+  toggleProp,
   toggleTerm,
   toggleValue,
   withoutFilter,
   type MultiField,
+  type PropertyField,
   type TermField,
   type BrowseState,
   type View,
@@ -217,6 +219,7 @@ const Browse = () => {
 
   const onToggle = (field: MultiField, value: string) => go(toggleValue(explicitBase(), field, value));
   const onTermToggle = (name: TermField, value: string) => go(toggleTerm(explicitBase(), name, value));
+  const onPropToggle = (name: PropertyField, value: string) => go(toggleProp(explicitBase(), name, value));
   const onMode = (field: MultiField, mode: "any" | "all") => {
     const b = explicitBase();
     go({ ...b, match_mode: { ...b.match_mode, [field]: mode } });
@@ -397,6 +400,7 @@ const Browse = () => {
                  onFileSize={(n) => go({ ...explicitBase(), max_file_bytes: n })}
                  onBoolean={onBoolean}
                 onTermToggle={onTermToggle}
+                onPropToggle={onPropToggle}
                 termLabels={termLabels}
               />
             </div>

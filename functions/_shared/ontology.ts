@@ -24,6 +24,20 @@ export const TERM_FILTERS = {
 export type TermFilter = keyof typeof TERM_FILTERS;
 export const TERM_FILTER_NAMES = Object.keys(TERM_FILTERS) as TermFilter[];
 
+/** Derived sample properties (schema/035 `sample_property`, scripts/ontology/properties.ts): parameter -> values. */
+export const SAMPLE_PROPERTIES = {
+  donor_status: ["healthy", "diseased"],
+  perturbation: ["treated", "genetic", "control"],
+  sample_kind: ["primary", "cell_line", "stem_cell", "organoid", "xenograft"],
+} as const;
+export type SampleProperty = keyof typeof SAMPLE_PROPERTIES;
+export const SAMPLE_PROPERTY_NAMES = Object.keys(SAMPLE_PROPERTIES) as SampleProperty[];
+
+/** `<col> IN (...)` over sample_property for one property; one bound parameter (a JSON array of values). */
+export function propertyMatchSql(property: SampleProperty, col: "gsm_id" | "gse_id"): string {
+  return `SELECT sp.${col} FROM sample_property sp WHERE sp.property = '${property}' AND sp.value IN (SELECT value FROM json_each(?))`;
+}
+
 /** One id and one label per filter, for tool descriptions and docs. */
 export const TERM_EXAMPLES: Record<TermFilter, string> = {
   tissue: '"UBERON:0002048" or "lung"',

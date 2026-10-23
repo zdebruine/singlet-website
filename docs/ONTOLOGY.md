@@ -1,8 +1,9 @@
 # Ontology mapping and filters
 
 Status 2026-10-23. Sample metadata extracted from GEO text (`sample_attr`, schema/030) is mapped to ontology terms, and
-search, the API, the MCP server and the Browse rail filter by those terms with descendants included. Not applied to
-production yet: see [Applying](#applying).
+search, the API, the MCP server and the Browse rail filter by those terms with descendants included. Applied to
+production D1 on 2026-10-23 (034, load, refresh; see [Applying](#applying)). Where this fits in the cell architecture:
+`docs/CELL-ARCHITECTURE.md`.
 
 | Filter (`<name>_term`) | From `sample_attr.attr` | Ontology |
 |---|---|---|
@@ -129,7 +130,8 @@ rail has an "Ontology terms" section with one picker per filter; chips show the 
 
 ## Applying
 
-Nothing in this change writes to D1. To apply (in order; each is idempotent):
+Applied 2026-10-23: 58,464 rows by the load, 143,877 by the refresh (10.4 s, 2.28M rows read). To apply again (in order;
+each is idempotent):
 
 ```
 npx wrangler d1 execute singlet-catalog --remote --file=schema/034_ontology.sql

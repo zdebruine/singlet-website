@@ -31,7 +31,7 @@ import { QUOTA_HEADER, type Identity } from "./identity";
 import { quotaHeaderValue, type Quota } from "./quota";
 import { interpretQuery, isEmptyInterpretation, type InterpretEnv, type Interpreted } from "./interpret";
 import { loadRules, type VocabRule } from "./vocab";
-import { TERM_FILTER_NAMES, type TermFilter } from "./ontology";
+import { SAMPLE_PROPERTY_NAMES, TERM_FILTER_NAMES, type SampleProperty, type TermFilter } from "./ontology";
 import {
   canonicalQuery,
   countStudies,
@@ -117,6 +117,7 @@ function atomicFilters(f: SearchFilters): FilterMatch[] {
     for (const v of f[field]) out.push({ field, value: v });
   }
   for (const name of TERM_FILTER_NAMES) for (const v of f.terms?.[name] ?? []) out.push({ field: `${name}_term`, value: v });
+  for (const name of SAMPLE_PROPERTY_NAMES) for (const v of f.props?.[name] ?? []) out.push({ field: name, value: v });
   if (f.min_cells != null) out.push({ field: "min_cells", value: String(f.min_cells) });
   if (f.year_min != null) out.push({ field: "year_min", value: String(f.year_min) });
   if (f.year_max != null) out.push({ field: "year_max", value: String(f.year_max) });
@@ -143,6 +144,11 @@ function without(f: SearchParams, drop: FilterMatch): SearchParams {
       const term = termField(drop.field);
       if (term) {
         g.terms = { ...f.terms, [term]: (f.terms[term] ?? []).filter((v) => v !== drop.value) };
+        break;
+      }
+      if ((SAMPLE_PROPERTY_NAMES as string[]).includes(drop.field)) {
+        const prop = drop.field as SampleProperty;
+        g.props = { ...f.props, [prop]: (f.props[prop] ?? []).filter((v) => v !== drop.value) };
         break;
       }
       const key = drop.field as "organism" | "tissue_group" | "disease_group" | "assay_family" | "cell_type";
@@ -174,6 +180,7 @@ function onlyFilter(f: SearchParams, keep: FilterMatch): SearchParams {
     default: {
       const term = termField(keep.field);
       if (term) g.terms = { [term]: [keep.value] };
+      else if ((SAMPLE_PROPERTY_NAMES as string[]).includes(keep.field)) g.props = { [keep.field]: [keep.value] };
       else (g as unknown as Record<string, string[]>)[keep.field] = [keep.value];
     }
   }

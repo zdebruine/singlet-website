@@ -8,6 +8,9 @@ import { parseObo } from "../../scripts/ontology/obo";
 import { ALIASES } from "../../scripts/ontology/aliases";
 import { ageRange, buildLabelIndex, LIFE_STAGE_TERMS, matchValue, placeInStage, stageIntervals, variants } from "../../scripts/ontology/map-core";
 import { createTestD1 } from "./helpers/d1-sqlite";
+import { sha256Hex } from "../../functions/_shared/hash";
+import { onRequestPost as ingestPost } from "../../functions/api/ingest/[table]";
+import { perturbationOf, propertiesOf, sampleKindOf } from "../../scripts/ontology/properties";
 
 const OBO = `format-version: 1.2
 data-version: test
@@ -375,5 +378,85 @@ describe("GET /api/ontology/terms", () => {
     expect((await get(createTestD1(), "filter=organ")).status).toBe(400);
     const empty = await get(createTestD1(), "filter=tissue");
     expect(empty.body).toMatchObject({ available: false, terms: [] });
+  });
+});
+
+// ── Cell tier: derived sample properties and the ingest of summaries (schema/035) ─────────
+
+describe("derived sample properties", () => {
+  it("reads perturbation from treatment status and engineered genotypes only", () => {
+    expect(perturbationOf("treatment_status", "treated")).toMatchObject({ value: "treated" });
+    expect(perturbationOf("treatment_status", "vehicle")).toMatchObject({ value: "control" });
+    expect(perturbationOf("genotype", "C57BL/6J")).toMatchObject({ value: "control" });
+    expect(perturbationOf("genotype", "Trem2-/-")).toMatchObject({ value: "genetic" });
+    expect(perturbationOf("genotype", "Cx3cr1CreERT2/+")).toMatchObject({ value: "genetic" });
+    expect(perturbationOf("genotype", "ARID1A KO")).toMatchObject({ value: "genetic" });
+    expect(perturbationOf("genotype", "BRCA1 mutation")).toBeNull(); // a patient's genotype, not an experiment
+    expect(perturbationOf("genotype", "trisomy 21")).toBeNull();
+    expect(perturbationOf("genotype", "Crohn's disease")).toBeNull();
+  });
+  it("reads the sample kind from the cell line field and organoid/xenograft words", () => {
+    expect(sampleKindOf("sample_type", "K562 Cell line")).toMatchObject({ value: "cell_line" });
+    expect(sampleKindOf("sample_type", "HEK293FT")).toMatchObject({ value: "cell_line" });
+    expect(sampleKindOf("sample_type", "H9")).toMatchObject({ value: "stem_cell" });
+    expect(sampleKindOf("sample_type", "primary cells")).toMatchObject({ value: "primary" });
+    expect(sampleKindOf("sample_type", "human")).toBeNull();
+    expect(sampleKindOf("sample_type", "knee - OA")).toBeNull();
+    expect(sampleKindOf("tissue", "Midbrain organoids")).toMatchObject({ value: "organoid" });
+    expect(sampleKindOf("tissue", "PDX tumor")).toMatchObject({ value: "xenograft" });
+    expect(sampleKindOf("cell_type_sorted", "iPSC-derived neural progenitors")).toMatchObject({ value: "stem_cell" });
+    expect(propertiesOf("treatment_status", "treated")).toHaveLength(1);
+  });
+
+  it("properties.sql derives donor status, perturbation and kind, and drops conflicts", async () => {
+    const db = createTestD1(`${BASE}\n${readFileSync("schema/035_cell_tier.sql", "utf8")}
+      INSERT INTO ontology_value_map (attr, organism, value_norm, term_id, method, source, confidence, mapper_version) VALUES
+        ('disease', '', 'healthy', 'PATO:0000461', 'curated', 'geo', 0.9, 't'), ('disease', '', 'copd', 'MONDO:0005002', 'curated', 'geo', 0.9, 't');
+      INSERT INTO sample_attr (gsm_id, gse_id, attr, value_raw, value_norm, source, extractor_version) VALUES
+        ('S1', 'GSE1', 'disease', 'healthy', 'healthy', 'geo', 'x'),
+        ('S2', 'GSE1', 'disease', 'COPD', 'copd', 'geo', 'x'), ('S2', 'GSE1', 'treatment_status', 'DMSO', 'vehicle', 'geo', 'x'),
+        ('S2', 'GSE1', 'genotype', 'Trem2-/-', 'Trem2-/-', 'geo', 'x'),
+        ('S3', 'GSE2', 'disease', 'healthy', 'healthy', 'geo', 'x'), ('S3', 'GSE2', 'disease', 'COPD', 'copd', 'geo', 'x'),
+        ('S3', 'GSE2', 'sample_type', 'K562', 'cell line', 'geo', 'x');
+      INSERT INTO property_value_map (attr, match_on, value, property, prop_value, confidence, evidence, version) VALUES
+        ('treatment_status', 'value_norm', 'vehicle', 'perturbation', 'control', 0.85, 'e', 'v'),
+        ('genotype', 'value_norm', 'Trem2-/-', 'perturbation', 'genetic', 0.8, 'e', 'v'),
+        ('sample_type', 'value_raw', 'K562', 'sample_kind', 'cell_line', 0.9, 'e', 'v');`);
+    db.raw.exec(readFileSync("scripts/ontology/refresh.sql", "utf8"));
+    db.raw.exec(readFileSync("scripts/ontology/properties.sql", "utf8"));
+    db.raw.exec(readFileSync("scripts/ontology/properties.sql", "utf8"));
+    const rows = db.raw.prepare("SELECT gsm_id, property, value FROM sample_property ORDER BY gsm_id, property, value").all();
+    expect(rows).toEqual([
+      { gsm_id: "S1", property: "donor_status", value: "healthy" },
+      { gsm_id: "S2", property: "donor_status", value: "diseased" },
+      { gsm_id: "S2", property: "perturbation", value: "genetic" }, // the vehicle arm of a knockout is still perturbed
+      { gsm_id: "S3", property: "sample_kind", value: "cell_line" }, // healthy and COPD at once: no donor status
+    ]);
+    // The search filters: closed values only, AND across properties.
+    const p = parseSearchParams(new URL("https://x/api/search?donor_status=Diseased&perturbation=genetic&sample_kind=bogus"));
+    expect(p.props).toEqual({ donor_status: ["diseased"], perturbation: ["genetic"] });
+    expect(canonicalQuery(p)).toContain("donor_status=diseased");
+    const w = buildSampleWhere({ ...emptyFilters(), props: p.props });
+    const hits = db.raw.prepare(`SELECT s.gsm_id FROM gsm s JOIN gse_meta m ON m.gse_id = s.gse_id WHERE ${w.clauses.join(" AND ")}`).all(...(w.params as never[]));
+    expect(hits).toEqual([{ gsm_id: "S2" }]);
+  });
+
+  it("ingests the feature registry and per-sample summaries, never cells", async () => {
+    const DB = createTestD1(readFileSync("schema/035_cell_tier.sql", "utf8"));
+    const env = { DB, INGEST_TOKEN_SHA256: await sha256Hex("tok") };
+    const post = (table: string, rows: unknown[]) =>
+      ingestPost({ request: new Request(`https://singlet.bio/api/ingest/${table}`, { method: "POST", headers: { "x-ingest-token": "tok", "content-type": "application/json" }, body: JSON.stringify({ rows }) }), env, params: { table } } as never);
+    const feature = { feature_id: "hallmark-2023.1/HALLMARK_HYPOXIA", feature_set: "hallmark-2023.1", kind: "score", label: "Hypoxia", method: "rank-auc", method_version: "1", licence: "CC-BY-4.0", storage: "sidecar" };
+    expect((await post("cell_feature", [feature])).status).toBe(200);
+    expect((await post("cell_feature", [{ ...feature, feature_id: "bad id with spaces" }])).status).toBe(400);
+    expect((await post("cell_feature", [{ ...feature, storage: "d1" }])).status).toBe(400);
+    const summary = { gsm_id: "GSM1", gse_id: "GSE1", subject: "cell_type", item: "CL:0000084", n_cells: 120, n_hi1: 100, n_hi2: 80, version: "annot-0.1" };
+    expect((await post("sample_cell_summary", [summary, { ...summary, subject: "feature", item: feature.feature_id, n_cells: 900, q50: 0.2 }])).status).toBe(200);
+    expect((await post("sample_cell_summary", [{ ...summary, n_cells: 130 }])).status).toBe(200); // upsert on (subject, item, gsm)
+    expect((await post("sample_cell_summary", [{ ...summary, subject: "cell" }])).status).toBe(400);
+    expect(DB.raw.prepare("SELECT subject, item, n_cells FROM sample_cell_summary ORDER BY subject").all()).toEqual([
+      { subject: "cell_type", item: "CL:0000084", n_cells: 130 },
+      { subject: "feature", item: "hallmark-2023.1/HALLMARK_HYPOXIA", n_cells: 900 },
+    ]);
   });
 });

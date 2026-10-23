@@ -36,6 +36,14 @@ export const TERM_FIELDS = [
 ] as const;
 export type TermField = (typeof TERM_FIELDS)[number]["name"];
 
+/** Derived sample properties (the server's SAMPLE_PROPERTIES), with display labels. */
+export const PROPERTY_FIELDS = [
+  { name: "donor_status", label: "Donor", values: [["healthy", "Healthy"], ["diseased", "Diseased"]] },
+  { name: "perturbation", label: "Perturbation", values: [["control", "Control"], ["treated", "Treated"], ["genetic", "Genetic"]] },
+  { name: "sample_kind", label: "Sample kind", values: [["primary", "Primary"], ["organoid", "Organoid"], ["cell_line", "Cell line"], ["stem_cell", "Stem cell"], ["xenograft", "Xenograft"]] },
+] as const;
+export type PropertyField = (typeof PROPERTY_FIELDS)[number]["name"];
+
 export const SORTS: { value: Sort; label: string }[] = [
   { value: "relevance", label: "Best match" },
   { value: "file_cells", label: "Most cells (file)" },
@@ -89,6 +97,8 @@ export interface BrowseState {
   /** Ontology filters by name (see TERM_FIELDS). */
   terms: Record<string, string[]>;
   term_exact: boolean;
+  /** Derived sample properties by name (see PROPERTY_FIELDS). */
+  props: Record<string, string[]>;
   match_mode: Record<string, "any" | "all">;
   sort: Sort;
   page: number;
@@ -119,6 +129,7 @@ export const DEFAULT_STATE: BrowseState = {
   has_conditions: null,
   terms: {},
   term_exact: false,
+  props: {},
   match_mode: {},
   sort: defaultSort(""),
   page: 1,
@@ -171,6 +182,7 @@ export function parseBrowseState(sp: URLSearchParams): BrowseState {
     has_conditions: sp.has("has_conditions") ? sp.get("has_conditions") === "1" : null,
     terms: Object.fromEntries(TERM_FIELDS.map((t) => [t.name, multi(sp, `${t.name}_term`)]).filter(([, v]) => v.length)),
     term_exact: sp.get("term_expand") === "none",
+    props: Object.fromEntries(PROPERTY_FIELDS.map((p) => [p.name, multi(sp, p.name)]).filter(([, v]) => v.length)),
     match_mode: Object.fromEntries([...ARRAY_FIELDS, "reference_build", "protocol", ...TERM_FIELDS.map((t) => `${t.name}_term`)].filter((f) => sp.get(`${f}_mode`) === "all").map((f) => [f, "all"])),
     sort,
     page: Math.max(1, intOrNull(sp.get("page")) ?? 1),
@@ -199,6 +211,7 @@ export function serializeBrowseState(s: BrowseState): URLSearchParams {
   if (s.has_conditions != null) sp.set("has_conditions", s.has_conditions ? "1" : "0");
   for (const t of TERM_FIELDS) for (const v of s.terms[t.name] ?? []) sp.append(`${t.name}_term`, v);
   if (s.term_exact) sp.set("term_expand", "none");
+  for (const p of PROPERTY_FIELDS) for (const v of s.props[p.name] ?? []) sp.append(p.name, v);
   for (const [field, mode] of Object.entries(s.match_mode)) if (mode === "all") sp.set(`${field}_mode`, "all");
   if (s.sort !== defaultSort(s.q)) sp.set("sort", s.sort);
   if (s.page > 1) sp.set("page", String(s.page));
@@ -226,6 +239,7 @@ export function hasExplicitFilters(s: BrowseState): boolean {
     || s.min_file_samples != null || s.min_file_cells != null || s.reference_build.length > 0 || s.protocol.length > 0
     || s.has_pubmed != null || s.max_file_bytes != null || s.has_conditions != null
     || Object.values(s.terms).some((v) => v.length > 0)
+    || Object.values(s.props).some((v) => v.length > 0)
   );
 }
 
@@ -253,6 +267,7 @@ export function toSearchQuery(s: BrowseState, limit = PAGE_SIZE): SearchQuery {
     has_conditions: s.has_conditions ?? undefined,
     terms: s.terms,
     term_exact: s.term_exact || undefined,
+    props: s.props,
     match_mode: s.match_mode,
     sort: s.sort,
     page: s.page,
@@ -284,6 +299,7 @@ export function appliedToQuery(a: AppliedFilters, level: Level): SearchQuery {
     has_conditions: a.has_conditions ?? undefined,
     terms: a.terms,
     term_exact: a.term_exact || undefined,
+    props: a.props,
     match_mode: a.match_mode,
   };
 }
@@ -317,6 +333,7 @@ export function appliedToState(a: AppliedFilters, base: BrowseState): BrowseStat
     has_conditions: a.has_conditions,
     terms: Object.fromEntries(Object.entries(a.terms ?? {}).map(([k, v]) => [k, [...v]])),
     term_exact: a.term_exact ?? false,
+    props: Object.fromEntries(Object.entries(a.props ?? {}).map(([k, v]) => [k, [...v]])),
     match_mode: { ...a.match_mode },
     page: 1,
   };
@@ -350,6 +367,7 @@ export const FIELD_LABEL: Record<string, string> = {
   include_low_qc: "Low QC",
   all_filters: "All filters",
   ...Object.fromEntries(TERM_FIELDS.map((t) => [`${t.name}_term`, `${t.label} (ontology)`])),
+  ...Object.fromEntries(PROPERTY_FIELDS.map((p) => [p.name, p.label])),
 };
 
 export interface ActiveFilter {
@@ -368,6 +386,7 @@ export function activeFilters(a: AppliedFilters, organismLabel: (v: string) => s
   for (const v of a.cell_type) out.push({ field: "cell_type", value: v, label: v });
   for (const v of a.reference_build) out.push({ field: "reference_build", value: v, label: v });
   for (const v of a.protocol) out.push({ field: "protocol", value: v, label: v });
+  for (const p of PROPERTY_FIELDS) for (const v of a.props?.[p.name] ?? []) out.push({ field: p.name, value: v, label: (p.values as readonly (readonly [string, string])[]).find(([x]) => x === v)?.[1] ?? v });
   for (const t of TERM_FIELDS) for (const v of a.terms?.[t.name] ?? []) out.push({ field: `${t.name}_term`, value: v, label: termLabels?.get(v) ?? v });
   if (a.min_cells != null) out.push({ field: "min_cells", value: String(a.min_cells), label: `≥ ${a.min_cells.toLocaleString()} cells` });
   if (a.year_min != null) out.push({ field: "year_min", value: String(a.year_min), label: `from ${a.year_min}` });
@@ -421,12 +440,20 @@ export function withoutFilter(s: BrowseState, field: string, value: string): Bro
       next.include_low_qc = false;
       break;
     default:
-      if (field.endsWith("_term")) {
+      if (PROPERTY_FIELDS.some((p) => p.name === field)) {
+        next.props = { ...s.props, [field]: (s.props[field] ?? []).filter((v) => v !== value) };
+      } else if (field.endsWith("_term")) {
         const name = field.slice(0, -5);
         next.terms = { ...s.terms, [name]: (s.terms[name] ?? []).filter((v) => v !== value) };
       }
   }
   return next;
+}
+
+export function toggleProp(s: BrowseState, name: PropertyField, value: string): BrowseState {
+  const cur = s.props[name] ?? [];
+  const next = cur.includes(value) ? cur.filter((v) => v !== value) : [...cur, value];
+  return { ...s, page: 1, props: { ...s.props, [name]: next } };
 }
 
 export function toggleTerm(s: BrowseState, name: TermField, value: string): BrowseState {
@@ -463,6 +490,7 @@ export function stateToApplied(s: BrowseState): AppliedFilters {
     has_conditions: s.has_conditions,
     terms: s.terms,
     term_exact: s.term_exact,
+    props: s.props,
     match_mode: s.match_mode,
   };
 }

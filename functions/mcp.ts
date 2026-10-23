@@ -33,7 +33,7 @@ import { requestId } from "./_shared/errors";
 import { loadStudy, bundleUrl, GSE_RE, type StudyDetail } from "./_shared/study-core";
 import { computeStats } from "./_shared/stats-core";
 import { TISSUE_GROUPS, DISEASE_GROUPS, ASSAY_FAMILIES } from "./_shared/vocab";
-import { TERM_EXAMPLES, TERM_FILTERS, TERM_FILTER_NAMES } from "./_shared/ontology";
+import { SAMPLE_PROPERTIES, SAMPLE_PROPERTY_NAMES, TERM_EXAMPLES, TERM_FILTERS, TERM_FILTER_NAMES } from "./_shared/ontology";
 import { MANIFEST_FORMATS } from "./_shared/manifest-core";
 import type { StudyRow, SampleRow } from "./_shared/search-core";
 import { getCohort, saveCohort, ProductError, type ProductCtx } from "./_shared/product";
@@ -118,7 +118,11 @@ const TERM_ARGS = Object.fromEntries(TERM_FILTER_NAMES.map((name) => [`${name}_t
   type: "array",
   items: { type: "string" },
   description: `${TERM_FILTERS[name].label} as ${TERM_FILTERS[name].ontologies.join("/")} ids or labels (e.g. ${TERM_EXAMPLES[name]}); matches samples mapped to the term or any descendant.`,
-}]));
+}]).concat(SAMPLE_PROPERTY_NAMES.map((name) => [name, {
+  type: "array",
+  items: { type: "string", enum: SAMPLE_PROPERTIES[name] as unknown as string[] },
+  description: `Derived sample property ${name}; samples without evidence for it are left out when set.`,
+}])));
 
 
 const TOOLS = [
@@ -722,6 +726,7 @@ function describeApplied(applied: NlSearchBody["applied"]): string {
   if (applied.assay_family.length) parts.push(`assay: ${applied.assay_family.join(" or ")}`);
   if (applied.cell_type.length) parts.push(`cell type: ${applied.cell_type.join(" or ")}`);
   for (const name of TERM_FILTER_NAMES) if (applied.terms?.[name]?.length) parts.push(`${TERM_FILTERS[name].label.toLowerCase()} (ontology): ${applied.terms[name]!.join(" or ")}`);
+  for (const name of SAMPLE_PROPERTY_NAMES) if (applied.props?.[name]?.length) parts.push(`${name.replace("_", " ")}: ${applied.props[name]!.join(" or ")}`);
   if (applied.min_cells != null) parts.push(`at least ${fmt(applied.min_cells)} cells`);
   if (applied.year_min != null || applied.year_max != null) parts.push(`year ${applied.year_min ?? "…"}–${applied.year_max ?? "…"}`);
   if (applied.q) parts.push(`text: "${applied.q}"`);
@@ -752,6 +757,7 @@ async function searchDatasets(
   for (const v of strArray(args.disease)) url.searchParams.append("disease_group", v);
   for (const v of strArray(args.assay)) url.searchParams.append("assay_family", v);
   for (const name of TERM_FILTER_NAMES) for (const v of strArray(args[`${name}_term`])) url.searchParams.append(`${name}_term`, v);
+  for (const name of SAMPLE_PROPERTY_NAMES) for (const v of strArray(args[name])) url.searchParams.append(name, v);
   if (args.min_cells != null && Number.isFinite(Number(args.min_cells))) url.searchParams.set("min_cells", String(Math.max(0, Math.floor(Number(args.min_cells)))));
   if (args.include_unbuilt === true) url.searchParams.set("has_bundle", "0");
   if (args.include_low_qc === true) url.searchParams.set("include_low_qc", "1");

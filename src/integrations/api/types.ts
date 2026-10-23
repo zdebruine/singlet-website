@@ -150,6 +150,8 @@ export interface AppliedFilters {
   terms?: Record<string, string[]>;
   /** Match only the named terms, not their descendants. */
   term_exact?: boolean;
+  /** Derived sample properties: donor_status, perturbation, sample_kind. */
+  props?: Record<string, string[]>;
   match_mode: Record<string, "any" | "all">;
 }
 
@@ -540,6 +542,7 @@ export interface SearchQuery {
   has_conditions?: boolean;
   terms?: Record<string, string[]>;
   term_exact?: boolean;
+  props?: Record<string, string[]>;
   match_mode?: Record<string, "any" | "all">;
   sort?: Sort;
   page?: number;

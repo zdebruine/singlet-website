@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import { fmtInt } from "@/lib/catalog-display";
 import { apiClient } from "@/integrations/api/client";
 import type { AppliedFilters } from "@/integrations/api/types";
-import { TERM_FIELDS, type TermField } from "./browse-state";
+import { PROPERTY_FIELDS, TERM_FIELDS, type PropertyField, type TermField } from "./browse-state";
 
 /** Labels for the ontology ids in the applied filters, for chips ("UBERON:0002048" -> "lung"). */
 export function useTermLabels(applied: AppliedFilters): Map<string, string> {
@@ -107,14 +107,36 @@ function TermPicker({ name, label, ontologies, placeholder, selected, labels, on
  * narrower term ("T cell" includes CD4-positive T cells, "lung" includes its lobes). Counts are studies with a
  * file that have such samples.
  */
-export function OntologyFilters({ current, labels, onToggle }: { current: AppliedFilters; labels: Map<string, string>; onToggle: (name: TermField, value: string) => void }) {
+export function OntologyFilters({ current, labels, onToggle, onPropToggle }: {
+  current: AppliedFilters;
+  labels: Map<string, string>;
+  onToggle: (name: TermField, value: string) => void;
+  onPropToggle: (name: PropertyField, value: string) => void;
+}) {
   return (
     <div>
+      {PROPERTY_FIELDS.map((p) => (
+        <div key={p.name} className="py-1.5">
+          <div className="mb-1 text-[13px] text-foreground/90">{p.label}</div>
+          <div className="flex flex-wrap gap-1.5" role="group" aria-label={p.label}>
+            {p.values.map(([value, label]) => {
+              const on = (current.props?.[p.name] ?? []).includes(value);
+              return (
+                <button key={value} type="button" aria-pressed={on} onClick={() => onPropToggle(p.name, value)}
+                  className={cn("chip h-7 px-2 text-[12px]", on && "border-primary text-primary bg-primary/5")}>
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ))}
       {TERM_FIELDS.map((t) => (
         <TermPicker key={t.name} name={t.name} label={t.label} ontologies={t.ontologies} placeholder={t.placeholder} selected={current.terms?.[t.name] ?? []} labels={labels} onToggle={onToggle} />
       ))}
       <p className="mt-2 text-[11px] leading-snug text-muted-foreground">
         Sample metadata mapped to ontology terms. A term also matches its narrower terms. Counts are studies with a file.
+        Donor, perturbation and sample kind are read from the sample's GEO fields; samples without that evidence are left out when one is set.
       </p>
     </div>
   );

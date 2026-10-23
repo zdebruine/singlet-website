@@ -193,6 +193,7 @@ const EMPTY_APPLIED = (): FacetsResponse["applied"] => ({
   has_conditions: null,
   terms: {},
   term_exact: false,
+  props: {},
   match_mode: {},
 });
 
@@ -219,6 +220,7 @@ function normalizeApplied(v: unknown): FacetsResponse["applied"] {
     has_conditions: typeof a.has_conditions === "boolean" ? a.has_conditions : null,
     terms: Object.fromEntries(Object.entries(rec(a.terms)).map(([k, v]) => [k, strArr(v)]).filter(([, v]) => v.length)),
     term_exact: a.term_exact === true,
+    props: Object.fromEntries(Object.entries(rec(a.props)).map(([k, v]) => [k, strArr(v)]).filter(([, v]) => v.length)),
     match_mode: rec(a.match_mode) as Record<string, "any" | "all">,
   };
 }
@@ -699,6 +701,7 @@ function searchParams(q: SearchQuery): Record<string, ParamValue> {
     has_conditions: q.has_conditions,
     ...Object.fromEntries(Object.entries(q.terms ?? {}).filter(([, v]) => v.length).map(([name, v]) => [`${name}_term`, v])),
     term_expand: q.term_exact ? "none" : undefined,
+    ...Object.fromEntries(Object.entries(q.props ?? {}).filter(([, v]) => v.length)),
     ...Object.fromEntries(Object.entries(q.match_mode ?? {}).map(([field, mode]) => [`${field}_mode`, mode])),
     sort: q.sort,
     page: q.page,

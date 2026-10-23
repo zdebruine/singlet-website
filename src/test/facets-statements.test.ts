@@ -35,6 +35,7 @@ const empty: SearchFilters = {
   has_conditions: null,
   terms: {},
   term_exact: false,
+  props: {},
   match_mode: {},
 };
 
@@ -59,6 +60,7 @@ const everything: SearchFilters = {
   has_conditions: true,
   terms: {},
   term_exact: false,
+  props: {},
   match_mode: {},
 };
 
