@@ -139,8 +139,9 @@ npx wrangler d1 execute singlet-catalog --remote --file=scripts/ontology/refresh
 
 Expected rows written: about 58,460 by the load (terms, closure, labels, value map) and about 143,900 by the refresh
 (62,660 `sample_term`, 78,573 `sample_attr` updates, 2,614 counts), plus index writes. The slowest refresh statement
-(tissue counts) took 7 s on a laptop copy. Until the tables exist the filters return no matches and the term endpoint
-answers `available: false`, so code and data can land in either order.
+(tissue counts) took 7 s on a laptop copy. Apply `034_ontology.sql` before merging: a search with a `<name>_term` filter
+fails while the tables are missing (previews share the production database), searches without one are unaffected. With
+the tables created but not yet loaded, term filters match nothing and the term endpoint returns empty lists.
 
 Refreshing: run `refresh.sql` after new `sample_attr` rows are ingested (values already in the map are picked up). To
 map new values, rerun `fetch-obo.sh`, `export-values.sh` and `npm run ontology:build -- --obo ontology-obo --values
