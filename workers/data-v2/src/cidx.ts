@@ -122,6 +122,25 @@ export interface Directory {
   totals: Record<string, number>;
   /** id -> label of every dictionary term and every ancestor they list */
   terms?: Record<string, string>;
+  /** registered per-cell features (spec section 4.9) */
+  features?: FeatureSpec[];
+  /** range field -> sample-table column prefix of its per-sample min/q10/q50/q90/max */
+  sample_stats?: Record<string, string>;
+}
+
+export interface FeatureSpec {
+  name: string;
+  version: string;
+  dtype: "u8" | "u16";
+  lo: number;
+  hi: number;
+  scale: number;
+  na: number;
+  thresholds: number[];
+  description: string;
+  producer: string;
+  /** physical shard column, f1, f2, ... */
+  column: string;
 }
 
 export interface PlanMember {
@@ -299,6 +318,8 @@ const SCORE_FIELDS = new Set(["cell_type_score", "sex_score", "ancestry_prob"]);
 const SEX_CODE: Record<string, number> = { unknown: 0, female: 1, male: 2, ambiguous: 3 };
 const GSM_RE = /^GSM(\d{1,9})$/;
 const GSE_RE = /^GSE(\d{1,9})$/;
+const RANGE_NAME = /^[a-z][a-z0-9_]{0,47}$/;
+const WHERE_KEYS = ["organism", "cell_type", "tissue", "sex", "ancestry", "samples", "studies", "ranges"];
 
 export interface Where {
   organism?: string;
@@ -338,12 +359,32 @@ export function dictCodes(entries: DictEntry[], wanted: string[], descendants = 
   return out;
 }
 
-function q8Lower(v: number): number {
-  return Math.ceil(v * SCALE8 - 1e-9);
+/** The code a score bound compares against: the code the bound's value is stored as (round half up). Same as singlet.v2.atlas.q8_threshold. */
+export function q8Code(v: number): number {
+  return Math.floor(v * SCALE8 + 0.5);
 }
-function q8Upper(v: number): number {
-  return Math.floor(v * SCALE8 + 1e-9);
+
+/** The code a feature bound compares against (FeatureSpec.bound). */
+export function featureCode(f: FeatureSpec, v: number): number {
+  return Math.floor(((v - f.lo) / (f.hi - f.lo)) * f.scale + 0.5);
 }
+
+/** lowbias32 (C. Wellons), as singlet.v2.atlas._mix32. */
+export function mix32(x: number): number {
+  x >>>= 0;
+  x ^= x >>> 16;
+  x = Math.imul(x, 0x7feb352d);
+  x ^= x >>> 15;
+  x = Math.imul(x, 0x846ca68b);
+  x ^= x >>> 16;
+  return x >>> 0;
+}
+
+/** The sampling key: mix32(mix32(seed ^ a) ^ b), u32 (singlet.v2.atlas.hash32). */
+export function hash32(seed: number, a: number, b: number): number {
+  return mix32((mix32((seed ^ a) >>> 0) ^ b) >>> 0);
+}
+export const CHUNK_SALT = 0x5bd1e995;
 
 export class QueryPlan {
   orgCodes: Set<number> | null = null;
@@ -351,9 +392,11 @@ export class QueryPlan {
   tissue: Uint8Array | null = null;
   anc: Uint8Array | null = null;
   sex: Uint8Array | null = null;
+  /** [query name, shard columns, lo code, hi code] */
   ranges: [string, string[], number, number][] = [];
   sampleSet: Uint32Array | null = null; // sorted
   exclude: Set<number>;
+  features: Map<string, FeatureSpec>;
   /** a hash of the normalised query, bound into cursors */
   digest = "";
 
@@ -362,9 +405,8 @@ export class QueryPlan {
     readonly where: Where
   ) {
     const w = where ?? {};
-    for (const k of Object.keys(w)) {
-      if (!["organism", "cell_type", "tissue", "sex", "ancestry", "samples", "studies", "ranges"].includes(k)) throw new CidxError(400, "bad_request", `Unknown filter '${k}'.`);
-    }
+    for (const k of Object.keys(w)) if (!WHERE_KEYS.includes(k)) throw new CidxError(400, "bad_request", `Unknown filter '${k}'.`);
+    this.features = new Map((d.features ?? []).map((f) => [f.name, f]));
     if (w.organism) {
       const codes = dictCodes(d.dicts.organism, [String(w.organism)], false);
       for (const e of d.dicts.organism) if (e.id === w.organism) codes.push(e.code);
@@ -384,22 +426,30 @@ export class QueryPlan {
       }
     }
     for (const [k, v] of Object.entries(w.ranges ?? {})) {
-      const cols = RANGE_FIELDS[k];
-      if (!cols) throw new CidxError(400, "bad_request", `Unknown range field '${k}'. Use ${Object.keys(RANGE_FIELDS).join(", ")}.`);
+      if (!RANGE_NAME.test(k)) throw new CidxError(400, "bad_request", `'${k}' is not a field name.`);
       const [lo, hi] = Array.isArray(v) ? v : [v as unknown as number, null];
       if ((lo !== null && lo !== undefined && !Number.isFinite(Number(lo))) || (hi !== null && hi !== undefined && !Number.isFinite(Number(hi)))) {
         throw new CidxError(400, "bad_request", `ranges.${k} must be [min, max] numbers or null.`);
       }
-      let a: number;
-      let b: number;
-      if (SCORE_FIELDS.has(k)) {
-        a = lo == null ? 0 : q8Lower(Number(lo));
-        b = hi == null ? SCALE8 : Math.min(SCALE8, q8Upper(Number(hi)));
+      const f = this.features.get(k);
+      if (RANGE_FIELDS[k]) {
+        let a: number;
+        let b: number;
+        if (SCORE_FIELDS.has(k)) {
+          a = lo == null ? 0 : q8Code(Number(lo));
+          b = hi == null ? SCALE8 : Math.min(SCALE8, q8Code(Number(hi)));
+        } else {
+          a = lo == null ? 0 : Math.ceil(Number(lo));
+          b = hi == null ? Number.MAX_SAFE_INTEGER : Math.floor(Number(hi));
+        }
+        this.ranges.push([k, RANGE_FIELDS[k], a, b]);
+      } else if (f) {
+        const a = lo == null ? 0 : Math.max(0, featureCode(f, Number(lo)));
+        const b = hi == null ? f.scale : Math.min(f.scale, featureCode(f, Number(hi)));
+        this.ranges.push([k, [f.column], a, b]);
       } else {
-        a = lo == null ? 0 : Math.ceil(Number(lo));
-        b = hi == null ? Number.MAX_SAFE_INTEGER : Math.floor(Number(hi));
+        throw new CidxError(400, "bad_request", `Unknown range field '${k}'. Use ${[...Object.keys(RANGE_FIELDS), ...this.features.keys()].join(", ")}.`);
       }
-      this.ranges.push([k, cols, a, b]);
     }
     this.exclude = new Set(d.exclude ?? []);
     this.digest = JSON.stringify(w);
@@ -437,6 +487,33 @@ export class QueryPlan {
     this.sampleSet = Uint32Array.from(out);
   }
 
+  /**
+   * Per-ordinal mask of the samples that can hold matching cells: organism, sample/study set, exclusions, and ranges the per-sample
+   * min/max rule out (singlet.v2.atlas._Plan.samples_ok).
+   */
+  samplesOk(t: Record<string, Uint32Array>): Uint8Array {
+    const ok = new Uint8Array((this.d.samples.max_so ?? 0) + 2);
+    const stat = this.d.sample_stats ?? {};
+    const rangeStats = this.ranges
+      .map(([k, , a, b]) => ({ pre: stat[k], a, b, feature: this.features.has(k) }))
+      .filter((r) => r.pre && t[`${r.pre}_min`] !== undefined);
+    for (let i = 0; i < t.so.length; i++) {
+      const so = t.so[i];
+      if (this.orgCodes && !this.orgCodes.has(t.organism[i])) continue;
+      if (this.exclude.has(so)) continue;
+      if (this.sampleSet && !this.sampleOverlap(so, so)) continue;
+      let good = true;
+      for (const r of rangeStats) {
+        if (t[`${r.pre}_max`][i] < r.a || t[`${r.pre}_min`][i] > r.b || (r.feature && t[`${r.pre}_n`][i] === 0)) {
+          good = false;
+          break;
+        }
+      }
+      if (good && so < ok.length) ok[so] = 1;
+    }
+    return ok;
+  }
+
   hasRowRanges(): boolean {
     return this.ranges.length > 0;
   }
@@ -447,7 +524,7 @@ export class QueryPlan {
     return false;
   }
 
-  private sampleOverlap(lo: number, hi: number): boolean {
+  sampleOverlap(lo: number, hi: number): boolean {
     const s = this.sampleSet;
     if (!s) return true;
     let a = 0;
@@ -527,8 +604,8 @@ export interface GroupRef {
   g: number;
 }
 
-/** Candidate row groups in directory order, starting at cursor (shard, group). Reads shard headers 6 at a time. */
-export async function* candidateGroups(deps: Deps, p: QueryPlan, start: { s: number; g: number }, stats?: ReadStats): AsyncGenerator<GroupRef> {
+/** Shards a query can touch (directory zone maps, postings for small sample sets), and the postings. */
+export async function candidateShards(deps: Deps, p: QueryPlan, start: { s: number }, stats?: ReadStats): Promise<{ shards: ShardEntry[]; postings: Map<number, [number, number][]> | null }> {
   const d = p.d;
   let postings: Map<number, [number, number][]> | null = null;
   if (p.sampleSet && p.sampleSet.length <= POSTINGS_MAX_SAMPLES) {
@@ -552,6 +629,12 @@ export async function* candidateGroups(deps: Deps, p: QueryPlan, start: { s: num
       shards.push(sh);
     }
   }
+  return { shards, postings };
+}
+
+/** Candidate row groups in directory order, starting at cursor (shard, group). Reads shard headers 6 at a time. */
+export async function* candidateGroups(deps: Deps, p: QueryPlan, start: { s: number; g: number }, stats?: ReadStats): AsyncGenerator<GroupRef> {
+  const { shards, postings } = await candidateShards(deps, p, start, stats);
   for (let i = 0; i < shards.length; i += 6) {
     const batch = shards.slice(i, i + 6);
     const heads = await Promise.all(batch.map((sh) => shardHeader(deps, sh.key, stats)));
@@ -576,14 +659,6 @@ export async function* candidateGroups(deps: Deps, p: QueryPlan, start: { s: num
 
 // ── cursors ─────────────────────────────────────────────────────────────────
 
-export interface Cursor {
-  v: string;
-  q: string;
-  s: number;
-  g: number;
-  r: number;
-}
-
 function b64url(s: string): string {
   return btoa(unescape(encodeURIComponent(s))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
@@ -596,30 +671,74 @@ async function qhash(s: string): Promise<string> {
   return [...new Uint8Array(h).slice(0, 8)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-export async function encodeCursor(c: Omit<Cursor, "q">, digest: string): Promise<string> {
-  return b64url(JSON.stringify({ ...c, q: await qhash(digest) }));
+/** Opaque cursor: {v: version, q: query digest, ...position}; rejected for another query or version. */
+export async function encodeCursor(pos: Record<string, number>, version: string, digest: string): Promise<string> {
+  return b64url(JSON.stringify({ v: version, q: await qhash(digest), ...pos }));
 }
 
-export async function decodeCursor(s: unknown, version: string, digest: string): Promise<Cursor | null> {
+export async function decodeCursor(s: unknown, version: string, digest: string, fields: string[]): Promise<Record<string, number> | null> {
   if (s === undefined || s === null || s === "") return null;
-  let c: Cursor;
+  let c: Record<string, unknown>;
   try {
-    c = JSON.parse(unb64url(String(s))) as Cursor;
+    c = JSON.parse(unb64url(String(s))) as Record<string, unknown>;
   } catch {
     throw new CidxError(400, "bad_cursor", "The cursor is not valid.");
   }
   if (c.v !== version || c.q !== (await qhash(digest))) throw new CidxError(400, "bad_cursor", "The cursor belongs to another query or index version.");
-  if (![c.s, c.g, c.r].every((x) => Number.isInteger(x) && x >= 0)) throw new CidxError(400, "bad_cursor", "The cursor is not valid.");
-  return c;
+  const out: Record<string, number> = {};
+  for (const f of fields) {
+    const x = c[f];
+    if (!Number.isInteger(x) || (x as number) < 0) throw new CidxError(400, "bad_cursor", "The cursor is not valid.");
+    out[f] = x as number;
+  }
+  return out;
+}
+
+// ── costs ───────────────────────────────────────────────────────────────────
+
+/** Cloudflare list prices, 2026-10-23 (singlet-bio docs/format-v2-cell-index-costs.md). Same as singlet.v2.atlas.PRICE. */
+export const PRICE = { request: 0.3e-6, cpuMs: 0.02e-6, classB: 0.36e-6, doRequest: 0.15e-6, doRowWrite: 1e-6 };
+export const CPU_MS_PER_1K_ROWS = 0.25;
+export const CPU_MS_PER_MB = 1.0;
+export const CPU_MS_FIXED = 5.0;
+
+export interface CostEstimate {
+  reads: number;
+  fills: number;
+  rows: number;
+  mb: number;
+  cpu_ms: number;
+  usd: number;
+}
+
+/** Worst case of one request: every read misses the cache and may start one cache fill (singlet.v2.atlas.estimate_cost). */
+export function estimateCost(o: { reads?: number; rows?: number; mb?: number; doCalls?: number; doWrites?: number; fills?: number }): CostEstimate {
+  const reads = o.reads ?? 0;
+  const fills = o.fills ?? reads;
+  const rows = o.rows ?? 0;
+  const mb = o.mb ?? 0;
+  const cpu = CPU_MS_FIXED + (rows / 1000) * CPU_MS_PER_1K_ROWS + mb * CPU_MS_PER_MB;
+  const usd = PRICE.request + cpu * PRICE.cpuMs + (reads + fills) * PRICE.classB + (o.doCalls ?? 0) * PRICE.doRequest + (o.doWrites ?? 0) * PRICE.doRowWrite;
+  return { reads, fills, rows, mb: Math.round(mb * 1000) / 1000, cpu_ms: Math.round(cpu * 10) / 10, usd };
+}
+
+/** The cost a finished request actually incurred, from its read stats (cache misses only; each miss counted with a possible fill). */
+export function actualCost(stats: ReadStats, rows: number, mb: number, doCalls: number): CostEstimate {
+  const misses = Math.max(0, stats.reads - stats.hits);
+  return estimateCost({ reads: misses, fills: misses, rows, mb, doCalls });
 }
 
 // ── POST /v2/cidx/query ─────────────────────────────────────────────────────
 
 export interface QueryLimits {
-  /** rows decoded per request before the answer is returned partial with a cursor */
+  /** rows decoded per request before a count is returned partial with a cursor, or a sample is refused with a plan */
   maxRowsScanned: number;
-  /** cells per page of a "cells" answer */
-  maxCellsPage: number;
+  /** cells per answer */
+  maxCells: number;
+  /** studies a cell answer may draw from */
+  maxStudies: number;
+  /** worst-case cost of one request, USD */
+  maxCostUsd: number;
 }
 
 export interface QueryBody {
@@ -627,9 +746,16 @@ export interface QueryBody {
   where?: Where;
   return?: "count" | "cells";
   by?: string[];
-  limit?: number;
   cursor?: string;
   fields?: string[];
+  /** cells: sample size (<= maxCells) */
+  n?: number;
+  seed?: number;
+  max_studies?: number;
+  study_rank?: "cells" | "given" | "random";
+  sampling?: "uniform" | "chunks";
+  /** answer with the plan and its worst-case cost instead of running it */
+  dry_run?: boolean;
 }
 
 const BY: Record<string, string> = { organism: "organism", cell_type: "ct", tissue: "tissue", sex: "sex", ancestry: "anc", sample: "sample", study: "study" };
@@ -644,8 +770,98 @@ function labelOf(d: Directory, by: string, code: number): { id: string | null; l
 export interface ScanHooks {
   /** called once before a row scan starts (not for summary counts); throws to refuse */
   beforeScan?: () => Promise<void>;
-  /** called with the rows the scan decoded */
-  afterScan?: (rows: number) => void;
+  /** called with the rows the scan decoded and the worst-case cost of what it read */
+  afterScan?: (rows: number, usd: number) => void;
+}
+
+/** A request the Worker will not run within its per-request budget, with what the caller can run instead (spec section 8.2). */
+export class OverBudget extends CidxError {
+  constructor(
+    message: string,
+    readonly plan: Record<string, unknown>
+  ) {
+    super(413, "over_budget", message);
+  }
+}
+
+function pyLiteral(v: unknown): string {
+  return JSON.stringify(v ?? {})
+    .replace(/\bnull\b/g, "None")
+    .replace(/\btrue\b/g, "True")
+    .replace(/\bfalse\b/g, "False");
+}
+
+export function clientPlan(d: Directory, kind: "query" | "sample" | "gather", body: Record<string, unknown>, estimate: CostEstimate, budget: number, reason: string, shards: ShardEntry[] = []): Record<string, unknown> {
+  const where = pyLiteral((body as { where?: unknown }).where ?? {});
+  const v = JSON.stringify(d.version);
+  const py =
+    kind === "gather"
+      ? `from singlet.v2 import atlas\n# smaller requests (each within the budget), batched by the client:\nadata = atlas.gather(cells, batch_cells=2000, batch_studies=2)`
+      : kind === "sample"
+        ? `from singlet.v2 import atlas\nidx = atlas.Index.open(${v})   # immutable index objects, read with ranged GETs\ndf, info = idx.sample_cells(${where}, n=${Number(body.n ?? 10000)}, seed=${Number(body.seed ?? 0)}, max_studies=${Number(body.max_studies ?? 10)})`
+        : `from singlet.v2 import atlas\nidx = atlas.Index.open(${v})\nn = idx.count(${where}, by=${pyLiteral(body.by ?? [])})`;
+  return {
+    reason,
+    kind,
+    version: d.version,
+    budget_usd: budget,
+    estimate,
+    shards: shards.slice(0, 200).map((s) => ({ key: s.key, bytes: s.bytes, rows: s.rows })),
+    shards_total: shards.length,
+    python: py,
+    note: "Every object named here is immutable and cacheable; a client can read them itself (GET with Range) or narrow the request.",
+  };
+}
+
+interface SampledRow {
+  h: number;
+  so: number;
+  col: number;
+  vals: number[];
+}
+
+/** keyed comparison (h, so, col) */
+function keyLess(a: SampledRow, b: SampledRow): boolean {
+  return a.h !== b.h ? a.h < b.h : a.so !== b.so ? a.so < b.so : a.col < b.col;
+}
+
+/** A bounded max-heap: keeps the n smallest keys seen (streaming bottom-n sample with O(n) memory). */
+class BottomN {
+  heap: SampledRow[] = [];
+  constructor(readonly n: number) {}
+  offer(r: SampledRow): void {
+    const hp = this.heap;
+    if (hp.length < this.n) {
+      hp.push(r);
+      let i = hp.length - 1;
+      while (i > 0) {
+        const p = (i - 1) >> 1;
+        if (keyLess(hp[p], hp[i])) {
+          [hp[p], hp[i]] = [hp[i], hp[p]];
+          i = p;
+        } else break;
+      }
+    } else if (this.n > 0 && keyLess(r, hp[0])) {
+      hp[0] = r;
+      let i = 0;
+      for (;;) {
+        const l = 2 * i + 1;
+        const rr = l + 1;
+        let m = i;
+        if (l < hp.length && keyLess(hp[m], hp[l])) m = l;
+        if (rr < hp.length && keyLess(hp[m], hp[rr])) m = rr;
+        if (m === i) break;
+        [hp[m], hp[i]] = [hp[i], hp[m]];
+        i = m;
+      }
+    }
+  }
+  /** would `r` enter the heap? (cheap pre-check before building a row) */
+  admits(h: number, so: number, col: number): boolean {
+    if (this.heap.length < this.n) return true;
+    const t = this.heap[0];
+    return h !== t.h ? h < t.h : so !== t.so ? so < t.so : col < t.col;
+  }
 }
 
 export async function runQuery(deps: Deps, body: QueryBody, limits: QueryLimits, hooks: ScanHooks = {}): Promise<Record<string, unknown>> {
@@ -655,6 +871,7 @@ export async function runQuery(deps: Deps, body: QueryBody, limits: QueryLimits,
   const p = new QueryPlan(d, body.where ?? {});
   await p.resolveSamples(deps, stats);
   const ret = body.return ?? "count";
+  if (ret !== "count" && ret !== "cells") throw new CidxError(400, "bad_request", "`return` is 'count' or 'cells'.");
   const by = (body.by ?? []).map(String);
   for (const b of by) if (!BY[b]) throw new CidxError(400, "bad_request", `Cannot group by '${b}'. Use ${Object.keys(BY).join(", ")}.`);
   if (by.length > 3) throw new CidxError(400, "bad_request", "Group by at most 3 fields.");
@@ -669,68 +886,45 @@ export async function runQuery(deps: Deps, body: QueryBody, limits: QueryLimits,
     }
     return a;
   };
-  const cursor = await decodeCursor(body.cursor, d.version, p.digest + "|" + ret + "|" + by.join(","));
+  const soOk = p.samplesOk(samples);
+  if (ret === "cells") return runSample(deps, d, p, body, limits, hooks, stats, samples, soIndex, soOk, t0);
 
+  const cursor = await decodeCursor(body.cursor, d.version, p.digest + "|count|" + by.join(","), ["s", "g", "r"]);
   // counts from the summary table when no per-cell range is asked for
-  if (ret === "count" && !p.hasRowRanges()) {
-    const h = await shardHeader(deps, d.summary.key, stats);
+  if (!p.hasRowRanges()) {
     const groups = new Map<string, number>();
     let total = 0;
-    for (let g = 0; g < h.nGroups; g++) {
-      const z = (c: string): [number, number] => {
-        const j = h.names.indexOf(c);
-        return j < 0 ? [0, 0xffffffff] : [h.chunks[g][j].min, h.chunks[g][j].max];
-      };
-      if (!p.zoneOk(z)) continue;
-      const cols = await readGroup(deps, d.summary.key, h, g, ["organism", "ct", "sex", "anc", "sample", "tissue", "n"], stats);
-      const n = h.groupRowsN[g];
-      for (let i = 0; i < n; i++) {
-        if (p.orgCodes && !p.orgCodes.has(cols.organism[i])) continue;
-        if (p.ct && !p.ct[cols.ct[i]]) continue;
-        if (p.tissue && !p.tissue[cols.tissue[i]]) continue;
-        if (p.sex && !p.sex[cols.sex[i]]) continue;
-        if (p.anc && !p.anc[cols.anc[i]]) continue;
-        const so = cols.sample[i];
-        if (p.exclude.has(so)) continue;
-        if (p.sampleSet) {
-          const s = p.sampleSet;
-          let a = 0;
-          let b = s.length;
-          while (a < b) {
-            const m = (a + b) >>> 1;
-            if (s[m] < so) a = m + 1;
-            else b = m;
-          }
-          if (a >= s.length || s[a] !== so) continue;
-        }
-        const w = cols.n[i];
-        total += w;
-        if (by.length) {
-          const key = by.map((b) => (b === "study" ? samples.gse[soIndex(so)] : b === "organism" ? cols.organism[i] : cols[BY[b]][i])).join("\u0000");
-          groups.set(key, (groups.get(key) ?? 0) + w);
-        }
+    await scanSummary(deps, d, p, soOk, stats, (cols, i) => {
+      const so = cols.sample[i];
+      const w = cols.n[i];
+      total += w;
+      if (by.length) {
+        const key = by.map((b) => (b === "study" ? samples.gse[soIndex(so)] : b === "organism" ? cols.organism[i] : cols[BY[b]][i])).join("\u0000");
+        groups.set(key, (groups.get(key) ?? 0) + w);
       }
-    }
-    return countAnswer(d, by, total, groups, true, null, stats, t0, "summary", samples, soIndex);
+    });
+    return countAnswer(d, by, total, groups, true, null, stats, t0, "summary", samples, soIndex, 0);
   }
 
-  // row scan
-  const want = new Set(p.neededColumns());
-  want.add("sample");
-  if (ret === "cells") {
-    want.add("col");
-    for (const f of body.fields ?? CELL_FIELDS) if (CELL_FIELDS.includes(f)) want.add(f);
-  } else for (const b of by) if (BY[b] !== "study" && BY[b] !== "organism") want.add(BY[b]);
-  const cols = [...want];
-  const limit = Math.max(1, Math.min(Number(body.limit ?? limits.maxCellsPage) || limits.maxCellsPage, limits.maxCellsPage));
+  // row scan, bounded by maxRowsScanned (the rest continues with the cursor)
+  const { shards: cand } = await candidateShards(deps, p, { s: cursor?.s ?? 0 }, stats);
+  const rowsMax = Math.min(limits.maxRowsScanned, cand.reduce((k, sh) => k + sh.rows, 0));
+  const est = estimateCost({ reads: Math.ceil(rowsMax / Math.max(1, d.group_rows)) + 2 * Math.min(cand.length, 64) + 8, rows: rowsMax, doCalls: 2, doWrites: 1 });
+  if (body.dry_run || est.usd > limits.maxCostUsd) {
+    const shards = cand;
+    const plan = clientPlan(d, "query", body as Record<string, unknown>, est, limits.maxCostUsd, body.dry_run ? "dry run" : "the row budget of one request costs more than the per-request budget", shards);
+    if (body.dry_run) return { version: d.version, dry_run: true, plan };
+    throw new OverBudget("This count would exceed the per-request budget.", plan);
+  }
   if (hooks.beforeScan) await hooks.beforeScan();
+  const want = new Set(p.neededColumns());
+  for (const b of by) if (BY[b] !== "study" && BY[b] !== "organism") want.add(BY[b]);
+  const cols = [...want];
   let scanned = 0;
   let total = 0;
   const groups = new Map<string, number>();
-  const outCols: Record<string, number[]> = Object.fromEntries(cols.map((c) => [c, []]));
   let next: { s: number; g: number; r: number } | null = null;
-  const start = cursor ? { s: cursor.s, g: cursor.g } : { s: 0, g: 0 };
-  for await (const ref of candidateGroups(deps, p, start, stats)) {
+  for await (const ref of candidateGroups(deps, p, cursor ? { s: cursor.s, g: cursor.g } : { s: 0, g: 0 }, stats)) {
     if (scanned >= limits.maxRowsScanned) {
       next = { s: ref.shard, g: ref.g, r: 0 };
       break;
@@ -738,72 +932,231 @@ export async function runQuery(deps: Deps, body: QueryBody, limits: QueryLimits,
     const n = ref.header.groupRowsN[ref.g];
     const v = await readGroup(deps, ref.key, ref.header, ref.g, cols, stats);
     scanned += n;
-    let idx = p.match(v, n);
-    if (cursor && ref.shard === cursor.s && ref.g === cursor.g && cursor.r > 0) idx = idx.filter((i) => i >= cursor.r);
-    if (ret === "cells") {
-      const room = limit - outCols.sample.length;
-      const take = idx.subarray(0, room);
-      for (const c of cols) {
-        const src = v[c];
-        const dst = outCols[c];
-        for (let k = 0; k < take.length; k++) dst.push(src[take[k]]);
-      }
-      if (idx.length > room) {
-        next = { s: ref.shard, g: ref.g, r: idx[room] };
-        break;
-      }
-      if (outCols.sample.length >= limit) {
-        next = { s: ref.shard, g: ref.g + 1, r: 0 };
-        break;
-      }
-    } else {
-      total += idx.length;
-      if (by.length) {
-        for (let k = 0; k < idx.length; k++) {
-          const i = idx[k];
-          const so = v.sample[i];
-          const key = by
-            .map((b) => (b === "study" ? samples.gse[soIndex(so)] : b === "organism" ? samples.organism[soIndex(so)] : v[BY[b]][i]))
-            .join("\u0000");
-          groups.set(key, (groups.get(key) ?? 0) + 1);
-        }
+    const idx = p.match(v, n);
+    total += idx.length;
+    if (by.length) {
+      for (let k = 0; k < idx.length; k++) {
+        const i = idx[k];
+        const so = v.sample[i];
+        const key = by.map((b) => (b === "study" ? samples.gse[soIndex(so)] : b === "organism" ? samples.organism[soIndex(so)] : v[BY[b]][i])).join("\u0000");
+        groups.set(key, (groups.get(key) ?? 0) + 1);
       }
     }
   }
-  hooks.afterScan?.(scanned);
-  const nextCursor = next ? await encodeCursor({ v: d.version, ...next }, p.digest + "|" + ret + "|" + by.join(",")) : null;
-  if (ret === "count") return countAnswer(d, by, total, groups, next === null, nextCursor, stats, t0, "scan", samples, soIndex, scanned);
-  // cells answer: so, gsm, col, decoded fields
-  const so = outCols.sample;
-  const res: Record<string, unknown[]> = {
-    so,
-    gsm: so.map((x) => `GSM${samples.gsm[soIndex(x)]}`),
-    col: outCols.col,
-  };
-  const dec = (dict: DictEntry[], codes: number[]) => codes.map((c) => dict[c]?.id ?? dict[c]?.label ?? null);
-  const score = (codes: number[]) => codes.map((c) => (c === NA8 ? null : Math.round((c / SCALE8) * 1e4) / 1e4));
-  for (const c of cols) {
-    if (c === "sample" || c === "col" || !(body.fields ?? CELL_FIELDS).includes(c)) continue;
-    const vals = outCols[c];
-    if (c === "ct") res.cell_type = dec(d.dicts.cell_type, vals);
-    else if (c === "tissue") res.tissue = dec(d.dicts.tissue, vals);
-    else if (c === "sex") res.sex = vals.map((x) => d.dicts.sex[x]?.label ?? "unknown");
-    else if (c === "anc") res.ancestry = dec(d.dicts.ancestry, vals);
-    else if (c === "ct_score") res.cell_type_score = score(vals);
-    else if (c === "sex_score") res.sex_score = score(vals);
-    else if (c === "anc_prob") res.ancestry_prob = score(vals);
-    else res[{ umi_exon: "n_umi_exon", umi_intron: "n_umi_intron", feat_exon: "n_feat_exon", feat_intron: "n_feat_intron" }[c] ?? c] = vals;
+  hooks.afterScan?.(scanned, estimateCost({ reads: stats.reads, rows: scanned, doCalls: 2, doWrites: 1 }).usd);
+  const nextCursor = next ? await encodeCursor(next, d.version, p.digest + "|count|" + by.join(",")) : null;
+  return countAnswer(d, by, total, groups, next === null, nextCursor, stats, t0, "scan", samples, soIndex, scanned);
+}
+
+/** Walk the summary rows matching the non-range filters and the sample mask; `each(cols, i)` per row. */
+async function scanSummary(deps: Deps, d: Directory, p: QueryPlan, soOk: Uint8Array, stats: ReadStats, each: (cols: Record<string, Uint32Array>, i: number) => void): Promise<void> {
+  const h = await shardHeader(deps, d.summary.key, stats);
+  for (let g = 0; g < h.nGroups; g++) {
+    const z = (c: string): [number, number] => {
+      const j = h.names.indexOf(c);
+      return j < 0 ? [0, 0xffffffff] : [h.chunks[g][j].min, h.chunks[g][j].max];
+    };
+    // ranges are per cell: the summary prunes on everything else
+    const saved = p.ranges;
+    p.ranges = [];
+    const ok = p.zoneOk(z);
+    p.ranges = saved;
+    if (!ok) continue;
+    const cols = await readGroup(deps, d.summary.key, h, g, ["organism", "ct", "sex", "anc", "sample", "tissue", "n"], stats);
+    const n = h.groupRowsN[g];
+    for (let i = 0; i < n; i++) {
+      if (p.orgCodes && !p.orgCodes.has(cols.organism[i])) continue;
+      if (p.ct && !p.ct[cols.ct[i]]) continue;
+      if (p.tissue && !p.tissue[cols.tissue[i]]) continue;
+      if (p.sex && !p.sex[cols.sex[i]]) continue;
+      if (p.anc && !p.anc[cols.anc[i]]) continue;
+      if (!soOk[cols.sample[i]]) continue;
+      each(cols, i);
+    }
   }
+}
+
+interface RankedStudy {
+  gse: number;
+  eligible_max: number;
+  samples: number[];
+}
+
+/** Studies with possibly matching cells, best first (singlet.v2.atlas.Index._rank). */
+async function rankStudies(deps: Deps, d: Directory, p: QueryPlan, soOk: Uint8Array, stats: ReadStats, samples: Record<string, Uint32Array>, soIndex: (so: number) => number, rank: string, seed: number): Promise<RankedStudy[]> {
+  const cells = new Map<number, number>();
+  const per = new Map<number, Set<number>>();
+  await scanSummary(deps, d, p, soOk, stats, (cols, i) => {
+    const so = cols.sample[i];
+    const g = samples.gse[soIndex(so)];
+    cells.set(g, (cells.get(g) ?? 0) + cols.n[i]);
+    let s = per.get(g);
+    if (!s) per.set(g, (s = new Set()));
+    s.add(so);
+  });
+  const out: RankedStudy[] = [];
+  for (const [g, n] of cells) if (n > 0) out.push({ gse: g, eligible_max: n, samples: [...per.get(g)!].sort((a, b) => a - b) });
+  if (rank === "cells") out.sort((a, b) => b.eligible_max - a.eligible_max || a.gse - b.gse);
+  else if (rank === "random") {
+    const key = new Map(out.map((r) => [r.gse, hash32(seed, r.gse, 0x9e3779b9)]));
+    out.sort((a, b) => key.get(a.gse)! - key.get(b.gse)! || a.gse - b.gse);
+  } else if (rank === "given") {
+    const given = asList(p.where.studies);
+    if (!given) throw new CidxError(400, "bad_request", "study_rank 'given' needs the studies filter, in order of relevance.");
+    const pos = new Map<number, number>();
+    given.forEach((g, i) => {
+      const m = GSE_RE.exec(g.toUpperCase());
+      if (m && !pos.has(Number(m[1]))) pos.set(Number(m[1]), i);
+    });
+    out.sort((a, b) => (pos.get(a.gse) ?? given.length) - (pos.get(b.gse) ?? given.length));
+  } else throw new CidxError(400, "bad_request", "study_rank is 'cells', 'given' or 'random'.");
+  return out;
+}
+
+/** `return: "cells"`: a seeded sample of at most n cells from at most max_studies studies (spec 6.3). */
+async function runSample(
+  deps: Deps,
+  d: Directory,
+  p: QueryPlan,
+  body: QueryBody,
+  limits: QueryLimits,
+  hooks: ScanHooks,
+  stats: ReadStats,
+  samples: Record<string, Uint32Array>,
+  soIndex: (so: number) => number,
+  soOk: Uint8Array,
+  t0: number
+): Promise<Record<string, unknown>> {
+  const n = Math.floor(Number(body.n ?? limits.maxCells));
+  const maxStudies = Math.floor(Number(body.max_studies ?? limits.maxStudies));
+  if (!(n >= 1) || n > limits.maxCells) throw new CidxError(400, "bad_request", `n is 1..${limits.maxCells} cells per request; ask again with the cursor for more.`);
+  if (!(maxStudies >= 1) || maxStudies > limits.maxStudies) throw new CidxError(400, "bad_request", `max_studies is 1..${limits.maxStudies} per request.`);
+  const seed = Number(body.seed ?? 0) >>> 0;
+  const sampling = body.sampling ?? "uniform";
+  if (sampling !== "uniform" && sampling !== "chunks") throw new CidxError(400, "bad_request", "sampling is 'uniform' or 'chunks'.");
+  const rank = body.study_rank ?? "cells";
+  const digest = `${p.digest}|cells|${seed}|${maxStudies}|${rank}|${sampling}`;
+  const cursor = await decodeCursor(body.cursor, d.version, digest, ["h", "so", "col"]);
+
+  const ranked = await rankStudies(deps, d, p, soOk, stats, samples, soIndex, rank, seed);
+  const chosen = ranked.slice(0, maxStudies);
+  const sel = new Set<number>();
+  for (const r of chosen) for (const s of r.samples) sel.add(s);
+  const eMax = chosen.reduce((k, r) => k + r.eligible_max, 0);
+  const selArr = Uint32Array.from([...sel].sort((a, b) => a - b));
+  p.sampleSet = p.sampleSet ? selArr.filter((s) => p.sampleOverlap(s, s)) : selArr;
+
+  // budget: every eligible row of the chosen studies is decoded once
+  const est = estimateCost({ reads: Math.ceil(eMax / Math.max(1, d.group_rows)) * 2 + Math.ceil(sel.size / Math.max(1, d.plan.block_size)) + 16, rows: eMax, doCalls: 2, doWrites: 1 });
+  const studiesOut = ranked.slice(0, Math.max(50, maxStudies)).map((r, i) => ({ gse: `GSE${r.gse}`, eligible_max: r.eligible_max, selected: i < maxStudies }));
+  if (body.dry_run || eMax > limits.maxRowsScanned || est.usd > limits.maxCostUsd) {
+    const { shards } = sel.size ? await candidateShards(deps, p, { s: 0 }, stats) : { shards: [] as ShardEntry[] };
+    const why = body.dry_run ? "dry run" : `the selected studies hold up to ${eMax} matching cells, more than one request may scan (${limits.maxRowsScanned}); lower max_studies or narrow the filter`;
+    const plan = clientPlan(d, "sample", body as Record<string, unknown>, est, limits.maxCostUsd, why, shards);
+    if (body.dry_run) return { version: d.version, dry_run: true, plan, studies: studiesOut, n_studies: ranked.length, eligible_max: eMax };
+    throw new OverBudget("This sample would exceed the per-request budget.", plan);
+  }
+  if (hooks.beforeScan) await hooks.beforeScan();
+
+  const fieldsWanted = (body.fields ?? [...CELL_FIELDS, ...(d.features ?? []).map((f) => f.column)]).filter((f) => CELL_FIELDS.includes(f) || (d.features ?? []).some((x) => x.column === f));
+  const want = new Set(p.neededColumns());
+  want.add("col");
+  for (const f of fieldsWanted) want.add(f);
+  const cols = [...want];
+  const heap = new BottomN(n);
+  let eligible = 0;
+  let after = 0;
+  let scanned = 0;
+  // chunk units (sampling "chunks"): first_col of each chosen sample's exon matrix
+  let units: Map<number, number[]> | null = null;
+  if (sampling === "chunks" && sel.size) {
+    units = new Map();
+    const plans = await planSamples(deps, d, [...sel], stats);
+    for (const [so, s] of plans) {
+      const m = s.members["exon_counts.1pz"] ?? Object.values(s.members).find((x) => (x.first_col ?? []).length >= 2);
+      const fc = m?.first_col && m.first_col.length >= 2 ? [...m.first_col] : [0, 2 ** 32];
+      fc[fc.length - 1] = 2 ** 32;
+      units.set(so, fc);
+    }
+  }
+  const unitOf = (so: number, col: number): number => {
+    const fc = units!.get(so) ?? [0, 2 ** 32];
+    let a = 0;
+    let b = fc.length - 1;
+    while (a < b) {
+      const m = (a + b + 1) >>> 1;
+      if (fc[m] <= col) a = m;
+      else b = m - 1;
+    }
+    return a;
+  };
+  if (sel.size) {
+    for await (const ref of candidateGroups(deps, p, { s: 0, g: 0 }, stats)) {
+      const nr = ref.header.groupRowsN[ref.g];
+      const v = await readGroup(deps, ref.key, ref.header, ref.g, cols, stats);
+      scanned += nr;
+      const idx = p.match(v, nr);
+      eligible += idx.length;
+      for (let k = 0; k < idx.length; k++) {
+        const i = idx[k];
+        const so = v.sample[i];
+        const col = v.col[i];
+        const h = sampling === "uniform" ? hash32(seed, so, col) : hash32((seed ^ CHUNK_SALT) >>> 0, so, unitOf(so, col));
+        if (cursor && (h < cursor.h || (h === cursor.h && (so < cursor.so || (so === cursor.so && col <= cursor.col))))) continue;
+        after++;
+        if (!heap.admits(h, so, col)) continue;
+        heap.offer({ h, so, col, vals: fieldsWanted.map((f) => v[f][i]) });
+      }
+    }
+  }
+  hooks.afterScan?.(scanned, estimateCost({ reads: stats.reads, rows: scanned, doCalls: 2, doWrites: 1 }).usd);
+  const rows = heap.heap.slice().sort((a, b) => (keyLess(a, b) ? -1 : 1));
+  const last = rows[rows.length - 1];
+  const more = after > rows.length;
+  const nextCursor = more && last ? await encodeCursor({ h: last.h, so: last.so, col: last.col }, d.version, digest) : null;
+  rows.sort((a, b) => a.so - b.so || a.col - b.col);
+
+  const res: Record<string, unknown[]> = {
+    so: rows.map((r) => r.so),
+    gsm: rows.map((r) => `GSM${samples.gsm[soIndex(r.so)]}`),
+    col: rows.map((r) => r.col),
+  };
+  const dec = (dict: DictEntry[], c: number) => dict[c]?.id ?? dict[c]?.label ?? null;
+  const score = (c: number) => (c === NA8 ? null : Math.round((c / SCALE8) * 1e4) / 1e4);
+  fieldsWanted.forEach((f, j) => {
+    const vals = rows.map((r) => r.vals[j]);
+    const feat = (d.features ?? []).find((x) => x.column === f);
+    if (feat) res[feat.name] = vals.map((c) => (c === feat.na ? null : Math.round((feat.lo + (c / feat.scale) * (feat.hi - feat.lo)) * 1e6) / 1e6));
+    else if (f === "ct") res.cell_type = vals.map((c) => dec(d.dicts.cell_type, c));
+    else if (f === "tissue") res.tissue = vals.map((c) => dec(d.dicts.tissue, c));
+    else if (f === "sex") res.sex = vals.map((c) => d.dicts.sex[c]?.label ?? "unknown");
+    else if (f === "anc") res.ancestry = vals.map((c) => dec(d.dicts.ancestry, c));
+    else if (f === "ct_score") res.cell_type_score = vals.map(score);
+    else if (f === "sex_score") res.sex_score = vals.map(score);
+    else if (f === "anc_prob") res.ancestry_prob = vals.map(score);
+    else res[{ umi_exon: "n_umi_exon", umi_intron: "n_umi_intron", feat_exon: "n_feat_exon", feat_intron: "n_feat_intron" }[f] ?? f] = vals;
+  });
   return {
     version: d.version,
-    n: so.length,
+    n: rows.length,
     cells: res,
+    eligible,
+    eligible_max: eMax,
+    remaining: after - rows.length,
+    sampled: eligible > rows.length,
+    seed,
+    sampling,
+    study_rank: rank,
+    n_studies: ranked.length,
+    studies: studiesOut,
     cursor: nextCursor,
-    complete: next === null,
+    complete: !nextCursor,
     rows_scanned: scanned,
     reads: stats.reads,
     bytes_read: stats.bytes,
     cache_hits: stats.hits,
+    estimate: est,
+    cost: actualCost(stats, scanned, 0, 2),
     ms: Date.now() - t0,
   };
 }
@@ -822,7 +1175,19 @@ function countAnswer(
   soIndex: (so: number) => number,
   scanned = 0
 ): Record<string, unknown> {
-  const out: Record<string, unknown> = { version: d.version, count: total, complete, cursor, source, rows_scanned: scanned, reads: stats.reads, bytes_read: stats.bytes, cache_hits: stats.hits, ms: Date.now() - t0 };
+  const out: Record<string, unknown> = {
+    version: d.version,
+    count: total,
+    complete,
+    cursor,
+    source,
+    rows_scanned: scanned,
+    reads: stats.reads,
+    bytes_read: stats.bytes,
+    cache_hits: stats.hits,
+    cost: actualCost(stats, scanned, 0, source === "scan" ? 2 : 0),
+    ms: Date.now() - t0,
+  };
   if (by.length) {
     const rows: Record<string, unknown>[] = [];
     for (const [k, n] of groups) {

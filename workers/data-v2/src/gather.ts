@@ -12,7 +12,23 @@
  *   the end frame's body is the trailer JSON {ok, errors, reads, bytes_read, bytes_sent, cache_hits, ms}
  */
 import type { Deps } from "./handler";
-import { CidxError, newStats, openDirectory, planSamples, readBytes, readTable, runQuery, type Directory, type PlanSample, type ReadStats, type Where } from "./cidx";
+import {
+  actualCost,
+  CidxError,
+  clientPlan,
+  estimateCost,
+  newStats,
+  openDirectory,
+  OverBudget,
+  planSamples,
+  readBytes,
+  readTable,
+  runQuery,
+  type Directory,
+  type PlanSample,
+  type QueryBody,
+  type ReadStats,
+} from "./cidx";
 
 export const GATHER_GAP = 64 * 1024;
 export const GATHER_READ_MAX = 8 * 1024 * 1024;
@@ -180,23 +196,36 @@ export async function runReads(deps: Deps, reads: Read[], emit: (f: Uint8Array) 
 }
 
 export interface GatherLimits {
+  /** cells per request (10,000) */
   maxCells: number;
+  /** studies the cells of one request may come from (10) */
+  maxStudies: number;
   maxSamples: number;
+  /** planned sample-object bytes per request */
   maxBytes: number;
+  /** planned R2 reads per request */
+  maxReads: number;
+  /** worst-case cost of one request, USD */
+  maxCostUsd: number;
+  /** rows a query handle may scan */
+  maxRowsScanned: number;
 }
 export interface GatherBody {
   version?: string;
   cells?: [number | string, number[]][];
-  query?: { where?: Where; limit?: number };
+  /** a query handle: the cells of `POST /v2/cidx/query` with return "cells" and these parameters */
+  query?: Omit<QueryBody, "return" | "by" | "fields" | "dry_run" | "version">;
   modalities?: string[];
   have_prefix?: string[];
   cells_table?: boolean;
+  /** answer with the plan and its worst-case cost (JSON) instead of streaming */
+  dry_run?: boolean;
 }
 export interface GatherCtx {
   deps: Deps;
   limits: GatherLimits;
   /** charge the planned cells/bytes before anything is streamed; throws CidxError(429) when over quota */
-  charge?: (cells: number, bytes: number) => Promise<void>;
+  charge?: (cells: number, bytes: number, usd: number) => Promise<void>;
   /** split reads across sub-invocations: returns a frames-only stream for the given reads */
   fanout?: ((reads: Read[]) => Promise<Response>) | null;
   /** reads before the plan is split (default FANOUT_MIN_READS) */
@@ -209,10 +238,12 @@ const GSM_RE = /^GSM(\d{1,9})$/;
 async function resolveCells(ctx: GatherCtx, d: Directory, body: GatherBody, stats: ReadStats): Promise<Map<number, number[]>> {
   const want = new Map<number, number[]>();
   if (body.query) {
-    const lim = Math.min(Number(body.query.limit ?? ctx.limits.maxCells), ctx.limits.maxCells);
-    const r = (await runQuery(ctx.deps, { version: d.version, where: body.query.where ?? {}, return: "cells", limit: lim, fields: [] }, { maxRowsScanned: 16_000_000, maxCellsPage: lim })) as {
-      cells: { so: number[]; col: number[] };
-    };
+    const L = ctx.limits;
+    const r = (await runQuery(
+      ctx.deps,
+      { ...body.query, version: d.version, return: "cells", fields: [] },
+      { maxRowsScanned: L.maxRowsScanned, maxCells: L.maxCells, maxStudies: L.maxStudies, maxCostUsd: L.maxCostUsd }
+    )) as { cells: { so: number[]; col: number[] } };
     r.cells.so.forEach((so, k) => {
       const l = want.get(so);
       if (l) l.push(r.cells.col[k]);
@@ -258,21 +289,45 @@ export async function runGather(ctx: GatherCtx, body: GatherBody): Promise<Respo
   const sos = [...want.keys()].sort((a, b) => a - b);
   const nCells = sos.reduce((n, s) => n + want.get(s)!.length, 0);
   if (!nCells) throw new CidxError(400, "bad_request", "No cells to gather.");
-  if (nCells > ctx.limits.maxCells) throw new CidxError(413, "too_many_cells", `${nCells} cells requested; the limit per request is ${ctx.limits.maxCells}. Split the request.`);
-  if (sos.length > ctx.limits.maxSamples) throw new CidxError(413, "too_many_samples", `${sos.length} samples; the limit per request is ${ctx.limits.maxSamples}.`);
+  const L = ctx.limits;
+  if (nCells > L.maxCells) throw new CidxError(413, "too_many_cells", `${nCells} cells requested; the limit per request is ${L.maxCells}. Split the request (singlet.v2.atlas.gather does).`);
+  if (sos.length > L.maxSamples) throw new CidxError(413, "too_many_samples", `${sos.length} samples; the limit per request is ${L.maxSamples}.`);
   const members = membersFor(body.modalities);
   const plans = await planSamples(ctx.deps, d, sos, stats);
   const entries = sos.map((s) => plans.get(s)!);
   const orgs = new Set(entries.map((e) => e.organism));
   if (orgs.size > 1) throw new CidxError(400, "mixed_organisms", "Cells from several organisms: gather one organism at a time.");
+  const studies = new Set(entries.map((e) => e.gse));
+  if (studies.size > L.maxStudies) throw new CidxError(413, "too_many_studies", `Cells from ${studies.size} studies; the limit per request is ${L.maxStudies}. Split the request by study.`);
   const have = new Set((body.have_prefix ?? []).map(String).slice(0, 100_000));
   const plan = planGather(entries, want, members, have, body.cells_table ? ["cells"] : []);
-  if (plan.bytes > ctx.limits.maxBytes) throw new CidxError(413, "too_many_bytes", `The plan reads ${plan.bytes} bytes; the limit per request is ${ctx.limits.maxBytes}. Split the request.`);
-  if (ctx.charge) await ctx.charge(nCells, plan.bytes);
+  // worst case of this request: every planned read misses the cache and starts a fill; every byte is copied once
+  const est = estimateCost({ reads: plan.reads.length + stats.reads, rows: 0, mb: plan.bytes / 1e6, doCalls: 1, doWrites: 1 });
+  const over = plan.bytes > L.maxBytes || plan.reads.length > L.maxReads || est.usd > L.maxCostUsd;
+  if (body.dry_run || over) {
+    const why = body.dry_run
+      ? "dry run"
+      : `the plan reads ${plan.bytes} bytes in ${plan.reads.length} reads (limits ${L.maxBytes} bytes, ${L.maxReads} reads, $${L.maxCostUsd} worst case per request); split it into smaller requests`;
+    const cp = clientPlan(d, "gather", body as unknown as Record<string, unknown>, est, L.maxCostUsd, why);
+    const out = { ...cp, cells: nCells, samples: sos.length, studies: studies.size, bytes: plan.bytes, reads: plan.reads.length };
+    if (body.dry_run) return Response.json({ version: d.version, dry_run: true, plan: out }, { headers: { "Cache-Control": "no-store" } });
+    throw new OverBudget("This gather would exceed the per-request budget.", out);
+  }
+  if (ctx.charge) await ctx.charge(nCells, plan.bytes, est.usd);
 
   const names = [...members, ...(body.cells_table ? ["cells"] : [])];
   const header = new TextEncoder().encode(
-    JSON.stringify({ format: "singlet-gather", version: d.version, member_names: names, samples: plan.samples, reads: plan.reads.length, bytes: plan.bytes, payload: plan.payload, cells: plan.cells })
+    JSON.stringify({
+      format: "singlet-gather",
+      version: d.version,
+      member_names: names,
+      samples: plan.samples,
+      reads: plan.reads.length,
+      bytes: plan.bytes,
+      payload: plan.payload,
+      cells: plan.cells,
+      estimate: est,
+    })
   );
   const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>();
   const writer = writable.getWriter();
@@ -300,7 +355,16 @@ export async function runGather(ctx: GatherCtx, body: GatherBody): Promise<Respo
         await runReads(ctx.deps, reads, emit, stats, errors);
       }
       const trailer = new TextEncoder().encode(
-        JSON.stringify({ ok: errors.length === 0, errors: errors.slice(0, 50), reads: stats.reads, bytes_read: stats.bytes, bytes_sent: sent, cache_hits: stats.hits, ms: Date.now() - t0 })
+        JSON.stringify({
+          ok: errors.length === 0,
+          errors: errors.slice(0, 50),
+          reads: stats.reads,
+          bytes_read: stats.bytes,
+          bytes_sent: sent,
+          cache_hits: stats.hits,
+          cost: actualCost(stats, 0, sent / 1e6, 1),
+          ms: Date.now() - t0,
+        })
       );
       await emit(frame(0, 0, FR_END, 0, trailer));
       await writer.close();

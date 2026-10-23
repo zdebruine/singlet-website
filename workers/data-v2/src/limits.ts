@@ -3,49 +3,51 @@
  *
  * Subjects: `key:<api key id>` for a valid singlet.bio API key (`Authorization: Bearer <key>`, checked read-only against D1
  * `api_keys` by SHA-256 hash, memoised 60 s per isolate), else `anon:<hash of the client address>`. Three layers:
- *   1. per-request caps (cells, samples, planned bytes, rows scanned): always on, no state;
+ *   1. per-request caps (10,000 cells, 10 studies, planned bytes and reads, rows scanned, $0.01 worst case): always on, no state;
  *   2. request rate per subject: the Workers Rate Limiting bindings CIDX_RL_ANON / CIDX_RL_KEY (per location, approximate) when bound;
- *   3. daily cells, bytes and scanned rows per subject: the `CidxQuota` Durable Object (one per subject, strictly consistent) when bound.
+ *   3. daily cells, bytes, scanned rows and worst-case dollars per subject: the `CidxQuota` Durable Object (one per subject, strictly
+ *      consistent) when bound.
  *      Gathers reserve their planned cells and bytes before streaming; a row-scan query checks that the day's row budget is not used up,
  *      then adds the rows it scanned (off the latency path), so a subject can overshoot by at most one request's row cap.
  * Missing bindings switch their layer off (local tests, first deploy); the caps in (1) still bound every request.
  */
 import { CidxError } from "./cidx";
 
-/** Request rates are not here: they are the `simple.limit` of the CIDX_RL_ANON / CIDX_RL_KEY bindings in wrangler.toml. */
+/**
+ * Per-request caps hold for every caller: whatever one request asks, its worst-case Cloudflare cost stays under `maxCostUsd`
+ * (every read missing the cache and starting a fill; singlet-bio docs/format-v2-cell-index-costs.md section 3). Request rates are not
+ * here: they are the `simple.limit` of the CIDX_RL_ANON / CIDX_RL_KEY bindings in wrangler.toml.
+ */
 export interface TierLimits {
-  maxCellsPerGather: number;
+  /** cells per query answer and per gather (a sample when more match) */
+  maxCellsPerRequest: number;
+  /** studies one request's cells may come from (the most relevant ones when more match) */
+  maxStudiesPerRequest: number;
   maxSamplesPerGather: number;
   maxBytesPerGather: number;
+  maxReadsPerRequest: number;
   maxRowsScanned: number;
-  maxCellsPage: number;
+  maxCostUsd: number;
   cellsPerDay: number;
   bytesPerDay: number;
   /** index rows decoded by row-scan queries (summary counts are free): bounds the CPU one subject can spend per day */
   rowsPerDay: number;
+  /** worst-case Cloudflare cost per UTC day, USD: every gather is charged its estimate, every row scan the estimate of what it read */
+  usdPerDay: number;
 }
 
+const PER_REQUEST = {
+  maxCellsPerRequest: 10_000,
+  maxStudiesPerRequest: 10,
+  maxSamplesPerGather: 2_000,
+  maxBytesPerGather: 1024 * 1024 * 1024,
+  maxReadsPerRequest: 4_000,
+  maxCostUsd: 0.01,
+};
+
 export const DEFAULT_LIMITS: Record<"anon" | "key", TierLimits> = {
-  anon: {
-    maxCellsPerGather: 20_000,
-    maxSamplesPerGather: 200,
-    maxBytesPerGather: 512 * 1024 * 1024,
-    maxRowsScanned: 8_000_000,
-    maxCellsPage: 20_000,
-    cellsPerDay: 200_000,
-    bytesPerDay: 4 * 1024 ** 3,
-    rowsPerDay: 200_000_000,
-  },
-  key: {
-    maxCellsPerGather: 500_000,
-    maxSamplesPerGather: 5_000,
-    maxBytesPerGather: 8 * 1024 ** 3,
-    maxRowsScanned: 32_000_000,
-    maxCellsPage: 100_000,
-    cellsPerDay: 20_000_000,
-    bytesPerDay: 200 * 1024 ** 3,
-    rowsPerDay: 5_000_000_000,
-  },
+  anon: { ...PER_REQUEST, maxRowsScanned: 8_000_000, cellsPerDay: 200_000, bytesPerDay: 4 * 1024 ** 3, rowsPerDay: 200_000_000, usdPerDay: 0.05 },
+  key: { ...PER_REQUEST, maxRowsScanned: 32_000_000, cellsPerDay: 2_000_000, bytesPerDay: 200 * 1024 ** 3, rowsPerDay: 5_000_000_000, usdPerDay: 1.0 },
 };
 
 /** `CIDX_LIMITS` (a JSON var: {"anon": {...}, "key": {...}}) overrides any field. */
@@ -133,13 +135,24 @@ export interface Usage {
   cells: number;
   bytes: number;
   rows: number;
+  /** worst-case USD */
+  usd: number;
 }
 
 async function quotaCall(ns: QuotaNamespaceLike, subject: Subject, limits: TierLimits, op: "charge" | "add", u: Partial<Usage>): Promise<Response | null> {
   try {
     return await ns.get(ns.idFromName(subject.id)).fetch(`https://quota/${op}`, {
       method: "POST",
-      body: JSON.stringify({ cells: u.cells ?? 0, bytes: u.bytes ?? 0, rows: u.rows ?? 0, cellsPerDay: limits.cellsPerDay, bytesPerDay: limits.bytesPerDay, rowsPerDay: limits.rowsPerDay }),
+      body: JSON.stringify({
+        cells: u.cells ?? 0,
+        bytes: u.bytes ?? 0,
+        rows: u.rows ?? 0,
+        usd: u.usd ?? 0,
+        cellsPerDay: limits.cellsPerDay,
+        bytesPerDay: limits.bytesPerDay,
+        rowsPerDay: limits.rowsPerDay,
+        usdPerDay: limits.usdPerDay,
+      }),
     });
   } catch {
     return null; // fail open: the per-request caps still hold
@@ -147,15 +160,15 @@ async function quotaCall(ns: QuotaNamespaceLike, subject: Subject, limits: TierL
 }
 
 /** Reserve `cells`/`bytes`/`rows` against the day's allowance; throws CidxError(429) when it would be exceeded. */
-export async function charge(ns: QuotaNamespaceLike | null | undefined, subject: Subject, limits: TierLimits, cells: number, bytes: number, rows = 0): Promise<void> {
+export async function charge(ns: QuotaNamespaceLike | null | undefined, subject: Subject, limits: TierLimits, cells: number, bytes: number, rows = 0, usd = 0): Promise<void> {
   if (!ns) return;
-  const res = await quotaCall(ns, subject, limits, "charge", { cells, bytes, rows });
+  const res = await quotaCall(ns, subject, limits, "charge", { cells, bytes, rows, usd });
   if (res && res.status === 429) {
     const j = (await res.json()) as { used: Usage; resets_at: string };
     throw new CidxError(
       429,
       "quota_exceeded",
-      `Daily allowance used (${j.used.cells} cells, ${j.used.bytes} bytes, ${j.used.rows} rows scanned; resets ${j.resets_at}).${subject.tier === "anon" ? " An API key from https://singlet.bio/account raises it." : ""}`
+      `Daily allowance used (${j.used.cells} cells, ${j.used.bytes} bytes, ${j.used.rows} rows scanned, $${(j.used.usd ?? 0).toFixed(4)} worst case; resets ${j.resets_at}).${subject.tier === "anon" ? " An API key from https://singlet.bio/account raises it." : ""}`
     );
   }
 }
@@ -177,23 +190,27 @@ export class CidxQuota {
 
   async fetch(request: Request): Promise<Response> {
     const op = new URL(request.url).pathname;
-    const b = (await request.json()) as Usage & { cellsPerDay: number; bytesPerDay: number; rowsPerDay?: number; now?: number };
+    const b = (await request.json()) as Usage & { cellsPerDay: number; bytesPerDay: number; rowsPerDay?: number; usdPerDay?: number; now?: number };
     const now = b.now ?? Date.now();
     const day = new Date(now).toISOString().slice(0, 10);
-    const cur = (await this.state.storage.get<Usage & { day: string }>("u")) ?? { day, cells: 0, bytes: 0, rows: 0 };
-    const u = cur.day === day ? { ...cur, rows: cur.rows ?? 0 } : { day, cells: 0, bytes: 0, rows: 0 };
+    const cur = (await this.state.storage.get<Usage & { day: string }>("u")) ?? { day, cells: 0, bytes: 0, rows: 0, usd: 0 };
+    const u = cur.day === day ? { ...cur, rows: cur.rows ?? 0, usd: cur.usd ?? 0 } : { day, cells: 0, bytes: 0, rows: 0, usd: 0 };
     const next = new Date(now);
     next.setUTCHours(24, 0, 0, 0);
-    const add = { cells: b.cells ?? 0, bytes: b.bytes ?? 0, rows: b.rows ?? 0 };
+    const add = { cells: b.cells ?? 0, bytes: b.bytes ?? 0, rows: b.rows ?? 0, usd: b.usd ?? 0 };
     // a row check asks whether today's row budget still has room (the request then scans at most its own cap)
     const over =
-      u.cells + add.cells > b.cellsPerDay || u.bytes + add.bytes > b.bytesPerDay || (b.rowsPerDay !== undefined && add.rows > 0 && u.rows >= b.rowsPerDay);
+      u.cells + add.cells > b.cellsPerDay ||
+      u.bytes + add.bytes > b.bytesPerDay ||
+      (b.rowsPerDay !== undefined && add.rows > 0 && u.rows >= b.rowsPerDay) ||
+      (b.usdPerDay !== undefined && u.usd + add.usd > b.usdPerDay);
     if (op !== "/add" && over) return Response.json({ ok: false, used: u, resets_at: next.toISOString() }, { status: 429 });
     u.cells += add.cells;
     u.bytes += add.bytes;
     if (op === "/add") u.rows += add.rows;
+    u.usd += add.usd;
     // a pure check (a row-scan query asking whether the row budget has room) writes nothing: storage writes are billed per row
-    if (op === "/add" || add.cells || add.bytes || cur.day !== day) await this.state.storage.put("u", u);
+    if (op === "/add" || add.cells || add.bytes || add.usd || cur.day !== day) await this.state.storage.put("u", u);
     return Response.json({ ok: true, used: u, resets_at: next.toISOString() });
   }
 }

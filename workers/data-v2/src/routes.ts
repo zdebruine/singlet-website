@@ -3,7 +3,7 @@
  * Runtime-neutral like handler.ts: index.ts passes the bindings, the tests pass fakes.
  */
 import type { Deps } from "./handler";
-import { CidxError, runQuery, type QueryBody } from "./cidx";
+import { CidxError, OverBudget, runQuery, type QueryBody } from "./cidx";
 import { runGather, runPart, type GatherBody, type Read } from "./gather";
 import { addUsage, charge, identify, limitsFor, rateLimit, type D1Like, type QuotaNamespaceLike, type RateLimiterLike } from "./limits";
 
@@ -71,10 +71,10 @@ export async function handleCidx(request: Request, deps: CidxDeps): Promise<Resp
       const r = await runQuery(
         deps,
         b,
-        { maxRowsScanned: lim.maxRowsScanned, maxCellsPage: lim.maxCellsPage },
+        { maxRowsScanned: lim.maxRowsScanned, maxCells: lim.maxCellsPerRequest, maxStudies: lim.maxStudiesPerRequest, maxCostUsd: lim.maxCostUsd },
         {
           beforeScan: () => charge(deps.quota, subject, lim, 0, 0, 1),
-          afterScan: (rows) => deps.waitUntil(addUsage(deps.quota, subject, lim, { rows })),
+          afterScan: (rows, usd) => deps.waitUntil(addUsage(deps.quota, subject, lim, { rows, usd })),
         }
       );
       return json(200, r);
@@ -85,8 +85,16 @@ export async function handleCidx(request: Request, deps: CidxDeps): Promise<Resp
     return await runGather(
       {
         deps,
-        limits: { maxCells: lim.maxCellsPerGather, maxSamples: lim.maxSamplesPerGather, maxBytes: lim.maxBytesPerGather },
-        charge: (cells, bytes) => charge(deps.quota, subject, lim, cells, bytes),
+        limits: {
+          maxCells: lim.maxCellsPerRequest,
+          maxStudies: lim.maxStudiesPerRequest,
+          maxSamples: lim.maxSamplesPerGather,
+          maxBytes: lim.maxBytesPerGather,
+          maxReads: lim.maxReadsPerRequest,
+          maxCostUsd: lim.maxCostUsd,
+          maxRowsScanned: lim.maxRowsScanned,
+        },
+        charge: (cells, bytes, usd) => charge(deps.quota, subject, lim, cells, bytes, 0, usd),
         fanout:
           self && secret
             ? (reads) => self.fetch("https://data.singlet.bio/v2/cidx/_part", { method: "POST", headers: { "x-cidx-internal": secret, "content-type": "application/json" }, body: JSON.stringify({ reads }) })
@@ -97,6 +105,7 @@ export async function handleCidx(request: Request, deps: CidxDeps): Promise<Resp
       b
     );
   } catch (e) {
+    if (e instanceof OverBudget) return json(e.status, { error: e.code, message: e.message, plan: e.plan });
     if (e instanceof CidxError) return json(e.status, { error: e.code, message: e.message }, e.status === 429 ? { "Retry-After": "60" } : {});
     console.error("data-v2 cidx:", e instanceof Error ? e.stack ?? e.message : String(e));
     return json(500, { error: "internal_error", message: "The request failed." });
