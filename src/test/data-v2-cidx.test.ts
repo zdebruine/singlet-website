@@ -161,7 +161,7 @@ describe("scx and hashing", () => {
       rows += h.nRows;
     }
     expect(rows).toBe(d.totals.cells);
-    expect(d.features?.map((f) => f.column)).toEqual(["f1", "f2"]);
+    expect(d.features?.map((f) => f.column)).toEqual(["f1", "f2", "f3", "f4"]);
   });
 
   it("readGroup decodes from one ranged read; hash32 equals singlet.v2.atlas.hash32", async () => {
@@ -251,9 +251,13 @@ describe("query", () => {
     const b = (await runQuery(deps, { where: { cell_type: ["CL:0000084", "CL:0000236"] } }, QL)) as { count: number };
     expect(a.count).toBe(b.count);
     expect(a.count).toBeGreaterThan(0);
-    const c = (await runQuery(deps, { return: "cells", where: { ranges: { malignancy: [0.8, null] } } }, QL)) as { cells: { malignancy: (number | null)[] } };
-    expect(c.cells.malignancy.length).toBeGreaterThan(0);
-    for (const v of c.cells.malignancy) expect(v!).toBeGreaterThanOrEqual(0.8 - 1 / 65534);
+    const c = (await runQuery(deps, { return: "cells", where: { ranges: { malignancy: [0.8, null] } } }, QL)) as { cells: Record<string, unknown[]> };
+    expect(c.cells["test/malignancy"].length).toBeGreaterThan(0);
+    for (const v of c.cells["test/malignancy"] as number[]) expect(v).toBeGreaterThanOrEqual(0.8 - 1 / 65534);
+    const g = (await runQuery(deps, { return: "cells", where: { donor_status: "diseased", categories: { phase: ["G1"] } } }, QL)) as { cells: Record<string, unknown[]> };
+    expect(new Set(g.cells["test/phase"])).toEqual(new Set(["G1"]));
+    await expect(runQuery(deps, { where: { categories: { "test/phase": ["M"] } } }, QL)).rejects.toThrow(/unknown category/);
+    await expect(runQuery(deps, { where: { donor_status: "sick" } }, QL)).rejects.toThrow(/donor_status/);
   });
 });
 

@@ -1,5 +1,5 @@
 {
- "version": "20261101T0000Z-daa60987",
+ "version": "20261101T0000Z-48871622",
  "queries": [
   {
    "query": {
@@ -220,7 +220,7 @@
        0.8,
        null
       ],
-      "hypoxia": [
+      "test/hypoxia": [
        null,
        0.5
       ]
@@ -230,6 +230,104 @@
    },
    "answer": {
     "count": 4
+   }
+  },
+  {
+   "query": {
+    "where": {
+     "categories": {
+      "test/phase": [
+       "S",
+       "G2M"
+      ]
+     },
+     "ranges": {
+      "cycling": [
+       1,
+       1
+      ]
+     }
+    },
+    "return": "count",
+    "by": [
+     "study"
+    ]
+   },
+   "answer": {
+    "groups": [
+     {
+      "study": "GSE900001",
+      "n_cells": 42
+     },
+     {
+      "study": "GSE900002",
+      "n_cells": 42
+     }
+    ]
+   }
+  },
+  {
+   "query": {
+    "where": {
+     "donor_status": "diseased"
+    },
+    "return": "count",
+    "by": [
+     "sample"
+    ]
+   },
+   "answer": {
+    "groups": [
+     {
+      "sample": "GSM9000011",
+      "n_cells": 200
+     },
+     {
+      "sample": "GSM9000003",
+      "n_cells": 25
+     }
+    ]
+   }
+  },
+  {
+   "query": {
+    "where": {
+     "disease": "cancer",
+     "perturbation": [
+      "genetic"
+     ]
+    },
+    "return": "count"
+   },
+   "answer": {
+    "count": 200
+   }
+  },
+  {
+   "query": {
+    "where": {
+     "sample_kind": [
+      "primary",
+      "unknown"
+     ],
+     "cell_type": "T cell"
+    },
+    "return": "count",
+    "by": [
+     "sample"
+    ]
+   },
+   "answer": {
+    "groups": [
+     {
+      "sample": "GSM9000001",
+      "n_cells": 109
+     },
+     {
+      "sample": "GSM9000003",
+      "n_cells": 13
+     }
+    ]
    }
   },
   {
@@ -2310,6 +2408,101 @@
      "GSE900002"
     ],
     "cursor": null
+   }
+  },
+  {
+   "query": {
+    "where": {
+     "donor_status": "diseased",
+     "categories": {
+      "phase": [
+       "G1"
+      ]
+     }
+    },
+    "return": "cells",
+    "n": 20,
+    "seed": 4
+   },
+   "answer": {
+    "so": [
+     3,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4,
+     4
+    ],
+    "col": [
+     19,
+     9,
+     23,
+     33,
+     91,
+     110,
+     115,
+     118,
+     268,
+     307,
+     322,
+     363,
+     370,
+     404,
+     435,
+     437,
+     457,
+     482,
+     535,
+     552
+    ],
+    "gsm": [
+     "GSM9000003",
+     "GSM9000011",
+     "GSM9000011",
+     "GSM9000011",
+     "GSM9000011",
+     "GSM9000011",
+     "GSM9000011",
+     "GSM9000011",
+     "GSM9000011",
+     "GSM9000011",
+     "GSM9000011",
+     "GSM9000011",
+     "GSM9000011",
+     "GSM9000011",
+     "GSM9000011",
+     "GSM9000011",
+     "GSM9000011",
+     "GSM9000011",
+     "GSM9000011",
+     "GSM9000011"
+    ],
+    "eligible": 72,
+    "eligible_max": 225,
+    "remaining": 52,
+    "selected": [
+     "GSE900002",
+     "GSE900001"
+    ],
+    "cursor": [
+     1191502134,
+     4,
+     307
+    ]
    }
   }
  ],

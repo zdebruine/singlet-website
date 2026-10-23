@@ -112,7 +112,9 @@ export interface Directory {
   format_version: number;
   version: string;
   group_rows: number;
-  dicts: Record<"organism" | "cell_type" | "tissue" | "sex" | "ancestry", DictEntry[]>;
+  dicts: Record<"organism" | "cell_type" | "tissue" | "sex" | "ancestry", DictEntry[]> & { disease?: DictEntry[]; development_stage?: DictEntry[] };
+  /** sample-level property vocabularies: donor_status and sample_kind codes, perturbation bits */
+  properties?: { donor_status?: Record<string, number>; perturbation?: Record<string, number>; sample_kind?: Record<string, number> };
   samples: { key: string; rows: number; max_so: number };
   summary: { key: string; rows: number };
   plan: { block_size: number; blocks: Record<string, string> };
@@ -129,8 +131,14 @@ export interface Directory {
 }
 
 export interface FeatureSpec {
+  /** <feature_set>/<name>, or name without a set */
+  id: string;
   name: string;
-  version: string;
+  feature_set: string;
+  kind: "score" | "category" | "flag";
+  categories: string[];
+  method_version: string;
+  comparable: "atlas" | "sample";
   dtype: "u8" | "u16";
   lo: number;
   hi: number;
@@ -138,7 +146,6 @@ export interface FeatureSpec {
   na: number;
   thresholds: number[];
   description: string;
-  producer: string;
   /** physical shard column, f1, f2, ... */
   column: string;
 }
@@ -318,8 +325,26 @@ const SCORE_FIELDS = new Set(["cell_type_score", "sex_score", "ancestry_prob"]);
 const SEX_CODE: Record<string, number> = { unknown: 0, female: 1, male: 2, ambiguous: 3 };
 const GSM_RE = /^GSM(\d{1,9})$/;
 const GSE_RE = /^GSE(\d{1,9})$/;
-const RANGE_NAME = /^[a-z][a-z0-9_]{0,47}$/;
-const WHERE_KEYS = ["organism", "cell_type", "tissue", "sex", "ancestry", "samples", "studies", "ranges"];
+const RANGE_NAME = /^[a-z][a-z0-9_]{0,47}(\/[a-z][a-z0-9_]{0,47})?$/;
+const WHERE_KEYS = [
+  "organism",
+  "cell_type",
+  "tissue",
+  "sex",
+  "ancestry",
+  "samples",
+  "studies",
+  "donor_status",
+  "perturbation",
+  "sample_kind",
+  "disease",
+  "development_stage",
+  "ranges",
+  "categories",
+];
+const DONOR_STATUS: Record<string, number> = { healthy: 1, diseased: 2 };
+const PERTURBATION_BITS: Record<string, number> = { treated: 1, genetic: 2, control: 4 };
+const SAMPLE_KINDS: Record<string, number> = { primary: 1, cell_line: 2, stem_cell: 3, organoid: 4, xenograft: 5 };
 
 export interface Where {
   organism?: string;
@@ -329,7 +354,14 @@ export interface Where {
   ancestry?: string | string[];
   samples?: string[];
   studies?: string[];
+  donor_status?: string | string[];
+  perturbation?: string | string[];
+  sample_kind?: string | string[];
+  disease?: string | string[];
+  development_stage?: string | string[];
   ranges?: Record<string, [number | null, number | null]>;
+  /** category features: {feature id or name: [category, ...]} */
+  categories?: Record<string, string[]>;
 }
 
 const asList = (v: unknown): string[] | null => {
@@ -396,7 +428,12 @@ export class QueryPlan {
   ranges: [string, string[], number, number][] = [];
   sampleSet: Uint32Array | null = null; // sorted
   exclude: Set<number>;
+  /** feature id -> spec */
   features: Map<string, FeatureSpec>;
+  /** bare feature name -> id, when the name is unique */
+  alias = new Map<string, string>();
+  /** category filters: [shard column, allowed codes] */
+  cats: [string, Uint8Array][] = [];
   /** a hash of the normalised query, bound into cursors */
   digest = "";
 
@@ -406,7 +443,10 @@ export class QueryPlan {
   ) {
     const w = where ?? {};
     for (const k of Object.keys(w)) if (!WHERE_KEYS.includes(k)) throw new CidxError(400, "bad_request", `Unknown filter '${k}'.`);
-    this.features = new Map((d.features ?? []).map((f) => [f.name, f]));
+    this.features = new Map((d.features ?? []).map((f) => [f.id ?? f.name, f]));
+    const byName = new Map<string, FeatureSpec[]>();
+    for (const f of this.features.values()) byName.set(f.name, [...(byName.get(f.name) ?? []), f]);
+    for (const [n, fs] of byName) if (fs.length === 1 && !this.features.has(n)) this.alias.set(n, fs[0].id ?? fs[0].name);
     if (w.organism) {
       const codes = dictCodes(d.dicts.organism, [String(w.organism)], false);
       for (const e of d.dicts.organism) if (e.id === w.organism) codes.push(e.code);
@@ -431,7 +471,7 @@ export class QueryPlan {
       if ((lo !== null && lo !== undefined && !Number.isFinite(Number(lo))) || (hi !== null && hi !== undefined && !Number.isFinite(Number(hi)))) {
         throw new CidxError(400, "bad_request", `ranges.${k} must be [min, max] numbers or null.`);
       }
-      const f = this.features.get(k);
+      const f = this.feature(k);
       if (RANGE_FIELDS[k]) {
         let a: number;
         let b: number;
@@ -443,16 +483,87 @@ export class QueryPlan {
           b = hi == null ? Number.MAX_SAFE_INTEGER : Math.floor(Number(hi));
         }
         this.ranges.push([k, RANGE_FIELDS[k], a, b]);
-      } else if (f) {
+      } else if (f && f.kind !== "category") {
         const a = lo == null ? 0 : Math.max(0, featureCode(f, Number(lo)));
         const b = hi == null ? f.scale : Math.min(f.scale, featureCode(f, Number(hi)));
-        this.ranges.push([k, [f.column], a, b]);
+        this.ranges.push([f.id ?? f.name, [f.column], a, b]);
       } else {
         throw new CidxError(400, "bad_request", `Unknown range field '${k}'. Use ${[...Object.keys(RANGE_FIELDS), ...this.features.keys()].join(", ")}.`);
       }
     }
+    for (const [k, vals] of Object.entries(w.categories ?? {})) {
+      const f = this.feature(k);
+      if (!f || f.kind !== "category") throw new CidxError(400, "bad_request", `'${k}' is not a registered category feature.`);
+      const m = new Uint8Array(65536);
+      for (const v of asList(vals) ?? []) {
+        const i = f.categories.indexOf(v);
+        if (i < 0) throw new CidxError(400, "bad_request", `${f.id}: unknown category '${v}' (use ${f.categories.slice(0, 20).join(", ")}).`);
+        m[i] = 1;
+      }
+      this.cats.push([f.column, m]);
+    }
     this.exclude = new Set(d.exclude ?? []);
     this.digest = JSON.stringify(w);
+  }
+
+  feature(k: string): FeatureSpec | undefined {
+    return this.features.get(k) ?? this.features.get(this.alias.get(k) ?? "");
+  }
+
+  /** Samples allowed by the sample-level property filters (singlet.v2.atlas._Plan._property_mask), or null when none is given. */
+  propertyMask(t: Record<string, Uint32Array>): Uint8Array | null {
+    const w = this.where ?? {};
+    const props = this.d.properties ?? {};
+    const n = t.so.length;
+    let m: Uint8Array | null = null;
+    const and = (x: Uint8Array) => {
+      if (!m) m = x;
+      else for (let i = 0; i < n; i++) m[i] &= x[i];
+    };
+    const codeFilter = (key: "donor_status" | "sample_kind", col: string, lut: Record<string, number>) => {
+      const vals = asList(w[key]);
+      if (!vals) return;
+      const codes = new Set<number>();
+      for (const v of vals) {
+        const lv = v.toLowerCase();
+        if (lv === "unknown") codes.add(0);
+        else if (lut[lv] !== undefined) codes.add(lut[lv]);
+        else throw new CidxError(400, "bad_request", `${key} is one of ${Object.keys(lut).join(", ")} or unknown.`);
+      }
+      const x = new Uint8Array(n);
+      for (let i = 0; i < n; i++) x[i] = codes.has(t[col][i]) ? 1 : 0;
+      and(x);
+    };
+    codeFilter("donor_status", "donor", props.donor_status ?? DONOR_STATUS);
+    codeFilter("sample_kind", "kind", props.sample_kind ?? SAMPLE_KINDS);
+    const pv = asList(w.perturbation);
+    if (pv) {
+      const bits = props.perturbation ?? PERTURBATION_BITS;
+      let want = 0;
+      let unknown = false;
+      for (const v of pv) {
+        const lv = v.toLowerCase();
+        if (lv === "unknown") unknown = true;
+        else if (bits[lv] !== undefined) want |= bits[lv];
+        else throw new CidxError(400, "bad_request", `perturbation is one of ${Object.keys(bits).join(", ")} or unknown.`);
+      }
+      const x = new Uint8Array(n);
+      for (let i = 0; i < n; i++) x[i] = (t.perturb[i] & want) !== 0 || (unknown && t.perturb[i] === 0) ? 1 : 0;
+      and(x);
+    }
+    for (const [key, col] of [
+      ["disease", "disease"],
+      ["development_stage", "dev_stage"],
+    ] as const) {
+      const vals = asList(w[key]);
+      if (!vals) continue;
+      const entries = this.d.dicts[key] ?? [{ code: 0, id: null, label: "unknown", anc: [] }];
+      const codes = new Set(dictCodes(entries, vals, true, this.d.terms ?? {}));
+      const x = new Uint8Array(n);
+      for (let i = 0; i < n; i++) x[i] = codes.has(t[col][i]) ? 1 : 0;
+      and(x);
+    }
+    return m;
   }
 
   private mask(entries: DictEntry[], wanted: string[] | null, size: number): Uint8Array | null {
@@ -463,6 +574,19 @@ export class QueryPlan {
   }
 
   async resolveSamples(deps: Deps, stats?: ReadStats): Promise<void> {
+    await this.resolveSampleList(deps, stats);
+    const props = ["donor_status", "perturbation", "sample_kind", "disease", "development_stage"] as const;
+    if (!props.some((k) => asList((this.where ?? {})[k]))) return;
+    const t = await readTable(deps, this.d.samples.key, stats);
+    const pm = this.propertyMask(t)!;
+    const allowed: number[] = [];
+    for (let i = 0; i < t.so.length; i++) if (pm[i]) allowed.push(t.so[i]);
+    allowed.sort((a, b) => a - b);
+    const cur = this.sampleSet;
+    this.sampleSet = Uint32Array.from(cur ? allowed.filter((so) => this.sampleOverlap(so, so)) : allowed);
+  }
+
+  private async resolveSampleList(deps: Deps, stats?: ReadStats): Promise<void> {
     const w = this.where ?? {};
     const sm = asList(w.samples);
     const st = asList(w.studies);
@@ -495,7 +619,7 @@ export class QueryPlan {
     const ok = new Uint8Array((this.d.samples.max_so ?? 0) + 2);
     const stat = this.d.sample_stats ?? {};
     const rangeStats = this.ranges
-      .map(([k, , a, b]) => ({ pre: stat[k], a, b, feature: this.features.has(k) }))
+      .map(([k, , a, b]) => ({ pre: stat[k], a, b, feature: t[`${stat[k]}_n`] !== undefined }))
       .filter((r) => r.pre && t[`${r.pre}_min`] !== undefined);
     for (let i = 0; i < t.so.length; i++) {
       const so = t.so[i];
@@ -515,7 +639,7 @@ export class QueryPlan {
   }
 
   hasRowRanges(): boolean {
-    return this.ranges.length > 0;
+    return this.ranges.length > 0 || this.cats.length > 0;
   }
 
   private static overlaps(m: Uint8Array | null, lo: number, hi: number): boolean {
@@ -550,6 +674,7 @@ export class QueryPlan {
       }
       if (hi < a || lo > b) return false;
     }
+    for (const [col, m] of this.cats) if (!QueryPlan.overlaps(m, ...z(col))) return false;
     const [s0, s1] = z("sample");
     return this.sampleOverlap(s0, s1);
   }
@@ -561,6 +686,7 @@ export class QueryPlan {
     if (this.sex) need.add("sex");
     if (this.anc) need.add("anc");
     for (const [, cols] of this.ranges) for (const c of cols) need.add(c);
+    for (const [col] of this.cats) need.add(col);
     return [...need];
   }
 
@@ -584,6 +710,7 @@ export class QueryPlan {
         const v = rc.length === 1 ? cols[rc[0]][i] : cols[rc[0]][i] + cols[rc[1]][i];
         ok = v >= a && v <= b;
       }
+      for (let c = 0; c < this.cats.length && ok; c++) ok = this.cats[c][1][cols[this.cats[c][0]][i]] === 1;
       if (!ok) continue;
       const so = s[i];
       if (so !== lastS) {
@@ -1126,7 +1253,8 @@ async function runSample(
   fieldsWanted.forEach((f, j) => {
     const vals = rows.map((r) => r.vals[j]);
     const feat = (d.features ?? []).find((x) => x.column === f);
-    if (feat) res[feat.name] = vals.map((c) => (c === feat.na ? null : Math.round((feat.lo + (c / feat.scale) * (feat.hi - feat.lo)) * 1e6) / 1e6));
+    if (feat && feat.kind === "category") res[feat.id ?? feat.name] = vals.map((c) => (c === feat.na ? null : (feat.categories[c] ?? null)));
+    else if (feat) res[feat.id ?? feat.name] = vals.map((c) => (c === feat.na ? null : Math.round((feat.lo + (c / feat.scale) * (feat.hi - feat.lo)) * 1e6) / 1e6));
     else if (f === "ct") res.cell_type = vals.map((c) => dec(d.dicts.cell_type, c));
     else if (f === "tissue") res.tissue = vals.map((c) => dec(d.dicts.tissue, c));
     else if (f === "sex") res.sex = vals.map((c) => d.dicts.sex[c]?.label ?? "unknown");
