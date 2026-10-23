@@ -1,7 +1,11 @@
+import { wellKnown } from "./_shared/mcp-oauth";
+
 /**
  * Security headers for every Pages Function response (API, MCP, sign-in,
- * sitemap). Static files get theirs from public/_headers; keep the lists in
- * step. A header a handler already set is left alone.
+ * OAuth, sitemap). Also answers the OAuth discovery documents under
+ * /.well-known/ (mcp-oauth.ts), which have no route file of their own.
+ * Static files get theirs from public/_headers; keep the lists in step. A
+ * header a handler already set is left alone.
  *
  * The CSP here is the strict one for responses that are data, not pages: they
  * load nothing, so `default-src 'none'` costs nothing and stops a response
@@ -27,10 +31,17 @@ export function withSecurityHeaders(res: Response): Response {
 
 /** Paths answered by Functions as data. Everything else (the SPA and static files) is left to public/_headers: the strict CSP above would block the app's own scripts. */
 export function isDataPath(pathname: string): boolean {
-  return pathname.startsWith("/api/") || pathname === "/mcp" || pathname.startsWith("/auth/") || pathname === "/sitemap.xml";
+  return (
+    pathname.startsWith("/api/") ||
+    pathname === "/mcp" ||
+    pathname.startsWith("/auth/") ||
+    pathname.startsWith("/oauth/") ||
+    pathname.startsWith("/.well-known/") ||
+    pathname === "/sitemap.xml"
+  );
 }
 
 export const onRequest: PagesFunction = async ({ request, next }) => {
-  const res = await next();
+  const res = wellKnown(request) ?? (await next());
   return isDataPath(new URL(request.url).pathname) ? withSecurityHeaders(res) : res;
 };

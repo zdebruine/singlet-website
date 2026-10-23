@@ -4,12 +4,10 @@ import { Globe } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CodeBlock } from "@/components/CodeBlock";
 import { BUILD_DEPS, EXAMPLE_GSE, PY_INSTALL, R_INSTALL_STANDALONE } from "@/lib/install-snippets";
-import { MCP_URL, claudeCodeConfig } from "@/lib/mcp-snippets";
+import { MCP_URL, claudeCodeConfigNoKey } from "@/lib/mcp-snippets";
 
 export type Tool = "web" | "python" | "r" | "claude";
 const TOOL_IDS: Tool[] = ["web", "python", "r", "claude"];
-
-const KEY = "sk_live_…";
 
 const Logo = ({ src }: { src: string }) => <img src={src} alt="" width={30} height={30} className="h-[30px] w-[30px] object-contain" />;
 
@@ -110,15 +108,15 @@ export function GetStarted() {
         )}
         {tool === "claude" && (
           <>
-            <Step n={1} title="Get a free API key">
-              <Link to="/account#api-keys" className="btn-primary btn-sm inline-flex">Create a key</Link>
+            <Step n={1} title="Add the connector">
+              <p>Claude → Settings → Connectors → Add custom connector:</p>
+              <CodeBlock label="url" code={MCP_URL} compact wrap />
             </Step>
-            <Step n={2} title="Connect">
-              <p>Claude.ai → Settings → Connectors → Add custom connector:</p>
-              <CodeBlock label="url" code={`${MCP_URL}?key=${KEY}`} compact wrap />
+            <Step n={2} title="Sign in">
+              <p>Click Connect and sign in with GitHub or Google. No key to copy.</p>
               <details>
-                <summary className="cursor-pointer text-[12.5px]">Claude Code, Desktop, Cursor, VS Code</summary>
-                <CodeBlock label="bash" code={claudeCodeConfig(KEY)} compact wrap className="mt-2" />
+                <summary className="cursor-pointer text-[12.5px]">Claude Code, Cursor, VS Code</summary>
+                <CodeBlock label="bash" code={claudeCodeConfigNoKey} compact wrap className="mt-2" />
                 <Link to="/docs/mcp" className="text-primary hover:underline text-[12.5px]">Every client →</Link>
               </details>
             </Step>
