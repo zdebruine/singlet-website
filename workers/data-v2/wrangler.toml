@@ -16,6 +16,10 @@ workers_dev = false
 # and point clients (website Pages variable V2_ORIGIN, Python/R loaders) at https://dv2.singlet.bio/v2/.
 routes = [{ pattern = "data.singlet.bio/v2/*", zone_name = "singlet.bio" }]
 
+# Cell index: big gathers are split across invocations of this Worker (each has its own 6 concurrent R2 reads). Needs the secret
+# `npx wrangler secret put CIDX_INTERNAL_SECRET`; without it the binding is unused.
+services = [{ binding = "SELF", service = "singlet-data-v2" }]
+
 # Read-only: the Worker only calls get() and head().
 [[r2_buckets]]
 binding = "DATA"
@@ -23,3 +27,36 @@ bucket_name = "singlet-data"
 
 [observability]
 enabled = true
+
+# ── atlas cell index (POST /v2/cidx/query, /v2/cidx/gather; singlet-bio docs/format-v2-cell-index.md) ──────────────────────────────
+# Every binding below is optional: without one, its layer is off and the per-request caps in src/limits.ts still bound each request.
+
+# API keys are checked read-only (SELECT on api_keys by hash); the Worker never writes to D1.
+[[d1_databases]]
+binding = "DB"
+database_name = "singlet-catalog"
+database_id = "fb42f359-92a0-452c-91e4-f630f627c4c7"
+
+# Requests per minute per subject (per Cloudflare location, approximate). namespace_id must be unique in the account.
+[[ratelimits]]
+name = "CIDX_RL_ANON"
+namespace_id = "7301"
+  [ratelimits.simple]
+  limit = 30
+  period = 60
+
+[[ratelimits]]
+name = "CIDX_RL_KEY"
+namespace_id = "7302"
+  [ratelimits.simple]
+  limit = 300
+  period = 60
+
+# Daily cells/bytes per subject, strictly consistent: one Durable Object per subject.
+[[durable_objects.bindings]]
+name = "CIDX_QUOTA"
+class_name = "CidxQuota"
+
+[[migrations]]
+tag = "cidx-quota-v1"
+new_sqlite_classes = ["CidxQuota"]

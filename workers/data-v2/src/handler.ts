@@ -36,6 +36,8 @@ export const MISSES_MAX = 256;
 
 export const CACHE_CONTROL_IMMUTABLE = "public, max-age=31536000, immutable";
 export const CACHE_CONTROL_SHORT = "public, max-age=300";
+/** v2/cidx/current.json: a new index version is visible within a minute. */
+export const CACHE_CONTROL_POINTER = "public, max-age=60";
 const CANONICAL_ORIGIN = "https://data.singlet.bio";
 const ALLOW = "GET, HEAD, OPTIONS";
 
@@ -71,6 +73,11 @@ export interface Deps {
   inFlight?: Set<string>;
   /** Keys of big objects (over RANGE_FILL_MAX_BYTES) that a ranged or conditional request has missed once in this isolate. Defaults to a module-level set. */
   misses?: Set<string>;
+  /**
+   * Overrides RANGE_FILL_MAX_BYTES for this request. The cell-index gather path reads many samples once each and passes 0, so a
+   * sample object is only filled into the cache on its second ranged miss in the isolate.
+   */
+  rangeFillMax?: number;
 }
 
 const defaultInFlight = new Set<string>();
@@ -94,6 +101,13 @@ const KEY_PATTERNS: { re: RegExp; contentType: string; cacheControl: string }[] 
   { re: /^\/v2\/ref\/index\.json$/, contentType: JSON_TYPE, cacheControl: CACHE_CONTROL_SHORT },
   { re: /^\/v2\/m\/GSE\d{1,12}\.json$/, contentType: JSON_TYPE, cacheControl: CACHE_CONTROL_SHORT },
   { re: /^\/v2\/cells\/GSE\d{1,12}\.cells$/, contentType: OCTET, cacheControl: CACHE_CONTROL_SHORT },
+  // atlas cell index (singlet-bio docs/format-v2-cell-index.md section 3): content-addressed objects, versioned directories, the pointer
+  { re: /^\/v2\/cidx\/obj\/[0-9a-f]{32}\.(scx|parquet)$/, contentType: OCTET, cacheControl: CACHE_CONTROL_IMMUTABLE },
+  { re: /^\/v2\/cidx\/obj\/[0-9a-f]{32}\.json$/, contentType: JSON_TYPE, cacheControl: CACHE_CONTROL_IMMUTABLE },
+  { re: /^\/v2\/cidx\/v\/\d{8}T\d{4}Z-[0-9a-f]{8}\.json$/, contentType: JSON_TYPE, cacheControl: CACHE_CONTROL_IMMUTABLE },
+  { re: /^\/v2\/cidx\/current\.json$/, contentType: JSON_TYPE, cacheControl: CACHE_CONTROL_POINTER },
+  // per-cell label sidecars, content-addressed, referenced from the study manifest
+  { re: /^\/v2\/a\/GSM\d{1,12}\/[0-9a-f]{32}\.parquet$/, contentType: OCTET, cacheControl: CACHE_CONTROL_IMMUTABLE },
 ];
 
 /** Raw request-target pieces that never appear in a valid key, tested before URL normalisation hides them. */
@@ -354,7 +368,7 @@ function scheduleFill(deps: Deps, cls: KeyClass): void {
  */
 function fillAfterPartial(ctx: Ctx, size: number): void {
   if (ctx.alreadyCached || !ctx.deps.cache) return;
-  if (size <= RANGE_FILL_MAX_BYTES) {
+  if (size <= (ctx.deps.rangeFillMax ?? RANGE_FILL_MAX_BYTES)) {
     scheduleFill(ctx.deps, ctx.cls);
     return;
   }
