@@ -92,7 +92,7 @@ def publish(gse, targets):
         return True
     pdir = f"{STATE}/pub/{gse}"; os.makedirs(pdir, exist_ok=True)
     cat = f"{pdir}/catalog.parquet"
-    run([PY, f"{S}/build_catalog_v3.py", cat, "--gse", gse, "--targets", targets, "--results", RESULTS])
+    run([PY, f"{S}/build_catalog_v3.py", cat, gse, "--targets", targets, "--results", RESULTS])
     run([PY, f"{S}/cf_bundle_v3.py", "--catalog", cat, "--results", RESULTS, "--out-dir", BUNDLES, "--gse", gse, "--jobs", "1"])
     bundle = f"{BUNDLES}/{gse}/{gse}.singlet"
     if not os.path.exists(bundle):
