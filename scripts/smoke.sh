@@ -165,9 +165,21 @@ mcp=$(curl -s -m 30 -X POST "$BASE/mcp" -H 'content-type: application/json' \
 n=$(printf '%s' "$mcp" | grep -o '"name":"[a-z_]*","title"' | wc -l | tr -d ' ')
 if [ "$n" = "14" ] || [ "$n" = "17" ]; then ok "mcp tools/list ($n)"; else bad "mcp tools/list ($n tools, want 14 or 17)"; fi
 
-# MCP tool calls need a key: without one a call is a tool error that says so (not an answer, not a 500).
-mcpcall=$(curl -s -m 30 -X POST "$BASE/mcp" -H 'content-type: application/json'   -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"get_atlas_stats","arguments":{}}}')
-if printf '%s' "$mcpcall" | grep -q 'key_required'; then ok "mcp tool call without a key is refused"; else bad "mcp tool call without a key (got: $(printf '%s' "$mcpcall" | head -c 120))"; fi
+# MCP tool calls need an account: without a credential a call is HTTP 401 whose WWW-Authenticate points at the
+# OAuth metadata (that 401 is what makes Claude's connectors start sign-in; a 200 tool error never does).
+mcpcall=$(curl -s -m 30 -o /dev/null -D - -X POST "$BASE/mcp" -H 'content-type: application/json'   -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"get_atlas_stats","arguments":{}}}' | tr -d '\r')
+if printf '%s' "$mcpcall" | grep -q '^HTTP/[0-9.]* 401' && printf '%s' "$mcpcall" | grep -qi '^www-authenticate: Bearer .*resource_metadata="'"$BASE"'/.well-known/oauth-protected-resource"'; then
+  ok "mcp tool call without a credential is 401 + resource_metadata"
+else
+  bad "mcp tool call without a credential (got: $(printf '%s' "$mcpcall" | head -c 200))"
+fi
+
+# OAuth discovery for MCP clients (functions/_shared/mcp-oauth.ts), on this deployment's own origin.
+check "oauth protected resource" 200 "$BASE/.well-known/oauth-protected-resource" "\"resource\": *\"$BASE/mcp\"" "json"
+check "oauth resource (mcp path)" 200 "$BASE/.well-known/oauth-protected-resource/mcp" "\"authorization_servers\"" "json"
+check "oauth server metadata"   200 "$BASE/.well-known/oauth-authorization-server" "\"registration_endpoint\": *\"$BASE/oauth/register\"" "json"
+code=$(curl -s -m 30 -o /dev/null -w '%{http_code}' -X POST "$BASE/oauth/token" -H 'content-type: application/x-www-form-urlencoded' -d 'grant_type=authorization_code&code=sac_nope&client_id=scl_nope')
+if [ "$code" = 401 ]; then ok "oauth token rejects an unknown client"; else bad "oauth token unknown client ($code, want 401)"; fi
 
 # An invalid key is HTTP 401, whatever the method.
 code=$(curl -s -m 30 -o /dev/null -w '%{http_code}' -X POST "$BASE/mcp" -H 'content-type: application/json'   -H 'authorization: Bearer sk_live_not-a-real-key-for-the-smoke-test' -d '{"jsonrpc":"2.0","id":3,"method":"tools/list"}')

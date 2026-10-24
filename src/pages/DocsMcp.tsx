@@ -9,7 +9,7 @@ import { GITHUB_ISSUES } from "@/lib/install-snippets";
 import {
   MCP_URL,
   claudeCodeConfig,
-  claudeDesktopConfig,
+  claudeCodeConfigNoKey,
   cursorConfig,
   vscodeConfig,
 } from "@/lib/mcp-snippets";
@@ -173,27 +173,31 @@ export default function DocsMcp() {
 
           <Section id="setup" title="Set it up">
             <p>
-              Hosted at <code className="code-inline">{MCP_URL}</code>. Tools need a free API key from{" "}
-              <Link to="/account">your account</Link>; downloads never do.
+              Hosted at <code className="code-inline">{MCP_URL}</code>. Tools need a free singlet.bio account: add the URL to your
+              client and sign in with GitHub or Google when it asks. Clients that only take a header can send a personal API key from{" "}
+              <Link to="/account">your account</Link> instead. Downloads never need either.
             </p>
-            <Tabs defaultValue="claude-ai">
+            <Tabs defaultValue="claude">
               <TabsList className="flex-wrap h-auto">
-                <TabsTrigger value="claude-ai">Claude.ai</TabsTrigger>
-                <TabsTrigger value="claude-desktop">Claude Desktop</TabsTrigger>
+                <TabsTrigger value="claude">Claude</TabsTrigger>
                 <TabsTrigger value="claude-code">Claude Code</TabsTrigger>
                 <TabsTrigger value="cursor">Cursor</TabsTrigger>
                 <TabsTrigger value="chatgpt">ChatGPT</TabsTrigger>
                 <TabsTrigger value="vscode">VS Code</TabsTrigger>
               </TabsList>
-              <TabsContent value="claude-ai" className="mt-4">
-                <p className="text-sm text-muted-foreground">Settings → Connectors → Add custom connector. Treat this URL like a password.</p>
-                <CodeBlock label="connector url" code={`${MCP_URL}?key=${KEY}`} />
-              </TabsContent>
-              <TabsContent value="claude-desktop" className="mt-4">
-                <p className="text-sm text-muted-foreground">Settings → Developer → Edit Config, then restart Claude.</p>
-                <CodeBlock label="claude_desktop_config.json" code={claudeDesktopConfig(KEY)} />
+              <TabsContent value="claude" className="mt-4">
+                <p className="text-sm text-muted-foreground">
+                  Claude on the web, Desktop or mobile: Settings → Connectors → Add custom connector, paste the URL, then Connect and sign in
+                  to singlet.bio with GitHub or Google. No key to copy; disconnect any time from <Link to="/account#connectors">your account</Link>.
+                </p>
+                <CodeBlock label="connector url" code={MCP_URL} />
               </TabsContent>
               <TabsContent value="claude-code" className="mt-4">
+                <p className="text-sm text-muted-foreground">
+                  Add the server, then run <code className="code-inline">/mcp</code> in Claude Code and choose singlet to sign in.
+                </p>
+                <CodeBlock label="terminal" code={claudeCodeConfigNoKey} />
+                <p className="text-sm text-muted-foreground">Or, for scripts and CI, with an API key:</p>
                 <CodeBlock label="terminal" code={claudeCodeConfig(KEY)} />
               </TabsContent>
               <TabsContent value="cursor" className="mt-4">
@@ -204,8 +208,8 @@ export default function DocsMcp() {
               </TabsContent>
               <TabsContent value="chatgpt" className="mt-4">
                 <p className="text-sm text-muted-foreground">
-                  Developer mode → Settings → Connectors → Create (HTTP). Add <code className="code-inline">Authorization: Bearer {KEY}</code>, or
-                  use the Claude.ai URL with the key in it.
+                  Developer mode → Settings → Connectors → Create (HTTP), authentication OAuth, then sign in. Or add{" "}
+                  <code className="code-inline">Authorization: Bearer {KEY}</code>.
                 </p>
                 <CodeBlock label="connector url" code={MCP_URL} />
               </TabsContent>
@@ -254,7 +258,7 @@ export default function DocsMcp() {
           <Section id="limits" title="Limits" collapsible>
             <ul>
               <li>
-                Tool calls are per key: 60 a minute. AI-interpreted search draws on a monthly AI token allowance;
+                Tool calls are per account: 60 a minute. AI-interpreted search draws on a monthly AI token allowance;
                 vocabulary-only and repeated questions use none. What is left comes back with every answer (in{" "}
                 <code className="code-inline">_meta.quota</code>). When it runs out the question is still answered, read
                 with the built-in vocabulary only, and the answer says so.
@@ -289,8 +293,9 @@ export default function DocsMcp() {
                 refused (HTTP 401) while a bad key is sent. Create a new key in <Link to="/account">your account</Link>.
               </li>
               <li>
-                <strong>"needs a personal singlet.bio API key"</strong> — you called a tool without
-                a key. Create one in <Link to="/account">your account</Link> and add it to the config above.
+                <strong>Claude shows Connect, or asks you to sign in again</strong> — the server answers HTTP 401 to a client
+                with no valid sign-in. Connect and sign in; a connection disconnected from{" "}
+                <Link to="/account#connectors">your account</Link> needs a new sign-in.
               </li>
               <li>
                 <strong>"Today's AI-search budget is used up"</strong> — the daily allowance of fresh AI readings. The

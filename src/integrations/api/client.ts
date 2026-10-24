@@ -18,6 +18,7 @@ import type {
   ApiKeyCreated,
   AuthMe,
   ApiKeySummary,
+  ConnectionSummary,
   CellVerdict,
   Condition,
   CorpusStats,
@@ -576,6 +577,12 @@ function normalizeGsmDetail(raw: unknown): GsmDetailResponse {
   };
 }
 
+function normalizeConnection(raw: unknown): ConnectionSummary | null {
+  const r = rec(raw);
+  if (typeof r.id !== "string") return null;
+  return { id: r.id, client_name: strOrNull(r.client_name), created_at: str(r.created_at), last_used_at: strOrNull(r.last_used_at) };
+}
+
 function normalizeApiKey(raw: unknown): ApiKeySummary | null {
   const r = rec(raw);
   if (typeof r.id !== "string") return null;
@@ -594,6 +601,7 @@ function normalizeApiKey(raw: unknown): ApiKeySummary | null {
  * POST a JSON body to one of the account endpoints (Pages Functions):
  *   /api/product — private projects, cohorts, workspaces (action router)
  *   /api/keys    — API keys (action router)
+ *   /api/connections — connected MCP clients (action router)
  * The session cookie identifies the visitor; anonymous calls get 401.
  */
 async function accountPost(path: string, body: unknown, signal?: AbortSignal): Promise<unknown> {
@@ -887,6 +895,17 @@ export const apiClient = {
     },
     async revoke(id: string): Promise<void> {
       await accountPost("/api/keys", { action: "revoke", id });
+    },
+  },
+
+  /** MCP clients connected by signing in (OAuth), e.g. a Claude connector — signed-in only (POST /api/connections). */
+  connections: {
+    async list(): Promise<ConnectionSummary[]> {
+      const r = rec(await accountPost("/api/connections", { action: "list" }));
+      return arr<unknown>(r.items).map(normalizeConnection).filter((c): c is ConnectionSummary => c !== null);
+    },
+    async revoke(id: string): Promise<void> {
+      await accountPost("/api/connections", { action: "revoke", id });
     },
   },
 

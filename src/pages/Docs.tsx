@@ -774,9 +774,9 @@ sc.pp.highly_variable_genes(adata, batch_key="gsm_id")`}
             {/* ── API keys & MCP ── */}
             <Section id="api-keys" title="API keys & MCP">
               <p>
-                Loading and downloading data never needs a key. A key is for two things: running natural-language searches
-                from code under your own daily allowance (200 a day, shared with the website), and connecting an assistant
-                to the atlas through the MCP server.
+                Loading and downloading data never needs a key. A key is for running natural-language searches from code
+                under your own allowance (shared with the website), and for MCP clients that only take a header. Claude
+                connects without one: add the MCP server as a connector and sign in.
               </p>
               <h3>Create a key</h3>
               <ol>
@@ -834,11 +834,11 @@ accs <- singlet::find("microglia in the aging mouse brain")`}
               <p>
                 <Mono>{MCP_URL}</Mono> is a hosted Model Context Protocol server (Streamable HTTP, stateless) that lets an
                 assistant — Claude Desktop, Claude Code, Cursor, VS Code — search the atlas, read a study's metadata and
-                hand back a download URL or a loader snippet. It works without a key. Only <Mono>search_datasets</Mono>{" "}
-                calls a language model (to turn a plain-English question into filters the built-in vocabulary cannot
-                read), so only those fresh AI readings are metered: 10 a day anonymously, 200 with a key.{" "}
-                <Mono>save_cohort</Mono> needs a key, and so does <Mono>get_cohort</Mono>{" "}
-                for a private cohort (a share-link token opens a link-shared one).
+                hand back a download URL or a loader snippet. Tools need a free account. In Claude (web, Desktop, mobile):
+                Settings → Connectors → Add custom connector → <Mono>{MCP_URL}</Mono>, then sign in with GitHub or
+                Google; no key to copy. Other clients can send an API key in a header, as below. Only{" "}
+                <Mono>search_datasets</Mono> calls a language model (to turn a plain-English question into filters the
+                built-in vocabulary cannot read), so only those fresh AI readings use your AI allowance.
               </p>
               <div className="grid md:grid-cols-2 gap-3">
                 <CodeBlock

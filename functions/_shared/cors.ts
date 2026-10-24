@@ -5,8 +5,9 @@ export const CORS_HEADERS = {
   // AI-search budgets; X-API-Key is the alternative spelling for scripts.
   // MCP clients send Mcp-Session-Id / MCP-Protocol-Version.
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-API-Key, X-Project-Token, Accept, Mcp-Session-Id, MCP-Protocol-Version",
-  // Per-request budget + cache diagnostics, readable from cross-origin previews.
-  "Access-Control-Expose-Headers": "X-Singlet-Quota, X-Edge-Cache, X-Total-Count, X-Export-Limit",
+  // Per-request budget + cache diagnostics, readable from cross-origin previews;
+  // WWW-Authenticate lets a browser MCP client find the OAuth metadata on a 401.
+  "Access-Control-Expose-Headers": "X-Singlet-Quota, X-Edge-Cache, X-Total-Count, X-Export-Limit, WWW-Authenticate",
   "Access-Control-Max-Age": "86400",
   "Content-Type": "application/json",
 };

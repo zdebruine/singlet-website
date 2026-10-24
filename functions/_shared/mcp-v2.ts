@@ -13,6 +13,7 @@ import { filterCells, openCells, parseCellFilter, type CellFilter } from "./v2-c
 import {
   GSE_RE,
   getV2Sample,
+  getV2Samples,
   getV2State,
   isLegacyAlive,
   listV2Samples,
@@ -37,6 +38,7 @@ import {
   selectColumns,
 } from "./v2-serve";
 import { v2ManifestUrl, v2PackIndexUrl, v2PackUrl } from "./v2-urls";
+import { loadModality, loadSnippets, parseLoadModalities, sampleLoadModalities, selectMembers, type Selection } from "./v2-load-modalities";
 import { organismToScientific } from "./vocab";
 
 export interface V2ToolCtx {
@@ -82,20 +84,55 @@ function studyHead(state: V2State) {
 const unchanged = (gse: string, rev: string, what: string): ToolResult =>
   toolResult(`${gse}: ${what} unchanged since rev ${rev}.`, unchangedBody(gse, rev));
 
+/** `modalities` of the arguments: null when absent, the names, or a tool error. */
+function modalitiesArg(args: Record<string, unknown>): { names: string[] } | ToolResult | null {
+  const p = parseLoadModalities(args.modalities);
+  if (p && "error" in p) return toolError(p.error);
+  return p;
+}
+const isToolResult = (v: unknown): v is ToolResult => !!v && typeof v === "object" && "content" in (v as object);
+
+/** One sample's selection, as an answer field: the members with their ranges and what a client downloads for them. */
+function selectionOut(sel: Selection, url: string, objectBytes: number | null) {
+  return {
+    modalities: sel.modalities,
+    files: sel.files.map((f) => ({ file: f.name, kind_name: f.kind_name, range: f.range, bytes: f.bytes })),
+    missing: sel.missing,
+    bytes: sel.bytes,
+    object_bytes: objectBytes,
+    url,
+  };
+}
+
 // ── get_download_url ────────────────────────────────────────────────────────
 
 export async function v2DownloadUrl(ctx: V2ToolCtx, id: string, title: string | null, state: V2State, args: Record<string, unknown>): Promise<ToolResult> {
   const s = state.study;
   const legacyAlive = isLegacyAlive(state.migration);
-  const includeSamples = args.include_samples === true;
-  let samples: { gsm_id: string; url: string; bytes: number | null; sha256: string | null; n_called: number | null }[] | undefined;
+  const mods = modalitiesArg(args);
+  if (isToolResult(mods)) return mods;
+  const includeSamples = args.include_samples === true || mods !== null;
+  let samples: { gsm_id: string; url: string; bytes: number | null; sha256: string | null; n_called: number | null; selection?: unknown }[] | undefined;
   let nextAfter: string | null = null;
+  let selected: { modalities: string[]; bytes: number; object_bytes: number; samples: number } | undefined;
   if (includeSamples) {
-    const limit = count(args.limit, 50, 1, 200);
+    // with modalities each sample's member list is read too, so a page is smaller
+    const limit = count(args.limit, mods ? 25 : 50, 1, mods ? 50 : 200);
     const after = typeof args.after === "string" ? args.after.trim().toUpperCase() : "";
     const rows = await listV2Samples(ctx.db, id, s.rev, { limit: limit + 1, after });
-    samples = rows.slice(0, limit).map((r) => ({ gsm_id: r.gsm_id, url: sampleObjectUrl(r.key), bytes: r.bytes, sha256: r.sha256, n_called: r.n_called }));
+    const page = rows.slice(0, limit);
     nextAfter = rows.length > limit ? rows[limit - 1].gsm_id : null;
+    const full = mods && page.length ? new Map((await getV2Samples(ctx.db, id, page.map((r) => r.gsm_id), s.rev)).map((r) => [r.gsm_id, r])) : null;
+    samples = page.map((r) => {
+      const url = sampleObjectUrl(r.key);
+      const line = { gsm_id: r.gsm_id, url, bytes: r.bytes, sha256: r.sha256, n_called: r.n_called };
+      const f = full?.get(r.gsm_id);
+      return mods && f ? { ...line, selection: selectionOut(selectMembers(parseMembers(f.members_json), mods.names), url, r.bytes ?? 0) } : line;
+    });
+    if (mods) {
+      const sel = samples.map((x) => x.selection as { bytes: number } | undefined).filter((x): x is { bytes: number } => !!x);
+      selected = { modalities: mods.names, bytes: sel.reduce((n, x) => n + x.bytes, 0), object_bytes: page.reduce((n, r) => n + (r.bytes ?? 0), 0), samples: sel.length };
+    }
   }
   const structured = {
     ...studyHead(state),
@@ -105,12 +142,15 @@ export async function v2DownloadUrl(ctx: V2ToolCtx, id: string, title: string | 
     packs: packsOf(state),
     legacy: legacyAlive ? { url: bundleUrl(id), bytes: s.legacy_bytes, note: "The old single-file bundle, until it is retired. Its contents are the same data." } : null,
     ...(samples ? { samples, next_after: nextAfter } : {}),
+    ...(selected ? { selected, load: loadSnippets(id, null, selected.modalities) } : {}),
     license: "CC0-1.0",
     ...LOADERS(id),
     curl: `curl -fLO ${v2ManifestUrl(id)}`,
     note: "The study is stored as one object per sample plus a manifest that lists them with their byte ranges. The Python and R packages read it directly; get_partial_download and slice_cells give byte ranges inside one sample.",
   };
-  const text = `${id}: ${fmt(s.n_samples)} sample objects, ${fmtBytes(s.bytes)} (format ${FORMAT}, rev ${s.rev}). Manifest: ${v2ManifestUrl(id)}\nCC0 — no account or key needed to download.\nPython: singlet.load("${id}")   R: load("${id}")`;
+  const text = selected
+    ? `${id}: ${selected.modalities.join(", ")} of ${selected.samples} sample${selected.samples === 1 ? "" : "s"} on this page is ${fmtBytes(selected.bytes)} of ${fmtBytes(selected.object_bytes)} (format ${FORMAT}, rev ${s.rev}); each sample lists its byte ranges.${nextAfter ? ` More samples: pass after=${nextAfter}.` : ""}\nPython: ${loadSnippets(id, null, selected.modalities).python}   R: ${loadSnippets(id, null, selected.modalities).r}`
+    : `${id}: ${fmt(s.n_samples)} sample objects, ${fmtBytes(s.bytes)} (format ${FORMAT}, rev ${s.rev}). Manifest: ${v2ManifestUrl(id)}\nCC0 — no account or key needed to download.\nPython: singlet.load("${id}")   R: load("${id}")`;
   return toolResult(text, structured);
 }
 
@@ -118,9 +158,13 @@ export async function v2DownloadUrl(ctx: V2ToolCtx, id: string, title: string | 
 
 export async function v2PartialDownload(ctx: V2ToolCtx, gse: string, gsm: string, file: string, state: V2State, args: Record<string, unknown>): Promise<ToolResult> {
   if (knownRev(args) === state.study.rev) return unchanged(gse, state.study.rev, "this study's files");
+  const mods = modalitiesArg(args);
+  if (isToolResult(mods)) return mods;
+  if (mods && file) return toolError("Give `file` or `modalities`, not both.");
   const sample = await getV2Sample(ctx.db, gse, gsm, state.study.rev);
   if (!sample) return toolError(`${gsm} is not in ${gse}. Use list_bundle_files to see which samples are.`);
   const members = parseMembers(sample.members_json);
+  if (mods) return partialByModalities(gse, gsm, state, sample, members, mods.names);
   const name = findMember(members, file);
   if (!name) {
     const have = describeMembers(sample).map((m) => m.name);
@@ -159,16 +203,51 @@ export async function v2PartialDownload(ctx: V2ToolCtx, gse: string, gsm: string
   return toolResult(text, structured);
 }
 
+/** get_partial_download with `modalities`: the byte range of every member those modalities need (the cells table included). */
+function partialByModalities(gse: string, gsm: string, state: V2State, sample: V2SampleFull, members: Record<string, V2Member>, names: string[]): ToolResult {
+  const sel = selectMembers(members, names);
+  const have = sampleLoadModalities(members);
+  if (sel.missing.length === names.length) {
+    return toolError(`${gsm} has none of ${names.join(", ")}. It has: ${have.join(", ") || "no matrices"}. Use get_modalities for the study.`);
+  }
+  const url = sampleObjectUrl(sample.key);
+  const out = selectionOut(sel, url, sample.bytes);
+  const structured = {
+    gse_id: gse,
+    gsm_id: gsm,
+    format: FORMAT,
+    rev: state.study.rev,
+    ...out,
+    available: have,
+    object: { key: sample.key, bytes: sample.bytes, sha256: sample.sha256, immutable: true },
+    packs: packsOf(state),
+    curl: sel.files.filter((f) => f.range).map((f) => `curl -s -r ${f.range!.slice(6)} "${url}" -o ${f.name.split("/").pop()}.member`),
+    load: loadSnippets(gse, gsm, sel.modalities.filter((m) => !sel.missing.includes(m))),
+    how: "Each range is one member of the immutable sample object. singlet.load with the same modalities fetches exactly these ranges and decodes them; slice_cells with modalities takes only some cells.",
+  };
+  const text = `${gse} / ${gsm}: ${names.join(", ")} is ${fmtBytes(sel.bytes)} of the ${fmtBytes(sample.bytes)} object in ${sel.files.filter((f) => f.range).length} ranges (${sel.files.map((f) => f.name).join(", ")}).${sel.missing.length ? ` Not in this sample: ${sel.missing.join(", ")}.` : ""}`;
+  return toolResult(text, structured);
+}
+
 // ── list_bundle_files ───────────────────────────────────────────────────────
 
 export async function v2ListFiles(ctx: V2ToolCtx, gse: string, gsm: string, state: V2State, args: Record<string, unknown>): Promise<ToolResult> {
   const s = state.study;
   if (knownRev(args) === s.rev) return unchanged(gse, s.rev, "this study's file listing");
   const head = { ...studyHead(state), created_at: s.created_at, packs: packsOf(state), legacy_bytes: s.legacy_bytes };
+  const mods = modalitiesArg(args);
+  if (isToolResult(mods)) return mods;
 
   if (gsm) {
     const sample = await getV2Sample(ctx.db, gse, gsm, s.rev);
     if (!sample) return toolError(`${gsm} is not in ${gse}. Use list_bundle_files without gsm_id to page through the samples.`);
+    if (mods) {
+      const sel = selectMembers(parseMembers(sample.members_json), mods.names);
+      return toolResult(
+        `${gse} / ${gsm}: ${mods.names.join(", ")} is ${sel.files.length} files, ${fmtBytes(sel.bytes)} of the ${fmtBytes(sample.bytes)} object (${sampleObjectUrl(sample.key)}).${sel.missing.length ? ` Not in this sample: ${sel.missing.join(", ")}.` : ""}`,
+        { ...head, sample: sampleLine(sample), object_url: sampleObjectUrl(sample.key), files: sel.files, selection: selectionOut(sel, sampleObjectUrl(sample.key), sample.bytes), load: loadSnippets(gse, gsm, mods.names) }
+      );
+    }
     const files = describeMembers(sample);
     return toolResult(
       `${gse} / ${gsm}: ${files.length} files in one ${fmtBytes(sample.bytes)} object (${sampleObjectUrl(sample.key)}).`,
@@ -176,7 +255,7 @@ export async function v2ListFiles(ctx: V2ToolCtx, gse: string, gsm: string, stat
     );
   }
 
-  const detail = args.detail === true;
+  const detail = args.detail === true || mods !== null;
   const limit = count(args.limit, detail ? 10 : 100, 1, detail ? 25 : 500);
   const after = typeof args.after === "string" ? args.after.trim().toUpperCase() : "";
   const light = await listV2Samples(ctx.db, gse, s.rev, { limit: limit + 1, after });
@@ -187,18 +266,30 @@ export async function v2ListFiles(ctx: V2ToolCtx, gse: string, gsm: string, stat
   const first = page[0] ? await getV2Sample(ctx.db, gse, page[0].gsm_id, s.rev) : null;
   const kinds = first ? describeMembers(first).map((f) => ({ name: f.name, kind: f.kind_name, bytes: f.bytes, legacy_bytes: f.legacy_bytes })) : [];
   let samples: unknown[] = page.map((r) => ({ gsm_id: r.gsm_id, bytes: r.bytes, n_columns: r.n_columns, n_called: r.n_called, n_members: r.n_members, url: sampleObjectUrl(r.key) }));
-  if (detail) {
+  let selected: { modalities: string[]; bytes: number; object_bytes: number } | undefined;
+  if (mods) {
+    const full = page.length ? new Map((await getV2Samples(ctx.db, gse, page.map((r) => r.gsm_id), s.rev)).map((r) => [r.gsm_id, r])) : new Map();
+    const sels = page.map((r) => {
+      const f = full.get(r.gsm_id);
+      return f ? selectMembers(parseMembers(f.members_json), mods.names) : null;
+    });
+    samples = page.map((r, i) => ({ gsm_id: r.gsm_id, bytes: r.bytes, url: sampleObjectUrl(r.key), files: sels[i]?.files ?? [], selected_bytes: sels[i]?.bytes ?? 0, missing: sels[i]?.missing ?? mods.names }));
+    selected = { modalities: mods.names, bytes: sels.reduce((n, x) => n + (x?.bytes ?? 0), 0), object_bytes: page.reduce((n, r) => n + (r.bytes ?? 0), 0) };
+  } else if (detail) {
     const full = await Promise.all(page.map((r) => getV2Sample(ctx.db, gse, r.gsm_id, s.rev)));
     samples = page.map((r, i) => ({ gsm_id: r.gsm_id, bytes: r.bytes, url: sampleObjectUrl(r.key), files: full[i] ? describeMembers(full[i]!) : [] }));
   }
   const structured = {
     ...head,
+    ...(selected ? { selected, load: loadSnippets(gse, null, selected.modalities) } : {}),
     files_in_each_sample: kinds,
     samples,
     next_after: next,
     ...(detail ? {} : { more: "Pass gsm_id for one sample's files with their byte ranges, or detail=true (up to 25 samples a page) for every sample's." }),
   };
-  const text = `${gse}: ${fmt(s.n_samples)} sample objects, ${fmtBytes(s.bytes)}, ${kinds.length} files each (format ${FORMAT}, rev ${s.rev}). Manifest: ${v2ManifestUrl(gse)}${next ? `\nMore samples: pass after=${next}.` : ""}`;
+  const text = selected
+    ? `${gse}: ${selected.modalities.join(", ")} of these ${page.length} samples is ${fmtBytes(selected.bytes)} of ${fmtBytes(selected.object_bytes)} (format ${FORMAT}, rev ${s.rev}).${next ? `\nMore samples: pass after=${next}.` : ""}`
+    : `${gse}: ${fmt(s.n_samples)} sample objects, ${fmtBytes(s.bytes)}, ${kinds.length} files each (format ${FORMAT}, rev ${s.rev}). Manifest: ${v2ManifestUrl(gse)}${next ? `\nMore samples: pass after=${next}.` : ""}`;
   return toolResult(text, structured);
 }
 
@@ -211,6 +302,8 @@ function sampleLine(r: V2SampleFull) {
 export async function v2Modalities(ctx: V2ToolCtx, gse: string, gsm: string, state: V2State, args: Record<string, unknown>): Promise<ToolResult> {
   const s = state.study;
   if (knownRev(args) === s.rev) return unchanged(gse, s.rev, "this study's modalities");
+  const mods = modalitiesArg(args);
+  if (isToolResult(mods)) return mods;
   const rows = (await listV2Samples(ctx.db, gse, s.rev, { limit: 500 })).filter((r) => !gsm || r.gsm_id === gsm);
   if (!rows.length) {
     return gsm ? toolError(`${gsm} is not in ${gse}. Samples are listed by list_bundle_files.`) : toolError(`${gse} has no samples in the v2 catalog.`);
@@ -236,6 +329,7 @@ export async function v2Modalities(ctx: V2ToolCtx, gse: string, gsm: string, sta
     },
     manifest_url: v2ManifestUrl(gse),
     study_url: `${SITE}/study/${gse}`,
+    ...(await loadBlock(ctx, gse, gsm, s.rev, perSample, mods?.names ?? null)),
   };
   const lines = [
     `${gse} carries ${present.length} modalit${present.length === 1 ? "y" : "ies"} across ${fmt(rows.length)} sample${rows.length === 1 ? "" : "s"}${s.reference_build ? ` (reference ${s.reference_build})` : ""}.`,
@@ -244,6 +338,30 @@ export async function v2Modalities(ctx: V2ToolCtx, gse: string, gsm: string, sta
   ];
   if (missing.length) lines.push("", `Not in this study: ${missing.join(", ")}.`);
   return toolResult(lines.join("\n"), structured);
+}
+
+/**
+ * What `singlet.load(..., modalities=...)` can fetch here: each load modality with the members it needs and how many samples have
+ * them (from the compact column). With `modalities` only those; with a gsm_id also that sample's byte ranges for the selection.
+ */
+async function loadBlock(ctx: V2ToolCtx, gse: string, gsm: string, rev: string, perSample: { modalities: string[] }[], names: string[] | null) {
+  const want = names ?? ["counts", "spliced", "unspliced", "splice_junctions", "psi", "mt", "vdj"];
+  const load_modalities = want.map((n) => {
+    const m = loadModality(n)!;
+    const nSamples = perSample.filter((p) => m.catalog.every((c) => p.modalities.includes(c))).length;
+    return { name: m.name, members: m.members, python: m.python, r: m.r, description: m.description, n_samples: nSamples };
+  });
+  const out: Record<string, unknown> = { load_modalities: names ? load_modalities : load_modalities.filter((m) => m.n_samples > 0) };
+  if (names) {
+    const absent = load_modalities.filter((m) => m.n_samples === 0).map((m) => m.name);
+    if (absent.length) out.load_missing = absent;
+    out.load = loadSnippets(gse, gsm || null, names);
+    if (gsm) {
+      const sample = await getV2Sample(ctx.db, gse, gsm, rev);
+      if (sample) out.selection = selectionOut(selectMembers(parseMembers(sample.members_json), names), sampleObjectUrl(sample.key), sample.bytes);
+    }
+  }
+  return out;
 }
 
 // ── find_cells ──────────────────────────────────────────────────────────────
@@ -439,7 +557,10 @@ export async function sliceCells(ctx: V2ToolCtx, args: Record<string, unknown>):
   const gsm = gsmOf(args);
   if (!gse) return toolError("`gse_id` must be a GEO series accession like GSE200901.");
   if (!gsm) return toolError("`gsm_id` must be a GEO sample accession like GSM4746717.");
-  const wantFiles = Array.isArray(args.files)
+  const mods = modalitiesArg(args);
+  if (isToolResult(mods)) return mods;
+  if (mods && (args.file !== undefined || args.files !== undefined)) return toolError("Give `file` or `modalities`, not both.");
+  let wantFiles = Array.isArray(args.files)
     ? (args.files as unknown[]).map((v) => String(v).trim()).filter(Boolean).slice(0, 4)
     : typeof args.file === "string" && args.file.trim()
       ? [args.file.trim()]
@@ -456,6 +577,13 @@ export async function sliceCells(ctx: V2ToolCtx, args: Record<string, unknown>):
 
   const files: Record<string, unknown>[] = [];
   const skipped: { file: string; reason: string }[] = [];
+  if (mods) {
+    // the matrices of these modalities (the cells table is listed as cells_table below)
+    const sel = selectMembers(members, mods.names);
+    wantFiles = sel.files.filter((f) => f.name !== "cells").map((f) => f.name);
+    for (const m of sel.missing) skipped.push({ file: m, reason: "this sample does not have it" });
+    if (!wantFiles.length) return toolError(`${gsm} has none of ${mods.names.join(", ")}. It has: ${sampleLoadModalities(members).join(", ") || "no matrices"}.`);
+  }
   let requests = 0;
   for (const want of wantFiles) {
     const name = findMember(members, want);
@@ -510,6 +638,7 @@ export async function sliceCells(ctx: V2ToolCtx, args: Record<string, unknown>):
     files,
     skipped,
     cells_table: cellsMember ? describeMember("cells", cellsMember) : null,
+    ...(mods ? { modalities: mods.names, load: loadSnippets(gse, gsm, mods.names) } : {}),
     requests,
     how: "For each file, GET the prefix ranges once and the chunk ranges for the cells you want (each with a Range header on `url`); the chunks decode independently. Column numbers are positions in the stored matrix, the same positions find_cells reports. singlet.load(gse, samples=[gsm]) does all of this.",
   };

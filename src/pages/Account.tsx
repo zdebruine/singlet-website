@@ -4,6 +4,7 @@ import { Check, Copy, KeyRound, Loader2, Trash2 } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { CodeBlock } from "@/components/CodeBlock";
+import { ConnectedApps } from "@/components/account/ConnectedApps";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { apiClient, isApiError, type AccountUsage } from "@/integrations/api/client";
 import type { ApiKeySummary } from "@/integrations/api/types";
@@ -281,6 +282,9 @@ const Account = () => {
               )}
             </section>
 
+            {/* ── Claude connector and other OAuth-connected MCP clients ── */}
+            <ConnectedApps userId={user.id} onUnauthorized={refresh} />
+
             {/* ── API keys ── */}
             <section id="api-keys" className="surface p-5 scroll-mt-24" aria-labelledby="keys-h">
               <div className="flex items-start justify-between gap-4">
@@ -290,8 +294,8 @@ const Account = () => {
                     API keys
                   </h2>
                   <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
-                    A key lets scripts, the <code className="code-inline">singlet</code> packages and the MCP server run natural-language searches
-                    under your account. Downloads never need one.{" "}
+                    A key lets scripts, the <code className="code-inline">singlet</code> packages and MCP clients that take a header run
+                    natural-language searches under your account. Downloads never need one.{" "}
                     <Link to="/docs#api-keys" className="text-primary hover:underline">
                       How to use a key →
                     </Link>
