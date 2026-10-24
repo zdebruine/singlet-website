@@ -97,6 +97,33 @@ smoke_bundle_offsets() { # gse
 smoke_bundle_offsets GSE111113
 smoke_bundle_offsets GSE138867
 
+# A retired study is one whose single .singlet file is deleted (v2_migration.status = 'retired'). It must answer from v2 and name no legacy URL:
+# the study detail has no bundle URL and says the legacy file is gone, the bundle index lists v2 objects, the search row and the manifest name
+# the v2 manifest, the manifest object is there, and the old file is really a 404. Name the studies in SMOKE_RETIRED (space separated, e.g.
+# SMOKE_RETIRED="GSE145370" once that study is retired); with it empty nothing is checked. src/test/retired-study.test.ts runs the same
+# assertions on fixtures for every endpoint and tool.
+smoke_retired() { # gse
+  local gse="$1" flat murl legacy
+  fetch "$BASE/api/gse/$gse"
+  flat=$(printf '%s' "$body" | tr -d ' \r\n')
+  if [ "$code" != 200 ]; then bad "retired $gse detail ($code)"; return; fi
+  if printf '%s' "$flat" | grep -q '"legacy_available":false' && printf '%s' "$flat" | grep -q '"bundle_url":null'; then ok "retired $gse: detail has no bundle URL, v2 block says the legacy file is gone"; else bad "retired $gse: detail still offers the legacy file (is its migration status retired?)"; fi
+  if printf '%s' "$flat" | grep -q -E "/data/$gse/|$gse\\.singlet"; then bad "retired $gse: detail names the legacy file"; else ok "retired $gse: detail names no legacy file"; fi
+  murl=$(printf '%s' "$flat" | grep -o '"manifest_url":"[^"]*"' | head -n 1 | sed 's/"manifest_url":"//; s/"$//')
+  if [ -n "$murl" ] && [ "$(curl -s -o /dev/null -m 30 -I -w '%{http_code}' "$murl")" = 200 ]; then ok "retired $gse: manifest answers ($murl)"; else bad "retired $gse: manifest missing (${murl:-no manifest_url})"; fi
+  legacy="https://data.singlet.bio/data/$gse/$gse.singlet"
+  if [ "$(curl -s -o /dev/null -m 30 -I -w '%{http_code}' "$legacy")" = 404 ]; then ok "retired $gse: legacy object is gone"; else bad "retired $gse: legacy object still answers"; fi
+  fetch "$BASE/api/bundle/$gse/index"
+  flat=$(printf '%s' "$body" | tr -d ' \r\n')
+  if [ "$code" = 200 ] && printf '%s' "$flat" | grep -q '"format":"singlet-v2"' && ! printf '%s' "$flat" | grep -q -E "/data/$gse/|$gse\\.singlet"; then ok "retired $gse: bundle index lists v2 objects"; else bad "retired $gse: bundle index ($code)"; fi
+  fetch "$BASE/api/search?level=gse&q=$gse&limit=5"
+  flat=$(printf '%s' "$body" | tr -d ' \r\n')
+  if [ "$code" = 200 ] && printf '%s' "$flat" | grep -q "\"gse_id\":\"$gse\"" && ! printf '%s' "$flat" | grep -q -E "\"bundle_key\":\"data/$gse/|/data/$gse/"; then ok "retired $gse: search row has no legacy key"; else bad "retired $gse: search row ($code)"; fi
+  fetch "$BASE/api/manifest?q=$gse&format=tsv"
+  if [ "$code" = 200 ] && printf '%s' "$body" | grep -q "v2/m/$gse.json" && ! printf '%s' "$body" | grep -q -E "/data/$gse/|$gse\\.singlet"; then ok "retired $gse: manifest export names the v2 manifest"; else bad "retired $gse: manifest export ($code)"; fi
+}
+for g in ${SMOKE_RETIRED:-}; do smoke_retired "$g"; done
+
 check "manifest tsv"         200 "$BASE/api/manifest?gse=GSE138867&format=tsv" "GSE138867"
 check "auth me (signed out)" 200 "$BASE/api/auth/me"                        "\"user\": *null|\"user\":null"
 check "unknown api is JSON 404" 404 "$BASE/api/definitely-not-a-route"      "\"error\": *\"not_found\"" "json"
@@ -138,9 +165,21 @@ mcp=$(curl -s -m 30 -X POST "$BASE/mcp" -H 'content-type: application/json' \
 n=$(printf '%s' "$mcp" | grep -o '"name":"[a-z_]*","title"' | wc -l | tr -d ' ')
 if [ "$n" = "14" ] || [ "$n" = "17" ]; then ok "mcp tools/list ($n)"; else bad "mcp tools/list ($n tools, want 14 or 17)"; fi
 
-# MCP tool calls need a key: without one a call is a tool error that says so (not an answer, not a 500).
-mcpcall=$(curl -s -m 30 -X POST "$BASE/mcp" -H 'content-type: application/json'   -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"get_atlas_stats","arguments":{}}}')
-if printf '%s' "$mcpcall" | grep -q 'key_required'; then ok "mcp tool call without a key is refused"; else bad "mcp tool call without a key (got: $(printf '%s' "$mcpcall" | head -c 120))"; fi
+# MCP tool calls need an account: without a credential a call is HTTP 401 whose WWW-Authenticate points at the
+# OAuth metadata (that 401 is what makes Claude's connectors start sign-in; a 200 tool error never does).
+mcpcall=$(curl -s -m 30 -o /dev/null -D - -X POST "$BASE/mcp" -H 'content-type: application/json'   -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"get_atlas_stats","arguments":{}}}' | tr -d '\r')
+if printf '%s' "$mcpcall" | grep -q '^HTTP/[0-9.]* 401' && printf '%s' "$mcpcall" | grep -qi '^www-authenticate: Bearer .*resource_metadata="'"$BASE"'/.well-known/oauth-protected-resource"'; then
+  ok "mcp tool call without a credential is 401 + resource_metadata"
+else
+  bad "mcp tool call without a credential (got: $(printf '%s' "$mcpcall" | head -c 200))"
+fi
+
+# OAuth discovery for MCP clients (functions/_shared/mcp-oauth.ts), on this deployment's own origin.
+check "oauth protected resource" 200 "$BASE/.well-known/oauth-protected-resource" "\"resource\": *\"$BASE/mcp\"" "json"
+check "oauth resource (mcp path)" 200 "$BASE/.well-known/oauth-protected-resource/mcp" "\"authorization_servers\"" "json"
+check "oauth server metadata"   200 "$BASE/.well-known/oauth-authorization-server" "\"registration_endpoint\": *\"$BASE/oauth/register\"" "json"
+code=$(curl -s -m 30 -o /dev/null -w '%{http_code}' -X POST "$BASE/oauth/token" -H 'content-type: application/x-www-form-urlencoded' -d 'grant_type=authorization_code&code=sac_nope&client_id=scl_nope')
+if [ "$code" = 401 ]; then ok "oauth token rejects an unknown client"; else bad "oauth token unknown client ($code, want 401)"; fi
 
 # An invalid key is HTTP 401, whatever the method.
 code=$(curl -s -m 30 -o /dev/null -w '%{http_code}' -X POST "$BASE/mcp" -H 'content-type: application/json'   -H 'authorization: Bearer sk_live_not-a-real-key-for-the-smoke-test' -d '{"jsonrpc":"2.0","id":3,"method":"tools/list"}')

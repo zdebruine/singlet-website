@@ -117,7 +117,7 @@ const V2_TOOL_NAMES = ["find_cells", "slice_cells", "resolve_features"];
 describe("tools/list and the instructions", () => {
   type Tool = { name: string; inputSchema: { properties: Record<string, unknown> } };
   async function rpcRaw(env: unknown, method: string, params: unknown = {}) {
-    const request = new Request("https://singlet.bio/mcp", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }) });
+    const request = new Request("https://singlet.bio/mcp", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${KEY}` }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }) });
     const res = await onRequestPost({ request, env, waitUntil: () => undefined, params: {} } as never);
     return ((await res.json()) as { result: any }).result;
   }

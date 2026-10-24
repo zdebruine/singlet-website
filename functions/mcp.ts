@@ -8,29 +8,41 @@
  *   notifications/initialized → 202
  *   ping                      → {}
  *   tools/list                → the seventeen tools below (find_cells, slice_cells and resolve_features are v2-only)
- *   tools/call                → needs a personal API key (Authorization: Bearer
- *                               sk_live_… or X-API-Key; free at /account). Each
- *                               call is counted per key and month, and a key is
- *                               limited to MCP_RATE_PER_MIN calls a minute. A
- *                               search that needs the AI reading of the question
- *                               also spends the owner's monthly token allowance
- *                               (_shared/spend); readings the vocabulary can
- *                               make, and cached ones, cost none. initialize,
- *                               tools/list, prompts and resources need no key.
+ *   tools/call                → needs a free account: an OAuth access token
+ *                               (Authorization: Bearer sat_…, from signing in
+ *                               when the client connects; _shared/mcp-oauth) or
+ *                               a personal API key (Bearer sk_live_… or
+ *                               X-API-Key; /account). Each call is counted per
+ *                               account and month, limited to MCP_RATE_PER_MIN
+ *                               calls a minute. A search that needs the AI
+ *                               reading of the question also spends the owner's
+ *                               monthly token allowance (_shared/spend);
+ *                               readings the vocabulary can make, and cached
+ *                               ones, cost none.
+ *
+ * With no credential, initialize, tools/call and resources/read answer HTTP 401
+ * with `WWW-Authenticate: Bearer resource_metadata=…` — the signal Claude's
+ * connectors (and other MCP clients) need to start sign-in; a 200 carrying a
+ * tool error never starts it. ping, tools/list, prompts and resources/list stay
+ * open. A credential that is wrong, revoked or expired is a 401 for any method.
  *   prompts/list, prompts/get → three guided workflows
  *   resources/list, /read     → singlet://stats, singlet://vocab
  *
- * Protocol versions 2025-06-18 and 2025-03-26 (JSON-RPC batches accepted for
- * the latter). A missing MCP-Protocol-Version header means 2025-03-26.
+ * Protocol versions 2025-11-25, 2025-06-18 and 2025-03-26 (JSON-RPC batches
+ * accepted for the latter). A missing MCP-Protocol-Version header means
+ * 2025-03-26. initialize negotiates the version in its body, so its header is
+ * never a reason to refuse it (Claude's connector check sends its own latest).
  */
 import { ensureCatalogColumns } from "./_shared/catalog-refresh";
 import { CORS_HEADERS } from "./_shared/cors";
 import type { AppEnv } from "./_shared/env";
-import { anonSubjectFromIp, API_KEY_RE, apiKeyFromRequest, checkApiKey, clientIp, keyMessage, type Identity, type KeyCheck } from "./_shared/identity";
+import { anonSubjectFromIp, API_KEY_RE, apiKeyFromRequest, checkCredential, clientIp, credentialIdentity, keyMessage, type CredentialCheck, type Identity } from "./_shared/identity";
+import { issuerFor, wwwAuthenticate } from "./_shared/mcp-oauth";
 import { nlSearch, type NlSearchBody } from "./_shared/nl-search-core";
 import { allowanceFor, recordToolCall, withinRate } from "./_shared/spend";
 import { requestId } from "./_shared/errors";
 import { loadStudy, bundleUrl, GSE_RE, type StudyDetail } from "./_shared/study-core";
+import { legacyUrl } from "./_shared/file-facts";
 import { computeStats } from "./_shared/stats-core";
 import { TISSUE_GROUPS, DISEASE_GROUPS, ASSAY_FAMILIES } from "./_shared/vocab";
 import { MANIFEST_FORMATS } from "./_shared/manifest-core";
@@ -40,8 +52,9 @@ import { dietEnabled, diet } from "./_shared/mcp-core";
 import { v2ToolsVisible } from "./_shared/v2-gate";
 import { findCells, resolveFeatures, sliceCells, v2DownloadUrl } from "./_shared/mcp-v2";
 import { combineRev, fileRev, knownRev, unchangedBody } from "./_shared/rev";
-import { getV2State } from "./_shared/v2-catalog";
+import { getV2State, isLegacyAlive } from "./_shared/v2-catalog";
 import { configureV2, v2ManifestUrl } from "./_shared/v2-urls";
+import { MODALITIES_PROP } from "./_shared/v2-load-modalities";
 import {
   ACCOUNT_URL,
   LOADERS,
@@ -66,7 +79,7 @@ type Env = AppEnv;
 // 1.1.0: results carry their data in structuredContent and a short text (verbose=true restores the full text); studies migrated to v2 are
 // answered from the v2 catalog; find_cells, slice_cells and resolve_features; rev / known_rev.
 const SERVER_INFO = { name: "singlet-bio", title: "singlet.bio atlas", version: "1.1.0" };
-const PROTOCOL_VERSIONS = ["2025-06-18", "2025-03-26"] as const;
+const PROTOCOL_VERSIONS = ["2025-11-25", "2025-06-18", "2025-03-26"] as const;
 const LATEST_PROTOCOL = PROTOCOL_VERSIONS[0];
 const MAX_SAMPLES_IN_STUDY = 60;
 
@@ -76,7 +89,7 @@ Recommended order: search_datasets → assess_study or get_study → get_sample_
 
 A .singlet file is not just gene counts: it can also carry splice junctions and exon inclusion (percent spliced in), mitochondrial heteroplasmy and chrM variants, genotype-free donor demultiplexing, non-host (microbial/viral) abundance, V(D)J usage and per-cell doublet/cell-cycle/ambient annotations. Older bundles have fewer of these — call get_modalities before telling a user a modality is available.
 
-Every number and every "why" string is computed, not generated — quote them, don't paraphrase. Catalog cell counts can differ from the file's own QC; the file is the truth. Every tool call needs a free personal API key from ${ACCOUNT_URL}; calls are counted per key. Downloads themselves (the data.singlet.bio links) never need one. Searches the built-in vocabulary can read cost no AI tokens; a question that needs the AI reading uses your monthly AI token allowance (shown in \`_meta.allowance\`).`;
+Every number and every "why" string is computed, not generated — quote them, don't paraphrase. Catalog cell counts can differ from the file's own QC; the file is the truth. Every tool call needs a free singlet.bio account: sign in when your client asks, or send a personal API key from ${ACCOUNT_URL}; calls are counted per account. Downloads themselves (the data.singlet.bio links) never need one. Searches the built-in vocabulary can read cost no AI tokens; a question that needs the AI reading uses your monthly AI token allowance (shown in \`_meta.allowance\`).`;
 
 
 /** Added to the instructions only once some study is served from v2 (see _shared/v2-gate). */
@@ -118,7 +131,7 @@ const TOOLS = [
     name: "search_datasets",
     title: "Search single-cell studies",
     description:
-      "Find public scRNA-seq studies (or individual samples) in the singlet.bio atlas from a plain-English question, e.g. \"microglia in the aging mouse brain\" or \"human PBMC covid-19 10x\". GEO accessions (GSE…, GSM…) are looked up directly. The question is turned into structured filters (organism, tissue, disease, assay, cell type) which are ANDed and never relaxed silently; when nothing matches, `suggestions` says what dropping one filter would return. Each result carries a deterministic `why` explaining the match, the download URL and one-line Python/R loaders. Needs a free API key from https://singlet.bio/account. Questions the built-in vocabulary can read (and repeats of any question) use no AI tokens; a question that needs a fresh AI reading uses your monthly AI token allowance. Remaining allowance is in `_meta.allowance`.",
+      "Find public scRNA-seq studies (or individual samples) in the singlet.bio atlas from a plain-English question, e.g. \"microglia in the aging mouse brain\" or \"human PBMC covid-19 10x\". GEO accessions (GSE…, GSM…) are looked up directly. The question is turned into structured filters (organism, tissue, disease, assay, cell type) which are ANDed and never relaxed silently; when nothing matches, `suggestions` says what dropping one filter would return. Each result carries a deterministic `why` explaining the match, the download URL and one-line Python/R loaders. Needs a free singlet.bio account (sign in when connecting, or an API key from https://singlet.bio/account). Questions the built-in vocabulary can read (and repeats of any question) use no AI tokens; a question that needs a fresh AI reading uses your monthly AI token allowance. Remaining allowance is in `_meta.allowance`.",
     inputSchema: {
       type: "object",
       properties: {
@@ -232,7 +245,7 @@ const TOOLS = [
         gsm_id: { type: "string", pattern: "^GSM\\d+$", description: "GEO sample accession." },
         file: { type: "string", description: "File name inside the sample folder, e.g. exon_counts.1pz (see list_bundle_files)." },
       },
-      required: ["gse_id", "gsm_id", "file"],
+      required: ["gse_id", "gsm_id"],
       additionalProperties: false,
     },
     annotations: { title: "Fetch one sample's file", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
@@ -274,7 +287,7 @@ const TOOLS = [
     name: "find_matched_controls",
     title: "Find matched control studies",
     description:
-      "Candidate control studies for a given study: same organism and tissue group, no disease label (or a healthy/control one), preferring the same assay family and reference build, ordered by samples in the file then year. Each candidate carries a deterministic `why` and its loader line, plus honest `caveats` about study-level labels and batch effects. Deterministic (no model call); needs an API key like every tool, and uses no AI tokens.",
+      "Candidate control studies for a given study: same organism and tissue group, no disease label (or a healthy/control one), preferring the same assay family and reference build, ordered by samples in the file then year. Each candidate carries a deterministic `why` and its loader line, plus honest `caveats` about study-level labels and batch effects. Deterministic (no model call); needs an account like every tool, and uses no AI tokens.",
     inputSchema: {
       type: "object",
       properties: {
@@ -321,14 +334,14 @@ const TOOLS = [
   {
     name: "get_cohort",
     title: "Get a saved cohort",
-    description: "Return a version-pinned cohort and its public/private study identifiers. A personal API key is required for your private and workspace cohorts; a shared-link token (sco_…) alone opens a link cohort.",
+    description: "Return a version-pinned cohort and its public/private study identifiers. Your account (sign-in or API key) opens your private and workspace cohorts; a shared-link token (sco_…) alone opens a link cohort.",
     inputSchema: { type: "object", properties: { id: { type: "string", format: "uuid" }, token: { type: "string", description: "Optional sco_… shared-link token." } }, required: ["id"], additionalProperties: false },
     annotations: { title: "Get a saved cohort", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   },
   {
     name: "save_cohort",
     title: "Save a cohort",
-    description: "Save up to 2,000 public GSE accessions as a private, link-shared or workspace cohort pinned to the current catalogue. Requires a personal API key.",
+    description: "Save up to 2,000 public GSE accessions as a private, link-shared or workspace cohort pinned to the current catalogue. Saved to your account.",
     inputSchema: { type: "object", properties: { name: { type: "string", minLength: 1, maxLength: 120 }, notes: { type: "string", maxLength: 20000 }, gse_ids: { type: "array", items: { type: "string", pattern: "^GSE\\d+$" }, minItems: 1, maxItems: 2000 }, visibility: { type: "string", enum: ["private", "link", "workspace"], default: "private" }, workspace_id: { type: "string", format: "uuid" } }, required: ["name", "gse_ids"], additionalProperties: false },
     annotations: { title: "Save a cohort", readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
   },
@@ -451,13 +464,24 @@ const REV_PROPS: Record<string, Record<string, unknown>> = {
 const V2_PROPS: Record<string, Record<string, unknown>> = {
   get_download_url: {
     include_samples: { type: "boolean", description: "v2 studies: also list the sample objects." },
+    modalities: { ...MODALITIES_PROP, description: `v2 studies: list each sample object with the byte ranges of only these members (25 samples a page). ${MODALITIES_PROP.description}` },
     limit: { type: "integer", minimum: 1, maximum: 200 },
     after: { type: "string", description: "next_after of the last page." },
   },
   list_bundle_files: {
     detail: { type: "boolean", description: "v2 studies: every sample's files, 25 samples a page." },
+    modalities: { ...MODALITIES_PROP, description: `v2 studies: only the files these need, with their bytes. ${MODALITIES_PROP.description}` },
     limit: { type: "integer", minimum: 1, maximum: 500 },
     after: { type: "string", description: "next_after of the last page." },
+  },
+  get_modalities: {
+    modalities: { ...MODALITIES_PROP, description: `v2 studies: which samples have these, the singlet.load call for them, and with gsm_id that sample's byte ranges. ${MODALITIES_PROP.description}` },
+  },
+  get_partial_download: {
+    modalities: { ...MODALITIES_PROP, description: `v2 studies: instead of \`file\`, the byte ranges of every member these need. ${MODALITIES_PROP.description}` },
+  },
+  slice_cells: {
+    modalities: { ...MODALITIES_PROP, description: `Instead of \`file\`: the matrices these need. ${MODALITIES_PROP.description}` },
   },
 };
 
@@ -622,7 +646,7 @@ async function readResource(env: Env, uri: string) {
  */
 async function quotaMeta(env: Env, identity: Identity | null) {
   if (!identity || identity.kind === "anonymous") {
-    return { quota: { metered: false, note: "Create a free API key at " + ACCOUNT_URL + " to use the tools and get a monthly AI token allowance." } };
+    return { quota: { metered: false, note: "Sign in when your client asks, or create a free API key at " + ACCOUNT_URL + ", to use the tools and get a monthly AI token allowance." } };
   }
   const snap = await allowanceFor(env.DB, env, identity.subject);
   return {
@@ -666,7 +690,10 @@ function studySummary(r: StudyRow, why: string) {
     n_cells: r.suspect_cells ? null : r.n_cells,
     year: r.year,
     has_bundle: r.has_bundle,
-    bundle_url: r.has_bundle ? bundleUrl(r.gse_id) : null,
+    // The legacy file's URL only while that file exists; a study served from v2 also names its manifest.
+    bundle_url: r.has_bundle ? legacyUrl(r.gse_id, r.v2, !!r.bundle_key || !r.v2) : null,
+    format: r.v2 ? r.v2.format : "singlet-v1",
+    manifest_url: r.v2?.manifest_url ?? null,
     bundle_bytes: r.bundle_bytes,
     bundle_n_samples: r.bundle_n_samples,
     file_cells: r.file_cells,
@@ -700,7 +727,8 @@ function sampleSummary(s: SampleRow) {
     status: s.status,
     characteristics: s.characteristics,
     has_bundle: s.has_bundle,
-    bundle_url: s.has_bundle ? bundleUrl(s.gse_id) : null,
+    bundle_url: s.has_bundle ? legacyUrl(s.gse_id, s.v2) : null,
+    manifest_url: s.v2?.manifest_url ?? null,
     study_url: `${SITE}/study/${s.gse_id}`,
   };
 }
@@ -894,7 +922,7 @@ async function getStudy(env: Env, args: Record<string, unknown>) {
   const structured = {
     gse_id: d.series.id,
     rev,
-    v2: v2 ? { format: "singlet-v2", rev: v2.study.rev, manifest_url: v2ManifestUrl(id), n_samples: v2.study.n_samples, bytes: v2.study.bytes } : null,
+    v2: v2 ? { format: "singlet-v2", rev: v2.study.rev, manifest_url: v2ManifestUrl(id), n_samples: v2.study.n_samples, bytes: v2.study.bytes, legacy_available: isLegacyAlive(v2.migration) } : null,
     title: d.series.title,
     abstract: d.series.abstract,
     organism: d.series.organism_label,
@@ -985,7 +1013,7 @@ interface CallContext {
   env: Env;
   request: Request;
   waitUntil: (p: Promise<unknown>) => void;
-  auth: KeyCheck | { ok: false; reason: "missing"; message: string };
+  auth: CredentialCheck | { ok: false; reason: "missing"; message: string };
   /** Who metered search is charged to: the key's owner, or the anonymous IP subject. */
   identity: Identity;
 }
@@ -1132,7 +1160,7 @@ async function handleMessage(ctx: CallContext, msg: JsonRpcRequest): Promise<unk
     case "resources/read": {
       // singlet://stats and singlet://vocab run aggregate queries over the catalog, so reading them
       // is a metered tool call like any other: it needs a key and counts against the per-key limit.
-      if (!ctx.auth.ok) return rpcError(id, -32001, `Reading resources needs a personal API key. Create one at ${ACCOUNT_URL}.`);
+      if (!ctx.auth.ok) return rpcError(id, -32001, `Reading resources needs a singlet.bio account: sign in when your client asks, or create an API key at ${ACCOUNT_URL}.`);
       const perMinute = Number.parseInt(ctx.env.MCP_RATE_PER_MIN ?? "", 10) || DEFAULT_MCP_RATE_PER_MIN;
       if (!(await withinRate(ctx.env.DB, ctx.identity.subject, "mcp", perMinute, 60_000))) {
         return rpcError(id, -32002, `Rate limit: ${perMinute} MCP calls a minute per key.`);
@@ -1165,20 +1193,20 @@ function apiKeyFromQuery(request: Request): string | null {
 }
 
 async function authFor(env: Env, request: Request, waitUntil: (p: Promise<unknown>) => void): Promise<CallContext["auth"]> {
-  // Header first. Clients that cannot set one (a Claude.ai custom connector takes only a URL)
-  // may put the key in the query string instead: https://singlet.bio/mcp?key=sk_live_…
-  const key = apiKeyFromRequest(request) ?? apiKeyFromQuery(request);
-  if (!key) return { ok: false, reason: "missing", message: keyMessage("unknown") };
-  return checkApiKey(env, key, waitUntil);
+  // An API key in a header first, then an OAuth access token. ?key=sk_live_… predates OAuth
+  // connectors and still works for clients that can only take a URL; prefer signing in.
+  const check = await checkCredential(env, request, waitUntil, apiKeyFromRequest(request) ?? apiKeyFromQuery(request));
+  return check ?? { ok: false, reason: "missing", message: keyMessage("unknown") };
 }
+
+/** Methods that need an account: without a credential they answer 401 so the client starts sign-in. */
+const NEEDS_ACCOUNT = new Set(["initialize", "tools/call", "resources/read"]);
 
 export const onRequestPost: PagesFunction<Env> = async ({ env, request, waitUntil }) => {
   configureV2(env);
   await ensureCatalogColumns(env.DB).catch(() => undefined);
   const version = (request.headers.get("MCP-Protocol-Version") ?? "").trim();
-  if (version && !(PROTOCOL_VERSIONS as readonly string[]).includes(version)) {
-    return json({ jsonrpc: "2.0", id: null, error: { code: -32600, message: `Unsupported MCP-Protocol-Version: ${version}. Supported: ${PROTOCOL_VERSIONS.join(", ")}` } }, 400);
-  }
+  const versionOk = !version || (PROTOCOL_VERSIONS as readonly string[]).includes(version);
 
   const declared = Number.parseInt(request.headers.get("Content-Length") ?? "", 10);
   if (Number.isFinite(declared) && declared > MAX_BODY_BYTES) {
@@ -1193,23 +1221,33 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request, waitUnti
     return json(rpcError(null, -32700, "Parse error: body must be JSON"), 400);
   }
 
-  const auth = await authFor(env, request, waitUntil);
-  // A key that was sent but is wrong, revoked or expired is an HTTP 401 for the
-  // whole request, so a client with a stale key sees it at once instead of
-  // being served as someone else.
-  if (!auth.ok && auth.reason !== "missing") {
-    return new Response(JSON.stringify(rpcError(null, -32001, auth.message)), {
-      status: auth.reason === "unavailable" ? 503 : 401,
-      headers: { ...JSON_HEADERS, "WWW-Authenticate": `Bearer realm="singlet.bio", error="invalid_token"` },
-    });
-  }
-  const identity: Identity = auth.ok
-    ? { kind: "api_key", subject: `user:${auth.userId}`, userId: auth.userId, keyId: auth.keyId }
-    : { kind: "anonymous", subject: await anonSubjectFromIp(clientIp(request)) };
-  const ctx: CallContext = { env, request, waitUntil, auth, identity };
   const messages = Array.isArray(payload) ? (payload as JsonRpcRequest[]) : [payload as JsonRpcRequest];
   if (!messages.length) return json(rpcError(null, -32600, "Empty batch"), 400);
   if (messages.length > MAX_BATCH) return json(rpcError(null, -32600, `Batch too large (limit ${MAX_BATCH} messages)`), 400);
+  if (!versionOk && !messages.every((m) => m && typeof m === "object" && m.method === "initialize")) {
+    return json({ jsonrpc: "2.0", id: null, error: { code: -32600, message: `Unsupported MCP-Protocol-Version: ${version}. Supported: ${PROTOCOL_VERSIONS.join(", ")}` } }, 400);
+  }
+
+  const issuer = issuerFor(request);
+  const auth = await authFor(env, request, waitUntil);
+  // A credential that was sent but is wrong, revoked or expired is an HTTP 401 for the
+  // whole request, so a client with a stale key sees it at once instead of being served
+  // as someone else, and an OAuth client knows to refresh.
+  if (!auth.ok && auth.reason !== "missing") {
+    return new Response(JSON.stringify(rpcError(null, -32001, auth.message)), {
+      status: auth.reason === "unavailable" ? 503 : 401,
+      headers: { ...JSON_HEADERS, "WWW-Authenticate": wwwAuthenticate(issuer, "invalid_token") },
+    });
+  }
+  if (!auth.ok && messages.some((m) => m && typeof m === "object" && NEEDS_ACCOUNT.has(String(m.method)))) {
+    const message = `Sign in to singlet.bio (free) when your MCP client asks, or send a personal API key from ${ACCOUNT_URL} as \`Authorization: Bearer sk_live_…\`.`;
+    return new Response(JSON.stringify(rpcError(null, -32001, message, { auth: "sign_in_required", account_url: ACCOUNT_URL })), {
+      status: 401,
+      headers: { ...JSON_HEADERS, "WWW-Authenticate": wwwAuthenticate(issuer) },
+    });
+  }
+  const identity: Identity = auth.ok ? credentialIdentity(auth) : { kind: "anonymous", subject: await anonSubjectFromIp(clientIp(request)) };
+  const ctx: CallContext = { env, request, waitUntil, auth, identity };
 
   const replies: unknown[] = [];
   for (const m of messages) {
@@ -1220,7 +1258,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request, waitUnti
   // Notifications only → 202 with no body.
   if (!replies.length) return new Response(null, { status: 202, headers: JSON_HEADERS });
   const body = Array.isArray(payload) ? replies : replies[0];
-  return json(body, 200, { "MCP-Protocol-Version": version || "2025-03-26" });
+  return json(body, 200, { "MCP-Protocol-Version": versionOk ? version || "2025-03-26" : LATEST_PROTOCOL });
 };
 
 export const onRequestGet: PagesFunction<Env> = async ({ env }) =>

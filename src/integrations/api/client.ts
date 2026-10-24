@@ -18,6 +18,7 @@ import type {
   ApiKeyCreated,
   AuthMe,
   ApiKeySummary,
+  ConnectionSummary,
   CellVerdict,
   Condition,
   CorpusStats,
@@ -276,6 +277,7 @@ export function normalizeStudyRow(raw: unknown): StudyRow | null {
     has_bundle: r.has_bundle === true || r.has_bundle === 1,
     bundle_bytes: numOrNull(r.bundle_bytes),
     bundle_key: strOrNull(r.bundle_key),
+    v2: normalizeStudyV2(r.v2),
     bundle_n_samples: numOrNull(r.bundle_n_samples),
     file_cells: numOrNull(r.file_cells),
     usable_samples: numOrNull(r.usable_samples),
@@ -575,6 +577,12 @@ function normalizeGsmDetail(raw: unknown): GsmDetailResponse {
   };
 }
 
+function normalizeConnection(raw: unknown): ConnectionSummary | null {
+  const r = rec(raw);
+  if (typeof r.id !== "string") return null;
+  return { id: r.id, client_name: strOrNull(r.client_name), created_at: str(r.created_at), last_used_at: strOrNull(r.last_used_at) };
+}
+
 function normalizeApiKey(raw: unknown): ApiKeySummary | null {
   const r = rec(raw);
   if (typeof r.id !== "string") return null;
@@ -593,6 +601,7 @@ function normalizeApiKey(raw: unknown): ApiKeySummary | null {
  * POST a JSON body to one of the account endpoints (Pages Functions):
  *   /api/product — private projects, cohorts, workspaces (action router)
  *   /api/keys    — API keys (action router)
+ *   /api/connections — connected MCP clients (action router)
  * The session cookie identifies the visitor; anonymous calls get 401.
  */
 async function accountPost(path: string, body: unknown, signal?: AbortSignal): Promise<unknown> {
@@ -889,6 +898,17 @@ export const apiClient = {
     },
   },
 
+  /** MCP clients connected by signing in (OAuth), e.g. a Claude connector — signed-in only (POST /api/connections). */
+  connections: {
+    async list(): Promise<ConnectionSummary[]> {
+      const r = rec(await accountPost("/api/connections", { action: "list" }));
+      return arr<unknown>(r.items).map(normalizeConnection).filter((c): c is ConnectionSummary => c !== null);
+    },
+    async revoke(id: string): Promise<void> {
+      await accountPost("/api/connections", { action: "revoke", id });
+    },
+  },
+
   /**
    * Accounts (Pages Functions + D1). Sign-in itself is a full-page redirect to
    * /auth/<provider>/start?return_to=…; these calls read and end the session.
@@ -1070,7 +1090,17 @@ export function normalizeRelated(raw: unknown): RelatedResponse {
   return { gse_id: str(r.gse_id), total: num(r.total, related.length), related };
 }
 
-/** Public download URL for a study bundle. */
+/** Public download URL for a study's legacy single bundle. It is a dead link once the study is retired: use studyFileUrl. */
 export function bundleUrl(gseId: string): string {
   return `https://data.singlet.bio/data/${gseId}/${gseId}.singlet`;
+}
+
+/** True when the study's single .singlet file is gone and its files are the v2 per-sample objects listed in a manifest. */
+export function isManifestFile(v2: Pick<StudyV2, "legacy_available"> | null | undefined): boolean {
+  return !!v2 && !v2.legacy_available;
+}
+
+/** The URL to download a study from: the single .singlet file while it exists, the v2 manifest once that file is retired. */
+export function studyFileUrl(gseId: string, v2?: Pick<StudyV2, "manifest_url" | "legacy_available"> | null): string {
+  return v2 && !v2.legacy_available ? v2.manifest_url : bundleUrl(gseId);
 }

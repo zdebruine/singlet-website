@@ -23,6 +23,12 @@
  * written; warnings adds notes such as partial summaries) or failed (unreadable
  * or no summary.json; parked so it is not retried). Loop until `remaining` is 0.
  *
+ * Studies moved to the v2 layout (schema/032): a study whose legacy file is retired (v2_migration.status = 'retired') is left out of the
+ * legacy pending set, because its `.singlet` is deleted; its catalog rows (gse.r2_bundle_key, bundle_manifest, bundle_index, sample_qc) stay
+ * as they were. A study served from v2 that has no QC rows and whose legacy file is retired or never existed is indexed from its sample
+ * objects instead: summary.json is read from each `.s2` (_shared/v2-summaries) and the usable flags come from the matrix sizes in the v2
+ * catalog. Both kinds count in `remaining`. POST index-bundle does the same for a retired study.
+ *
  * GET /api/ingest/refresh-next?n=50 — freshness crank, token-protected and locked
  * the same way (`meta_cache` key `refresh-next:lock`) and idempotent. Each call:
  * (a) fills gsm.organism_primary/tissue_group/disease_group/assay_family where
@@ -31,7 +37,9 @@
  * file parked as a broken zip); (c) creates bundle_manifest rows for files in
  * gse.r2_bundle_key that have none (reads manifest.json, which also stores
  * bundle_index); (d) recomputes gse_meta for studies missing one or marked
- * stale, except those still waiting for index-next. Returns `{ done: {...},
+ * stale, except those still waiting for index-next ((b) and (d) treat a study served from v2 as having a file; `has_bundle` is 1 for a
+ * legacy key or a served v2 study; (e) usable flags for served v2 studies come from `v2_sample.members_json`, counted as `sample_usable_v2`).
+ * Returns `{ done: {...},
  * remaining: {...}, remaining_total }`; a count that failed is -1 in
  * `remaining` and makes `remaining_total` -1 (unknown, not done). New
  * manifests are then picked up by index-next for sample_qc.
@@ -48,10 +56,11 @@
 
 
 import { StaleBundleError, getBundleIndex, ensureSampleQcTable } from "../../_shared/bundle-reader";
-import { readSampleSummaries, upsertSampleQcStatement } from "../../_shared/bundle-core";
+import { readSampleSummaries, shapeSummary, upsertSampleQcStatement } from "../../_shared/bundle-core";
 import {
   UNREADABLE_FILE_ERRORS,
   applyUsable,
+  applyUsableV2,
   ensureCatalogColumns,
   ensureCrankTables,
   markSummariesIndexed,
@@ -61,6 +70,8 @@ import {
 import { acquireCrankLock, releaseCrankLock } from "../../_shared/crank-lock";
 import { serverError } from "../../_shared/errors";
 import { checkIngestToken } from "../../_shared/ingest-auth";
+import { getV2State, isLegacyAlive, v2Available } from "../../_shared/v2-catalog";
+import { readV2Summaries } from "../../_shared/v2-summaries";
 
 const MAX_ROWS = 2000;
 const MAX_BODY_BYTES = 4 * 1024 * 1024;
@@ -289,6 +300,18 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, params }
         continue;
       }
       try {
+        // The legacy file of a retired study is deleted: its summaries are read from the v2 sample objects, and its matrices measured from the catalog.
+        const v2 = await getV2State(env.DB, gse);
+        if (v2 && !isLegacyAlive(v2.migration)) {
+          const samples = (await readV2Summaries(env.DB, gse, v2.study.rev)).map((r) => shapeSummary(gse, r.gsm_id, r.summary));
+          const st = nowIso();
+          const statements = samples.map((s) => upsertSampleQcStatement(env.DB, s as unknown as Record<string, unknown>, st));
+          for (let i = 0; i < statements.length; i += BATCH_SIZE) await env.DB.batch(statements.slice(i, i + BATCH_SIZE));
+          if (samples.length) await markSummariesIndexed(env.DB, gse, samples.length, st).catch(() => undefined);
+          await applyUsableV2(env.DB, gse, v2.study.rev);
+          results.push({ gse_id: gse, ok: true, source: "v2", bytes: v2.study.bytes, entries: null, samples_qc: samples.length });
+          continue;
+        }
         const index = await getBundleIndex(env.DB, gse, { refresh: true });
         const samples = await readSampleSummaries(gse, index);
         const st = nowIso();
@@ -501,6 +524,24 @@ export const PENDING_SQL = `FROM bundle_manifest m
              AND NOT EXISTS (SELECT 1 FROM summaries_indexed s WHERE s.gse_id = m.gse_id)))
     AND NOT EXISTS (SELECT 1 FROM bundle_index_failure f WHERE f.gse_id = m.gse_id AND ${PARK_HOLDS})`;
 
+/**
+ * The same with studies whose legacy file is retired left out (their summaries are not in a deleted file; PENDING_V2_SQL reads them from the
+ * v2 sample objects). Used once the v2 tables exist.
+ */
+export const PENDING_NOT_RETIRED_SQL = `${PENDING_SQL}
+    AND NOT EXISTS (SELECT 1 FROM v2_migration vm WHERE vm.gse_id = m.gse_id AND vm.status = 'retired')`;
+
+/**
+ * Studies served from v2 that have no QC rows yet and whose legacy file is gone (retired) or never existed (no bundle_manifest): the
+ * v2 analogue of PENDING_SQL. Same park rules.
+ */
+export const PENDING_V2_SQL = `FROM v2_study vs JOIN v2_migration vm ON vm.gse_id = vs.gse_id
+  WHERE vm.status IN ('verified', 'retired')
+    AND (vm.status = 'retired' OR NOT EXISTS (SELECT 1 FROM bundle_manifest m WHERE m.gse_id = vs.gse_id))
+    AND NOT EXISTS (SELECT 1 FROM sample_qc q WHERE q.gse_id = vs.gse_id)
+    AND NOT EXISTS (SELECT 1 FROM summaries_indexed s WHERE s.gse_id = vs.gse_id)
+    AND NOT EXISTS (SELECT 1 FROM bundle_index_failure f WHERE f.gse_id = vs.gse_id AND ${PARK_HOLDS})`;
+
 const SUMMARY_RE = /^samples\/GSM\d+\/summary\.json$/;
 
 /** Per-sample summary.json entries listed in a central directory. */
@@ -544,9 +585,11 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env, params })
     await ensureSampleQcTable(env.DB).catch(() => undefined);
     await ensureCrankTables(env.DB).catch(() => undefined);
     await ensureCatalogColumns(env.DB);
+    const v2 = await v2Available(env.DB);
+    const legacyPending = v2 ? PENDING_NOT_RETIRED_SQL : PENDING_SQL;
     const pending = await env.DB.prepare(
       `SELECT m.gse_id, EXISTS (SELECT 1 FROM bundle_index i WHERE i.gse_id = m.gse_id) AS has_index
-       ${PENDING_SQL} ORDER BY m.gse_id LIMIT ?`
+       ${legacyPending} ORDER BY m.gse_id LIMIT ?`
     )
       .bind(n)
       .all<{ gse_id: string; has_index: number }>();
@@ -635,12 +678,44 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env, params })
       }
     }
 
+    // Studies served from v2 whose legacy file is gone: the summaries come from the sample objects, the usable flags from the catalog.
+    let v2Handled = 0;
+    if (v2) {
+      const room = Math.max(1, n - (pending.results ?? []).length);
+      const v2Pending = await env.DB.prepare(`SELECT vs.gse_id AS gse_id, vs.rev AS rev ${PENDING_V2_SQL} ORDER BY vs.gse_id LIMIT ?`)
+        .bind(room)
+        .all<{ gse_id: string; rev: string }>();
+      for (const { gse_id, rev } of v2Pending.results ?? []) {
+        v2Handled++;
+        let parked: string | null = null;
+        try {
+          const samples = (await readV2Summaries(env.DB, gse_id, rev)).map((r) => shapeSummary(gse_id, r.gsm_id, r.summary));
+          if (samples.length > 0) {
+            const st = nowIso();
+            const statements = samples.map((s) => upsertSampleQcStatement(env.DB, s as unknown as Record<string, unknown>, st));
+            for (let i = 0; i < statements.length; i += BATCH_SIZE) await env.DB.batch(statements.slice(i, i + BATCH_SIZE));
+            await markSummariesIndexed(env.DB, gse_id, samples.length, st).catch(() => undefined);
+            await applyUsableV2(env.DB, gse_id, rev);
+            indexed.push(gse_id);
+          } else {
+            parked = "no summary.json";
+          }
+        } catch (e) {
+          parked = String(e).slice(0, 500);
+        }
+        if (parked) {
+          failed.push({ gse_id, error: parked });
+          await parkStudy(env.DB, gse_id, parked);
+        }
+      }
+    }
+
     // Nothing was pending → nothing is (skips a second scan on idle calls).
-    const rest = (pending.results ?? []).length
-      ? await env.DB.prepare(`SELECT COUNT(*) AS c ${PENDING_SQL}`).first<{ c: number }>()
-      : { c: 0 };
+    const ranSomething = (pending.results ?? []).length > 0 || v2Handled > 0;
+    const rest = ranSomething ? await env.DB.prepare(`SELECT COUNT(*) AS c ${legacyPending}`).first<{ c: number }>() : { c: 0 };
+    const restV2 = ranSomething && v2 ? await env.DB.prepare(`SELECT COUNT(*) AS c ${PENDING_V2_SQL}`).first<{ c: number }>() : { c: 0 };
     return json(
-      { ok: true, indexed, failed, warnings, remaining: Number(rest?.c ?? 0), ms: Date.now() - started },
+      { ok: true, indexed, failed, warnings, remaining: Number(rest?.c ?? 0) + Number(restV2?.c ?? 0), ms: Date.now() - started },
       200,
       origin
     );

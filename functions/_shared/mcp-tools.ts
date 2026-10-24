@@ -5,6 +5,7 @@
  * an assistant can quote the output verbatim.
  */
 import { GSE_RE, bundleUrl, loadStudy, type StudyDetail } from "./study-core";
+import { downloadUrl, studyV2Map } from "./file-facts";
 import { StaleBundleError, getBundleIndex, ensureSampleQcTable, entryRange, strongEtag, withIndexRetry, MAX_INFLATE_BYTES, type ZipEntry } from "./bundle-reader";
 import { publicEntries } from "./restricted";
 import { bundleIndexResponse, loadSampleQc, normalizeQc, SAMPLE_QC_COLUMNS, v2BundleIndexResponse, type SampleQc } from "./bundle-core";
@@ -355,10 +356,15 @@ export async function getPartialDownload(ctx: SampleQcArgs, args: Record<string,
   const gsm = typeof args.gsm_id === "string" ? args.gsm_id.trim().toUpperCase() : "";
   if (!GSM_RE.test(gsm)) return toolError("`gsm_id` must be a GEO sample accession like GSM8976273.");
   const file = typeof args.file === "string" ? args.file.trim() : "";
-  if (!file) return toolError("`file` is required — e.g. exon_counts.1pz. Use list_bundle_files to see what is in the study.");
+  const byModalities = args.modalities !== undefined && args.modalities !== null;
+  if (!file && !byModalities) return toolError("`file` is required — e.g. exon_counts.1pz (or `modalities`, e.g. [\"spliced\"]). Use list_bundle_files to see what is in the study.");
 
   const v2 = await getV2State(ctx.db, gse);
   if (v2) return v2PartialDownload(ctx, gse, gsm, file, v2, args);
+  if (!file) {
+    // a legacy bundle is one ZIP: each matrix is its own entry, asked for by name
+    return toolError(`${gse} is still a single .singlet bundle, so \`modalities\` cannot be answered in one call: ask for each file by name (counts = exon_counts.1pz + intron_counts.1pz, spliced = exon_counts.1pz, unspliced = intron_counts.1pz, splice_junctions / psi = sj_counts.1pz).`);
+  }
 
   const prefix = `samples/${gsm}/`;
   type Found = { err: string } | { unchanged: string } | { entry: ZipEntry; range: Awaited<ReturnType<typeof entryRange>>; etag: string | null; rev: string };
@@ -572,7 +578,7 @@ export async function findMatchedControls(ctx: SampleQcArgs, args: Record<string
     .bind(gse, organism, `%"${tissue}"%`)
     .all<CandidateRow>();
 
-  const candidates = rows.results
+  const ranked = rows.results
     .map((r) => {
       const diseases = safeList(r.disease_groups);
       const rowAssays = safeList(r.assay_families);
@@ -595,8 +601,13 @@ export async function findMatchedControls(ctx: SampleQcArgs, args: Record<string
         (Number(b.r.year ?? 0) - Number(a.r.year ?? 0)) ||
         a.r.gse_id.localeCompare(b.r.gse_id)
     )
-    .slice(0, 10)
+    .slice(0, 10);
+
+  // Where each candidate's files are: the legacy single file only while it exists, else the v2 manifest.
+  const facts = await studyV2Map(ctx.db, ranked.map((c) => c.r.gse_id));
+  const candidates = ranked
     .map((c) => {
+      const v2 = facts.get(c.r.gse_id) ?? null;
       const healthy = c.diseases.some((d) => HEALTHY_GROUPS.has(d));
       const why = [
         `same organism (${organismToCommon(organism)})`,
@@ -622,8 +633,9 @@ export async function findMatchedControls(ctx: SampleQcArgs, args: Record<string
         reference_build: c.r.reference_build,
         same_assay: c.assayMatch,
         same_reference_build: c.buildMatch,
-        bytes: c.r.bytes != null ? Number(c.r.bytes) : null,
-        download_url: bundleUrl(c.r.gse_id),
+        bytes: v2 && !v2.legacy_available && v2.bytes != null ? v2.bytes : c.r.bytes != null ? Number(c.r.bytes) : null,
+        format: v2 ? v2.format : "singlet-v1",
+        download_url: downloadUrl(c.r.gse_id, v2),
         study_url: `${SITE}/study/${c.r.gse_id}`,
         why,
         loader: `singlet.load("${c.r.gse_id}")`,

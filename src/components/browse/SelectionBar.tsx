@@ -19,7 +19,7 @@ const TABS: { id: Tab; label: string }[] = [
 /** Install lines are on /docs#install; a pip command never goes inside a Python block. */
 const INSTALL_NOTE = "# Install: https://singlet.bio/docs#install";
 
-export function snippetFor(tab: Tab, ids: string[]): string {
+export function snippetFor(tab: Tab, ids: string[], urls: Record<string, string> = {}): string {
   if (tab === "python") {
     if (ids.length === 1) return `${INSTALL_NOTE}\nimport singlet\nadata = singlet.load("${ids[0]}")`;
     return `${INSTALL_NOTE}\nimport singlet\nids = [${ids.map((i) => `"${i}"`).join(", ")}]\nadatas = {g: singlet.load(g) for g in ids}`;
@@ -29,16 +29,19 @@ export function snippetFor(tab: Tab, ids: string[]): string {
     if (ids.length === 1) return `${INSTALL_NOTE}\nlibrary(singlet)\nsce <- singlet::load("${ids[0]}")`;
     return `${INSTALL_NOTE}\nlibrary(singlet)\nids <- c(${ids.map((i) => `"${i}"`).join(", ")})\nsces <- lapply(ids, singlet::load)`;
   }
-  return ids.map((i) => `curl -O ${bundleUrl(i)}`).join("\n");
+  // A study whose single file is retired is fetched through its manifest (a JSON list of the per-sample objects); singlet.load() does that itself.
+  const lines = ids.map((i) => `curl -O ${urls[i] ?? bundleUrl(i)}`);
+  const manifests = ids.some((i) => (urls[i] ?? "").endsWith(".json"));
+  return (manifests ? ["# .json files are manifests of per-sample files; singlet.load() fetches the objects they list", ...lines] : lines).join("\n");
 }
 
 /** Trigger several downloads without a popup per file (hidden iframes). */
-function downloadAll(ids: string[]) {
+function downloadAll(ids: string[], urls: Record<string, string> = {}) {
   ids.forEach((id, i) => {
     setTimeout(() => {
       const f = document.createElement("iframe");
       f.style.display = "none";
-      f.src = bundleUrl(id);
+      f.src = urls[id] ?? bundleUrl(id);
       document.body.appendChild(f);
       setTimeout(() => f.remove(), 60_000);
     }, i * 400);
@@ -63,7 +66,8 @@ export const SelectionBar = forwardRef<HTMLDivElement, Props>(function Selection
   if (!items.length) return null;
 
   const ids = items.map((i) => i.gse_id);
-  const code = snippetFor(tab, ids);
+  const urls = Object.fromEntries(items.map((i) => [i.gse_id, i.file_url ?? bundleUrl(i.gse_id)]));
+  const code = snippetFor(tab, ids, urls);
   const downloadable = items.filter((i) => i.has_bundle).map((i) => i.gse_id);
 
   const copy = () => {
@@ -143,7 +147,7 @@ export const SelectionBar = forwardRef<HTMLDivElement, Props>(function Selection
             </button>
             <button
               type="button"
-              onClick={() => downloadAll(downloadable)}
+              onClick={() => downloadAll(downloadable, urls)}
               disabled={!downloadable.length}
               className="btn-primary btn-sm"
               title={downloadable.length < ids.length ? `${ids.length - downloadable.length} selected studies have no file yet` : undefined}

@@ -65,7 +65,10 @@ export interface StudyRow {
   suspect_cells: boolean;
   has_bundle: boolean;
   bundle_bytes: number | null;
+  /** Key of the legacy single file; null once it is retired (deleted). */
   bundle_key: string | null;
+  /** Set when the study is stored in the v2 per-sample layout; `legacy_available: false` means the single file is gone. */
+  v2?: StudyV2 | null;
   bundle_n_samples: number | null;
   file_cells: number | null;
   reference_build: string | null;
@@ -532,6 +535,14 @@ export interface SearchQuery {
 }
 
 // ── API keys (account page; managed by POST /api/keys) ──────────────────────
+
+/** An MCP client (e.g. a Claude connector) the user approved through /oauth/consent. */
+export interface ConnectionSummary {
+  id: string;
+  client_name: string | null;
+  created_at: string;
+  last_used_at: string | null;
+}
 
 export interface ApiKeySummary {
   id: string;

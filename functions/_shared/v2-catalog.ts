@@ -518,6 +518,15 @@ export function isServedFromV2(migration: Pick<V2MigrationRow, "status"> | null)
   return migration !== null && SERVED_STATUSES.includes(migration.status);
 }
 
+/**
+ * Whether the legacy single-file bundle (`data/<GSE>/<GSE>.singlet`) still exists for a study with this migration state. It is gone
+ * once the migration is `retired`; every place that names the legacy URL, reads the legacy file or counts on its index asks this.
+ * No migration row at all means the study was never moved: the legacy file is the only file.
+ */
+export function isLegacyAlive(migration: Pick<V2MigrationRow, "status"> | null): boolean {
+  return migration?.status !== "retired";
+}
+
 /** The study's v2 state when it is served from v2, otherwise null (not migrated, still migrating, failed). Two primary-key reads. */
 export async function getV2State(db: D1Database, gse: string): Promise<V2State | null> {
   const study = await getV2Study(db, gse);
