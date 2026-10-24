@@ -4,6 +4,11 @@ State on 2026-10-20. Companion to `docs/SEARCH-ROADMAP.md` (the search plan writ
 capability" session); this note covers the pipeline-computed facts that plan's task T6 would index: SNP
 genotypes, genetic ancestry, genetic sex, mitochondrial variants, doublets and cell cycle.
 
+Per-donor genotype layers (SNP read depth, genotype calls, allele-specific counts, donor mitochondrial sequence) are computed by
+the pipeline but are not public: the site, the API and the MCP server neither list, serve nor count them
+(`functions/_shared/restricted.ts`, CHANGELOG 2026-10-20). Wherever this note says "SNP genotypes", it describes the pipeline's
+output, not what a visitor can download.
+
 ## 1. What the published files hold today
 
 Layers depend on the pipeline version that built the file, not on species or biology. Downloadable human and

@@ -1,7 +1,8 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
 import { createTestD1 } from "./helpers/d1-sqlite";
-import { computeLayerStats } from "../../functions/_shared/layers-core";
+import { LAYER_FILES, computeLayerStats } from "../../functions/_shared/layers-core";
+import { isRestrictedMember } from "../../functions/_shared/restricted";
 
 const SCHEMA = `
 CREATE TABLE gse_meta (gse_id TEXT PRIMARY KEY, organism_primary TEXT, has_bundle INTEGER, n_usable_samples INTEGER, n_lowqc_samples INTEGER, reference_mismatch INTEGER);
@@ -29,5 +30,12 @@ describe("computeLayerStats", () => {
     // Ancestry counts human studies only: GSE5 (mouse) has the file but is not counted.
     expect(by.ancestry).toMatchObject({ studies: 1, of: 1 });
     expect(by.splicing.of).toBe(3);
+  });
+});
+
+describe("LAYER_FILES", () => {
+  it("lists no layer that is held back from the public product", () => {
+    for (const l of LAYER_FILES) expect(isRestrictedMember(l.file), l.file).toBe(false);
+    expect(LAYER_FILES.map((l) => l.key).filter((k) => /snp|genotype|ase|allele/i.test(k))).toEqual([]);
   });
 });

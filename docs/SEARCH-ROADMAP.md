@@ -73,7 +73,7 @@ The conclusions that drive the plan:
 | Computational biologist building a reference, training set or benchmark | "all human CD8 T cells from blood, healthy adults, 10x 3' v3, at least 3 donors per study" | structured filters they can see and edit; reproducible spec; bulk manifest; Python/R one-liner | a cohort spec + manifest + loader call that returns one AnnData |
 | Translational / wet-lab researcher with a biological question | "adipocytes in obese adults, no GLP-1 treatment, not pediatric, with lean controls" | one sentence, then a short back-and-forth that narrows by what exists | a scoped cohort with the caveats spelled out (which studies were excluded and why) |
 | An AI agent (Claude, ChatGPT, Cursor through MCP) acting for either | the same, programmatically | deterministic, small, explainable tool results; counts before data; the ability to ask "what if I drop X" | a cohort id it can hand to the loader |
-| Method developer | "paired cells/nuclei from the same tissue", "time courses with 4+ points", "studies with VDJ and SNPs" | design and layer filters more than biology | a list of studies with the design facts verified |
+| Method developer | "paired cells/nuclei from the same tissue", "time courses with 4+ points", "studies with VDJ and donor demultiplexing" | design and layer filters more than biology | a list of studies with the design facts verified |
 
 Query shapes the system must handle, with examples drawn from the personas above:
 
