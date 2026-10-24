@@ -249,7 +249,9 @@ describe("authorization and consent", () => {
     const signedIn = await consentPage(new Request(consentUrl, { headers: { Cookie: await cookieFor(env) } }), env, noWait);
     const consent = await signedIn.text();
     expect(consent).toContain("Allow Claude to use singlet tools as you?");
-    expect(consent).toContain("u1@example.com");
+    expect(consent).toContain("<!--email_off-->u1@example.com<!--/email_off-->");
+    // no-referrer would make the browser send `Origin: null` on the Allow form, which the POST refuses.
+    expect(signedIn.headers.get("Referrer-Policy")).toBe("same-origin");
     expect(consent).toContain("claude.ai");
     expect(signedIn.headers.get("Content-Security-Policy")).toContain("form-action 'self' https://claude.ai");
   });
@@ -263,6 +265,7 @@ describe("authorization and consent", () => {
     const post = (origin: string, action: string) =>
       consentDecision(new Request(`${SITE}/oauth/consent`, { method: "POST", headers: { ...FORM_HEADERS, Cookie: cookie, Origin: origin }, body: form({ request: requestId, action }) }), env, noWait);
     expect((await post("https://evil.example", "allow")).status).toBe(403);
+    expect((await post("null", "allow")).status).toBe(403);
     const denied = await post(SITE, "deny");
     expect(new URL(denied.headers.get("Location") ?? "").searchParams.get("error")).toBe("access_denied");
     // The request is single use.
