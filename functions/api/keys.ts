@@ -2,7 +2,8 @@
  * POST /api/keys — manage the signed-in user's personal API keys (D1).
  *
  * Browser session only (the session cookie from a same-origin page): an API
- * key can call the API as its owner but can never list, mint or revoke keys.
+ * key or an OAuth access token can call the API as its owner but can never
+ * list, mint or revoke keys.
  * Body:
  *   { action: "list" }
  *     → { items: ApiKeyItem[] }  (newest first, revoked and expired included)
@@ -27,9 +28,9 @@ export const onRequest: PagesFunction<AppEnv> = async ({ request, env, waitUntil
 
   const who = await requireUser(request, env, waitUntil, "Sign in to manage API keys.");
   if (!who.ok) return who.response;
-  if (who.identity.kind === "api_key") {
+  if (who.identity.kind !== "session") {
     return json(
-      { error: "session_required", message: "API keys cannot manage API keys. Sign in at https://singlet.bio/account to create or revoke them." },
+      { error: "session_required", message: "API keys and connected apps cannot manage API keys. Sign in at https://singlet.bio/account to create or revoke them." },
       403,
     );
   }

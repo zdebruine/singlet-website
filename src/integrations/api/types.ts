@@ -533,6 +533,14 @@ export interface SearchQuery {
 
 // ── API keys (account page; managed by POST /api/keys) ──────────────────────
 
+/** An MCP client (e.g. a Claude connector) the user approved through /oauth/consent. */
+export interface ConnectionSummary {
+  id: string;
+  client_name: string | null;
+  created_at: string;
+  last_used_at: string | null;
+}
+
 export interface ApiKeySummary {
   id: string;
   name: string;
