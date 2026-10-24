@@ -14,6 +14,10 @@ It does not touch the legacy `data/<GSE>/<GSE>.singlet` objects: those stay on t
 | `/v2/m/<GSE>.json` | study manifest (mutable) | `public, max-age=300` |
 | `/v2/cells/<GSE>.cells` | study-level cell tables (replaced per rev) | `public, max-age=300` |
 
+| `/v2/cidx/current.json` | pointer to the current cell-index version | `public, max-age=60` |
+| `/v2/cidx/v/<version>.json`, `/v2/cidx/obj/<32 hex>.(scx\|json\|parquet)` | cell-index directory and objects | `public, max-age=31536000, immutable` |
+| `/v2/a/<GSM>/<32 hex>.parquet` | per-cell label sidecar | `public, max-age=31536000, immutable` |
+
 Anything else is a JSON 404 (`Cache-Control: no-store`, so an object uploaded a moment later is visible at once). Methods
 GET, HEAD and OPTIONS only; everything else is 405. The query string is ignored. Keys are matched by anchored regexes on the
 normalised path and are never built from raw input.
@@ -69,12 +73,56 @@ multipart 206 (and answers 416 for syntactically odd ranges such as `bytes=5-2`)
 The handler therefore forwards to `match` only a single valid `Range`, evaluates every conditional itself, and falls back to a ranged
 R2 read if a platform returns the whole entry for a Range.
 
+## Cell index endpoints (POST)
+
+`POST /v2/cidx/query` (counts and grouped counts; cell answers as a seeded uniform sample of at most 10,000 cells from the 10 most
+relevant studies, paged with a cursor) and `POST /v2/cidx/gather` (those cells, or any list of at most 10,000 cells from at most 10
+studies, from many samples in one streamed `application/x-singlet-gather` answer). Every request is planned first and refused with a
+413 and a client-side plan if its worst-case cost (every read missing the cache) would exceed $0.01 or a cap; `dry_run: true` returns the
+plan and its estimate. Answers carry `estimate` and `cost`. Specification: `docs/format-v2-cell-index.md` in singlet-bio (sections 6-8); costs:
+`docs/format-v2-cell-index-costs.md`. Code: `src/routes.ts` (routing, identity, limits), `src/cidx.ts` (directory, shard reads, query
+planning and execution), `src/gather.ts` (plan, stream, fan-out), `src/scx.ts` (shard decoder), `src/limits.ts` (tiers, rate limits,
+the `CidxQuota` Durable Object). Every internal read goes through `handle()`, so it shares the Cache API copy and the R2 fallback of
+public GETs; gather passes `rangeFillMax: 0` so sample objects are filled into the cache on their second ranged miss, not the first.
+
+Bindings (all optional; without one its layer is off and the per-request caps in `src/limits.ts` still bound every request):
+
+| binding | what for |
+|---|---|
+| `DB` (D1 `singlet-catalog`) | API keys, read only (`SELECT ... FROM api_keys WHERE key_hash = ?`) |
+| `CIDX_RL_ANON`, `CIDX_RL_KEY` (Rate Limiting) | requests per minute per subject |
+| `CIDX_QUOTA` (Durable Object `CidxQuota`, SQLite) | daily cells, bytes, scanned rows and worst-case dollars per subject ($0.05 anonymous, $1.00 per API key) |
+| `SELF` (service binding to this Worker) + secret `CIDX_INTERNAL_SECRET` | big gathers split across sub-invocations (`POST /v2/cidx/_part`, refused without the secret) |
+| `CIDX_LIMITS` (var, JSON) | overrides of the tier limits, e.g. `{"anon": {"maxCellsPerRequest": 5000, "usdPerDay": 0.02}}` |
+
+### Deploy the cell index (owner)
+
+1. `npx wrangler secret put CIDX_INTERNAL_SECRET` (any random 32+ character string).
+2. Check that the rate-limit `namespace_id`s 7301/7302 are unused in the account.
+3. `npx wrangler deploy` (adds the Durable Object migration `cidx-quota-v1`).
+4. Upload an index built by `scripts/v2_cidx_build.py` (objects first, `v2/cidx/current.json` last), then
+   `curl -s -X POST https://data.singlet.bio/v2/cidx/query -d '{"where":{}}'` must return the cell total.
+5. Measure: `python -P bench/cidx/measure.py https://data.singlet.bio` (singlet-bio) and tune `FANOUT_MAX_PARTS` if R2 latency differs
+   from the assumed 40 ms.
+
+### Local run (workerd + seeded R2)
+
+```
+npx esbuild workers/data-v2/src/index.ts --bundle --format=esm --outfile=workers/data-v2/.local/worker.mjs
+node workers/data-v2/scripts/local.mjs <dir laid out like the bucket: v2/m, v2/s, v2/ref, v2/cidx> 8799
+```
+
+`scripts/local.mjs` runs the bundle in Miniflare (the runtime of `wrangler dev --local`) with the R2 bucket seeded from the directory, the
+quota Durable Object and the SELF fan-out (`--no-self` turns it off, `CIDX_FANOUT_MIN_READS=4` forces it). It exists because
+`wrangler r2 object put --local` fails intermittently on Windows ("Network connection lost").
+
 ## Files
 
 * `src/handler.ts`: all behaviour, runtime-neutral (`handle(request, { bucket, cache, waitUntil })`).
 * `src/index.ts`: the Worker entry; wires `env.DATA` and `caches.default`.
 * `wrangler.toml`: route, R2 binding (read only: the code only calls `get` and `head`), observability.
-* Tests: `src/test/data-v2-worker.test.ts` in the repository root (runs in `npm test`; the types are checked by `npm run check`).
+* `src/routes.ts`, `src/cidx.ts`, `src/gather.ts`, `src/scx.ts`, `src/limits.ts`: the cell index (above).
+* Tests: `src/test/data-v2-worker.test.ts` and `src/test/data-v2-cidx.test.ts` (golden answers from singlet-bio in `src/test/fixtures/cidx`) in the repository root (runs in `npm test`; the types are checked by `npm run check`).
 
 ## Deploy (owner, once)
 
