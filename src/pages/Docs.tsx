@@ -229,10 +229,17 @@ head(colData(sce)$gsm_id)`}
               </div>
               <h3>Files on disk</h3>
               <p>
-                Every study is a single <Mono>.singlet</Mono> file at{" "}
+                Studies are being moved to a per-sample layout: one immutable object per sample at{" "}
+                <Mono>https://data.singlet.bio/v2/s/&lt;GSM&gt;/&lt;digest&gt;.s2</Mono> and a manifest at{" "}
+                <Mono>https://data.singlet.bio/v2/m/&lt;GSE&gt;.json</Mono> that lists every sample, member and byte range. The
+                API tells you which layout a study has (<Mono>series.v2</Mono> in <Mono>GET /api/gse/:id</Mono>), and{" "}
+                <Mono>singlet.load</Mono> reads both the same way.
+              </p>
+              <p>
+                Until a study is moved, and for as long as its old file is kept, it is a single <Mono>.singlet</Mono> file at{" "}
                 <Mono>https://data.singlet.bio/data/&lt;GSE&gt;/&lt;GSE&gt;.singlet</Mono>, from about 300 KB to over 20 GB
-                (about 9 in 10 are under 1 GB). You can download it with curl and load the local path the same way. There are no per-sample
-                files; filter on <Mono>obs["gsm_id"]</Mono> after loading, or see{" "}
+                (about 9 in 10 are under 1 GB). You can download it with curl and load the local path the same way. Inside it the samples are not
+                separate downloads: filter on <Mono>obs["gsm_id"]</Mono> after loading, or see{" "}
                 <a href="#partial-download">Download just part of a study</a>.
               </p>
               <CodeBlock
@@ -436,6 +443,13 @@ if (singlet_has(path, "donor_assignments", gsm))
                 A <Mono>.singlet</Mono> file is a ZIP64 archive, so you don't have to fetch the whole thing to see
                 what's inside or to pull out one sample. This is an HTTP API (and MCP) feature: the Python and R packages
                 always download the whole study file, including for <Mono>singlet.load("GSM…")</Mono>.
+              </p>
+              <p>
+                For a study stored per sample (see <a href="#singlet-file">Files on disk</a>), the same three endpoints answer from the
+                catalog: <Mono>index</Mono> lists each sample object and its members (with <Mono>format: "singlet-v2"</Mono>),
+                and <Mono>entry</Mono> says where a member's bytes are inside the sample object instead of inflating it. Those
+                objects never change, so a range you have once stays valid; the MCP tools <Mono>slice_cells</Mono> and{" "}
+                <Mono>find_cells</Mono> go further and give the ranges for just some cells.
               </p>
               <p>
                 <Mono>GET /api/bundle/:gse/index</Mono> lists every member — per-sample files, compressed and
@@ -860,11 +874,12 @@ accs <- singlet::find("microglia in the aging mouse brain")`}
   --header "Authorization: Bearer ${KEY_PLACEHOLDER}"`}
               />
               <p>
-                The server has 14 tools: <Mono>search_datasets</Mono>, <Mono>get_study</Mono>,{" "}
+                The server has 17 tools: <Mono>search_datasets</Mono>, <Mono>get_study</Mono>,{" "}
                 <Mono>get_download_url</Mono>, <Mono>get_atlas_stats</Mono>, <Mono>get_sample_qc</Mono>,{" "}
                 <Mono>list_bundle_files</Mono>, <Mono>get_modalities</Mono>, <Mono>get_partial_download</Mono>,{" "}
                 <Mono>export_manifest</Mono>, <Mono>find_matched_controls</Mono>, <Mono>compare_studies</Mono>,{" "}
-                <Mono>assess_study</Mono>, <Mono>get_cohort</Mono> and <Mono>save_cohort</Mono>. Inputs, outputs and
+                <Mono>assess_study</Mono>, <Mono>get_cohort</Mono>, <Mono>save_cohort</Mono>, and for studies stored
+                per sample <Mono>find_cells</Mono>, <Mono>slice_cells</Mono> and <Mono>resolve_features</Mono>. Inputs, outputs and
                 key requirements for each are in the <Link to="/docs/mcp#tools">tool reference</Link>.
               </p>
               <p>

@@ -16,25 +16,13 @@ import { exclusionFor, studyCompleteness, type Completeness, type Exclusion } fr
 import { cellCountVerdict, type CellCountVerdict } from "./suspect-cells";
 import { statusText } from "./search-core";
 import { organismToCommon } from "./vocab";
-import { getV2State } from "./v2-catalog";
-import { v2ManifestUrl } from "./v2-urls";
+import { getV2State, parseJsonObject } from "./v2-catalog";
+import { DATA_BASE, bundleUrl } from "./data-urls";
+import { legacyUrl, studyV2, type StudyV2 } from "./file-facts";
 
-/** Public base for per-study bundles; one `.singlet` file per GSE. */
-export const DATA_BASE = "https://data.singlet.bio";
-
-export function bundleUrl(gse: string): string {
-  return `${DATA_BASE}/data/${gse}/${gse}.singlet`;
-}
-
-/** A study stored in the v2 per-sample layout (schema/032): the manifest, its revision, and whether the old single file still exists. */
-export interface StudyV2 {
-  format: "singlet-v2";
-  rev: string;
-  manifest_url: string;
-  n_samples: number;
-  bytes: number | null;
-  legacy_available: boolean;
-}
+// The legacy URL builder lives in data-urls.ts (no import cycle with the readers); kept importable from here.
+export { DATA_BASE, bundleUrl };
+export type { StudyV2 };
 
 export interface StudySeries {
   id: string;
@@ -249,19 +237,24 @@ export async function loadStudy(db: D1Database, rawId: string): Promise<StudyDet
   const bundleBytes = seriesRow.r2_bundle_bytes != null ? Number(seriesRow.r2_bundle_bytes) : null;
   const hasBundle = metaRow ? Number(metaRow.has_bundle ?? 0) === 1 : !!bundleKey;
 
+  const v2State = await getV2State(db, id);
+  const v2 = v2State ? studyV2(id, v2State) : null;
+  // What a study served from v2 says about its own files stands in where the legacy file's catalog rows (bundle_manifest) are absent:
+  // a study that never had a legacy file has none, and a retired one keeps them.
+  const v2Pipeline = v2State ? parseJsonObject(v2State.study.pipeline_json) : null;
+
   const bundleNSamples =
     manifestRow?.n_gsms_in_bundle != null
       ? Number(manifestRow.n_gsms_in_bundle)
       : seriesRow.r2_bundle_n_gsms != null
         ? Number(seriesRow.r2_bundle_n_gsms)
-        : null;
+        : (v2State?.study.n_samples ?? null);
   const referenceBuild =
     typeof manifestRow?.reference_build === "string" && manifestRow.reference_build
       ? manifestRow.reference_build
-      : null;
-
-  const v2State = await getV2State(db, id);
-  const legacyAlive = v2State ? v2State.migration?.status !== "retired" : true;
+      : (v2State?.study.reference_build ?? null) || null;
+  // A retired study's legacy file is deleted: no URL, no key, and the size is that of the v2 files. The catalog rows stay.
+  const legacyGone = !!v2 && !v2.legacy_available;
   const usableRow = await usablePromise;
   const assessed = usableRow && Number(usableRow.n) > 0 && Number(usableRow.unknown ?? 0) === 0 ? Number(usableRow.n) : null;
   const organismForRef = (metaRow?.organism_primary as string | null) ?? (seriesRow.organism as string | null);
@@ -278,33 +271,29 @@ export async function loadStudy(db: D1Database, rawId: string): Promise<StudyDet
     n_gsm_failed: Number(seriesRow.n_gsm_failed ?? 0),
     n_cells: Number(seriesRow.n_cells ?? 0),
     pubmed_ids: safeList(seriesRow.pubmed_ids),
-    bundle_key: bundleKey,
-    bundle_bytes: bundleBytes,
+    bundle_key: legacyGone ? null : bundleKey,
+    bundle_bytes: legacyGone ? (v2!.bytes ?? bundleBytes) : bundleBytes,
     // Once the legacy file is retired its URL is dead; the v2 block says where the data is.
-    bundle_url: hasBundle && legacyAlive ? bundleUrl(id) : null,
-    v2: v2State
-      ? {
-          format: "singlet-v2",
-          rev: v2State.study.rev,
-          manifest_url: v2ManifestUrl(id),
-          n_samples: v2State.study.n_samples,
-          bytes: v2State.study.bytes,
-          legacy_available: legacyAlive,
-        }
-      : null,
+    // (A study served from v2 that never had a legacy key has no legacy file either.)
+    bundle_url: hasBundle ? legacyUrl(id, v2, !!bundleKey || !v2) : null,
+    v2,
     bundle_n_samples: bundleNSamples != null && !Number.isNaN(bundleNSamples) ? bundleNSamples : null,
     reference_build: referenceBuild,
     singlet_version:
-      typeof manifestRow?.singlet_version === "string" && manifestRow.singlet_version ? manifestRow.singlet_version : null,
+      typeof manifestRow?.singlet_version === "string" && manifestRow.singlet_version
+        ? manifestRow.singlet_version
+        : typeof v2Pipeline?.singlet_version === "string" && v2Pipeline.singlet_version
+          ? v2Pipeline.singlet_version
+          : null,
     packed_at:
       typeof manifestRow?.manifest_created_at === "string" && manifestRow.manifest_created_at
         ? manifestRow.manifest_created_at
-        : null,
+        : (v2State?.study.created_at ?? null),
     doi: null,
     submitted_date: (seriesRow.submitted_date as string | null) ?? null,
     last_updated: (seriesRow.last_updated as string | null) ?? null,
-    r2_bundle_key: bundleKey,
-    r2_bundle_bytes: bundleBytes,
+    r2_bundle_key: legacyGone ? null : bundleKey,
+    r2_bundle_bytes: legacyGone ? (v2!.bytes ?? bundleBytes) : bundleBytes,
     usable_samples: assessed != null ? Number(usableRow?.ok ?? 0) : null,
     assessed_samples: assessed,
     unusable_gsm_ids: assessed != null && usableRow?.bad ? usableRow.bad.split(",").sort() : [],
@@ -339,7 +328,7 @@ export async function loadStudy(db: D1Database, rawId: string): Promise<StudyDet
   const completeness = studyCompleteness({
     nGsmTotal: series.n_gsm_total,
     samples: samplesResult.results.map((r) => ({ status: r.status as string | null, failure_category: r.failure_category as string | null })),
-    hasFile: hasBundle || !!v2State,
+    hasFile: hasBundle || !!v2,
     bundleSamples: bundleNSamples != null && !Number.isNaN(bundleNSamples) ? bundleNSamples : null,
     passedQc: assessed != null ? Math.max(0, Number(usableRow?.ok ?? 0) - lowById.size - removedIds.size) : null,
     lowQc: lowById.size,

@@ -42,6 +42,7 @@ import { nlSearch, type NlSearchBody } from "./_shared/nl-search-core";
 import { allowanceFor, recordToolCall, withinRate } from "./_shared/spend";
 import { requestId } from "./_shared/errors";
 import { loadStudy, bundleUrl, GSE_RE, type StudyDetail } from "./_shared/study-core";
+import { legacyUrl } from "./_shared/file-facts";
 import { computeStats } from "./_shared/stats-core";
 import { TISSUE_GROUPS, DISEASE_GROUPS, ASSAY_FAMILIES } from "./_shared/vocab";
 import { MANIFEST_FORMATS } from "./_shared/manifest-core";
@@ -51,7 +52,7 @@ import { dietEnabled, diet } from "./_shared/mcp-core";
 import { v2ToolsVisible } from "./_shared/v2-gate";
 import { findCells, resolveFeatures, sliceCells, v2DownloadUrl } from "./_shared/mcp-v2";
 import { combineRev, fileRev, knownRev, unchangedBody } from "./_shared/rev";
-import { getV2State } from "./_shared/v2-catalog";
+import { getV2State, isLegacyAlive } from "./_shared/v2-catalog";
 import { configureV2, v2ManifestUrl } from "./_shared/v2-urls";
 import { MODALITIES_PROP } from "./_shared/v2-load-modalities";
 import {
@@ -689,7 +690,10 @@ function studySummary(r: StudyRow, why: string) {
     n_cells: r.suspect_cells ? null : r.n_cells,
     year: r.year,
     has_bundle: r.has_bundle,
-    bundle_url: r.has_bundle ? bundleUrl(r.gse_id) : null,
+    // The legacy file's URL only while that file exists; a study served from v2 also names its manifest.
+    bundle_url: r.has_bundle ? legacyUrl(r.gse_id, r.v2, !!r.bundle_key || !r.v2) : null,
+    format: r.v2 ? r.v2.format : "singlet-v1",
+    manifest_url: r.v2?.manifest_url ?? null,
     bundle_bytes: r.bundle_bytes,
     bundle_n_samples: r.bundle_n_samples,
     file_cells: r.file_cells,
@@ -723,7 +727,8 @@ function sampleSummary(s: SampleRow) {
     status: s.status,
     characteristics: s.characteristics,
     has_bundle: s.has_bundle,
-    bundle_url: s.has_bundle ? bundleUrl(s.gse_id) : null,
+    bundle_url: s.has_bundle ? legacyUrl(s.gse_id, s.v2) : null,
+    manifest_url: s.v2?.manifest_url ?? null,
     study_url: `${SITE}/study/${s.gse_id}`,
   };
 }
@@ -917,7 +922,7 @@ async function getStudy(env: Env, args: Record<string, unknown>) {
   const structured = {
     gse_id: d.series.id,
     rev,
-    v2: v2 ? { format: "singlet-v2", rev: v2.study.rev, manifest_url: v2ManifestUrl(id), n_samples: v2.study.n_samples, bytes: v2.study.bytes } : null,
+    v2: v2 ? { format: "singlet-v2", rev: v2.study.rev, manifest_url: v2ManifestUrl(id), n_samples: v2.study.n_samples, bytes: v2.study.bytes, legacy_available: isLegacyAlive(v2.migration) } : null,
     title: d.series.title,
     abstract: d.series.abstract,
     organism: d.series.organism_label,

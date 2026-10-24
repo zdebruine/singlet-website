@@ -2,9 +2,10 @@
  * Shapes served by /api/bundle/* — the study's own `.singlet` file read over
  * HTTP Range requests, plus the D1 mirror of the per-sample QC summaries.
  */
-import { applyUsable, isUsable, matrixBytesByGsm } from "./catalog-refresh";
+import { applyUsable, applyUsableV2, isUsable, matrixBytesByGsm } from "./catalog-refresh";
 import { publicEntries } from "./restricted";
-import { getV2Samples, listV2Samples, parseJsonObject, type V2State } from "./v2-catalog";
+import { getV2Samples, getV2State, listV2Samples, parseJsonObject, type V2State } from "./v2-catalog";
+import { readV2Summaries, v2MatrixBytes } from "./v2-summaries";
 import { describeMembers } from "./v2-serve";
 import { v2ManifestUrl } from "./v2-urls";
 import {
@@ -285,6 +286,29 @@ export async function loadSampleQc(
         db.prepare(`SELECT ${SAMPLE_QC_COLUMNS.join(", ")} FROM sample_qc WHERE gse_id = ? ORDER BY gsm_id`).bind(gse).all<SampleQc>().catch(() => null)
       );
     if (rows?.results?.length) return { source: "d1", samples: rows.results.map(normalizeQc) };
+  }
+
+  // A study served from v2 is read from its sample objects: the legacy file may be retired (deleted), and the objects hold the same summaries.
+  const v2 = await getV2State(db, gse);
+  if (v2) {
+    const rev = v2.study.rev;
+    const fromV2 = (await readV2Summaries(db, gse, rev)).map((r) => shapeSummary(gse, r.gsm_id, r.summary));
+    const sizes = await v2MatrixBytes(db, gse, rev);
+    for (const s of fromV2) {
+      s.matrix_bytes = sizes.get(s.gsm_id) ?? 0;
+      s.usable = isUsable(s.matrix_bytes, s.n_cells_called) ? 1 : 0;
+    }
+    if (fromV2.length) {
+      const stamp = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
+      const statements = fromV2.map((s) => upsertSampleQcStatement(db, s as unknown as Record<string, unknown>, stamp));
+      const write = (async () => {
+        for (let i = 0; i < statements.length; i += 100) await db.batch(statements.slice(i, i + 100));
+        await applyUsableV2(db, gse, rev);
+      })().catch(() => undefined);
+      if (opts.waitUntil) opts.waitUntil(write);
+      else await write;
+    }
+    return { source: "bundle", samples: fromV2 };
   }
 
   const { index, samples } = await withIndexRetry(db, gse, { waitUntil: opts.waitUntil }, async (index) => ({

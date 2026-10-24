@@ -97,6 +97,33 @@ smoke_bundle_offsets() { # gse
 smoke_bundle_offsets GSE111113
 smoke_bundle_offsets GSE138867
 
+# A retired study is one whose single .singlet file is deleted (v2_migration.status = 'retired'). It must answer from v2 and name no legacy URL:
+# the study detail has no bundle URL and says the legacy file is gone, the bundle index lists v2 objects, the search row and the manifest name
+# the v2 manifest, the manifest object is there, and the old file is really a 404. Name the studies in SMOKE_RETIRED (space separated, e.g.
+# SMOKE_RETIRED="GSE145370" once that study is retired); with it empty nothing is checked. src/test/retired-study.test.ts runs the same
+# assertions on fixtures for every endpoint and tool.
+smoke_retired() { # gse
+  local gse="$1" flat murl legacy
+  fetch "$BASE/api/gse/$gse"
+  flat=$(printf '%s' "$body" | tr -d ' \r\n')
+  if [ "$code" != 200 ]; then bad "retired $gse detail ($code)"; return; fi
+  if printf '%s' "$flat" | grep -q '"legacy_available":false' && printf '%s' "$flat" | grep -q '"bundle_url":null'; then ok "retired $gse: detail has no bundle URL, v2 block says the legacy file is gone"; else bad "retired $gse: detail still offers the legacy file (is its migration status retired?)"; fi
+  if printf '%s' "$flat" | grep -q -E "/data/$gse/|$gse\\.singlet"; then bad "retired $gse: detail names the legacy file"; else ok "retired $gse: detail names no legacy file"; fi
+  murl=$(printf '%s' "$flat" | grep -o '"manifest_url":"[^"]*"' | head -n 1 | sed 's/"manifest_url":"//; s/"$//')
+  if [ -n "$murl" ] && [ "$(curl -s -o /dev/null -m 30 -I -w '%{http_code}' "$murl")" = 200 ]; then ok "retired $gse: manifest answers ($murl)"; else bad "retired $gse: manifest missing (${murl:-no manifest_url})"; fi
+  legacy="https://data.singlet.bio/data/$gse/$gse.singlet"
+  if [ "$(curl -s -o /dev/null -m 30 -I -w '%{http_code}' "$legacy")" = 404 ]; then ok "retired $gse: legacy object is gone"; else bad "retired $gse: legacy object still answers"; fi
+  fetch "$BASE/api/bundle/$gse/index"
+  flat=$(printf '%s' "$body" | tr -d ' \r\n')
+  if [ "$code" = 200 ] && printf '%s' "$flat" | grep -q '"format":"singlet-v2"' && ! printf '%s' "$flat" | grep -q -E "/data/$gse/|$gse\\.singlet"; then ok "retired $gse: bundle index lists v2 objects"; else bad "retired $gse: bundle index ($code)"; fi
+  fetch "$BASE/api/search?level=gse&q=$gse&limit=5"
+  flat=$(printf '%s' "$body" | tr -d ' \r\n')
+  if [ "$code" = 200 ] && printf '%s' "$flat" | grep -q "\"gse_id\":\"$gse\"" && ! printf '%s' "$flat" | grep -q -E "\"bundle_key\":\"data/$gse/|/data/$gse/"; then ok "retired $gse: search row has no legacy key"; else bad "retired $gse: search row ($code)"; fi
+  fetch "$BASE/api/manifest?q=$gse&format=tsv"
+  if [ "$code" = 200 ] && printf '%s' "$body" | grep -q "v2/m/$gse.json" && ! printf '%s' "$body" | grep -q -E "/data/$gse/|$gse\\.singlet"; then ok "retired $gse: manifest export names the v2 manifest"; else bad "retired $gse: manifest export ($code)"; fi
+}
+for g in ${SMOKE_RETIRED:-}; do smoke_retired "$g"; done
+
 check "manifest tsv"         200 "$BASE/api/manifest?gse=GSE138867&format=tsv" "GSE138867"
 check "auth me (signed out)" 200 "$BASE/api/auth/me"                        "\"user\": *null|\"user\":null"
 check "unknown api is JSON 404" 404 "$BASE/api/definitely-not-a-route"      "\"error\": *\"not_found\"" "json"

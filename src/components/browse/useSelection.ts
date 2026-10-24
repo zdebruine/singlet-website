@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { StudyRow } from "@/integrations/api/types";
+import { studyFileUrl } from "@/integrations/api/client";
 
 export interface SelectedStudy {
   gse_id: string;
@@ -7,7 +8,11 @@ export interface SelectedStudy {
   n_cells: number;
   bundle_bytes: number | null;
   has_bundle: boolean;
+  /** Where to download the study: its single file, or its v2 manifest once the single file is retired. Absent in older saved selections. */
+  file_url?: string;
 }
+
+const fileUrlOf = (row: StudyRow | SelectedStudy): string => ("file_url" in row && row.file_url ? row.file_url : studyFileUrl(row.gse_id, "v2" in row ? row.v2 : null));
 
 const KEY = "singlet.browse.selection.v1";
 
@@ -44,7 +49,7 @@ export function useSelection() {
       if (prev.some((p) => p.gse_id === row.gse_id)) return prev.filter((p) => p.gse_id !== row.gse_id);
       return [
         ...prev,
-        { gse_id: row.gse_id, title: row.title, n_cells: row.n_cells, bundle_bytes: row.bundle_bytes, has_bundle: row.has_bundle },
+        { gse_id: row.gse_id, title: row.title, n_cells: row.n_cells, bundle_bytes: row.bundle_bytes, has_bundle: row.has_bundle, file_url: fileUrlOf(row) },
       ];
     });
   }, []);
@@ -54,7 +59,7 @@ export function useSelection() {
       const seen = new Set(prev.map((p) => p.gse_id));
       const add = rows
         .filter((r) => !seen.has(r.gse_id))
-        .map((r) => ({ gse_id: r.gse_id, title: r.title, n_cells: r.n_cells, bundle_bytes: r.bundle_bytes, has_bundle: r.has_bundle }));
+        .map((r) => ({ gse_id: r.gse_id, title: r.title, n_cells: r.n_cells, bundle_bytes: r.bundle_bytes, has_bundle: r.has_bundle, file_url: fileUrlOf(r) }));
       return add.length ? [...prev, ...add] : prev;
     });
   }, []);

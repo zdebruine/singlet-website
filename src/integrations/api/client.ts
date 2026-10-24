@@ -277,6 +277,7 @@ export function normalizeStudyRow(raw: unknown): StudyRow | null {
     has_bundle: r.has_bundle === true || r.has_bundle === 1,
     bundle_bytes: numOrNull(r.bundle_bytes),
     bundle_key: strOrNull(r.bundle_key),
+    v2: normalizeStudyV2(r.v2),
     bundle_n_samples: numOrNull(r.bundle_n_samples),
     file_cells: numOrNull(r.file_cells),
     usable_samples: numOrNull(r.usable_samples),
@@ -1089,7 +1090,17 @@ export function normalizeRelated(raw: unknown): RelatedResponse {
   return { gse_id: str(r.gse_id), total: num(r.total, related.length), related };
 }
 
-/** Public download URL for a study bundle. */
+/** Public download URL for a study's legacy single bundle. It is a dead link once the study is retired: use studyFileUrl. */
 export function bundleUrl(gseId: string): string {
   return `https://data.singlet.bio/data/${gseId}/${gseId}.singlet`;
+}
+
+/** True when the study's single .singlet file is gone and its files are the v2 per-sample objects listed in a manifest. */
+export function isManifestFile(v2: Pick<StudyV2, "legacy_available"> | null | undefined): boolean {
+  return !!v2 && !v2.legacy_available;
+}
+
+/** The URL to download a study from: the single .singlet file while it exists, the v2 manifest once that file is retired. */
+export function studyFileUrl(gseId: string, v2?: Pick<StudyV2, "manifest_url" | "legacy_available"> | null): string {
+  return v2 && !v2.legacy_available ? v2.manifest_url : bundleUrl(gseId);
 }

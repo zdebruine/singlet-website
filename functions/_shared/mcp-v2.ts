@@ -15,6 +15,7 @@ import {
   getV2Sample,
   getV2Samples,
   getV2State,
+  isLegacyAlive,
   listV2Samples,
   parseJsonObject,
   parseMembers,
@@ -107,7 +108,7 @@ function selectionOut(sel: Selection, url: string, objectBytes: number | null) {
 
 export async function v2DownloadUrl(ctx: V2ToolCtx, id: string, title: string | null, state: V2State, args: Record<string, unknown>): Promise<ToolResult> {
   const s = state.study;
-  const legacyAlive = state.migration?.status !== "retired";
+  const legacyAlive = isLegacyAlive(state.migration);
   const mods = modalitiesArg(args);
   if (isToolResult(mods)) return mods;
   const includeSamples = args.include_samples === true || mods !== null;
@@ -402,7 +403,8 @@ export async function findCells(ctx: V2ToolCtx, args: Record<string, unknown>, o
 
   // 1. the samples, in D1
   const where: string[] = [
-    `NOT EXISTS (SELECT 1 FROM v2_migration m WHERE m.gse_id = s.gse_id AND m.status NOT IN ('verified', 'retired'))`,
+    // served only: a migration row that says verified or retired (a study with no migration row is not served)
+    `EXISTS (SELECT 1 FROM v2_migration m WHERE m.gse_id = s.gse_id AND m.status IN ('verified', 'retired'))`,
   ];
   const bind: (string | number)[] = [];
   if (gseIds.length) {

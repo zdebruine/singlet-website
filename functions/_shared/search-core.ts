@@ -13,6 +13,7 @@
  * 100-bound-parameter limit.
  */
 import { safeList } from "./json";
+import { attachFileFacts, type StudyV2 } from "./file-facts";
 import { parseCharacteristics, summarizeConditions, type ConditionSummary } from "./conditions";
 import { cellCountVerdict, isSuspectStudyCells, type CellCountVerdict } from "./suspect-cells";
 import {
@@ -112,7 +113,10 @@ export interface StudyRow {
   suspect_cells: boolean;
   has_bundle: boolean;
   bundle_bytes: number | null;
+  /** Key of the legacy single file; null when it is retired (deleted) or never existed. */
   bundle_key: string | null;
+  /** Set when the study is served from the v2 per-sample layout (manifest URL; whether the legacy file still exists). */
+  v2?: StudyV2 | null;
   bundle_n_samples: number | null;
   file_cells: number | null;
   reference_build: string | null;
@@ -158,6 +162,8 @@ export interface SampleRow {
   source: string | null;
   characteristics: Record<string, string>;
   has_bundle: boolean;
+  /** The study's v2 block when it is served from v2: where its files are once the legacy file is gone. */
+  v2?: StudyV2 | null;
   year: number | null;
   score: number | null;
 }
@@ -1286,6 +1292,7 @@ export async function runStudySearch(
     rows = kept.slice(start, start + p.limit).map((x) => x.row);
   }
   await attachConditions(ctx, rows);
+  await attachFileFacts(db, rows);
   for (const r of rows) {
     r.why = whyText(r, evidenceParams);
     r.abstract = truncateAbstract(r.abstract);
@@ -1794,6 +1801,7 @@ export async function runSampleSearch(ctx: Ctx, p: SearchParams): Promise<Search
     cells = c?.cells ?? null;
   }
   const rows = res.results.map(shapeSample);
+  await attachFileFacts(db, rows);
   return {
     total,
     totals: { studies: null, samples: total, cells: cells != null ? Number(cells) : null },
