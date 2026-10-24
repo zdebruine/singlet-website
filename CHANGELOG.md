@@ -6,7 +6,7 @@ Changes to what singlet.bio publishes. Newest first.
 
 Every mouse sample's `sex_call.json` reads "unknown": the pipeline matches the chrY and XIST gene names in upper case, so mouse
 symbols (Xist, Uty, Ddx3y, …) never match. The file is present, but it holds no call. The layer statistics (`/api/stats/layers`),
-the study summaries and the docs now count and list genetic sex for human studies only, as they already did for ancestry. Mouse
+the study summaries, the search index export and the docs now count and list genetic sex for human studies only, as they already did for ancestry. Mouse
 calls return when the pipeline matches mouse gene names and the files are rebuilt.
 
 ## 2026-10-22 — Studies are starting to move to one object per sample

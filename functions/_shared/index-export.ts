@@ -41,22 +41,23 @@ WHERE s.status = 'DONE' AND s.gsm_id > ?
 ORDER BY s.gsm_id
 LIMIT ?`;
 
-/** What each study's file holds (the per-study part of the old export-samples.sql). */
+/** What each study's file holds (the per-study part of the old export-samples.sql). Genetic sex is a human layer: mouse sex_call.json files say "unknown". */
 const STUDIES_SQL = `
-SELECT gse_id,
+SELECT b.gse_id,
   TRIM(
-    CASE WHEN entries LIKE '%exon_counts.1pz%'       THEN 'gene_counts|' ELSE '' END ||
-    CASE WHEN entries LIKE '%intron_counts.1pz%'     THEN 'splicing|'    ELSE '' END ||
-    CASE WHEN entries LIKE '%sj_counts.1pz%'         THEN 'junctions|'   ELSE '' END ||
-    CASE WHEN entries LIKE '%mt_heteroplasmy.1pz%'   THEN 'mtdna|'       ELSE '' END ||
-    CASE WHEN entries LIKE '%vdj_gene_usage.1pz%'    THEN 'vdj|'         ELSE '' END ||
-    CASE WHEN entries LIKE '%donor_assignments.tsv%' THEN 'donors|'      ELSE '' END ||
-    CASE WHEN entries LIKE '%sex_call.json%'         THEN 'sex|'         ELSE '' END ||
-    CASE WHEN entries LIKE '%doublet_scores.tsv%'    THEN 'doublets|'    ELSE '' END,
+    CASE WHEN b.entries LIKE '%exon_counts.1pz%'       THEN 'gene_counts|' ELSE '' END ||
+    CASE WHEN b.entries LIKE '%intron_counts.1pz%'     THEN 'splicing|'    ELSE '' END ||
+    CASE WHEN b.entries LIKE '%sj_counts.1pz%'         THEN 'junctions|'   ELSE '' END ||
+    CASE WHEN b.entries LIKE '%mt_heteroplasmy.1pz%'   THEN 'mtdna|'       ELSE '' END ||
+    CASE WHEN b.entries LIKE '%vdj_gene_usage.1pz%'    THEN 'vdj|'         ELSE '' END ||
+    CASE WHEN b.entries LIKE '%donor_assignments.tsv%' THEN 'donors|'      ELSE '' END ||
+    CASE WHEN b.entries LIKE '%sex_call.json%' AND m.organism_primary = 'Homo sapiens' THEN 'sex|' ELSE '' END ||
+    CASE WHEN b.entries LIKE '%doublet_scores.tsv%'    THEN 'doublets|'    ELSE '' END,
     '|') AS layer
-FROM bundle_index
-WHERE gse_id > ?
-ORDER BY gse_id
+FROM bundle_index b
+LEFT JOIN gse_meta m ON m.gse_id = b.gse_id
+WHERE b.gse_id > ?
+ORDER BY b.gse_id
 LIMIT ?`;
 
 const ATTR_SQL = `
