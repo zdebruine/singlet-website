@@ -53,13 +53,14 @@ describe("MCP access", () => {
     expect(body.result.tools.length).toBeGreaterThan(10);
   });
 
-  it("refuses every tool call without a key and records nothing", async () => {
+  it("answers every tool call without a key with HTTP 401 (so clients start sign-in) and records nothing", async () => {
     const env = await setup();
     for (const name of ["get_atlas_stats", "search_datasets", "get_study", "export_manifest"]) {
       const res = await post(call(name, { query: "x", gse_id: "GSE1" }), env);
-      const body = (await res.json()) as { result: { isError: boolean; _meta: { auth: string } } };
-      expect(body.result.isError, name).toBe(true);
-      expect(body.result._meta.auth, name).toBe("key_required");
+      expect(res.status, name).toBe(401);
+      expect(res.headers.get("WWW-Authenticate"), name).toMatch(/resource_metadata=/);
+      const body = (await res.json()) as { error: { data: { auth: string } } };
+      expect(body.error.data.auth, name).toBe("sign_in_required");
     }
     const n = await env.DB.prepare(`SELECT COUNT(*) AS n FROM mcp_usage`).first<{ n: number }>();
     expect(n?.n).toBe(0);

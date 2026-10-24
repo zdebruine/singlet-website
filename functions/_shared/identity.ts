@@ -10,6 +10,10 @@
  *     `X-API-Key: sk_live_…`, looked up by sha256 in `api_keys` (60 s
  *     per-isolate memo; `last_used_at` refreshed at most every 5 min). A key
  *     acts as its owner, so it spends the owner's signed-in AI budget;
+ *   - an MCP client connected through OAuth (Claude's custom connectors):
+ *     `Authorization: Bearer sat_…`, an access token from /oauth/token
+ *     (mcp-oauth.ts). It acts as its owner exactly like a key, but only on
+ *     the origin that issued it;
  *   - everyone else: anonymous, metered by a salted hash of the IP.
  *
  * Downloads never need any of this; accounts exist for AI budgets, API keys,
@@ -18,6 +22,7 @@
 import type { WaitUntil } from "./env";
 import { CORS_HEADERS } from "./cors";
 import { sha256Hex } from "./hash";
+import { ACCESS_TOKEN_RE, checkAccessToken } from "./mcp-oauth";
 import { lookupSession, nowIso, type SessionUser } from "./session";
 
 export { sha256Hex };
@@ -38,6 +43,12 @@ export type KeyReason = "unknown" | "revoked" | "expired" | "unavailable";
 export type KeyCheck =
   | { ok: true; keyId: string; userId: string }
   | { ok: false; reason: KeyReason; message: string };
+
+/** An API key or an OAuth access token, checked. `via` says which; an OAuth credential's keyId is "oauth:<grant id>". */
+export type CredentialCheck =
+  | { ok: true; via: "api_key"; keyId: string; userId: string }
+  | { ok: true; via: "oauth"; keyId: string; userId: string; grantId: string; clientId: string }
+  | { ok: false; via: "api_key" | "oauth"; reason: KeyReason; message: string };
 
 interface MemoEntry {
   result: KeyCheck;
@@ -93,6 +104,54 @@ export function apiKeyFromRequest(request: Request): string | null {
   const m = /^Bearer\s+(.+)$/i.exec(raw);
   const token = m?.[1]?.trim() ?? "";
   return API_KEY_RE.test(token) ? token : null;
+}
+
+/** The `sat_…` OAuth access token on the request, if any. */
+export function accessTokenFromRequest(request: Request): string | null {
+  const m = /^Bearer\s+(.+)$/i.exec((request.headers.get("Authorization") ?? "").trim());
+  const token = m?.[1]?.trim() ?? "";
+  return ACCESS_TOKEN_RE.test(token) ? token : null;
+}
+
+export function tokenMessage(reason: KeyReason): string {
+  switch (reason) {
+    case "revoked":
+      return `This connection to singlet.bio was disconnected. Connect again from your MCP client, or see ${ACCOUNT_URL}.`;
+    case "expired":
+      return "This access token has expired. Your MCP client should refresh it, or connect again.";
+    case "unavailable":
+      return "Sign-in tokens cannot be checked right now. Try again in a minute.";
+    default:
+      return "Unknown access token. Connect singlet.bio again from your MCP client.";
+  }
+}
+
+/**
+ * The credential on the request — an API key (header) or an OAuth access token — checked against D1;
+ * null when neither is present. `key` overrides the API key lookup (the MCP endpoint's ?key=).
+ */
+export async function checkCredential(
+  env: { DB: D1Database },
+  request: Request,
+  waitUntil: WaitUntil,
+  key: string | null = apiKeyFromRequest(request),
+): Promise<CredentialCheck | null> {
+  if (key) {
+    const check = await checkApiKey(env, key, waitUntil);
+    return { ...check, via: "api_key" };
+  }
+  const token = accessTokenFromRequest(request);
+  if (!token) return null;
+  const check = await checkAccessToken(env.DB, token, new URL(request.url).origin, waitUntil);
+  if (!check.ok) return { ok: false, via: "oauth", reason: check.reason, message: tokenMessage(check.reason) };
+  return { ok: true, via: "oauth", keyId: `oauth:${check.grantId}`, userId: check.userId, grantId: check.grantId, clientId: check.clientId };
+}
+
+/** The signed-in identity a valid credential stands for. */
+export function credentialIdentity(check: Extract<CredentialCheck, { ok: true }>): SignedInIdentity {
+  return check.via === "oauth"
+    ? { kind: "oauth", subject: `user:${check.userId}`, userId: check.userId, grantId: check.grantId, clientId: check.clientId }
+    : { kind: "api_key", subject: `user:${check.userId}`, userId: check.userId, keyId: check.keyId };
 }
 
 export function keyMessage(reason: KeyReason): string {
@@ -176,7 +235,9 @@ export type Identity =
    */
   | { kind: "anonymous"; subject: string; sandbox?: boolean }
   | { kind: "session"; subject: string; userId: string; user: SessionUser }
-  | { kind: "api_key"; subject: string; userId: string; keyId: string };
+  | { kind: "api_key"; subject: string; userId: string; keyId: string }
+  /** An OAuth access token (an MCP client such as a Claude connector); acts as its owner like an API key. */
+  | { kind: "oauth"; subject: string; userId: string; grantId: string; clientId: string };
 
 export type SignedInIdentity = Exclude<Identity, { kind: "anonymous" }>;
 
@@ -219,7 +280,7 @@ export function sameOriginOrSafe(request: Request): boolean {
 
 /**
  * Resolve the caller before touching the cache or D1-heavy work. Only an API
- * key can fail (401 / 503): a missing, expired or cross-origin session simply
+ * key or an access token can fail (401 / 503): a missing, expired or cross-origin session simply
  * degrades to anonymous, and anonymous is always allowed.
  */
 export async function resolveIdentity(
@@ -227,11 +288,10 @@ export async function resolveIdentity(
   env: { DB: D1Database; ANON_IP_SALT?: string },
   waitUntil: WaitUntil,
 ): Promise<IdentityOutcome> {
-  const key = apiKeyFromRequest(request);
-  if (key) {
-    const check = await checkApiKey(env, key, waitUntil);
+  const check = await checkCredential(env, request, waitUntil);
+  if (check) {
     if (!check.ok) return { ok: false, response: unauthorized(check.message, check.reason) };
-    return { ok: true, identity: { kind: "api_key", subject: `user:${check.userId}`, userId: check.userId, keyId: check.keyId } };
+    return { ok: true, identity: credentialIdentity(check) };
   }
   if (sameOriginOrSafe(request)) {
     const user = await lookupSession(env.DB, request, waitUntil);
