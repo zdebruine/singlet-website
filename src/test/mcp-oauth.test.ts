@@ -374,6 +374,19 @@ describe("MCP with OAuth", () => {
     expect(n?.n).toBe(0);
   });
 
+  it("answers Claude's connector check: initialize with a newer protocol header still reaches the 401", async () => {
+    const env = await setup();
+    for (const v of ["2025-11-25", "2099-01-01"]) {
+      const res = await mcp(env, { ...initialize, params: { ...initialize.params, protocolVersion: v } }, { "MCP-Protocol-Version": v });
+      expect(res.status, v).toBe(401);
+      expect(res.headers.get("WWW-Authenticate"), v).toMatch(/resource_metadata=/);
+    }
+    const ok = await mcp(env, { ...initialize, params: { ...initialize.params, protocolVersion: "2025-11-25" } }, { "MCP-Protocol-Version": "2025-11-25", Authorization: `Bearer ${KEY}` });
+    expect(((await ok.json()) as { result: { protocolVersion: string } }).result.protocolVersion).toBe("2025-11-25");
+    const other = await mcp(env, { jsonrpc: "2.0", id: 1, method: "tools/list" }, { "MCP-Protocol-Version": "2099-01-01" });
+    expect(other.status).toBe(400);
+  });
+
   it("keeps ping and tools/list open, and header API keys working as before", async () => {
     const env = await setup();
     expect((await mcp(env, { jsonrpc: "2.0", id: 1, method: "tools/list" })).status).toBe(200);

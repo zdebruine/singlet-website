@@ -28,8 +28,10 @@
  *   prompts/list, prompts/get → three guided workflows
  *   resources/list, /read     → singlet://stats, singlet://vocab
  *
- * Protocol versions 2025-06-18 and 2025-03-26 (JSON-RPC batches accepted for
- * the latter). A missing MCP-Protocol-Version header means 2025-03-26.
+ * Protocol versions 2025-11-25, 2025-06-18 and 2025-03-26 (JSON-RPC batches
+ * accepted for the latter). A missing MCP-Protocol-Version header means
+ * 2025-03-26. initialize negotiates the version in its body, so its header is
+ * never a reason to refuse it (Claude's connector check sends its own latest).
  */
 import { ensureCatalogColumns } from "./_shared/catalog-refresh";
 import { CORS_HEADERS } from "./_shared/cors";
@@ -75,7 +77,7 @@ type Env = AppEnv;
 // 1.1.0: results carry their data in structuredContent and a short text (verbose=true restores the full text); studies migrated to v2 are
 // answered from the v2 catalog; find_cells, slice_cells and resolve_features; rev / known_rev.
 const SERVER_INFO = { name: "singlet-bio", title: "singlet.bio atlas", version: "1.1.0" };
-const PROTOCOL_VERSIONS = ["2025-06-18", "2025-03-26"] as const;
+const PROTOCOL_VERSIONS = ["2025-11-25", "2025-06-18", "2025-03-26"] as const;
 const LATEST_PROTOCOL = PROTOCOL_VERSIONS[0];
 const MAX_SAMPLES_IN_STUDY = 60;
 
@@ -1187,9 +1189,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request, waitUnti
   configureV2(env);
   await ensureCatalogColumns(env.DB).catch(() => undefined);
   const version = (request.headers.get("MCP-Protocol-Version") ?? "").trim();
-  if (version && !(PROTOCOL_VERSIONS as readonly string[]).includes(version)) {
-    return json({ jsonrpc: "2.0", id: null, error: { code: -32600, message: `Unsupported MCP-Protocol-Version: ${version}. Supported: ${PROTOCOL_VERSIONS.join(", ")}` } }, 400);
-  }
+  const versionOk = !version || (PROTOCOL_VERSIONS as readonly string[]).includes(version);
 
   const declared = Number.parseInt(request.headers.get("Content-Length") ?? "", 10);
   if (Number.isFinite(declared) && declared > MAX_BODY_BYTES) {
@@ -1207,6 +1207,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request, waitUnti
   const messages = Array.isArray(payload) ? (payload as JsonRpcRequest[]) : [payload as JsonRpcRequest];
   if (!messages.length) return json(rpcError(null, -32600, "Empty batch"), 400);
   if (messages.length > MAX_BATCH) return json(rpcError(null, -32600, `Batch too large (limit ${MAX_BATCH} messages)`), 400);
+  if (!versionOk && !messages.every((m) => m && typeof m === "object" && m.method === "initialize")) {
+    return json({ jsonrpc: "2.0", id: null, error: { code: -32600, message: `Unsupported MCP-Protocol-Version: ${version}. Supported: ${PROTOCOL_VERSIONS.join(", ")}` } }, 400);
+  }
 
   const issuer = issuerFor(request);
   const auth = await authFor(env, request, waitUntil);
@@ -1238,7 +1241,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request, waitUnti
   // Notifications only → 202 with no body.
   if (!replies.length) return new Response(null, { status: 202, headers: JSON_HEADERS });
   const body = Array.isArray(payload) ? replies : replies[0];
-  return json(body, 200, { "MCP-Protocol-Version": version || "2025-03-26" });
+  return json(body, 200, { "MCP-Protocol-Version": versionOk ? version || "2025-03-26" : LATEST_PROTOCOL });
 };
 
 export const onRequestGet: PagesFunction<Env> = async ({ env }) =>
