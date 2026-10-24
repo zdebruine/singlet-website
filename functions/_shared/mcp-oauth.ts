@@ -337,7 +337,9 @@ function page(title: string, body: string, status = 200, formTarget: string | nu
     headers: {
       "Content-Type": "text/html; charset=utf-8",
       "Cache-Control": "no-store",
-      "Referrer-Policy": "no-referrer",
+      // Not no-referrer: under it browsers send `Origin: null` on the consent form's POST, which
+      // consentDecision refuses. same-origin still sends nothing to the client's site.
+      "Referrer-Policy": "same-origin",
       // form-action must also allow the client's redirect origin: browsers apply it to the redirect after the POST.
       "Content-Security-Policy": `default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; form-action ${formAction}; frame-ancestors 'none'; base-uri 'none'`,
     },
@@ -499,7 +501,7 @@ export async function consentPage(request: Request, env: OAuthEnv, waitUntil: Wa
   return page(
     "Connect",
     `<h1>Allow ${esc(app)} to use singlet tools as you?</h1>
-     <p class="muted">Signed in as ${esc(signedInAs(user))}.</p>
+     <p class="muted">Signed in as <!--email_off-->${esc(signedInAs(user))}<!--/email_off-->.</p>
      <div class="box">
        <p>${esc(app)} will be able to:</p>
        <ul>
@@ -523,6 +525,7 @@ export async function consentPage(request: Request, env: OAuthEnv, waitUntil: Wa
   );
 }
 
+/** The address is wrapped in email_off markers: Cloudflare's email obfuscation needs a script this page's CSP blocks. */
 function signedInAs(user: SessionUser): string {
   return user.email ?? user.displayName ?? "your singlet.bio account";
 }
