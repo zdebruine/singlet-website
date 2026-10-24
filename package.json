@@ -9,6 +9,7 @@
     "enrich:attrs": "esbuild scripts/enrich/extract-attrs.ts --bundle --platform=node --format=esm --outfile=scripts/enrich/.run-attrs.mjs --log-level=error && node scripts/enrich/.run-attrs.mjs",
     "enrich:ingest": "esbuild scripts/enrich/ingest.ts --bundle --platform=node --format=esm --outfile=scripts/enrich/.run-ingest.mjs --log-level=error && node scripts/enrich/.run-ingest.mjs",
     "enrich:cards": "esbuild scripts/enrich/make-cards.ts --bundle --platform=node --format=esm --outfile=scripts/enrich/.run-cards.mjs --log-level=error && node scripts/enrich/.run-cards.mjs",
+    "ontology:build": "esbuild scripts/ontology/build.ts --bundle --platform=node --format=esm --outfile=scripts/ontology/.run-build.mjs --log-level=error && node scripts/ontology/.run-build.mjs",
     "eval:search": "esbuild scripts/search-eval/run.ts --bundle --platform=node --format=esm --outfile=scripts/search-eval/.run.mjs --log-level=error && node scripts/search-eval/.run.mjs",
     "check": "vitest run && tsc -p tsconfig.functions.json --noEmit && wrangler pages functions build --outdir /tmp/fnbuild && tsc -p workers/data-v2/tsconfig.json --noEmit",
     "build": "vite build",

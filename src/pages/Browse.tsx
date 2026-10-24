@@ -40,13 +40,18 @@ import {
   stateFromParams,
   stateToApplied,
   toSearchQuery,
+  toggleProp,
+  toggleTerm,
   toggleValue,
   withoutFilter,
   type MultiField,
+  type PropertyField,
+  type TermField,
   type BrowseState,
   type View,
 } from "@/components/browse/browse-state";
 import { FilterRail } from "@/components/browse/FilterRail";
+import { useTermLabels } from "@/components/browse/OntologyFilters";
 import { ActiveFiltersRow } from "@/components/browse/ActiveFiltersRow";
 import { StudyCard, StudyCardSkeleton } from "@/components/browse/StudyCard";
 import { StudyTable, STUDY_COLUMNS } from "@/components/browse/StudyTable";
@@ -213,6 +218,8 @@ const Browse = () => {
   }, [aiMode, fresh, state]);
 
   const onToggle = (field: MultiField, value: string) => go(toggleValue(explicitBase(), field, value));
+  const onTermToggle = (name: TermField, value: string) => go(toggleTerm(explicitBase(), name, value));
+  const onPropToggle = (name: PropertyField, value: string) => go(toggleProp(explicitBase(), name, value));
   const onMode = (field: MultiField, mode: "any" | "all") => {
     const b = explicitBase();
     go({ ...b, match_mode: { ...b.match_mode, [field]: mode } });
@@ -259,6 +266,7 @@ const Browse = () => {
   const readingQuery = aiMode && result.isFetching && !fresh;
   const refreshing = result.isFetching && !!shown;
   const chipsApplied = fresh ? fresh.applied : applied;
+  const termLabels = useTermLabels(chipsApplied);
 
   const exportHref = apiClient.exportAccessionsUrl(appliedQuery);
 
@@ -363,7 +371,7 @@ const Browse = () => {
             aria-controls="browse-filters"
           >
             <SlidersHorizontal size={15} />
-            <span className="sr-only sm:not-sr-only">Filters ({activeFilters(chipsApplied, organismLabel).length})</span>
+            <span className="sr-only sm:not-sr-only">Filters ({activeFilters(chipsApplied, organismLabel, termLabels).length})</span>
           </button>
         </form>
       </div>
@@ -391,6 +399,9 @@ const Browse = () => {
                  onFileCells={(n) => go({ ...explicitBase(), min_file_cells: n })}
                  onFileSize={(n) => go({ ...explicitBase(), max_file_bytes: n })}
                  onBoolean={onBoolean}
+                onTermToggle={onTermToggle}
+                onPropToggle={onPropToggle}
+                termLabels={termLabels}
               />
             </div>
           </div>
@@ -418,6 +429,7 @@ const Browse = () => {
 
             <ActiveFiltersRow
               applied={chipsApplied}
+              termLabels={termLabels}
               ai={showAiRow}
               dropped={fresh?.dropped}
               note={
