@@ -576,7 +576,7 @@ python load_studies.py`}
                 and input was capped at 30,000,000 reads per sample (see{" "}
                 <Link to="/about#processing">What a study goes through</Link>). Before merging studies, check that they
                 share a reference build and pipeline version. The atlas data is <Mono>CC0</Mono>{" "}
-                (public domain, no attribution required); the pipeline and packages are <Mono>MIT</Mono> licensed.
+                (public domain, no attribution required); the pipeline, packages and site code are <Mono>MIT</Mono> licensed.
                 Details on the <Link to="/data-license">license page</Link>.
               </p>
             </Section>

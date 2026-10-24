@@ -3,7 +3,7 @@ import { useEffect } from "react";
 const SITE = "https://singlet.bio";
 const DEFAULT_TITLE = "singlet.bio — AI-ready single-cell data, at your fingertips";
 const DEFAULT_DESC =
-  "Public scRNA-seq studies from GEO, reprocessed from raw reads, one .singlet file per study. Free, CC0, no account.";
+  "Public scRNA-seq studies from GEO, reprocessed from raw reads, one .singlet file per study. Free, CC0 data, no account.";
 const DEFAULT_IMAGE = `${SITE}/og-default.png`;
 
 function setMeta(selector: string, attr: string, value: string) {

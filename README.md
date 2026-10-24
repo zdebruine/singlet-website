@@ -1,6 +1,6 @@
 # singlet.bio
 
-Website, catalog API and MCP server for the **singlet** atlas — public single-cell RNA-seq studies from GEO, reprocessed from raw reads with one pipeline, one `.singlet` file per study. Data and this repository's code are CC0 1.0. The Workbench has a free academic allowance for AI search and analyses.
+Website, catalog API and MCP server for the **singlet** atlas — public single-cell RNA-seq studies from GEO, reprocessed from raw reads with one pipeline, one `.singlet` file per study. Data is CC0 1.0 (`LICENSE-DATA`); this repository's code is MIT (`LICENSE`). The Workbench has a free academic allowance for AI search and analyses.
 
 ```bash
 pip install "singlet-bio @ git+https://github.com/Singlet-Bio/singlet"
@@ -113,3 +113,7 @@ Most tools need no key. Only `search_datasets` is metered, and only when a quest
 ## Related
 
 - [Singlet-Bio/singlet](https://github.com/Singlet-Bio/singlet) — Python and R client packages
+
+## License
+
+Code: MIT (`LICENSE`), for this repository and the `singlet` clients. Data: CC0 1.0 (`LICENSE-DATA`), for every file served from `data.singlet.bio` and every row the API returns. More on [singlet.bio/data-license](https://singlet.bio/data-license).
