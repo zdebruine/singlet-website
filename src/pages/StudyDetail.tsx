@@ -220,7 +220,8 @@ const StudyDetail = () => {
   }, [data]);
 
   const series = data?.series;
-  const hasBundle = !!series?.bundle_url;
+  // A file to download: the single .singlet file, or, once that is retired, the v2 manifest (series.bundle_url is null then).
+  const hasBundle = !!series?.bundle_url || !!series?.v2;
   const description = series?.title
     ? `${series.title}. ${derived ? `${organismLabelList(derived.organisms)} · ${fmtInt(derived.processed.length)} processed samples · ${fmtCompact(derived.totalCells)} cells.` : ""} Load it in one line with singlet.`
     : `Reprocessed single-cell data for ${gseId}.`;
@@ -251,8 +252,8 @@ const StudyDetail = () => {
                   distribution: [
                     {
                       "@type": "DataDownload",
-                      encodingFormat: "application/x-singlet",
-                      contentUrl: series.bundle_url ?? bundleUrl(gseId),
+                      encodingFormat: series.bundle_url ? "application/x-singlet" : "application/json",
+                      contentUrl: series.bundle_url ?? series.v2?.manifest_url ?? bundleUrl(gseId),
                       ...(series.bundle_bytes != null ? { contentSize: `${series.bundle_bytes} B` } : {}),
                     },
                   ],
@@ -534,7 +535,7 @@ const StudyDetail = () => {
               // number ("v0.9.0"), not a pipeline release, so it is never a fallback.
               series.singlet_version && series.singlet_version !== "unknown"
                 ? { label: "Pipeline", value: <span className="font-mono">{series.singlet_version}</span> }
-                : series.bundle_url
+                : hasBundle
                   ? { label: "Pipeline", value: <span className="text-muted-foreground">{series.singlet_version === "unknown" ? "not recorded in the file" : "not recorded"}</span> }
                   : null,
               dateMin ? { label: "Processed", value: <span className="tabular">{dateMin === dateMax || !dateMax ? dateMin : `${dateMin} \u2013 ${dateMax}`}</span> } : null,

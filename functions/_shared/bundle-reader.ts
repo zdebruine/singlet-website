@@ -21,7 +21,7 @@
  *   3. every entry read checks the zip local-header signature and name at the offset. A mismatch is
  *      a StaleBundleError; withIndexRetry re-reads the central directory once and retries once.
  */
-import { bundleUrl } from "./study-core";
+import { bundleUrl } from "./data-urls";
 
 /** One central-directory entry, kept deliberately short — it is stored as JSON. */
 export interface ZipEntry {

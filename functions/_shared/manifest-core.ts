@@ -100,6 +100,9 @@ export async function manifestRows(db: D1Database, ids: string[]): Promise<Manif
     row.v2_manifest_url = f.manifest_url;
     row.v2_rev = f.rev;
     row.v2_bytes = f.bytes;
+    // where the legacy file's catalog rows say nothing (a study that never had one), the v2 manifest does
+    row.n_samples_in_file ??= f.n_samples;
+    row.reference_build ??= f.reference_build;
     if (!f.legacy_alive) {
       row.download_url = f.manifest_url;
       row.bytes = f.bytes;

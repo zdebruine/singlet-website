@@ -195,8 +195,8 @@ describe("POST /api/ingest/v2-study", () => {
     const sql = spyOnPrepare(e);
     const res = await post(e, body);
     expect(await res.json()).toMatchObject({ ok: true, unchanged: true, samples_written: 0, migration_status: "verified" });
-    // one read of the stored rev, then only the migration row (the body carried one)
-    expect(sql.map((q) => q.trim().split(/\s+/).slice(0, 3).join(" "))).toEqual(["SELECT rev FROM", "INSERT INTO v2_migration"]);
+    // one read of the stored rev, then only the migration row (the body carried one) and the queue marker for a study served without a legacy file
+    expect(sql.map((q) => q.trim().split(/\s+/).slice(0, 3).join(" "))).toEqual(["SELECT rev FROM", "INSERT INTO v2_migration", "UPDATE gse_meta SET"]);
     expect(rows(e, "SELECT gsm_id, updated_at FROM v2_sample ORDER BY gsm_id")).toEqual(before);
     // without a migration block even that is skipped, and a verified study stays verified
     sql.length = 0;

@@ -106,7 +106,7 @@ Once both bots upload here:
 
 ## MCP server
 
-`https://singlet.bio/mcp` (Streamable HTTP, stateless JSON-RPC 2.0) has 14 tools: `search_datasets`, `get_study`, `get_download_url`, `get_atlas_stats`, `get_sample_qc`, `list_bundle_files`, `get_modalities`, `get_partial_download`, `export_manifest`, `find_matched_controls`, `compare_studies`, `assess_study`, `get_cohort` and `save_cohort`. `get_study`, `get_sample_qc`, `list_bundle_files`, `get_modalities` and `get_partial_download` return a `rev` that can be sent back as `known_rev` to get `{unchanged: true}`.
+`https://singlet.bio/mcp` (Streamable HTTP, stateless JSON-RPC 2.0) has 17 tools: `search_datasets`, `get_study`, `get_download_url`, `get_atlas_stats`, `get_sample_qc`, `list_bundle_files`, `get_modalities`, `get_partial_download`, `export_manifest`, `find_matched_controls`, `compare_studies`, `assess_study`, `get_cohort`, `save_cohort`, and for studies stored in the v2 per-sample format `find_cells`, `slice_cells` and `resolve_features`. Results carry their data in `structuredContent` with a short text (`verbose: true` adds the full text), and `get_study`, `get_sample_qc`, `list_bundle_files`, `get_modalities` and `get_partial_download` return a `rev` that can be sent back as `known_rev` to get `{unchanged: true}`.
 
 Most tools need no key. Only `search_datasets` is metered, and only when a question needs a fresh AI reading (10 a day anonymously, 200 with a key). `save_cohort` needs a personal API key, and so does `get_cohort` except for a link cohort opened with its share token. Keys go in `Authorization: Bearer sk_live_…` or `X-API-Key` and are charged to their owner. Client configs are documented at `/docs/mcp`.
 

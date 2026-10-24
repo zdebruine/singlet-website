@@ -9,7 +9,7 @@
  */
 import { isRestrictedMember } from "./restricted";
 import type { V2Member, V2SampleFull } from "./v2-catalog";
-import { parseMembers, v2ServedStudies } from "./v2-catalog";
+import { isLegacyAlive, parseMembers, v2ServedStudies } from "./v2-catalog";
 import { v2ManifestUrl, v2Url } from "./v2-urls";
 
 export const KIND_NAMES: Record<number, string> = { 1: "pz2 matrix", 2: "cells table", 3: "stored (zstd)", 4: "derived (recipe)", 5: "raw" };
@@ -466,6 +466,7 @@ export interface V2Facts {
   manifest_url: string;
   bytes: number | null;
   n_samples: number;
+  reference_build: string | null;
   /** The legacy single-file bundle still exists (the migration is not retired). */
   legacy_alive: boolean;
 }
@@ -474,7 +475,7 @@ export interface V2Facts {
 export async function v2Facts(db: D1Database, gses: string[]): Promise<Map<string, V2Facts>> {
   const out = new Map<string, V2Facts>();
   for (const [gse, st] of await v2ServedStudies(db, gses)) {
-    out.set(gse, { rev: st.study.rev, manifest_url: v2ManifestUrl(gse), bytes: st.study.bytes, n_samples: st.study.n_samples, legacy_alive: st.migration?.status !== "retired" });
+    out.set(gse, { rev: st.study.rev, manifest_url: v2ManifestUrl(gse), bytes: st.study.bytes, n_samples: st.study.n_samples, reference_build: st.study.reference_build, legacy_alive: isLegacyAlive(st.migration) });
   }
   return out;
 }
