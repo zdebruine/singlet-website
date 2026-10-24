@@ -53,6 +53,7 @@ import { findCells, resolveFeatures, sliceCells, v2DownloadUrl } from "./_shared
 import { combineRev, fileRev, knownRev, unchangedBody } from "./_shared/rev";
 import { getV2State } from "./_shared/v2-catalog";
 import { configureV2, v2ManifestUrl } from "./_shared/v2-urls";
+import { MODALITIES_PROP } from "./_shared/v2-load-modalities";
 import {
   ACCOUNT_URL,
   LOADERS,
@@ -243,7 +244,7 @@ const TOOLS = [
         gsm_id: { type: "string", pattern: "^GSM\\d+$", description: "GEO sample accession." },
         file: { type: "string", description: "File name inside the sample folder, e.g. exon_counts.1pz (see list_bundle_files)." },
       },
-      required: ["gse_id", "gsm_id", "file"],
+      required: ["gse_id", "gsm_id"],
       additionalProperties: false,
     },
     annotations: { title: "Fetch one sample's file", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
@@ -462,13 +463,24 @@ const REV_PROPS: Record<string, Record<string, unknown>> = {
 const V2_PROPS: Record<string, Record<string, unknown>> = {
   get_download_url: {
     include_samples: { type: "boolean", description: "v2 studies: also list the sample objects." },
+    modalities: { ...MODALITIES_PROP, description: `v2 studies: list each sample object with the byte ranges of only these members (25 samples a page). ${MODALITIES_PROP.description}` },
     limit: { type: "integer", minimum: 1, maximum: 200 },
     after: { type: "string", description: "next_after of the last page." },
   },
   list_bundle_files: {
     detail: { type: "boolean", description: "v2 studies: every sample's files, 25 samples a page." },
+    modalities: { ...MODALITIES_PROP, description: `v2 studies: only the files these need, with their bytes. ${MODALITIES_PROP.description}` },
     limit: { type: "integer", minimum: 1, maximum: 500 },
     after: { type: "string", description: "next_after of the last page." },
+  },
+  get_modalities: {
+    modalities: { ...MODALITIES_PROP, description: `v2 studies: which samples have these, the singlet.load call for them, and with gsm_id that sample's byte ranges. ${MODALITIES_PROP.description}` },
+  },
+  get_partial_download: {
+    modalities: { ...MODALITIES_PROP, description: `v2 studies: instead of \`file\`, the byte ranges of every member these need. ${MODALITIES_PROP.description}` },
+  },
+  slice_cells: {
+    modalities: { ...MODALITIES_PROP, description: `Instead of \`file\`: the matrices these need. ${MODALITIES_PROP.description}` },
   },
 };
 
