@@ -226,7 +226,7 @@ const About = () => {
               visual={<QueryParse />}
               detail={
                 <>
-                  <p>A fixed vocabulary reads the question first, free and instant. Only words it cannot place go to a language model, once; the answer is cached and checked against the vocabulary.</p>
+                  <p>A fixed vocabulary reads the question first, with no model call and no cost. Only words it cannot place go to a language model, once; the answer is cached and checked against the vocabulary.</p>
                   <p>Species comes only from words like "mouse" or "patients". A disease never implies a tissue: "melanoma" is cancer, not skin.</p>
                 </>
               }
