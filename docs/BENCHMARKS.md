@@ -1,9 +1,9 @@
 # Benchmark and roadmap pages
 
-- `/benchmarking` (hub), `/benchmarking/<capability>` and `/roadmap`. Capability list and hero copy: `src/lib/benchmark-capabilities.ts`.
-- Results: one file per capability at `public/data/benchmarks/<slug>.json`, shape `BenchResult` in `src/lib/benchmarks.ts`
-  (`schema_version: 1`, `capability` = slug, `singlet_commit`, `tools[]`, `datasets[]`, `methods`, `panels[]` (max 3 shown),
-  `metrics[]` (value, threshold, comparator `>=`/`<=`), `conclusion` (< 100 words), optional `code[]` of repo paths).
-  Pass/fail is computed from value and threshold, never stored. A missing or malformed file renders "Benchmark in progress".
-- Notebook: `public/data/benchmarks/singlet-benchmarks.ipynb` (linked from the hub).
+- `/benchmarking` (hub), `/benchmarking/<capability>` and `/roadmap`. Capability ids, hero copy and competitor lists: `src/lib/benchmark-capabilities.ts` (ids follow the results contract).
+- Results follow contract 1.x (Singlet-Bio/singlet `bench/public/CONTRACT.md`). To publish, copy `bench/public/results/*.json` (index and capability files)
+  and `bench/public/notebook/singlet_benchmarks.ipynb` into `public/data/benchmarks/`. The site trusts each metric's `pass`
+  and rolls up status the same way the contract does. A capability missing from the index or without a readable file shows "Benchmark in progress".
+- Derived panels: a quality-vs-runtime Pareto chart (first accuracy/agreement metric with competitor values, plus `resources[]`; tool names must match, Singlet is `singlet`)
+  and, when a document has the optional `reach` list (`{tool, output, supported: yes|no|partial}`), a Reach panel and a hub matrix. Runtime is context unless a `resources` metric gates it.
 - Roadmap: `public/data/roadmap.json` (milestones with `status` done | active | upcoming, `progress` 0-100 on the active one).

@@ -4,7 +4,7 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { Link } from "react-router-dom";
 import { usePageMeta } from "@/hooks/usePageMeta";
-import { parseRoadmap, roadmapProgress, type Roadmap as RoadmapData } from "@/lib/benchmarks";
+import { parseRoadmap, roadmapProgress, type Roadmap as RoadmapData } from "@/lib/roadmap";
 import { cn } from "@/lib/utils";
 
 async function loadRoadmap(signal?: AbortSignal): Promise<RoadmapData | null> {
