@@ -20,6 +20,9 @@ import Terms from "./pages/Terms.tsx";
 import Privacy from "./pages/Privacy.tsx";
 import SplicePatternSpec from "./pages/SplicePatternSpec.tsx";
 import HpcDashboard from "./pages/HpcDashboard.tsx";
+import Benchmarking from "./pages/Benchmarking.tsx";
+import BenchmarkDetail from "./pages/BenchmarkDetail.tsx";
+import Roadmap from "./pages/Roadmap.tsx";
 import AuthCallback from "./pages/AuthCallback.tsx";
 import Account from "./pages/Account.tsx";
 import Brand from "./pages/Brand.tsx";
@@ -116,6 +119,9 @@ const App = () => (
               <Route path="/privacy" element={<Privacy />} />
               <Route path="/specs/splice-patterns" element={<SplicePatternSpec />} />
               <Route path="/hpc-dashboard" element={<HpcDashboard />} />
+              <Route path="/benchmarking" element={<Benchmarking />} />
+              <Route path="/benchmarking/:capability" element={<BenchmarkDetail />} />
+              <Route path="/roadmap" element={<Roadmap />} />
 
               {/* Retired routes → their new home */}
               <Route path="/download" element={<Navigate to="/docs#install" replace />} />
