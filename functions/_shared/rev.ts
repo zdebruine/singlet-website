@@ -2,14 +2,14 @@
  * `rev`: a short token that changes when an answer about a study could have changed, so a client can send it back as
  * `known_rev` and get `{unchanged: true}` instead of the whole answer again (w4_cf section 6, step 5).
  *
- *   file revision   what the study's data is: the v2 manifest `rev` (a content digest, stable across re-migrations that produce
+ *   file revision   what the study's data is: the store manifest `rev` (a content digest, stable across re-migrations that produce
  *                   the same objects), or for a study still served from the legacy bundle a digest of its ETag (size when the
  *                   index row predates schema/031).
  *   combined        the file revision plus whatever else the answer reads (catalog timestamps, QC update time).
  *
  * Every rev is 16 lowercase hex characters. They are opaque: compare for equality only.
  */
-import { getV2Study } from "./v2-catalog";
+import { getStoreStudy } from "./store-catalog";
 
 export async function sha16(text: string): Promise<string> {
   const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
@@ -27,13 +27,13 @@ export async function legacyRev(etag: string | null | undefined, bytes: number |
 }
 
 /**
- * The file revision of a study, from light reads: the v2_study row, else the legacy bundle_index row WITHOUT its entries.
+ * The file revision of a study, from light reads: the store_study row, else the legacy bundle_index row WITHOUT its entries.
  * Null when neither exists (no file yet).
  */
-export async function fileRev(db: D1Database, gse: string, v2Rev?: string | null): Promise<{ rev: string; source: "v2" | "legacy" } | null> {
-  // v2Rev: the study's v2 rev when the caller already looked (null = it did and there is none); undefined = look here.
-  const v2 = v2Rev === undefined ? ((await getV2Study(db, gse))?.rev ?? null) : v2Rev;
-  if (v2) return { rev: v2, source: "v2" };
+export async function fileRev(db: D1Database, gse: string, storeRev?: string | null): Promise<{ rev: string; source: "store" | "legacy" } | null> {
+  // storeRev: the study's store rev when the caller already looked (null = it did and there is none); undefined = look here.
+  const store = storeRev === undefined ? ((await getStoreStudy(db, gse))?.rev ?? null) : storeRev;
+  if (store) return { rev: store, source: "store" };
   const row =
     (await db
       .prepare(`SELECT bytes, etag FROM bundle_index WHERE gse_id = ?`)

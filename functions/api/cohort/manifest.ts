@@ -13,8 +13,8 @@ import { sha256Hex } from "../../_shared/hash";
 import { canonicalCohort, cohortMask, CohortError } from "../../_shared/cohort-core";
 import { cohortFailure, numOpt, readCohortRequest } from "../../_shared/cohort-http";
 import { getBitIndex, type CohortEnv } from "../../_shared/cohort-index";
-import { DEFAULT_FILES, DEFAULT_MIN_CELLS_PER_SAMPLE, loadChunkRows, loadEntries, loadV2Plan, planManifest } from "../../_shared/cohort-manifest";
-import { configureV2 } from "../../_shared/v2-urls";
+import { DEFAULT_FILES, DEFAULT_MIN_CELLS_PER_SAMPLE, loadChunkRows, loadEntries, loadStorePlan, planManifest } from "../../_shared/cohort-manifest";
+import { configureStore } from "../../_shared/store-urls";
 
 async function manifest(env: CohortEnv, request: Request): Promise<Response> {
   try {
@@ -36,13 +36,13 @@ async function manifest(env: CohortEnv, request: Request): Promise<Response> {
     // Plan once without I/O to learn which samples sit on this page, then read only those studies.
     const base = { selected, maxCells, seed, minCellsPerSample: minPer, files, offset, limit };
     const probe = planManifest({ ...base, entries: new Map(), chunks: new Map(), indices: false });
-    configureV2(env);
-    // Studies served from v2 are planned from the v2 catalog; only the others need the legacy member index and chunk maps.
-    const v2 = await loadV2Plan(env.DB, probe.studies.map((s) => ({ gse_id: s.gse_id, gsms: s.samples.map((x) => x.gsm_id) })));
-    const legacy = probe.studies.filter((s) => !v2.has(s.gse_id));
+    configureStore(env);
+    // Studies served from store are planned from the catalog; only the others need the legacy member index and chunk maps.
+    const store = await loadStorePlan(env.DB, probe.studies.map((s) => ({ gse_id: s.gse_id, gsms: s.samples.map((x) => x.gsm_id) })));
+    const legacy = probe.studies.filter((s) => !store.has(s.gse_id));
     const pageGsms = legacy.flatMap((s) => s.samples.map((x) => x.gsm_id));
     const [entries, chunks] = await Promise.all([loadEntries(env.DB, legacy.map((s) => s.gse_id)), loadChunkRows(env.DB, pageGsms)]);
-    const plan = planManifest({ ...base, entries, chunks, v2, indices: opts.get("indices") !== "none" });
+    const plan = planManifest({ ...base, entries, chunks, store, indices: opts.get("indices") !== "none" });
 
     const hash = (await sha256Hex(`${canonicalCohort(query)}|${index.version}|${maxCells ?? ""}|${seed}|${minPer}`)).slice(0, 16);
     return corsOk({
@@ -58,9 +58,9 @@ async function manifest(env: CohortEnv, request: Request): Promise<Response> {
       studies: plan.studies,
       warnings: plan.warnings,
       notes: [
-        ...(v2.size
+        ...(store.size
           ? [
-              "Studies with format singlet-v2 (studies[].format): one immutable object per sample. files[].range is an absolute byte range inside samples[].object.url; chunk_index.range is the chunk index of a matrix. The MCP tool slice_cells turns column runs into chunk ranges.",
+              "Studies with format singlet-store (studies[].format): one immutable object per sample. files[].range is an absolute byte range inside samples[].object.url; chunk_index.range is the chunk index of a matrix. The MCP tool slice_cells turns column runs into chunk ranges.",
             ]
           : []),
         "Chunk offsets are relative to the first payload byte of the zip entry. data_offset is exact when present; otherwise read the 30-byte local header at local_header_offset and add 30 + name length + extra length.",

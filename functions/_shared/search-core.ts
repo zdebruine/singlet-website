@@ -13,7 +13,7 @@
  * 100-bound-parameter limit.
  */
 import { safeList } from "./json";
-import { attachFileFacts, type StudyV2 } from "./file-facts";
+import { attachFileFacts, type StudyStore } from "./file-facts";
 import { parseCharacteristics, summarizeConditions, type ConditionSummary } from "./conditions";
 import { cellCountVerdict, isSuspectStudyCells, type CellCountVerdict } from "./suspect-cells";
 import {
@@ -115,8 +115,10 @@ export interface StudyRow {
   bundle_bytes: number | null;
   /** Key of the legacy single file; null when it is retired (deleted) or never existed. */
   bundle_key: string | null;
-  /** Set when the study is served from the v2 per-sample layout (manifest URL; whether the legacy file still exists). */
-  v2?: StudyV2 | null;
+  /** Set when the study is served from the per-sample layout (manifest URL; whether the legacy file still exists). */
+  store?: StudyStore | null;
+  /** DUAL: alias of `store`. */
+  v2?: StudyStore | null;
   bundle_n_samples: number | null;
   file_cells: number | null;
   reference_build: string | null;
@@ -162,8 +164,10 @@ export interface SampleRow {
   source: string | null;
   characteristics: Record<string, string>;
   has_bundle: boolean;
-  /** The study's v2 block when it is served from v2: where its files are once the legacy file is gone. */
-  v2?: StudyV2 | null;
+  /** The study's store block when it is served from store: where its files are once the legacy file is gone. */
+  store?: StudyStore | null;
+  /** DUAL: alias of `store`. */
+  v2?: StudyStore | null;
   year: number | null;
   score: number | null;
 }

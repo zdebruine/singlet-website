@@ -14,7 +14,7 @@
  *
  * The object under a key can be overwritten in place (a repack, the 2026-10 restricted-sidecar
  * migration), which leaves every cached offset pointing into a different file. Three guards keep a
- * stale row from turning into wrong bytes (docs/v2-migration.md D13):
+ * stale row from turning into wrong bytes (docs/store-migration.md D13):
  *   1. each row stores the object's ETag and Last-Modified next to the offsets (schema/031);
  *   2. every ranged read sends `If-Match: <etag>` (a changed object answers 412) and accepts only
  *      206, never a 200 that would buffer the whole file;

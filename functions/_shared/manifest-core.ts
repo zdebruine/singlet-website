@@ -9,7 +9,7 @@ import { safeList } from "./json";
 import { bundleUrl } from "./study-core";
 import { organismToCommon } from "./vocab";
 import { exportStudyAccessions, type Ctx, type SearchFilters } from "./search-core";
-import { v2Facts } from "./v2-serve";
+import { storeFacts } from "./store-serve";
 
 export const MAX_MANIFEST_STUDIES = 2000;
 export const MANIFEST_FORMATS = ["tsv", "json", "curl", "wget", "python", "r"] as const;
@@ -35,14 +35,18 @@ export interface ManifestRow {
   pubmed_ids: string[];
   reference_build: string | null;
   bytes: number | null;
-  /** The legacy single file while it exists; the v2 manifest once the legacy bundle is retired. */
+  /** The legacy single file while it exists; the store manifest once the legacy bundle is retired. */
   download_url: string;
   license: "CC0";
-  /** "singlet-v2" when the study is served from the v2 per-sample layout (schema/032), else "singlet-v1". */
-  format: "singlet-v1" | "singlet-v2";
+  /** "singlet-store" when the study is served from the per-sample layout (schema/032), else "singlet-v1". */
+  format: "singlet-v1" | "singlet-store";
+  store_manifest_url: string | null;
+  store_rev: string | null;
+  /** Total size of the sample objects. */
+  store_bytes: number | null;
+  /** DUAL: the old names of the three columns above (same values), removed in the cleanup. */
   v2_manifest_url: string | null;
   v2_rev: string | null;
-  /** Total size of the v2 sample objects. */
   v2_bytes: number | null;
 }
 
@@ -85,22 +89,28 @@ export async function manifestRows(db: D1Database, ids: string[]): Promise<Manif
         download_url: bundleUrl(String(r.gse_id)),
         license: "CC0",
         format: "singlet-v1",
+        store_manifest_url: null,
+        store_rev: null,
+        store_bytes: null,
         v2_manifest_url: null,
         v2_rev: null,
         v2_bytes: null,
       });
     }
   }
-  // Studies served from v2 say so; once their legacy bundle is retired the manifest URL and v2 size stand in for the old file.
-  const facts = await v2Facts(db, out.map((r) => r.gse_id));
+  // Studies served from store say so; once their legacy bundle is retired the manifest URL and store size stand in for the old file.
+  const facts = await storeFacts(db, out.map((r) => r.gse_id));
   for (const row of out) {
     const f = facts.get(row.gse_id);
     if (!f) continue;
-    row.format = "singlet-v2";
+    row.format = "singlet-store";
+    row.store_manifest_url = f.manifest_url;
+    row.store_rev = f.rev;
+    row.store_bytes = f.bytes;
     row.v2_manifest_url = f.manifest_url;
     row.v2_rev = f.rev;
     row.v2_bytes = f.bytes;
-    // where the legacy file's catalog rows say nothing (a study that never had one), the v2 manifest does
+    // where the legacy file's catalog rows say nothing (a study that never had one), the store manifest does
     row.n_samples_in_file ??= f.n_samples;
     row.reference_build ??= f.reference_build;
     if (!f.legacy_alive) {
@@ -130,7 +140,9 @@ const TSV_COLUMNS = [
   "download_url",
   "license",
   "format",
-  "v2_manifest_url",
+  "store_manifest_url",
+  "store_rev",
+  "v2_manifest_url", // DUAL: old column names, same values
   "v2_rev",
 ] as const;
 
@@ -160,7 +172,7 @@ function renderCurl(rows: ManifestRow[], total: number): string {
     ["#!/usr/bin/env bash", "set -euo pipefail", ...header(rows, total), ""]
       .concat(
         rows.map((r) =>
-          r.format === "singlet-v2" && r.download_url === r.v2_manifest_url
+          r.format === "singlet-store" && r.download_url === r.store_manifest_url
             ? `curl -fL --retry 3 -C - -o "${r.gse_id}.manifest.json" "${r.download_url}"  # one object per sample, listed in this manifest`
             : `curl -fL --retry 3 -C - -o "${r.gse_id}.singlet" "${r.download_url}"`
         )

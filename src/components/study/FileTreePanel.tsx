@@ -74,7 +74,7 @@ export function FileTreePanel({ index, isLoading, isError }: FileTreePanelProps)
 
   if (!index) return null;
 
-  const v2 = index.format === "singlet-v2";
+  const store = index.format === "singlet-store" || (index.format as string) === "singlet-v2";
   const meta = [
     index.reference_build ? `Reference ${index.reference_build}` : null,
     index.singlet_version && index.singlet_version !== "unknown" ? `pipeline ${index.singlet_version}` : null,
@@ -84,7 +84,7 @@ export function FileTreePanel({ index, isLoading, isError }: FileTreePanelProps)
   return (
     <section className="mb-6" aria-labelledby="filetree-h">
       <div className="flex items-baseline justify-between gap-3 mb-2 flex-wrap">
-        <h2 id="filetree-h" className="text-[18px]">{v2 ? "What's in the study" : "What's in the file"}</h2>
+        <h2 id="filetree-h" className="text-[18px]">{store ? "What's in the study" : "What's in the file"}</h2>
         <span className="text-[12px] text-muted-foreground tabular">
           {fmtBytes(index.bytes)} · {fmtInt(index.n_samples)} sample{index.n_samples === 1 ? "" : "s"}
           {meta.length > 0 && ` · ${meta.join(" · ")}`}
@@ -93,7 +93,7 @@ export function FileTreePanel({ index, isLoading, isError }: FileTreePanelProps)
       <div className="surface px-2 py-2">
         {index.study_files.length > 0 && (
           <div className="mb-1.5">
-            <p className="text-[11px] uppercase tracking-wider text-muted-foreground px-1 py-1">{v2 ? "Study manifest" : "Study-level files"}</p>
+            <p className="text-[11px] uppercase tracking-wider text-muted-foreground px-1 py-1">{store ? "Study manifest" : "Study-level files"}</p>
             <ul>
               {index.study_files.map((f) => (
                 <FileRow key={f.path} name={f.path} bytes={f.bytes_compressed} />
@@ -104,9 +104,9 @@ export function FileTreePanel({ index, isLoading, isError }: FileTreePanelProps)
         {index.samples.length > 0 && (
           <div>
             <p className="text-[11px] uppercase tracking-wider text-muted-foreground px-1 py-1">
-              {v2 ? "Sample objects" : "Samples"} ({fmtInt(index.samples.length)})
+              {store ? "Sample objects" : "Samples"} ({fmtInt(index.samples.length)})
             </p>
-            {v2 && (
+            {store && (
               <p className="text-[12px] text-muted-foreground px-1 pb-1">
                 Each sample is one file on the data host; the manifest lists them with the byte range of every member.
                 {index.files_truncated ? " Members are listed for the first 100 samples." : ""}

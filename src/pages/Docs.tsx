@@ -230,9 +230,9 @@ head(colData(sce)$gsm_id)`}
               <h3>Files on disk</h3>
               <p>
                 Studies are being moved to a per-sample layout: one immutable object per sample at{" "}
-                <Mono>https://data.singlet.bio/v2/s/&lt;GSM&gt;/&lt;digest&gt;.s2</Mono> and a manifest at{" "}
-                <Mono>https://data.singlet.bio/v2/m/&lt;GSE&gt;.json</Mono> that lists every sample, member and byte range. The
-                API tells you which layout a study has (<Mono>series.v2</Mono> in <Mono>GET /api/gse/:id</Mono>), and{" "}
+                <Mono>https://data.singlet.bio/store/s/&lt;GSM&gt;/&lt;digest&gt;.s1</Mono> and a manifest at{" "}
+                <Mono>https://data.singlet.bio/store/m/&lt;GSE&gt;.json</Mono> that lists every sample, member and byte range. The
+                API tells you which layout a study has (<Mono>series.store</Mono> in <Mono>GET /api/gse/:id</Mono>), and{" "}
                 <Mono>singlet.load</Mono> reads both the same way.
               </p>
               <p>
@@ -446,7 +446,7 @@ if (singlet_has(path, "donor_assignments", gsm))
               </p>
               <p>
                 For a study stored per sample (see <a href="#singlet-file">Files on disk</a>), the same three endpoints answer from the
-                catalog: <Mono>index</Mono> lists each sample object and its members (with <Mono>format: "singlet-v2"</Mono>),
+                catalog: <Mono>index</Mono> lists each sample object and its members (with <Mono>format: "singlet-store"</Mono>),
                 and <Mono>entry</Mono> says where a member's bytes are inside the sample object instead of inflating it. Those
                 objects never change, so a range you have once stays valid; the MCP tools <Mono>slice_cells</Mono> and{" "}
                 <Mono>find_cells</Mono> go further and give the ranges for just some cells.

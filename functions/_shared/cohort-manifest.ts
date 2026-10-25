@@ -16,9 +16,9 @@
 import type { ZipEntry } from "./bundle-reader";
 import { bundleUrl } from "./study-core";
 import { publicEntries } from "./restricted";
-import { getV2Samples, parseMembers, v2ServedStudies, type V2Member } from "./v2-catalog";
-import { describeMember, findMember, sampleObjectUrl, type MemberDescription } from "./v2-serve";
-import { v2ManifestUrl } from "./v2-urls";
+import { getStoreSamples, parseMembers, storeServedStudies, type StoreMember } from "./store-catalog";
+import { describeMember, findMember, sampleObjectUrl, type MemberDescription } from "./store-serve";
+import { storeManifestUrl } from "./store-urls";
 
 export const DEFAULT_MIN_CELLS_PER_SAMPLE = 50;
 export const DEFAULT_FILES = ["exon_counts.1pz", "intron_counts.1pz"];
@@ -225,16 +225,16 @@ export interface ManifestFile {
 }
 
 /**
- * A file of a sample in the v2 layout (docs/format-v2.md): a member inside the sample's immutable object. `range` is absolute inside
+ * A file of a sample in the per-sample layout (docs/format-store.md): a member inside the sample's immutable object. `range` is absolute inside
  * the object. For a matrix, chunk `c` of `chunk_cols` columns is found from the chunk index: read `chunk_index.range` once (n_chunks + 1
  * records of 24 bytes: u64 offset into the chunk section, u32 length, u32 first column, u64 nnz before), then the chunk is at
  * member start + chunk-section offset (from the member header, 256 bytes at the member start) + record offset. The MCP tool
  * slice_cells does this arithmetic for you.
  */
-export interface ManifestFileV2 extends MemberDescription {
+export interface ManifestFileStore extends MemberDescription {
   /** The member name, under the key the v1 entries use. */
   path: string;
-  format: "singlet-v2";
+  format: "singlet-store";
   chunk_index: { range: string; bytes: number } | null;
   // v1-only fields, absent here (declared so code reading either kind of entry type-checks)
   method?: undefined;
@@ -248,35 +248,35 @@ export interface ManifestSample {
   keep_cells: number;
   /** Runs of kept columns [start, length, ...]; null = all columns. */
   keep_runs: number[] | null;
-  /** v2 studies: the sample's object. */
+  /** per-sample studies: the sample's object. */
   object?: { url: string; bytes: number | null };
-  files: (ManifestFile | ManifestFileV2)[];
+  files: (ManifestFile | ManifestFileStore)[];
 }
 
 export interface ManifestStudy {
   gse_id: string;
-  /** The study file (v1) or the study manifest (v2). */
+  /** The study file (v1) or the study manifest (store). */
   url: string;
   indexed: boolean;
-  format?: "singlet-v1" | "singlet-v2";
-  /** v2 studies: revision of the study manifest. */
+  format?: "singlet-v1" | "singlet-store";
+  /** per-sample studies: revision of the study manifest. */
   rev?: string;
   samples: ManifestSample[];
 }
 
-/** What the planner needs to know about a study served from v2. */
-export interface V2PlanStudy {
+/** What the planner needs to know about a study served from store. */
+export interface StorePlanStudy {
   rev: string;
   manifest_url: string;
-  samples: Map<string, { key: string; bytes: number | null; members: Record<string, V2Member> }>;
+  samples: Map<string, { key: string; bytes: number | null; members: Record<string, StoreMember> }>;
 }
 
 export interface PlanInput {
   selected: { gsm_id: string; gse_id: string; n_cells: number }[];
   /** gse -> entries from bundle_index (absent = study not indexed yet). */
   entries: Map<string, IndexedEntry[]>;
-  /** gse -> the study's v2 catalog rows; a study listed here is planned from them and not from `entries`. */
-  v2?: Map<string, V2PlanStudy>;
+  /** gse -> the study's catalog rows; a study listed here is planned from them and not from `entries`. */
+  store?: Map<string, StorePlanStudy>;
   /** `${gsm}|${file}` -> chunk map. */
   chunks: Map<string, ChunkRow>;
   files?: string[];
@@ -347,30 +347,30 @@ export function planManifest(inp: PlanInput): Plan {
   let cur: ManifestStudy | null = null;
   for (const i of pageIdx) {
     const s = sel[i];
-    const v2s = inp.v2?.get(s.gse_id);
+    const stores = inp.store?.get(s.gse_id);
     if (!cur || cur.gse_id !== s.gse_id) {
       const entries = inp.entries.get(s.gse_id);
-      cur = v2s
-        ? { gse_id: s.gse_id, url: v2s.manifest_url, indexed: true, format: "singlet-v2", rev: v2s.rev, samples: [] }
+      cur = stores
+        ? { gse_id: s.gse_id, url: stores.manifest_url, indexed: true, format: "singlet-store", rev: stores.rev, samples: [] }
         : { gse_id: s.gse_id, url: bundleUrl(s.gse_id), indexed: !!entries, samples: [] };
       studies.push(cur);
     }
     const keepN = alloc ? alloc.keep[i] : s.n_cells;
     const subset = keepN < s.n_cells;
     const cols = subset ? selectColumns(s.n_cells, keepN, seed, s.gsm_id) : null;
-    if (v2s) {
-      const vs = v2s.samples.get(s.gsm_id);
-      if (!vs) warnings.push(`${s.gsm_id}: not in the v2 catalog of ${s.gse_id}`);
-      const v2files: ManifestFileV2[] = [];
+    if (stores) {
+      const vs = stores.samples.get(s.gsm_id);
+      if (!vs) warnings.push(`${s.gsm_id}: not in the catalog of ${s.gse_id}`);
+      const storefiles: ManifestFileStore[] = [];
       for (const want of files) {
         const name = vs ? findMember(vs.members, want) : null;
         if (!vs || !name) continue;
         const m = vs.members[name];
         const ci = Array.isArray(m.chunk_index) ? m.chunk_index : null;
-        v2files.push({
+        storefiles.push({
           ...describeMember(name, m),
           path: name,
-          format: "singlet-v2",
+          format: "singlet-store",
           chunk_index: m.kind === 1 && ci ? { range: `bytes=${ci[0]}-${ci[0] + ci[1] - 1}`, bytes: ci[1] } : null,
         });
       }
@@ -380,7 +380,7 @@ export function planManifest(inp: PlanInput): Plan {
         keep_cells: keepN,
         keep_runs: cols && inp.indices !== false ? toRuns(cols) : null,
         ...(vs ? { object: { url: sampleObjectUrl(vs.key), bytes: vs.bytes } } : {}),
-        files: v2files.sort((a, b) => (a.name < b.name ? -1 : 1)),
+        files: storefiles.sort((a, b) => (a.name < b.name ? -1 : 1)),
       });
       continue;
     }
@@ -442,20 +442,20 @@ export async function loadEntries(db: D1Database, gses: string[]): Promise<Map<s
 }
 
 /**
- * The v2 catalog rows for the studies and samples on a page: which studies are served from v2, and their samples' member tables
+ * The catalog rows for the studies and samples on a page: which studies are served from store, and their samples' member tables
  * (at most 50 samples per read, so a page of 500 samples is at most 10 reads plus two per 90 studies).
  */
-export async function loadV2Plan(db: D1Database, pages: { gse_id: string; gsms: string[] }[]): Promise<Map<string, V2PlanStudy>> {
-  const out = new Map<string, V2PlanStudy>();
-  const served = await v2ServedStudies(db, pages.map((p) => p.gse_id));
+export async function loadStorePlan(db: D1Database, pages: { gse_id: string; gsms: string[] }[]): Promise<Map<string, StorePlanStudy>> {
+  const out = new Map<string, StorePlanStudy>();
+  const served = await storeServedStudies(db, pages.map((p) => p.gse_id));
   for (const { gse_id, gsms } of pages) {
     const st = served.get(gse_id);
     if (!st) continue;
-    const samples = new Map<string, { key: string; bytes: number | null; members: Record<string, V2Member> }>();
+    const samples = new Map<string, { key: string; bytes: number | null; members: Record<string, StoreMember> }>();
     for (let i = 0; i < gsms.length; i += 50) {
-      for (const r of await getV2Samples(db, gse_id, gsms.slice(i, i + 50), st.study.rev)) samples.set(r.gsm_id, { key: r.key, bytes: r.bytes, members: parseMembers(r.members_json) });
+      for (const r of await getStoreSamples(db, gse_id, gsms.slice(i, i + 50), st.study.rev)) samples.set(r.gsm_id, { key: r.key, bytes: r.bytes, members: parseMembers(r.members_json) });
     }
-    out.set(gse_id, { rev: st.study.rev, manifest_url: v2ManifestUrl(gse_id), samples });
+    out.set(gse_id, { rev: st.study.rev, manifest_url: storeManifestUrl(gse_id), samples });
   }
   return out;
 }

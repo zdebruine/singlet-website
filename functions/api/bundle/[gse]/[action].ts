@@ -11,8 +11,8 @@
  * describes (the object is overwritten in place), so every entry read checks the zip local header
  * and sends If-Match; on a mismatch the index is re-read once (bundle-reader.ts, withIndexRetry).
  *
- * Edge-cache keys carry a version: bump it whenever cached answers may be wrong (v2 of `entry`
- * and v2 of `samples` drop the recipes cached from stale offsets; `index` was already v2).
+ * Edge-cache keys carry a version: bump it whenever cached answers may be wrong (store of `entry`
+ * and store of `samples` drop the recipes cached from stale offsets; `index` was already store).
  */
 import { corsOk, corsErr, handleOptions, CORS_HEADERS } from "../../../_shared/cors";
 import { serverError } from "../../../_shared/errors";
@@ -21,24 +21,25 @@ import { CACHE_TTL_HEADER, cachedJson } from "../../../_shared/cache";
 import { GSE_RE, bundleUrl } from "../../../_shared/study-core";
 import { StaleBundleError, getBundleIndex, readEntry, entryRange, strongEtag, withIndexRetry, MAX_INFLATE_BYTES } from "../../../_shared/bundle-reader";
 import { publicEntries } from "../../../_shared/restricted";
-import { bundleIndexResponse, loadSampleQc, v2BundleIndexResponse } from "../../../_shared/bundle-core";
-import { getV2Presence, getV2Sample, parseMembers, servedState, type V2Presence } from "../../../_shared/v2-catalog";
-import { describeMember, findMember, sampleObjectUrl } from "../../../_shared/v2-serve";
-import { configureV2 } from "../../../_shared/v2-urls";
+import { bundleIndexResponse, loadSampleQc, storeBundleIndexResponse } from "../../../_shared/bundle-core";
+import { getStorePresence, getStoreSample, parseMembers, servedState, type StorePresence } from "../../../_shared/store-catalog";
+import { describeMember, findMember, sampleObjectUrl } from "../../../_shared/store-serve";
+import { configureStore } from "../../../_shared/store-urls";
 
 interface Env {
   DB: D1Database;
   INGEST_TOKEN_SHA256?: string;
+  STORE_ORIGIN?: string;
   V2_ORIGIN?: string;
 }
 
 const DAY = 86400;
 /**
- * A study that has a row in the v2 catalog, served or still being moved, is cached at the edge for five minutes and not a day: its answer changes
- * when the migration is verified or retired. (The keys carry no v2 rev: that would cost a D1 read before every cache lookup.)
+ * A study that has a row in the catalog, served or still being moved, is cached at the edge for five minutes and not a day: its answer changes
+ * when the migration is verified or retired. (The keys carry no store rev: that would cost a D1 read before every cache lookup.)
  */
-const V2_EDGE_TTL = 300;
-const ttlFor = (p: V2Presence): Record<string, string> => (p.study || p.migration ? { [CACHE_TTL_HEADER]: String(V2_EDGE_TTL) } : {});
+const STORE_EDGE_TTL = 300;
+const ttlFor = (p: StorePresence): Record<string, string> => (p.study || p.migration ? { [CACHE_TTL_HEADER]: String(STORE_EDGE_TTL) } : {});
 
 function contentTypeFor(path: string): string {
   if (path.endsWith(".json")) return "application/json; charset=utf-8";
@@ -53,7 +54,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, params, request, w
   const action = String(params.action ?? "");
   if (!GSE_RE.test(gse)) return corsErr("Invalid series id", 400);
 
-  configureV2(env);
+  configureStore(env);
   const url = new URL(request.url);
   // ?refresh=1 re-reads the file and rewrites the cached index. It is for the
   // catalog crank, so it needs the ingest token; for everyone else it is ignored.
@@ -68,10 +69,10 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, params, request, w
       waitUntil,
       async () => {
         try {
-          // A study stored in the v2 layout is listed from the v2 catalog.
-          const pres = await getV2Presence(env.DB, gse);
-          const v2 = servedState(pres);
-          if (v2) return corsOk(await v2BundleIndexResponse(env.DB, gse, v2), { headers: ttlFor(pres) });
+          // A study stored in the per-sample layout is listed from the catalog.
+          const pres = await getStorePresence(env.DB, gse);
+          const store = servedState(pres);
+          if (store) return corsOk(await storeBundleIndexResponse(env.DB, gse, store), { headers: ttlFor(pres) });
           // verify: one HEAD compares the cached row with the live object, so the size and listing are not
           // those of a file that has since been overwritten. The answer is edge-cached for a day.
           const index = await getBundleIndex(env.DB, gse, { refresh, verify: true, waitUntil });
@@ -106,9 +107,9 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, params, request, w
     // An entry never changes under the same study file, so one cache entry per (study, path).
     const produce = async (): Promise<Response> => {
       try {
-        const pres = await getV2Presence(env.DB, gse);
-        const v2 = servedState(pres);
-        if (v2) return await v2Entry(env.DB, gse, v2.study.rev, path, ttlFor(pres));
+        const pres = await getStorePresence(env.DB, gse);
+        const store = servedState(pres);
+        if (store) return await storeEntry(env.DB, gse, store.study.rev, path, ttlFor(pres));
         const found = await withIndexRetry(env.DB, gse, { waitUntil }, async (index) => {
           const entry = publicEntries(index.entries).find((e) => e.p === path);
           if (!entry) return null;
@@ -164,13 +165,13 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, params, request, w
 };
 
 /**
- * An entry of a study stored in the v2 layout: no inflating at the edge (the members are zstd or pz2), just where the bytes are. A derived
+ * An entry of a study stored in the per-sample layout: no inflating at the edge (the members are zstd or pz2), just where the bytes are. A derived
  * member (regenerated by a recipe) has none; the singlet package rebuilds it.
  */
-async function v2Entry(db: D1Database, gse: string, rev: string, path: string, ttl: Record<string, string>): Promise<Response> {
+async function storeEntry(db: D1Database, gse: string, rev: string, path: string, ttl: Record<string, string>): Promise<Response> {
   const m = /^samples\/(GSM\d+)\/(.+)$/.exec(path);
-  if (!m) return corsErr(`No entry '${path}' in ${gse}: study-level files are inside the v2 manifest (v2/m/${gse}.json).`, 404);
-  const sample = await getV2Sample(db, gse, m[1], rev);
+  if (!m) return corsErr(`No entry '${path}' in ${gse}: study-level files are inside the store manifest (store/m/${gse}.json).`, 404);
+  const sample = await getStoreSample(db, gse, m[1], rev);
   const members = parseMembers(sample?.members_json);
   const name = sample ? findMember(members, m[2]) : null;
   if (!sample || !name) return corsErr(`No entry '${path}' in ${gse}`, 404);
@@ -178,7 +179,7 @@ async function v2Entry(db: D1Database, gse: string, rev: string, path: string, t
   return corsOk({
     gse_id: gse,
     path,
-    format: "singlet-v2",
+    format: "singlet-store",
     url: sampleObjectUrl(sample.key),
     range: d.range,
     method: d.kind === 1 ? "pz2" : d.kind === 3 ? "zstd" : d.kind === 5 ? "stored" : "derived",

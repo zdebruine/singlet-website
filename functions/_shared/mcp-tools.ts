@@ -5,10 +5,10 @@
  * an assistant can quote the output verbatim.
  */
 import { GSE_RE, bundleUrl, loadStudy, type StudyDetail } from "./study-core";
-import { downloadUrl, studyV2Map } from "./file-facts";
+import { downloadUrl, studyStoreMap } from "./file-facts";
 import { StaleBundleError, getBundleIndex, ensureSampleQcTable, entryRange, strongEtag, withIndexRetry, MAX_INFLATE_BYTES, type ZipEntry } from "./bundle-reader";
 import { publicEntries } from "./restricted";
-import { bundleIndexResponse, loadSampleQc, normalizeQc, SAMPLE_QC_COLUMNS, v2BundleIndexResponse, type SampleQc } from "./bundle-core";
+import { bundleIndexResponse, loadSampleQc, normalizeQc, SAMPLE_QC_COLUMNS, storeBundleIndexResponse, type SampleQc } from "./bundle-core";
 import {
   buildManifestFromIds,
   buildManifestFromSearch,
@@ -24,8 +24,8 @@ import { QC_LOW_MESSAGE, QC_RULES, qcReasons, qcStatus } from "./qc-rules";
 
 import { ACCOUNT_URL, GSM_RE, LOADERS, SITE, fmt, fmtBytes, toolError, toolResult, type ToolResult } from "./mcp-core";
 import { combineRev, fileRev, knownRev, legacyRev, unchangedBody } from "./rev";
-import { getV2State } from "./v2-catalog";
-import { v2ListFiles, v2Modalities, v2PartialDownload } from "./mcp-v2";
+import { getStoreState } from "./store-catalog";
+import { storeListFiles, storeModalities, storePartialDownload } from "./mcp-store";
 export { ACCOUNT_URL, LOADERS, SITE, fmt, fmtBytes, toolError, toolResult, type ToolResult };
 
 /** Summary fields are stored as either a fraction (0–1) or a percentage. */
@@ -172,9 +172,9 @@ export async function listBundleFiles(ctx: SampleQcArgs, args: Record<string, un
   const gsm = typeof args.gsm_id === "string" ? args.gsm_id.trim().toUpperCase() : "";
   if (gsm && !GSM_RE.test(gsm)) return toolError("`gsm_id` must be a GEO sample accession like GSM4746717.");
 
-  // A migrated study is answered from the v2 catalog; everything below is the legacy bundle.
-  const v2 = await getV2State(ctx.db, gse);
-  if (v2) return v2ListFiles(ctx, gse, gsm, v2, args);
+  // A migrated study is answered from the catalog; everything below is the legacy bundle.
+  const store = await getStoreState(ctx.db, gse);
+  if (store) return storeListFiles(ctx, gse, gsm, store, args);
 
   let index;
   try {
@@ -237,8 +237,8 @@ export async function getModalities(ctx: SampleQcArgs, args: Record<string, unkn
   const gsm = typeof args.gsm_id === "string" ? args.gsm_id.trim().toUpperCase() : "";
   if (gsm && !GSM_RE.test(gsm)) return toolError("`gsm_id` must be a GEO sample accession like GSM4746717.");
 
-  const v2 = await getV2State(ctx.db, gse);
-  if (v2) return v2Modalities(ctx, gse, gsm, v2, args);
+  const store = await getStoreState(ctx.db, gse);
+  if (store) return storeModalities(ctx, gse, gsm, store, args);
 
   let index;
   try {
@@ -359,8 +359,8 @@ export async function getPartialDownload(ctx: SampleQcArgs, args: Record<string,
   const byModalities = args.modalities !== undefined && args.modalities !== null;
   if (!file && !byModalities) return toolError("`file` is required — e.g. exon_counts.1pz (or `modalities`, e.g. [\"spliced\"]). Use list_bundle_files to see what is in the study.");
 
-  const v2 = await getV2State(ctx.db, gse);
-  if (v2) return v2PartialDownload(ctx, gse, gsm, file, v2, args);
+  const store = await getStoreState(ctx.db, gse);
+  if (store) return storePartialDownload(ctx, gse, gsm, file, store, args);
   if (!file) {
     // a legacy bundle is one ZIP: each matrix is its own entry, asked for by name
     return toolError(`${gse} is still a single .singlet bundle, so \`modalities\` cannot be answered in one call: ask for each file by name (counts = exon_counts.1pz + intron_counts.1pz, spliced = exon_counts.1pz, unspliced = intron_counts.1pz, splice_junctions / psi = sj_counts.1pz).`);
@@ -603,11 +603,11 @@ export async function findMatchedControls(ctx: SampleQcArgs, args: Record<string
     )
     .slice(0, 10);
 
-  // Where each candidate's files are: the legacy single file only while it exists, else the v2 manifest.
-  const facts = await studyV2Map(ctx.db, ranked.map((c) => c.r.gse_id));
+  // Where each candidate's files are: the legacy single file only while it exists, else the store manifest.
+  const facts = await studyStoreMap(ctx.db, ranked.map((c) => c.r.gse_id));
   const candidates = ranked
     .map((c) => {
-      const v2 = facts.get(c.r.gse_id) ?? null;
+      const store = facts.get(c.r.gse_id) ?? null;
       const healthy = c.diseases.some((d) => HEALTHY_GROUPS.has(d));
       const why = [
         `same organism (${organismToCommon(organism)})`,
@@ -633,9 +633,9 @@ export async function findMatchedControls(ctx: SampleQcArgs, args: Record<string
         reference_build: c.r.reference_build,
         same_assay: c.assayMatch,
         same_reference_build: c.buildMatch,
-        bytes: v2 && !v2.legacy_available && v2.bytes != null ? v2.bytes : c.r.bytes != null ? Number(c.r.bytes) : null,
-        format: v2 ? v2.format : "singlet-v1",
-        download_url: downloadUrl(c.r.gse_id, v2),
+        bytes: store && !store.legacy_available && store.bytes != null ? store.bytes : c.r.bytes != null ? Number(c.r.bytes) : null,
+        format: store ? store.format : "singlet-v1",
+        download_url: downloadUrl(c.r.gse_id, store),
         study_url: `${SITE}/study/${c.r.gse_id}`,
         why,
         loader: `singlet.load("${c.r.gse_id}")`,
@@ -850,12 +850,12 @@ export async function assessStudy(ctx: SampleQcArgs, args: Record<string, unknow
 
   let qc: SampleQc[] = await sampleQcFromD1(ctx.db, gse);
   let index: Awaited<ReturnType<typeof bundleIndexResponse>> | null = null;
-  const v2 = d.series.v2;
+  const store = d.series.store;
   try {
-    // A study stored in the v2 layout is described from the v2 catalog, the others from the legacy bundle's central directory.
-    const v2State = v2 ? await getV2State(ctx.db, gse) : null;
-    index = v2State
-      ? await v2BundleIndexResponse(ctx.db, gse, v2State)
+    // A study stored in the per-sample layout is described from the catalog, the others from the legacy bundle's central directory.
+    const storeState = store ? await getStoreState(ctx.db, gse) : null;
+    index = storeState
+      ? await storeBundleIndexResponse(ctx.db, gse, storeState)
       : await bundleIndexResponse(ctx.db, gse, await getBundleIndex(ctx.db, gse, { waitUntil: ctx.waitUntil }), ctx.waitUntil);
     if (!qc.length) qc = (await loadSampleQc(ctx.db, gse, { waitUntil: ctx.waitUntil })).samples;
   } catch {
@@ -957,7 +957,7 @@ export async function assessStudy(ctx: SampleQcArgs, args: Record<string, unknow
   const unusable = qc.filter((s) => s.usable === 0).map((s) => s.gsm_id);
   const usableCount = d.series.usable_samples ?? (qc.some((s) => s.usable != null) ? qc.filter((s) => s.usable === 1).length : null);
   const integrity: string[] = [];
-  const hasFile = !!d.series.bundle_url || !!v2;
+  const hasFile = !!d.series.bundle_url || !!store;
   if (hasFile && usableCount === 0)
     integrity.push("HOLLOW FILE: this file currently contains no usable count data (every sample has an empty matrix or 0 called cells). Do not use it.");
   else if (unusable.length)
@@ -974,9 +974,9 @@ export async function assessStudy(ctx: SampleQcArgs, args: Record<string, unknow
     integrity_flags: integrity,
     file: {
       available: hasFile,
-      url: d.series.bundle_url ?? v2?.manifest_url ?? null,
-      format: v2 ? "singlet-v2" : "singlet-v1",
-      bytes: d.series.bundle_url ? d.series.bundle_bytes : (v2?.bytes ?? d.series.bundle_bytes),
+      url: d.series.bundle_url ?? store?.manifest_url ?? null,
+      format: store ? "singlet-store" : "singlet-v1",
+      bytes: d.series.bundle_url ? d.series.bundle_bytes : (store?.bytes ?? d.series.bundle_bytes),
       n_samples_in_file: index?.n_samples ?? d.series.bundle_n_samples,
       reference_build: index?.reference_build ?? d.series.reference_build,
       singlet_version: index?.singlet_version ?? d.series.singlet_version,

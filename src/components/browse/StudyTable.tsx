@@ -137,10 +137,10 @@ export const STUDY_COLUMNS: ColumnDef<StudyRow>[] = [
     render: (r) =>
       r.has_bundle ? (
         <a
-          href={studyFileUrl(r.gse_id, r.v2)}
+          href={studyFileUrl(r.gse_id, r.store)}
           download
           className="inline-flex text-primary hover:text-foreground"
-          title={isManifestFile(r.v2) ? "Download the manifest of this study's per-sample files" : "Download .singlet"}
+          title={isManifestFile(r.store) ? "Download the manifest of this study's per-sample files" : "Download .singlet"}
           aria-label={`Download ${r.gse_id}`}
         >
           <Download size={14} />

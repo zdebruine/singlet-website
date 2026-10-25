@@ -36,8 +36,8 @@ export const LAYER_FILES: { key: string; label: string; file: string; humanOnly?
   { key: "doublets", label: "Doublet scores", file: "doublet_scores.tsv" },
 ];
 
-/** Layer counts over downloadable studies that are served from v2 and have no bundle_index row; null before schema/032 or when there are none. */
-async function v2OnlyLayerRow(db: D1Database): Promise<Record<string, number | null> | null> {
+/** Layer counts over downloadable studies that are served from store and have no bundle_index row; null before schema/032 or when there are none. */
+async function storeOnlyLayerRow(db: D1Database): Promise<Record<string, number | null> | null> {
   const human = "m.organism_primary = 'Homo sapiens'";
   const sums = LAYER_FILES.map(
     (l, i) => `COUNT(DISTINCT CASE WHEN s.members_json LIKE ?${i + 1}${l.humanOnly ? ` AND ${human}` : ""} THEN m.gse_id END) AS l${i}`,
@@ -47,9 +47,9 @@ async function v2OnlyLayerRow(db: D1Database): Promise<Record<string, number | n
       .prepare(
         `SELECT COUNT(DISTINCT m.gse_id) AS n, COUNT(DISTINCT CASE WHEN ${human} THEN m.gse_id END) AS n_human, ${sums}
            FROM gse_meta m
-           JOIN v2_study vs ON vs.gse_id = m.gse_id
-           JOIN v2_migration vm ON vm.gse_id = vs.gse_id AND vm.status IN ('verified', 'retired')
-           JOIN v2_sample s ON s.gse_id = vs.gse_id AND s.rev = vs.rev
+           JOIN store_study vs ON vs.gse_id = m.gse_id
+           JOIN store_migration vm ON vm.gse_id = vs.gse_id AND vm.status IN ('verified', 'retired')
+           JOIN store_sample s ON s.gse_id = vs.gse_id AND s.rev = vs.rev
           WHERE ${DOWNLOADABLE_SQL} AND NOT EXISTS (SELECT 1 FROM bundle_index b WHERE b.gse_id = m.gse_id)`,
       )
       .bind(...LAYER_FILES.map((l) => `%${l.file}%`))
@@ -68,10 +68,10 @@ export async function computeLayerStats(db: D1Database): Promise<LayerStats> {
     .prepare(`SELECT COUNT(*) AS n, SUM(CASE WHEN ${human} THEN 1 ELSE 0 END) AS n_human, ${sums} FROM gse_meta m JOIN bundle_index b ON b.gse_id = m.gse_id WHERE ${DOWNLOADABLE_SQL}`)
     .bind(...LAYER_FILES.map((l) => `%${l.file}%`))
     .first<Record<string, number | null>>();
-  // Studies served from v2 that have no legacy index (never had one) are counted from the files their samples hold. A retired study keeps its
+  // Studies served from store that have no legacy index (never had one) are counted from the files their samples hold. A retired study keeps its
   // legacy bundle_index row, so it is counted above.
-  const v2 = await v2OnlyLayerRow(db);
-  const total = (key: string) => Number(row?.[key] ?? 0) + Number(v2?.[key] ?? 0);
+  const store = await storeOnlyLayerRow(db);
+  const total = (key: string) => Number(row?.[key] ?? 0) + Number(store?.[key] ?? 0);
   return {
     studies: total("n"),
     layers: LAYER_FILES.map((l, i) => ({
