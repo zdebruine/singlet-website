@@ -67,6 +67,7 @@ const Benchmarking = () => {
                         <StateBadge state={e?.status ?? "missing"} />
                         {e && e.n_metrics > 0 && <span className="tabular text-[12px] text-muted-foreground">{e.n_pass}/{e.n_metrics} metrics</span>}
                       </div>
+                      {e?.unresolved_corroboration?.length ? <p className="mt-2 text-[12px] text-muted-foreground">Waiting on real-data corroboration.</p> : null}
                     </Link>
                   </li>
                 );

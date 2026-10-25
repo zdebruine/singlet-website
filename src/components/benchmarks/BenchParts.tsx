@@ -57,7 +57,7 @@ const yAxis = (label?: string) => (
 
 export function figureSupported(f: BenchFigure): boolean {
   if (f.data_file && !(f.series?.length || f.rows?.length)) return false;
-  if (f.kind === "box") return false;
+  if (f.kind === "box" || f.kind === "pareto") return false;
   if (f.kind === "heatmap") return !!f.z && !!f.rows && !!f.cols;
   if (f.kind === "table") return !!f.columns && !!f.rows;
   return !!f.series?.length;
@@ -152,24 +152,25 @@ function fmtSeconds(s: number): string {
   return s >= 3600 ? `${(s / 3600).toFixed(1)} h` : s >= 60 ? `${(s / 60).toFixed(1)} min` : `${s.toFixed(0)} s`;
 }
 
-/** Quality against runtime, one point per tool, with the Pareto frontier drawn. Runtime is context, not a verdict. */
+/** Quality against cost, one point per tool, frontier joined by a line. Cost is context, not a verdict. */
 export function ParetoChart({ pareto }: { pareto: Pareto }) {
   const names = pareto.points.map((p) => p.tool);
-  const q = pareto.metric;
+  const frontier = pareto.points.filter((p) => p.frontier).sort((a, b) => a.x - b.x);
+  const fmtX = (v: number) => (pareto.xUnit === "s" ? fmtSeconds(v) : `${+v.toPrecision(3)}`);
   return (
     <Card
-      title="Quality against runtime"
-      sub={`${q.name} (${q.direction} is better) vs mean wall time. The line joins the tools nothing else beats on both.`}
-      note="Speed alone is not the goal. Exact genome-wide alignment can place reads that a pseudoaligner such as alevin-fry misses, so Singlet is judged on where it sits on this frontier, not on runtime by itself."
+      title={pareto.title}
+      sub={`${pareto.yLabel} (${pareto.direction} is better) against ${pareto.xLabel}${pareto.xUnit && pareto.xUnit !== "s" ? ` (${pareto.xUnit})` : ""}. The line joins the tools nothing else beats on both.`}
+      note="Speed alone is not the goal. Exact genome-wide alignment can place reads that a pseudoaligner such as alevin-fry misses, so Singlet is judged on where it sits on this frontier, not on cost by itself."
     >
-      <div className="h-64" role="img" aria-label="Quality against runtime">
+      <div className="h-64" role="img" aria-label={pareto.title}>
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart margin={{ left: 4, right: 12, top: 8 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-            <XAxis type="number" dataKey="seconds" tick={AXIS} scale="log" domain={["auto", "auto"]} tickFormatter={fmtSeconds} name="Runtime" />
-            <YAxis type="number" dataKey="quality" tick={AXIS} width={56} domain={["auto", "auto"]} name={q.name} />
-            <Tooltip formatter={(v: number, n: string) => (n === "Runtime" ? fmtSeconds(v) : v)} />
-            <Scatter data={pareto.frontier} line={{ stroke: "var(--muted-text, #6b7280)", strokeDasharray: "4 3" }} shape={() => <g />} legendType="none" isAnimationActive={false} />
+            <XAxis type="number" dataKey="x" tick={AXIS} scale="log" domain={["auto", "auto"]} tickFormatter={fmtX} name={pareto.xLabel} />
+            <YAxis type="number" dataKey="y" tick={AXIS} width={56} domain={["auto", "auto"]} name={pareto.yLabel} />
+            <Tooltip formatter={(v: number, n: string) => (n === pareto.xLabel ? fmtX(v) : v)} />
+            <Scatter data={frontier} line={{ stroke: "var(--muted-text, #6b7280)", strokeDasharray: "4 3" }} shape={() => <g />} legendType="none" isAnimationActive={false} />
             {pareto.points.map((p) => (
               <Scatter key={p.tool} name={p.tool} data={[p]} fill={colorFor(p.tool, names)} isAnimationActive={false} />
             ))}
@@ -238,7 +239,7 @@ export function MetricTable({ metrics }: { metrics: BenchMetric[] }) {
         <tbody>
           {metrics.map((m) => (
             <tr key={m.id} className="border-b border-border/60 align-top">
-              <td className="py-2 pr-4 text-foreground">{m.name}<span className="block text-[12px] text-muted-foreground">{m.dataset}</span></td>
+              <td className="py-2 pr-4 text-foreground">{m.name}<span className="block text-[12px] text-muted-foreground">{m.dataset}</span>{m.corroborated_by?.length ? <span className="block text-[12px] text-muted-foreground">Supplement; corroborated by {m.corroborated_by.join(", ")}</span> : null}</td>
               <td className="py-2 pr-4 tabular">{fmtVal(m.singlet.value, m.unit)}</td>
               <td className="py-2 pr-4 tabular text-muted-foreground">
                 {(m.competitors ?? []).length ? m.competitors!.map((c) => <span key={c.tool} className="block">{c.tool} {fmtVal(c.value, m.unit)}</span>) : "none"}

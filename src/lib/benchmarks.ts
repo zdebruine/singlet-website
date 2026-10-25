@@ -37,16 +37,18 @@ export interface BenchMetric {
   };
   pass?: Verdict;
   notes?: string;
+  /** Metrics on real data that show the same effect, for results on derived or simulated data. */
+  corroborated_by?: string[];
 }
 
 export interface BenchFigure {
   id: string;
   title: string;
   caption?: string;
-  kind: "bar" | "grouped_bar" | "scatter" | "line" | "box" | "histogram" | "heatmap" | "table";
+  kind: "bar" | "grouped_bar" | "scatter" | "line" | "box" | "histogram" | "heatmap" | "table" | "pareto";
   x?: { label?: string; unit?: string; scale?: "linear" | "log"; categories?: (string | number)[] };
   y?: { label?: string; unit?: string; scale?: "linear" | "log"; min?: number; max?: number };
-  series?: { name: string; tool?: string; x?: (string | number)[]; y: number[] }[];
+  series?: { name: string; tool?: string; x?: (string | number)[]; y: number[]; frontier?: boolean }[];
   rows?: (string | number)[] | (string | number)[][];
   cols?: string[];
   columns?: string[];
@@ -96,6 +98,7 @@ export interface BenchDoc {
     id: string;
     title?: string;
     truth: string;
+    data_kind?: "real" | "derived" | "simulated";
     n_cells?: number;
     accessions: { gse?: string; gsm?: string[]; srr?: string[]; url?: string };
   }[];
@@ -118,6 +121,7 @@ export interface BenchIndexEntry {
   n_fail: number;
   n_na: number;
   conclusion?: string;
+  unresolved_corroboration?: string[];
 }
 
 export interface BenchIndex {
@@ -198,19 +202,35 @@ export function commitUrl(sha: string): string {
 export interface ParetoPoint {
   tool: string;
   singlet: boolean;
-  seconds: number;
-  quality: number;
+  /** Cost (wall time, CPU-hours or memory). */
+  x: number;
+  /** Quality. */
+  y: number;
+  frontier: boolean;
 }
 
 export interface Pareto {
-  metric: BenchMetric;
+  title: string;
+  xLabel: string;
+  xUnit: string;
+  yLabel: string;
+  direction: "higher" | "lower";
   points: ParetoPoint[];
-  frontier: ParetoPoint[];
+}
+
+/** A contract `pareto` figure: one point per tool, `frontier` set by the contract. */
+export function paretoFromFigure(f: BenchFigure): Pareto | null {
+  const points = (f.series ?? [])
+    .filter((s) => s.x?.length && s.y.length)
+    .map((s) => ({ tool: s.tool ?? s.name, singlet: (s.tool ?? s.name).toLowerCase() === "singlet", x: Number(s.x![0]), y: s.y[0], frontier: !!s.frontier }));
+  if (points.length < 2) return null;
+  return { title: f.title, xLabel: f.x?.label ?? "cost", xUnit: f.x?.unit ?? "", yLabel: f.y?.label ?? "quality", direction: "higher", points };
 }
 
 /**
- * Quality (the first accuracy/agreement metric that has a Singlet value and competitor values) against mean
- * wall time, one point per tool. The frontier is the set of points no other tool beats on both axes.
+ * Fallback for documents without a `pareto` figure: quality (the first accuracy/agreement metric with a Singlet
+ * value and competitor values) against mean wall time, one point per tool. The frontier is the set of points
+ * no other tool beats on both axes.
  */
 export function paretoOf(d: BenchDoc): Pareto | null {
   const metric = d.metrics.find(
@@ -223,18 +243,24 @@ export function paretoOf(d: BenchDoc): Pareto | null {
   if (!metric) return null;
   const quality = new Map<string, number>([["singlet", metric.singlet.value as number]]);
   for (const c of metric.competitors ?? []) if (c.value != null) quality.set(c.tool, c.value);
-  const points: ParetoPoint[] = [];
+  const raw: Omit<ParetoPoint, "frontier">[] = [];
   for (const [tool, q] of quality) {
     const rs = d.resources.filter((r) => r.tool === tool && (!r.dataset || r.dataset === "pooled" || r.dataset === metric.dataset));
     if (rs.length === 0) continue;
-    points.push({ tool, singlet: tool === "singlet", seconds: rs.reduce((a, r) => a + r.wall_s, 0) / rs.length, quality: q });
+    raw.push({ tool, singlet: tool === "singlet", x: rs.reduce((a, r) => a + r.wall_s, 0) / rs.length, y: q });
   }
-  if (points.length < 2) return null;
+  if (raw.length < 2) return null;
   const sign = metric.direction === "higher" ? 1 : -1;
-  const beats = (o: ParetoPoint, p: ParetoPoint) =>
-    o !== p && o.seconds <= p.seconds && sign * o.quality >= sign * p.quality && (o.seconds < p.seconds || sign * o.quality > sign * p.quality);
-  const frontier = points.filter((p) => !points.some((o) => beats(o, p))).sort((a, b) => a.seconds - b.seconds);
-  return { metric, points, frontier };
+  const beats = (o: (typeof raw)[number], p: (typeof raw)[number]) =>
+    o !== p && o.x <= p.x && sign * o.y >= sign * p.y && (o.x < p.x || sign * o.y > sign * p.y);
+  const points = raw.map((p) => ({ ...p, frontier: !raw.some((o) => beats(o, p)) }));
+  return { title: "Quality against runtime", xLabel: "Mean wall time", xUnit: "s", yLabel: metric.name, direction: metric.direction as "higher" | "lower", points };
+}
+
+/** The document's own pareto figure when it has one, else the derived one. */
+export function paretoFor(d: BenchDoc): Pareto | null {
+  const fig = (d.figures ?? []).find((f) => f.kind === "pareto");
+  return (fig && paretoFromFigure(fig)) || paretoOf(d);
 }
 
 /** Tools x outputs across every document that publishes `reach`. */

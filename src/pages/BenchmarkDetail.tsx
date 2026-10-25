@@ -6,7 +6,7 @@ import Footer from "@/components/Footer";
 import NotFound from "./NotFound";
 import { usePageMeta } from "@/hooks/usePageMeta";
 import { findCapability } from "@/lib/benchmark-capabilities";
-import { commitUrl, datasetLinks, docStatus, loadDoc, paretoOf } from "@/lib/benchmarks";
+import { commitUrl, datasetLinks, docStatus, loadDoc, paretoFor } from "@/lib/benchmarks";
 import {
   BackLink, figureSupported, FigureChart, InProgress, MetricTable, ParetoChart, ReachPanel, ResourcesTable, StateBadge,
 } from "@/components/benchmarks/BenchParts";
@@ -31,7 +31,7 @@ const BenchmarkDetail = () => {
   });
   if (!cap) return <NotFound />;
 
-  const pareto = doc ? paretoOf(doc) : null;
+  const pareto = doc ? paretoFor(doc) : null;
   const figures = (doc?.figures ?? []).filter(figureSupported).slice(0, 3);
   const panelCount = figures.length + (pareto ? 1 : 0) + (doc?.reach?.length ? 1 : 0);
 
@@ -91,7 +91,7 @@ const BenchmarkDetail = () => {
                   {doc.datasets.map((d) => (
                     <li key={d.id}>
                       <span className="text-foreground">{d.title ?? d.id}</span>
-                      <span className="block text-[12.5px] text-muted-foreground">Truth: {d.truth}</span>
+                      <span className="block text-[12.5px] text-muted-foreground">Truth: {d.truth}{d.data_kind && d.data_kind !== "real" ? ` · ${d.data_kind} data` : ""}</span>
                       <span className="flex flex-wrap gap-x-3">
                         {datasetLinks(d).map((l) =>
                           l.internal ? (

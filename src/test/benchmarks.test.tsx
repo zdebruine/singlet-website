@@ -4,7 +4,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import BenchmarkDetail from "../pages/BenchmarkDetail";
 import {
-  datasetLinks, docStatus, paretoOf, parseDoc, parseIndex, reachMatrix, wordCount, type BenchDoc, type BenchMetric,
+  datasetLinks, docStatus, paretoFor, paretoOf, parseDoc, parseIndex, reachMatrix, wordCount, type BenchDoc, type BenchMetric,
 } from "../lib/benchmarks";
 import { parseRoadmap, roadmapProgress } from "../lib/roadmap";
 import { CAPABILITIES } from "../lib/benchmark-capabilities";
@@ -89,12 +89,20 @@ describe("Pareto frontier", () => {
     const p = paretoOf(doc())!;
     // singlet: 0.99 @ 12s, cellXY: 0.96 @ 48s (dominated), rule: 0.90 @ 2s
     expect(p.points).toHaveLength(3);
-    expect(p.frontier.map((x) => x.tool)).toEqual(["rule", "singlet"]);
+    expect(p.points.filter((x) => x.frontier).map((x) => x.tool).sort()).toEqual(["rule", "singlet"]);
   });
 
   it("flips the quality direction for lower-is-better metrics", () => {
     const d = doc({ metrics: [metric({ direction: "lower", singlet: { value: 0.01 }, competitors: [{ tool: "cellXY", value: 0.05 }, { tool: "rule", value: 0.2 }] })] });
-    expect(paretoOf(d)!.frontier.map((x) => x.tool)).toEqual(["rule", "singlet"]);
+    expect(paretoOf(d)!.points.filter((x) => x.frontier).map((x) => x.tool).sort()).toEqual(["rule", "singlet"]);
+  });
+
+  it("uses the pareto figure of the document when it has one", () => {
+    const d = doc({ figures: [{ id: "p", kind: "pareto", title: "Accuracy vs CPU-h", x: { label: "cpu_h", unit: "CPU-hours" }, y: { label: "Accuracy" },
+      series: [{ name: "singlet", tool: "singlet", x: [0.003], y: [0.99], frontier: true }, { name: "cellXY", tool: "cellXY", x: [0.013], y: [0.96], frontier: false }] }] });
+    const p = paretoFor(d)!;
+    expect(p.title).toBe("Accuracy vs CPU-h");
+    expect(p.points.filter((x) => x.frontier).map((x) => x.tool)).toEqual(["singlet"]);
   });
 
   it("is absent without competitor values or timings", () => {
