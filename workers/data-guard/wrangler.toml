@@ -1,0 +1,18 @@
+# data.singlet.bio/data/*: Research Alpha guard for legacy .singlet bundles. See README.md.
+# Pattern: workers/data-v2. Deployed by the owner, never by CI: `npx wrangler deploy` from this directory.
+name = "singlet-data-guard"
+main = "src/index.ts"
+compatibility_date = "2026-09-01"
+account_id = "2f8a8cc95b6bc0be84ac611fe2e5c3c2"
+workers_dev = false
+
+# Same mechanism as data-v2's data.singlet.bio/v2/* route: a Worker route runs in front of the R2 custom domain.
+routes = [{ pattern = "data.singlet.bio/data/*", zone_name = "singlet.bio" }]
+
+# Read-only: the Worker only calls head() and ranged get() to read a bundle's central directory.
+[[r2_buckets]]
+binding = "DATA"
+bucket_name = "singlet-data"
+
+[observability]
+enabled = true
