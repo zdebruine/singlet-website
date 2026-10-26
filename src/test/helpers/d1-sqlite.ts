@@ -21,7 +21,7 @@ const [ALPHA_TABLES, ALPHA_TRIGGERS] = ALPHA_SQL.split("-- @triggers");
 function addAlphaSchema(raw: DatabaseSync): void {
   raw.exec(ALPHA_TABLES);
   const has = (t: string) => !!raw.prepare(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?`).get(t);
-  if (has("sample_qc") && has("gse_meta")) raw.exec(ALPHA_TRIGGERS.replace(/^.*\n/, ""));
+  if (has("sample_qc") && has("gse_meta")) raw.exec(ALPHA_TRIGGERS.replace(/^[^\n]*\n/, "")); // drop the rest of the marker line (CRLF-safe)
 }
 
 type Bind = string | number | bigint | null | Uint8Array;
