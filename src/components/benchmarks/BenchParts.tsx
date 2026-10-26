@@ -323,3 +323,12 @@ export function BackLink() {
     </Link>
   );
 }
+
+/** Shown on every benchmark and roadmap page while Singlet 1.0.0 is a research beta. */
+export function BetaBanner() {
+  return (
+    <p className="mb-6 rounded border border-border bg-secondary px-3 py-2 text-[13px] text-muted-foreground">
+      <span className="font-medium text-foreground">Research beta.</span> Results are work in progress and are shown as measured, including where Singlet does not yet match the other tools.
+    </p>
+  );
+}

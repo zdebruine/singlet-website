@@ -6,6 +6,7 @@ import { Link } from "react-router-dom";
 import { usePageMeta } from "@/hooks/usePageMeta";
 import { parseRoadmap, roadmapProgress, type Roadmap as RoadmapData } from "@/lib/roadmap";
 import { cn } from "@/lib/utils";
+import { BetaBanner } from "@/components/benchmarks/BenchParts";
 
 async function loadRoadmap(signal?: AbortSignal): Promise<RoadmapData | null> {
   try {
@@ -25,6 +26,7 @@ const Roadmap = () => {
     <div className="min-h-screen bg-background">
       <Navbar />
       <main className="container-site py-12 md:py-16">
+        <BetaBanner />
         <h1 className="font-display text-3xl md:text-4xl font-bold tracking-tightest text-foreground">Roadmap to Singlet {data?.release ?? "1.0.0"}</h1>
         <p className="mt-3 max-w-2xl text-[15px] text-muted-foreground">
           The release waits on the <Link to="/benchmarking" className="text-primary underline underline-offset-2">benchmarks</Link>, a

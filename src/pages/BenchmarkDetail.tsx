@@ -8,7 +8,7 @@ import { usePageMeta } from "@/hooks/usePageMeta";
 import { findCapability } from "@/lib/benchmark-capabilities";
 import { commitUrl, datasetLinks, docStatus, loadDoc, paretosFor } from "@/lib/benchmarks";
 import {
-  BackLink, figureSupported, FigureChart, InProgress, MetricTable, ParetoChart, ReachPanel, ResourcesTable, StateBadge,
+  BackLink, BetaBanner, figureSupported, FigureChart, InProgress, MetricTable, ParetoChart, ReachPanel, ResourcesTable, StateBadge,
 } from "@/components/benchmarks/BenchParts";
 
 const H2 = ({ children }: { children: React.ReactNode }) => (
@@ -39,6 +39,7 @@ const BenchmarkDetail = () => {
     <div className="min-h-screen bg-background">
       <Navbar />
       <main className="container-site py-12 md:py-16">
+        <BetaBanner />
         <BackLink />
         <header className="mt-4 max-w-3xl">
           <h1 className="font-display text-3xl md:text-4xl font-bold tracking-tightest text-foreground">{cap.name}</h1>

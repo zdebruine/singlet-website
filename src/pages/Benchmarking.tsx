@@ -6,7 +6,7 @@ import Footer from "@/components/Footer";
 import { usePageMeta } from "@/hooks/usePageMeta";
 import { CAPABILITIES, GROUPS } from "@/lib/benchmark-capabilities";
 import { docCounts, docStatus, loadDoc, loadIndex, NOTEBOOK_URL, reachMatrix, type BenchDoc } from "@/lib/benchmarks";
-import { StateBadge } from "@/components/benchmarks/BenchParts";
+import { BetaBanner, StateBadge } from "@/components/benchmarks/BenchParts";
 import { cn } from "@/lib/utils";
 
 const MARK = { yes: "Yes", partial: "Partial", no: "No" } as const;
@@ -34,6 +34,7 @@ const Benchmarking = () => {
     <div className="min-h-screen bg-background">
       <Navbar />
       <main className="container-site py-12 md:py-16">
+        <BetaBanner />
         <h1 className="font-display text-3xl md:text-4xl font-bold tracking-tightest text-foreground">Benchmarks</h1>
         <p className="mt-3 max-w-2xl text-[15px] text-muted-foreground">
           Every capability of the Singlet pipeline is compared with the tools people use today, on public GEO data.
