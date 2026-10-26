@@ -9,7 +9,7 @@
  *
  * Layers that carry per-donor germline information are not in this registry, and neither are the layers Research
  * Alpha does not offer (ambient RNA, doublet scores, legacy percent-spliced-in, mtDNA variants and heteroplasmy,
- * genetic ancestry, per-cell non-host): see ./restricted. They may still be inside a whole-file download.
+ * genetic ancestry, per-cell non-host, the legacy pipeline sex call): see ./restricted. They may still be inside a whole-file download.
  *
  * `members` lists candidate archive paths inside `samples/<GSM>/` in priority
  * order, because the layout changed across pipeline versions (e.g. donor
@@ -65,9 +65,6 @@ export const MODALITIES: Modality[] = [
   M("donor_assignments", "table", "Donor", ["donor/donor_assignments.tsv", "donor_assignments.tsv"],
     "Genotype-free donor demultiplexing: barcode → donor label.",
     `b.donors(gsm)`, `singlet_read(path, gsm, "donor_assignments")`),
-  M("sex_call", "json", "Donor", ["sex_call.json"],
-    "Genetic sex call from chrX/chrY expression and coverage. Human studies only: calls for other species are all \"unknown\" so far.",
-    `b.read("sex_call", gsm)`, `singlet_read(path, gsm, "sex_call")`),
   // ── Non-host ──────────────────────────────────────────────────────────────
   M("nonhost_species", "table", "Non-host", ["nonhost/nonhost_em_abundance.tsv", "nonhost_em_abundance.tsv"],
     "Per-taxon non-host (microbial/viral) abundance after EM re-assignment.",
@@ -101,7 +98,6 @@ export const MODALITIES: Modality[] = [
     `b.read("star_log", gsm)`, `singlet_read(path, gsm, "star_log")`),
 ];
 
-MODALITIES.find((m) => m.name === "sex_call")!.humanOnly = true;
 MODALITIES.find((m) => m.name === "vdj_gene_usage")!.label = "TR/IG gene expression (not clonotypes)";
 
 export const MODALITY_BY_NAME = new Map(MODALITIES.map((m) => [m.name, m]));

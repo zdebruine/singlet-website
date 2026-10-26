@@ -30,7 +30,7 @@ describe("computeLayerStats", () => {
     expect(by.ancestry).toBeUndefined();
     expect(by.doublets).toBeUndefined();
     expect(by.splicing.of).toBe(3);
-    // Mouse sex_call.json files hold only "unknown": GSE2 and GSE5 have the file but are not counted.
-    expect(by.sex).toMatchObject({ studies: 1, of: 1 });
+    // The legacy pipeline sex call is not counted for any species (genetic sex comes from the s1 cell labels).
+    expect(by.sex).toBeUndefined();
   });
 });

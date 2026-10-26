@@ -79,8 +79,8 @@ describe("GET /api/ingest/export", () => {
   it("gives each study's file layers", async () => {
     const env = await seed();
     const p = await (await get(env, "table=studies")).json<{ rows: unknown[][]; next: string | null }>();
-    // GSE3 is mouse: its sex_call.json holds only "unknown", so the sex layer is not listed.
-    expect(p.rows).toEqual([["GSE1", "gene_counts|splicing|sex"], ["GSE2", ""], ["GSE3", "gene_counts"]]);
+    // The legacy sex_call.json is not a layer in Research Alpha, for any species.
+    expect(p.rows).toEqual([["GSE1", "gene_counts|splicing"], ["GSE2", ""], ["GSE3", "gene_counts"]]);
     expect(p.next).toBeNull();
   });
 

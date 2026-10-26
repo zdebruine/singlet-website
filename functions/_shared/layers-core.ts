@@ -24,8 +24,8 @@ export interface LayerStats {
 
 /**
  * Layer → a file name that only that layer writes (see ./modalities). Research Alpha counts only the layers it offers:
- * mtDNA variants and genetic ancestry are not released, and doublet scores are not reliable yet (./restricted), so they
- * are not counted even though the files are in many legacy bundles.
+ * mtDNA variants and the legacy ancestry call are not released, and doublet scores and the legacy pipeline sex call are
+ * not reliable (./restricted), so they are not counted even though the files are in many legacy bundles.
  */
 export const LAYER_FILES: { key: string; label: string; file: string; humanOnly?: boolean }[] = [
   { key: "gene_counts", label: "Gene counts", file: "exon_counts.1pz" },
@@ -33,9 +33,7 @@ export const LAYER_FILES: { key: string; label: string; file: string; humanOnly?
   { key: "junctions", label: "Splice junctions", file: "sj_counts.1pz" },
   { key: "vdj", label: "TR/IG gene expression (not clonotypes)", file: "vdj_gene_usage.1pz" },
   { key: "donors", label: "Donor demultiplexing", file: "donor_assignments.tsv" },
-  // The pipeline matches chrY/XIST gene names in upper case, so every mouse sex_call.json says "unknown"
-  // (docs/DENSE-METADATA.md). The file is there but holds no call: count humans only.
-  { key: "sex", label: "Genetic sex (human)", file: "sex_call.json", humanOnly: true },
+  // The legacy pipeline sex call (sex_call.json) is not offered: genetic sex comes from the s1 cell labels (sex_chrom).
 ];
 
 /** Layer counts over downloadable studies that are served from v2 and have no bundle_index row; null before schema/032 or when there are none. */

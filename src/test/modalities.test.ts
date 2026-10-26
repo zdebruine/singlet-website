@@ -40,7 +40,6 @@ describe("modality registry", () => {
       "intron_counts",
       "junctions",
       "donor_assignments",
-      "sex_call",
       "nonhost_species",
       "vdj_gene_usage",
       "cell_cycle_scores",

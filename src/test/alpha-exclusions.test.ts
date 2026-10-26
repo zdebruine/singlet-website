@@ -251,8 +251,8 @@ describe("study pages", () => {
     const idx = { entries: JSON.parse(row.entries), bytes: 7000, indexed_at: "x", etag: null } as never;
     const out = await bundleIndexResponse(env.DB, "GSE10", idx);
     expect(out.samples.map((x) => x.gsm_id)).toEqual(["GSM101", "GSM102"]);
-    expect(out.samples[0].files.map((f) => f.path.split("/").pop())).toEqual(["exon_counts.1pz", "intron_counts.1pz", "sex_call.json", "summary.json"]);
-    // mouse: genetic sex is not offered
+    // the legacy sex call is not offered for any species (genetic sex comes from the s1 cell labels)
+    expect(out.samples[0].files.map((f) => f.path.split("/").pop())).toEqual(["exon_counts.1pz", "intron_counts.1pz", "summary.json"]);
     const mouse = await servedEntries(env.DB, "GSE20", [{ p: "samples/GSM9/sex_call.json" }, { p: "samples/GSM9/exon_counts.1pz" }]);
     expect(mouse.map((e) => e.p)).toEqual(["samples/GSM9/exon_counts.1pz"]);
   });
@@ -306,11 +306,14 @@ describe("layers", () => {
     for (const rel of ["mt/mt_summary.tsv", "donor/donor_assignments.tsv", "sex_call.json", "exon_counts.1pz"]) expect(isRestrictedMember(rel), rel).toBe(false);
   });
 
-  it("hides the layers Alpha does not offer, and genetic sex outside human studies", () => {
+  it("hides the legacy layers Alpha does not offer, including the pipeline sex call, and not the s1 cell labels", () => {
     for (const rel of ["ambient_contamination.tsv", "ambient_contamination.json", "ambient_profile.tsv", "doublet_scores.tsv", "splice_psi.1pz", "nonhost/nonhost_per_cell.1pz", "mt/mt_summary.tsv"])
       expect(isHiddenMember(rel, { human: true }), rel).toBe(true);
-    expect(isHiddenMember("sex_call.json", { human: true })).toBe(false);
+    expect(isHiddenMember("sex_call.json", { human: true })).toBe(true);
     expect(isHiddenMember("sex_call.json", { human: false })).toBe(true);
+    // the s1 transcode's labels are public cell metadata: not restricted, not hidden
+    for (const rel of ["cells", "labels.tsv", "ancestry_hancestro", "ancestry_prob", "sex_chrom", "cell_type_cl"])
+      expect(isRestrictedMember(rel) || isHiddenMember(rel, { human: true }), rel).toBe(false);
     expect(isHiddenMember("nonhost/nonhost_summary.json")).toBe(false);
     const list = [{ p: "samples/GSM1/doublet_scores.tsv" }, { p: "samples/GSM2/exon_counts.1pz" }, { p: "samples/GSM1/exon_counts.1pz" }];
     expect(publicEntries(list, { human: true, excluded: new Set(["GSM2"]) }).map((e) => e.p)).toEqual(["samples/GSM1/exon_counts.1pz"]);
@@ -320,7 +323,7 @@ describe("layers", () => {
     for (const m of MODALITIES) for (const member of m.members) expect(isHiddenMember(member, { human: true }) || isRestrictedMember(member), member).toBe(false);
     expect(LAYER_FILES.map((l) => l.key)).not.toEqual(expect.arrayContaining(["mtdna"]));
     expect(LAYER_FILES.find((l) => l.key === "vdj")?.label).toBe("TR/IG gene expression (not clonotypes)");
-    expect(resolveModalities(["sex_call.json"], { human: false })).toEqual([]);
-    expect(resolveModalities(["sex_call.json"], { human: true }).map((f) => f.modality.name)).toEqual(["sex_call"]);
+    expect(resolveModalities(["sex_call.json"], { human: true })).toEqual([]);
+    expect(LAYER_FILES.find((l) => l.key === "sex")).toBeUndefined();
   });
 });

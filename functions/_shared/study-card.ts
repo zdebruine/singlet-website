@@ -146,11 +146,10 @@ export function cellsLabel(n: number | null): string | null {
 const TO_DAYS: Record<string, number> = { years: 365.25, months: 30.44, weeks: 7, days: 1 };
 
 /**
- * Layers a summary may name. Research Alpha does not offer genetic ancestry or doublet scores (./restricted), and genetic sex only for human
- * studies (mouse sex_call.json files hold only "unknown", docs/DENSE-METADATA.md).
+ * Layers a summary may name. Research Alpha does not offer the legacy ancestry call, the legacy pipeline sex call or doublet scores
+ * (./restricted); genetic sex and ancestry come from the s1 cell labels.
  */
 const LAYER_FILES: { file: string; label: string; humanOnly?: boolean }[] = [
-  { file: "sex_call.json", label: "genetic sex", humanOnly: true },
   { file: "donor_assignments.tsv", label: "donor demultiplexing" },
 ];
 

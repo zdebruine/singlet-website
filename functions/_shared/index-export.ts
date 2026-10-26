@@ -11,8 +11,9 @@
  * Nothing private is exported. Each page is one D1 statement with two bound values.
  *
  * Research Alpha (./alpha): samples that are not part of the atlas and withheld studies are not exported, so the next
- * nightly build drops them from the cohort index; layers Alpha does not offer (mtDNA, doublets, genetic sex outside
- * human studies) are not listed.
+ * nightly build drops them from the cohort index; layers Alpha does not offer (mtDNA, doublets, the legacy sex call) are
+ * not listed. Pipeline facts `sex_genetic` and `ancestry_genetic` (the s1 labeller's per-sample summaries, written to
+ * sample_attr with source = pipeline) are exported, so the cohort index's existing attributes of those names fill in.
  */
 import { sampleServedSql, studyServedSql } from "./alpha";
 
@@ -47,7 +48,7 @@ WHERE s.status = 'DONE' AND s.gsm_id > ? AND ${sampleServedSql("s.gsm_id")} AND 
 ORDER BY s.gsm_id
 LIMIT ?`;
 
-/** What each study's file holds (the per-study part of the old export-samples.sql). Genetic sex is a human layer: mouse sex_call.json files say "unknown". */
+/** What each study's file holds (the per-study part of the old export-samples.sql). The legacy sex_call.json is not a layer in Alpha. */
 const STUDIES_SQL = `
 SELECT b.gse_id,
   TRIM(
@@ -55,8 +56,7 @@ SELECT b.gse_id,
     CASE WHEN b.entries LIKE '%intron_counts.1pz%'     THEN 'splicing|'    ELSE '' END ||
     CASE WHEN b.entries LIKE '%sj_counts.1pz%'         THEN 'junctions|'   ELSE '' END ||
     CASE WHEN b.entries LIKE '%vdj_gene_usage.1pz%'    THEN 'vdj|'         ELSE '' END ||
-    CASE WHEN b.entries LIKE '%donor_assignments.tsv%' THEN 'donors|'      ELSE '' END ||
-    CASE WHEN b.entries LIKE '%sex_call.json%' AND m.organism_primary = 'Homo sapiens' THEN 'sex|' ELSE '' END,
+    CASE WHEN b.entries LIKE '%donor_assignments.tsv%' THEN 'donors|'      ELSE '' END,
     '|') AS layer
 FROM bundle_index b
 LEFT JOIN gse_meta m ON m.gse_id = b.gse_id
@@ -68,7 +68,7 @@ const ATTR_SQL = `
 SELECT a.gsm_id, a.attr, a.value_norm, a.value_num, a.unit, a.source, a.confidence
 FROM sample_attr a
 JOIN gsm s ON s.gsm_id = a.gsm_id AND s.status = 'DONE' AND ${sampleServedSql("s.gsm_id")} AND ${studyServedSql("s.gse_id")}
-WHERE a.attr IN ('tissue', 'disease', 'disease_state', 'sex', 'age', 'life_stage', 'sample_type', 'treatment_status')
+WHERE a.attr IN ('tissue', 'disease', 'disease_state', 'sex', 'sex_genetic', 'ancestry_genetic', 'age', 'life_stage', 'sample_type', 'treatment_status')
   AND a.gsm_id > ?
 ORDER BY a.gsm_id, a.attr, a.source, a.value_norm
 LIMIT ?`;
