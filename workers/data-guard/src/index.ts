@@ -11,6 +11,8 @@ interface Env {
 }
 
 const KEY_RE = /^\/data\/(GSE\d+)\/([^/]+)$/;
+// v2 study manifests of withheld studies (exact routes in wrangler.toml; everything else under /v2/* stays with data-v2)
+const V2_MANIFEST_RE = /^\/v2\/m\/(GSE\d+)\.json$/;
 const cache = new Map<string, ZipIndex>();
 const CACHE_MAX = 256;
 
@@ -54,6 +56,8 @@ function parseRange(h: string | null, size: number): [number, number] | null | "
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+    const v2 = V2_MANIFEST_RE.exec(url.pathname);
+    if (v2) return isWithheld(v2[1]) ? text(404, "Not found") : fetch(request);
     const m = KEY_RE.exec(url.pathname);
     if (!m) return fetch(request);
     const [, gse, file] = m;
