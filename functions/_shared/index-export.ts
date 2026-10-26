@@ -12,8 +12,8 @@
  *
  * Research Alpha (./alpha): samples that are not part of the atlas and withheld studies are not exported, so the next
  * nightly build drops them from the cohort index; layers Alpha does not offer (mtDNA, doublets, the legacy sex call) are
- * not listed. Pipeline facts `sex_genetic` and `ancestry_genetic` (the s1 labeller's per-sample summaries, written to
- * sample_attr with source = pipeline) are exported, so the cohort index's existing attributes of those names fill in.
+ * not listed. Pipeline facts `sex_genetic`, `ancestry_genetic` and `cell_type` (the s1 labeller's per-sample summaries, written to
+ * sample_attr with source = pipeline by ./s1-labels) are exported, so the cohort index's attributes of those names fill in.
  */
 import { sampleServedSql, studyServedSql } from "./alpha";
 
@@ -68,7 +68,8 @@ const ATTR_SQL = `
 SELECT a.gsm_id, a.attr, a.value_norm, a.value_num, a.unit, a.source, a.confidence
 FROM sample_attr a
 JOIN gsm s ON s.gsm_id = a.gsm_id AND s.status = 'DONE' AND ${sampleServedSql("s.gsm_id")} AND ${studyServedSql("s.gse_id")}
-WHERE a.attr IN ('tissue', 'disease', 'disease_state', 'sex', 'sex_genetic', 'ancestry_genetic', 'age', 'life_stage', 'sample_type', 'treatment_status')
+WHERE a.attr IN ('tissue', 'disease', 'disease_state', 'sex', 'sex_genetic', 'ancestry_genetic', 'cell_type', 'age', 'life_stage', 'sample_type', 'treatment_status')
+  AND (a.attr != 'cell_type' OR a.source = 'pipeline')  -- labelled cell types only, not text-extracted ones
   AND a.gsm_id > ?
 ORDER BY a.gsm_id, a.attr, a.source, a.value_norm
 LIMIT ?`;

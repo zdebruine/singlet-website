@@ -12,8 +12,8 @@
  *   dtype 1 u8, 2 u16, 3 u32, 4 i32, 5 f32, 6 f64, 7 bool (bitmap, LSB first), 8 string (NUL joined), 9 barcode
  *   enc   0 raw, 1 zstd, 2 delta + zstd (integer columns; wrapping differences)
  *
- * Only what a cell filter needs is decoded: numeric and bool columns. String and barcode columns are listed in the directory but
- * never decoded here.
+ * Only what a cell filter needs is decoded: numeric, bool and string (categorical label) columns. Barcode columns are listed in the
+ * directory but never decoded here.
  *
  * `openCells` reads through a range fetcher (offsets relative to the start of the cells member): a small table (up to
  * `wholeMax`, 1 MiB by default) costs ONE request for the whole member, a large one costs the directory plus one request per
@@ -188,7 +188,7 @@ export class CellsTable {
   /** Calls made to the range fetcher so far, including the ones that opened the table. */
   requests: number;
   private readonly byName = new Map<string, CellsColumnInfo>();
-  private readonly cache = new Map<string, Promise<Float64Array | Uint8Array>>();
+  private readonly cache = new Map<string, Promise<Float64Array | Uint8Array | string[]>>();
 
   /** Use `openCells`. `head` holds the bytes from offset 0 that were already read. */
   constructor(
@@ -251,6 +251,37 @@ export class CellsTable {
       this.cache.set(key, p);
     }
     return p as Promise<Uint8Array>;
+  }
+
+  /** A string column (dtype 8: UTF-8 values, each NUL-terminated; raw or zstd) as one value per row. */
+  strings(name: string): Promise<string[]> {
+    const c = this.require(name);
+    if (c.dtype !== DT_STR) throw new CellsError(`column '${name}' is not a string column (dtype ${c.dtype})`);
+    const key = "s:" + name;
+    let p = this.cache.get(key);
+    if (!p) {
+      p = this.decodeStrings(c);
+      this.cache.set(key, p);
+    }
+    return p as Promise<string[]>;
+  }
+
+  private async decodeStrings(c: CellsColumnInfo): Promise<string[]> {
+    const n = this.nRows;
+    if (n === 0) return [];
+    const body = await this.body(c);
+    let raw: Uint8Array;
+    if (c.enc === 0) raw = body;
+    else if (c.enc === 1) {
+      const size = zstdContentSize(body);
+      if (size === null || size > MAX_COLUMN_BYTES) throw new CellsError(`column '${c.name}': zstd frame without a bounded content size`);
+      raw = zstdExact(body, size, c.name);
+    } else throw new CellsError(`string column '${c.name}' cannot be delta encoded`);
+    if (raw.length > MAX_COLUMN_BYTES) throw new CellsError(`column '${c.name}' is too large to decode`);
+    if (!raw.length || raw[raw.length - 1] !== 0) throw new CellsError(`string column '${c.name}' is not NUL terminated`);
+    const vals = utf8.decode(raw.subarray(0, raw.length - 1)).split(String.fromCharCode(0));
+    if (vals.length !== n) throw new CellsError(`string column '${c.name}' holds ${vals.length} values, expected ${n}`);
+    return vals;
   }
 
   private async decodeNumeric(c: CellsColumnInfo): Promise<Float64Array> {
@@ -364,11 +395,25 @@ export async function cellsSummary(table: CellsTable): Promise<{ nRows: number; 
 // ── filter ──────────────────────────────────────────────────────────────────
 
 export type WhereOp = ">=" | "<=" | ">" | "<" | "==" | "!=";
-export interface CellWhere {
+export interface CellWhereNumber {
   column: string;
   op: WhereOp;
   value: number;
 }
+/**
+ * A categorical clause on a string column (a text label such as a cell type or sex column): `==` / `!=` one value, `in` / `not_in` a
+ * list, `contains` any of a list as a substring (cell_type_path "CL:a>CL:b>CL:c" contains every level of the call). Values compare
+ * case-insensitively; an empty cell matches only "".
+ */
+export type TextOp = "==" | "!=" | "in" | "not_in" | "contains";
+export interface CellWhereText {
+  column: string;
+  op: TextOp;
+  value: string[];
+}
+export type CellWhere = CellWhereNumber | CellWhereText;
+export const isTextWhere = (w: CellWhere): w is CellWhereText => Array.isArray(w.value);
+export const MAX_TEXT_VALUES = 100;
 
 /**
  * umi = n_umi_exon + n_umi_intron and features = max(n_feat_exon, n_feat_intron), the quantities `stats()` in cells.py takes
@@ -385,6 +430,7 @@ export interface CellFilter {
 
 const FILTER_KEYS = new Set(["called_only", "min_umi", "max_umi", "min_features", "max_features", "where"]);
 const OPS = new Set<string>([">=", "<=", ">", "<", "==", "!="]);
+const TEXT_OPS = new Set<string>(["==", "!=", "in", "not_in", "contains"]);
 const COLUMN_RE = /^[A-Za-z0-9_.-]{1,64}$/;
 export const MAX_WHERE = 6;
 
@@ -415,8 +461,18 @@ export function parseCellFilter(input: unknown): { filter: CellFilter } | { erro
       const rec = w as Record<string, unknown>;
       for (const k of Object.keys(rec)) if (k !== "column" && k !== "op" && k !== "value") return { error: `where[${i}]: unknown key '${k}'` };
       if (typeof rec.column !== "string" || !COLUMN_RE.test(rec.column)) return { error: `where[${i}].column must match ${COLUMN_RE.source}` };
+      const text = typeof rec.value === "string" || Array.isArray(rec.value);
+      if (text) {
+        const vals = (Array.isArray(rec.value) ? rec.value : [rec.value]) as unknown[];
+        if (typeof rec.op !== "string" || !TEXT_OPS.has(rec.op)) return { error: `where[${i}].op must be one of ${[...TEXT_OPS].join(" ")} for a text value` };
+        if (!vals.length || vals.length > MAX_TEXT_VALUES || !vals.every((v) => typeof v === "string" && v.length <= 200))
+          return { error: `where[${i}].value must be a string or a list of 1-${MAX_TEXT_VALUES} strings` };
+        if ((rec.op === "==" || rec.op === "!=") && vals.length !== 1) return { error: `where[${i}]: ${rec.op} takes one value; use in / not_in for a list` };
+        where.push({ column: rec.column, op: rec.op as TextOp, value: vals as string[] });
+        continue;
+      }
       if (typeof rec.op !== "string" || !OPS.has(rec.op)) return { error: `where[${i}].op must be one of ${[...OPS].join(" ")}` };
-      if (typeof rec.value !== "number" || !Number.isFinite(rec.value)) return { error: `where[${i}].value must be a finite number` };
+      if (typeof rec.value !== "number" || !Number.isFinite(rec.value)) return { error: `where[${i}].value must be a finite number, a string or a list of strings` };
       where.push({ column: rec.column, op: rec.op as WhereOp, value: rec.value });
     }
     filter.where = where;
@@ -465,7 +521,7 @@ function compare(op: WhereOp, a: number, b: number): boolean {
   }
 }
 
-export async function filterCells(table: CellsTable, filter: CellFilter, opts: { maxRuns?: number } = {}): Promise<FilterResult> {
+export async function filterCells(table: CellsTable, filter: CellFilter, opts: { maxRuns?: number; allow?: Uint8Array | null } = {}): Promise<FilterResult> {
   const maxRuns = Math.max(0, Math.floor(opts.maxRuns ?? 500));
   const n = table.nRows;
   const used: string[] = [];
@@ -489,11 +545,22 @@ export async function filterCells(table: CellsTable, filter: CellFilter, opts: {
     need("n_feat_intron", "min_features/max_features");
   }
   for (const w of where) need(w.column, `where ${w.column} ${w.op} ${w.value}`);
+  const textCols = new Set(where.filter(isTextWhere).map((w) => w.column));
+  for (const name of textCols) if (table.info(name)!.dtype !== DT_STR) throw new CellsError(`column '${name}' is not a text column (a text value needs a string column)`);
+  for (const w of where) if (!isTextWhere(w) && textCols.has(w.column)) throw new CellsError(`column '${w.column}' is a text column: compare it with a string value`);
 
   const cols = new Map<string, Float64Array>();
-  await Promise.all(used.map(async (name) => void cols.set(name, await values(table, name, "the filter"))));
+  const texts = new Map<string, string[]>();
+  await Promise.all(
+    used.map(async (name) => {
+      if (textCols.has(name)) texts.set(name, await table.strings(name));
+      else cols.set(name, await values(table, name, "the filter"));
+    })
+  );
 
   const mask = new Uint8Array(n).fill(1);
+  // rows chosen elsewhere (find_cells: the cells the atlas cell index labels as asked)
+  if (opts.allow) for (let i = 0; i < n; i++) if (!opts.allow[i]) mask[i] = 0;
   if (calledOnly) {
     const c = cols.get("called")!;
     for (let i = 0; i < n; i++) if (c[i] === 0) mask[i] = 0;
@@ -519,6 +586,18 @@ export async function filterCells(table: CellsTable, filter: CellFilter, opts: {
     }
   }
   for (const w of where) {
+    if (isTextWhere(w)) {
+      const t = texts.get(w.column)!;
+      if (w.op === "contains") {
+        const subs = w.value.map((v) => v.toLowerCase()).filter(Boolean);
+        for (let i = 0; i < n; i++) if (mask[i] && !subs.some((v) => t[i].toLowerCase().includes(v))) mask[i] = 0;
+        continue;
+      }
+      const want = new Set(w.value.map((v) => v.toLowerCase()));
+      const keep = w.op === "==" || w.op === "in";
+      for (let i = 0; i < n; i++) if (mask[i] && want.has(t[i].toLowerCase()) !== keep) mask[i] = 0;
+      continue;
+    }
     const c = cols.get(w.column)!;
     for (let i = 0; i < n; i++) if (mask[i] && !compare(w.op, c[i], w.value)) mask[i] = 0;
   }

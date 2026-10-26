@@ -44,6 +44,8 @@ export const ATTRS: AttrSpec[] = [
   { key: "sex", kind: "cat", label: "Sex (declared)" },
   { key: "sex_genetic", kind: "cat", label: "Sex (genetic)" },
   { key: "ancestry_genetic", kind: "cat", label: "Ancestry (genetic)" },
+  // The .s1 labeller's cell types (CL labels, each with its labelled ancestors; ./s1-labels): a sample holds several.
+  { key: "cell_type", kind: "cat", label: "Cell types (labelled)", multi: true },
   { key: "life_stage", kind: "cat", label: "Life stage" },
   { key: "sample_type", kind: "cat", label: "Sample type" },
   { key: "chemistry", kind: "cat", label: "Chemistry" },

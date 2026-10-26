@@ -84,23 +84,23 @@ const PROTOCOL_VERSIONS = ["2025-11-25", "2025-06-18", "2025-03-26"] as const;
 const LATEST_PROTOCOL = PROTOCOL_VERSIONS[0];
 const MAX_SAMPLES_IN_STUDY = 60;
 
-const INSTRUCTIONS_BASE = `singlet.bio is an open atlas of public single-cell RNA-seq studies from GEO, reprocessed from raw reads with one pipeline. Coverage is partial: studies whose deposited reads cannot be processed are left out, and get_study reports completeness for each study. One CC0 .singlet file per study (zip64) holding per-sample count matrices and per-sample QC.
+const INSTRUCTIONS_BASE = `singlet.bio is an open atlas of public single-cell RNA-seq studies from GEO, reprocessed from raw reads with one pipeline (Research Alpha). Coverage is partial: studies whose deposited reads cannot be processed are left out, and get_study reports completeness for each study. Data is CC0 in the .s1 format: one immutable object per sample (pz2-coded count matrices, a per-cell table, per-sample QC and provenance) plus a study manifest at data.singlet.bio/s1/m/<GSE>.json.
 
 Recommended order: search_datasets → assess_study or get_study → get_sample_qc → get_modalities (what is in the file beyond gene counts) → get_download_url (whole study) or get_partial_download (one sample's matrix, by HTTP range) → export_manifest for a cohort. compare_studies and find_matched_controls help pick controls.
 
-A .singlet file is not just gene counts: it can also carry splice junctions and exon inclusion (percent spliced in), mitochondrial heteroplasmy and chrM variants, genotype-free donor demultiplexing, non-host (microbial/viral) abundance, V(D)J usage and per-cell doublet/cell-cycle/ambient annotations. Older bundles have fewer of these — call get_modalities before telling a user a modality is available.
+What Alpha serves per sample: gene counts (spliced and unspliced), splice junctions and exon inclusion computed from them, cell calls and per-cell QC, and per-cell labels — Cell Ontology cell type (per-study accuracy: compartment 0.84, lineage 0.75, cell type 0.43, subtype 0.32; the last two are previews), chromosomal sex (98.1% of samples agree with GEO) and genetic ancestry (HANCESTRO; human donors with enough covered sites). The labels are public cell metadata: search_datasets and export_manifest filter studies by cell_type_label, sex_genetic and ancestry_genetic. Genotypes, mitochondrial allele data, ambient-RNA and doublet calls are not offered. Call get_modalities before telling a user a modality is available.
 
 Every number and every "why" string is computed, not generated — quote them, don't paraphrase. Catalog cell counts can differ from the file's own QC; the file is the truth. Every tool call needs a free singlet.bio account: sign in when your client asks, or send a personal API key from ${ACCOUNT_URL}; calls are counted per account. Downloads themselves (the data.singlet.bio links) never need one. Searches the built-in vocabulary can read cost no AI tokens; a question that needs the AI reading uses your AI allowance (200 readings a day and a monthly token allowance; the monthly allowance is shown in \`_meta.quota\`).`;
 
 
 /** Added to the instructions only once some study is served from s1 (see _shared/s1-gate). */
-const S1_INSTRUCTIONS = `Studies are being moved to a per-sample format (format "singlet-s1": one immutable object per sample plus a manifest). For those studies get_download_url returns the manifest, list_bundle_files and get_partial_download give byte ranges inside the sample objects, find_cells searches cells by their per-cell statistics, slice_cells gives the byte ranges of just those cells' matrix chunks, and resolve_features turns row numbers into feature names. Studies not moved yet keep the single .singlet file.`;
+const S1_INSTRUCTIONS = `For a study in the .s1 format (format "singlet-s1") get_download_url returns its manifest, list_bundle_files and get_partial_download give byte ranges inside the sample objects, find_cells searches cells by their per-cell statistics and labels, slice_cells gives the byte ranges of just those cells' matrix chunks, and resolve_features turns row numbers into feature names. A study not yet in the .s1 format has one legacy .singlet file (zip64).`;
 const REV_INSTRUCTIONS = `Answers about a study carry a \`rev\`; send it back as \`known_rev\` to get {unchanged: true} instead of the same answer again.`;
 const DIET_INSTRUCTIONS = `Results hold their data in structuredContent with a short text; pass verbose=true for the full text too.`;
 
 function instructions(s1: boolean, diet: boolean): string {
   const extra = [s1 ? S1_INSTRUCTIONS : null, REV_INSTRUCTIONS, diet ? DIET_INSTRUCTIONS : null].filter(Boolean).join(" ");
-  return INSTRUCTIONS_BASE.replace("\n\nA .singlet file is not just gene counts:", `\n\n${extra}\n\nA .singlet file is not just gene counts:`);
+  return INSTRUCTIONS_BASE.replace("\n\nWhat Alpha serves per sample:", `\n\n${extra}\n\nWhat Alpha serves per sample:`);
 }
 
 // ── JSON-RPC plumbing ───────────────────────────────────────────────────────
@@ -145,6 +145,9 @@ const TOOLS = [
         disease: { type: "array", items: { type: "string", enum: DISEASE_GROUPS as unknown as string[] }, description: "Extra canonical disease groups." },
         assay: { type: "array", items: { type: "string", enum: ASSAY_FAMILIES as unknown as string[] }, description: "Extra canonical assay families." },
         min_cells: { type: "integer", minimum: 0, description: "Only studies/samples with at least this many cells." },
+        sex_genetic: { type: "array", items: { type: "string", enum: ["female", "male"] }, description: "Chromosomal sex the .s1 labeller called from the cells (XIST vs chrY; 98.1% sample agreement with GEO)." },
+        ancestry_genetic: { type: "array", items: { type: "string" }, description: "Genetic ancestry the .s1 labeller called (HANCESTRO id or label: European, African, East Asian, South Asian, Hispanic or Latin American, admixed ancestry). Human donors only." },
+        cell_type_label: { type: "array", items: { type: "string" }, description: "Cell types the .s1 labeller called in the cells (Cell Ontology id or label, e.g. CL:0000084 or \"T cell\"; includes subtypes). Unlike the GEO-text cell type, this comes from the expression." },
         include_unbuilt: { type: "boolean", default: false, description: "Also return studies whose .singlet file is not published yet." },
         include_low_qc: { type: "boolean", default: false, description: "Also count and return samples singlet's QC flagged (few genes detected or few reads mapped). Left out by default; proceed with caution if you include them." },
       },
@@ -269,6 +272,9 @@ const TOOLS = [
             disease: { type: "array", items: { type: "string", enum: DISEASE_GROUPS as unknown as string[] } },
             assay: { type: "array", items: { type: "string", enum: ASSAY_FAMILIES as unknown as string[] } },
             cell_type: { type: "array", items: { type: "string" } },
+            sex_genetic: { type: "array", items: { type: "string", enum: ["female", "male"] } },
+            ancestry_genetic: { type: "array", items: { type: "string" } },
+            cell_type_label: { type: "array", items: { type: "string" } },
             min_cells: { type: "integer", minimum: 0 },
             year_min: { type: "integer" },
             year_max: { type: "integer" },
@@ -355,7 +361,7 @@ const NEW_TOOLS = [
     name: "find_cells",
     title: "Find cells by their statistics",
     description:
-      "Find cells in samples by per-cell statistics. Pick samples (gse_ids, gsm_ids, or a sample_filter), then filter their cells (called, UMIs, features, any numeric cells-table column). Returns per sample the matching cells as [start, length] column runs for slice_cells. At most 25 samples and 40 reads of the data host per call; continue with `after`. " + S1_ONLY,
+      "Find cells in samples by per-cell statistics and labels. Pick samples (gse_ids, gsm_ids, or a sample_filter, which also takes the samples' labelled sex, ancestry and cell types), then filter their cells (called, UMIs, features, any numeric or text cells-table column; cell_labels: the cell type, chromosomal sex and genetic ancestry the .s1 labeller gave each cell, answered by the atlas cell index). Returns per sample the matching cells as [start, length] column runs for slice_cells. At most 25 samples and 40 reads of the data host per call; continue with `after`. " + S1_ONLY,
     inputSchema: {
       type: "object",
       properties: {
@@ -374,6 +380,9 @@ const NEW_TOOLS = [
             min_median_umi: { type: "number" },
             min_median_genes: { type: "number" },
             include_low_qc: { type: "boolean", default: false },
+            sex_genetic: { type: "array", items: { type: "string", enum: ["female", "male"] }, description: "Samples whose labelled cells are of this chromosomal sex." },
+            ancestry_genetic: { type: "array", items: { type: "string" }, description: "Samples whose donors the labeller called this genetic ancestry (HANCESTRO id or label)." },
+            cell_type_label: { type: "array", items: { type: "string" }, description: "Samples where at least 5% of typed cells are this cell type (CL id or label, subtypes included)." },
           },
           additionalProperties: false,
         },
@@ -389,14 +398,31 @@ const NEW_TOOLS = [
             where: {
               type: "array",
               maxItems: 6,
-              description: "Conditions on any numeric column of the cells table.",
+              description: "Conditions on any numeric or text column of the cells table.",
               items: {
                 type: "object",
-                properties: { column: { type: "string" }, op: { type: "string", enum: [">=", "<=", ">", "<", "==", "!="] }, value: { type: "number" } },
+                properties: {
+                  column: { type: "string" },
+                  op: { type: "string", enum: [">=", "<=", ">", "<", "==", "!=", "in", "not_in", "contains"] },
+                  value: {
+                    description: "A number for a numeric column; a string or a list of strings (in / not_in / contains) for a text column such as cell_type_label, cell_type_path, sex_chrom or ancestry_hancestro, compared case-insensitively.",
+                    anyOf: [{ type: "number" }, { type: "string" }, { type: "array", items: { type: "string" }, maxItems: 100 }],
+                  },
+                },
                 required: ["column", "op", "value"],
                 additionalProperties: false,
               },
             },
+          },
+          additionalProperties: false,
+        },
+        cell_labels: {
+          type: "object",
+          description: "Per-cell labels from the .s1 labeller (public cell metadata), read from each sample's cells table (the atlas cell index for older objects): ontology ids or labels, subtypes included. Cell type per-study accuracy: compartment 0.84, lineage 0.75, cell type 0.43, subtype 0.32 (deeper levels are previews). ANDed with cell_filter.",
+          properties: {
+            cell_type: { type: "array", items: { type: "string" }, description: "Cell Ontology ids or labels, e.g. CL:0000084 or \"T cell\"." },
+            sex: { type: "array", items: { type: "string", enum: ["female", "male", "ambiguous", "unknown"] } },
+            ancestry: { type: "array", items: { type: "string" }, description: "HANCESTRO ids or labels (human donors with enough covered sites)." },
           },
           additionalProperties: false,
         },
@@ -742,6 +768,9 @@ function describeApplied(applied: NlSearchBody["applied"]): string {
   if (applied.disease_group.length) parts.push(`disease: ${applied.disease_group.join(" or ")}`);
   if (applied.assay_family.length) parts.push(`assay: ${applied.assay_family.join(" or ")}`);
   if (applied.cell_type.length) parts.push(`cell type: ${applied.cell_type.join(" or ")}`);
+  if (applied.cell_type_label?.length) parts.push(`labelled cell type: ${applied.cell_type_label.join(" or ")}`);
+  if (applied.sex_genetic?.length) parts.push(`genetic sex: ${applied.sex_genetic.join(" or ")}`);
+  if (applied.ancestry_genetic?.length) parts.push(`genetic ancestry: ${applied.ancestry_genetic.join(" or ")}`);
   if (applied.min_cells != null) parts.push(`at least ${fmt(applied.min_cells)} cells`);
   if (applied.year_min != null || applied.year_max != null) parts.push(`year ${applied.year_min ?? "…"}–${applied.year_max ?? "…"}`);
   if (applied.q) parts.push(`text: "${applied.q}"`);
@@ -772,6 +801,7 @@ async function searchDatasets(
   for (const v of strArray(args.disease)) url.searchParams.append("disease_group", v);
   for (const v of strArray(args.assay)) url.searchParams.append("assay_family", v);
   if (args.min_cells != null && Number.isFinite(Number(args.min_cells))) url.searchParams.set("min_cells", String(Math.max(0, Math.floor(Number(args.min_cells)))));
+  for (const k of ["sex_genetic", "ancestry_genetic", "cell_type_label"] as const) for (const v of strArray(args[k])) url.searchParams.append(k, v);
   if (args.include_unbuilt === true) url.searchParams.set("has_bundle", "0");
   if (args.include_low_qc === true) url.searchParams.set("include_low_qc", "1");
 

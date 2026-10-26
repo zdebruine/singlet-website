@@ -34,7 +34,7 @@ CREATE TABLE sample_qc (gsm_id TEXT PRIMARY KEY, gse_id TEXT, protocol TEXT, ref
   median_mito_fraction REAL, fraction_reads_in_cells REAL, total_genes_detected INTEGER, singlet_version TEXT, updated_at TEXT,
   matrix_bytes INTEGER, usable INTEGER, qc_tier INTEGER);
 `;
-const SCHEMA = ["010_accounts.sql", "012_ai_budget.sql", "032_v2_catalog.sql", "033_v2_sample_rev_key.sql", "038_s1_catalog.sql"].map((f) => readFileSync(`schema/${f}`, "utf8")).join("\n") + CATALOG;
+const SCHEMA = ["010_accounts.sql", "012_ai_budget.sql", "032_v2_catalog.sql", "033_v2_sample_rev_key.sql", "038_s1_catalog.sql", "030_search_facts.sql", "039_s1_labels.sql"].map((f) => readFileSync(`schema/${f}`, "utf8")).join("\n") + CATALOG;
 
 async function setup() {
   const db = createTestD1(SCHEMA);
@@ -478,6 +478,45 @@ describe("find_cells", () => {
     const none = (await rpc(env, "find_cells", { gse_ids: ["GSE1"], cell_filter: { min_umi: 1e9 } })).structuredContent;
     expect(none.results).toEqual([]);
     expect(none.samples_scanned).toBe(1);
+  });
+
+  it("filters samples by their label facts, and cells by the labels the atlas cell index gives them", async () => {
+    const { env } = await seeded(2);
+    env.DB.raw.exec(`INSERT INTO sample_attr (gsm_id, gse_id, attr, value_norm, ontology_id, value_num, source, extractor_version)
+      VALUES ('GSM1000001', 'GSE1', 'cell_type', 'T cell', 'CL:0000084', 0.7, 'pipeline', 't'), ('GSM1000002', 'GSE1', 'sex_genetic', 'male', 'PATO:0000384', 1, 'pipeline', 't')`);
+    const byType = (await rpc(env, "find_cells", { gse_ids: ["GSE1"], sample_filter: { cell_type_label: ["t cell"] }, cell_filter: {} })).structuredContent;
+    expect(byType.results.map((x: { gsm_id: string }) => x.gsm_id)).toEqual(["GSM1000001"]);
+    const bySex = (await rpc(env, "find_cells", { gse_ids: ["GSE1"], sample_filter: { sex_genetic: "male" }, cell_filter: {} })).structuredContent;
+    expect(bySex.results.map((x: { gsm_id: string }) => x.gsm_id)).toEqual(["GSM1000002"]);
+
+    // per-cell labels: the cell index names the labelled cells; find_cells ANDs them with the cells-table filter
+    const calledIdx = called.map((c, i) => (c === 1 ? i : -1)).filter((i) => i >= 0);
+    const uncalled = called.indexOf(0);
+    const labelled = [calledIdx[0], calledIdx[1], calledIdx[5], uncalled];
+    const prev = globalThis.fetch;
+    const bodies: any[] = [];
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input instanceof Request ? input.url : input);
+      if (url === "https://data.singlet.bio/s1/cidx/query") {
+        bodies.push(JSON.parse(String(init?.body)));
+        return new Response(JSON.stringify({ version: "20261101T0000Z-00000000", n: labelled.length, eligible: labelled.length, cells: { gsm: labelled.map(() => "GSM1000001"), col: labelled } }), { status: 200 });
+      }
+      return prev(input, init);
+    });
+    const r = (await rpc(env, "find_cells", { gsm_ids: ["GSM1000001"], cell_labels: { cell_type: ["T cell"], sex: "Female" }, cell_filter: {} })).structuredContent;
+    expect(bodies[0]).toMatchObject({ where: { samples: ["GSM1000001"], cell_type: ["T cell"], sex: ["female"] }, return: "cells" });
+    expect(r.results[0].runs).toEqual(runsOf((i) => [calledIdx[0], calledIdx[1], calledIdx[5]].includes(i)));
+    // the fixture object predates the label columns, so the cell index answers for it
+    expect(r.cell_labels).toMatchObject({ samples_from_cells_table: 0, cell_index: { samples: 1, complete: true, cells_labelled: 4, cells_returned: 4, index_version: "20261101T0000Z-00000000" } });
+
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) =>
+      String(input instanceof Request ? input.url : input).endsWith("/s1/cidx/query") ? new Response(JSON.stringify({ error: "over_budget", message: "too big" }), { status: 413 }) : prev(input, init)
+    );
+    const refused = (await rpc(env, "find_cells", { gsm_ids: ["GSM1000001"], cell_labels: { cell_type: "T cell" } })).structuredContent;
+    expect(refused.results).toEqual([]);
+    expect(refused.errors[0].error).toMatch(/no label columns, and the atlas cell index refused the query: too big/);
+    expect((await rpc(env, "find_cells", { gsm_ids: ["GSM1000001"], cell_labels: { tissue: "lung" } })).content[0].text).toMatch(/unknown key 'tissue'/);
+    expect((await rpc(env, "find_cells", { gsm_ids: ["GSM1000001"], cell_labels: { sex: "x" } })).content[0].text).toMatch(/sex takes/);
   });
 
   it("filters samples in D1 first: depth, organism, called cells, QC", async () => {

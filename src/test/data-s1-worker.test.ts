@@ -202,6 +202,18 @@ describe("classify", () => {
     expect(ok("/s1/cells/GSE145370.cells")).toMatchObject({ key: "s1/cells/GSE145370.cells", contentType: "application/octet-stream" });
   });
 
+  it("serves the campaign's other public keys: label sidecars and the atlas cell index, with their cache classes; never the ledger", () => {
+    expect(ok(`/s1/a/GSM1/${HEX}.parquet`)).toMatchObject({ key: `s1/a/GSM1/${HEX}.parquet`, cacheControl: "public, max-age=31536000, immutable" });
+    expect(ok("/s1/cidx/current.json")).toMatchObject({ key: "s1/cidx/current.json" });
+    expect(ok(`/s1/cidx/obj/${HEX}.scx`)).toMatchObject({ cacheControl: "public, max-age=31536000, immutable" });
+    expect(ok("/s1/cidx/v/20261101T0000Z-0123abcd.json")).toMatchObject({ contentType: "application/json; charset=utf-8" });
+    expect(ok("/s1/m/GSE145370.json")!.cacheControl).toBe("public, max-age=300");
+    // the campaign's ledger and anything outside the grammar stay private (404)
+    expect(ok("/s1/ledger/GSE145370.jsonl")).toBeNull();
+    expect(ok(`/s1/a/GSM1/${HEX}.tsv`)).toBeNull();
+    expect(ok("/store/m/GSE145370.json")).toBeNull();
+  });
+
   it.each([
     "/",
     "/s1",

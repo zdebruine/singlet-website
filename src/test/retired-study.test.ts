@@ -181,6 +181,40 @@ function rpc(env: Env, name: string, args: Record<string, unknown> = {}) {
 
 const MANIFEST = `https://data.singlet.bio/s1/m/${RETIRED}.json`;
 
+describe("the legacy retirement switch (s1_flags.legacy_bundles, schema/038)", () => {
+  const flip = (env: Env, value: "served" | "retired") => env.DB.raw.prepare(`UPDATE s1_flags SET value = ? WHERE name = 'legacy_bundles'`).run(value);
+  const ALIVE_MANIFEST = `https://data.singlet.bio/s1/m/${ALIVE}.json`;
+
+  it("'retired': every verified study stops naming its legacy file in the API and MCP; 'served' brings it back; an unmoved study is untouched", async () => {
+    const env = await world();
+    flip(env, "retired");
+    const alive = (await (await get(gseGet, env, `/api/gse/${ALIVE}`, { id: ALIVE })).json()) as any;
+    expectNoLegacy("gse detail", alive, ALIVE);
+    expect(alive.series).toMatchObject({ bundle_url: null, bundle_key: null });
+    expect(alive.series.s1).toMatchObject({ manifest_url: ALIVE_MANIFEST, legacy_available: false });
+    const dl = await rpc(env, "get_download_url", { gse_id: ALIVE });
+    expectNoLegacy("get_download_url", dl, ALIVE);
+    expect(JSON.stringify(dl)).toContain(ALIVE_MANIFEST);
+    const files = await rpc(env, "list_bundle_files", { gse_id: ALIVE });
+    expectNoLegacy("list_bundle_files", files, ALIVE);
+    // a study that was never moved keeps its file
+    const old = (await (await get(gseGet, env, `/api/gse/${LEGACY_ONLY}`, { id: LEGACY_ONLY })).json()) as any;
+    expect(old.series.bundle_url).toBe(`https://data.singlet.bio/data/${LEGACY_ONLY}/${LEGACY_ONLY}.singlet`);
+    // rollback: one UPDATE
+    flip(env, "served");
+    const back = (await (await get(gseGet, env, `/api/gse/${ALIVE}`, { id: ALIVE })).json()) as any;
+    expect(back.series.bundle_url).toBe(`https://data.singlet.bio/data/${ALIVE}/${ALIVE}.singlet`);
+    expect(legacyRequests(ALIVE)).toEqual([]); // nothing read the legacy file
+  });
+
+  it("the stored migration status is never changed by the switch", async () => {
+    const env = await world();
+    flip(env, "retired");
+    await get(gseGet, env, `/api/gse/${ALIVE}`, { id: ALIVE });
+    expect(env.DB.raw.prepare(`SELECT status FROM s1_migration WHERE gse_id = ?`).get(ALIVE)).toEqual({ status: "verified" });
+  });
+});
+
 describe("REST: a retired study answers from s1", () => {
   it("/api/gse/:id has no legacy URL or key, the s1 block and the s1 size", async () => {
     const env = await world();

@@ -9,7 +9,7 @@
 import { bundleUrl } from "./study-core";
 import { fmt, fmtBytes, GSM_RE, LOADERS, SITE, toolError, toolResult, type ToolResult } from "./mcp-core";
 import { knownRev, unchangedBody } from "./rev";
-import { filterCells, openCells, parseCellFilter, type CellFilter } from "./s1-cells";
+import { DT_STR, filterCells, openCells, parseCellFilter, type CellFilter, type CellsTable } from "./s1-cells";
 import {
   GSE_RE,
   getS1Sample,
@@ -38,7 +38,8 @@ import {
   sampleObjectUrl,
   selectColumns,
 } from "./s1-serve";
-import { s1ManifestUrl, s1PackIndexUrl, s1PackUrl } from "./s1-urls";
+import { s1ManifestUrl, s1PackIndexUrl, s1PackUrl, s1Url } from "./s1-urls";
+import { HANCESTRO_LABELS, LABEL_FILTERS, LABEL_FILTER_FIELDS, labelMatchSql, normalizeLabelValues } from "./s1-labels";
 import { loadModality, loadSnippets, parseLoadModalities, sampleLoadModalities, selectMembers, type Selection } from "./s1-load-modalities";
 import { organismToScientific } from "./vocab";
 
@@ -367,7 +368,153 @@ async function loadBlock(ctx: S1ToolCtx, gse: string, gsm: string, rev: string, 
 
 // ── find_cells ──────────────────────────────────────────────────────────────
 
-const SAMPLE_FILTER_KEYS = ["min_called", "max_called", "min_median_umi", "min_median_genes", "organism", "tissue_group", "disease_group", "assay_family", "include_low_qc"] as const;
+const SAMPLE_FILTER_KEYS = ["min_called", "max_called", "min_median_umi", "min_median_genes", "organism", "tissue_group", "disease_group", "assay_family", "include_low_qc", ...LABEL_FILTER_FIELDS] as const;
+
+/** cell_labels: per-cell label filters answered by the atlas cell index (POST /s1/cidx/query, data Worker). */
+const CELL_LABEL_KEYS = ["cell_type", "sex", "ancestry"] as const;
+export type CellLabels = Partial<Record<(typeof CELL_LABEL_KEYS)[number], string[]>>;
+const SEXES = new Set(["female", "male", "ambiguous", "unknown"]);
+/** Cells per cell-index answer (its cap, docs/format-s1-cell-index.md 6.3). */
+const CIDX_MAX_CELLS = 10_000;
+
+function parseCellLabels(input: unknown): { labels: CellLabels | null } | { error: string } {
+  if (input === undefined || input === null) return { labels: null };
+  if (typeof input !== "object" || Array.isArray(input)) return { error: "cell_labels must be an object" };
+  const out: CellLabels = {};
+  for (const [k, v] of Object.entries(input as Record<string, unknown>)) {
+    if (!(CELL_LABEL_KEYS as readonly string[]).includes(k)) return { error: `unknown key '${k}' (allowed: ${CELL_LABEL_KEYS.join(", ")})` };
+    const vals = (Array.isArray(v) ? v : [v]).map((x) => (typeof x === "string" ? x.trim() : "")).filter(Boolean);
+    if (!vals.length || vals.length > 20 || vals.some((x) => x.length > 200)) return { error: `${k} takes 1-20 ontology ids or labels` };
+    if (k === "sex" && vals.some((x) => !SEXES.has(x.toLowerCase()))) return { error: "sex takes female, male, ambiguous or unknown" };
+    out[k as keyof CellLabels] = k === "sex" ? vals.map((x) => x.toLowerCase()) : vals;
+  }
+  return { labels: Object.keys(out).length ? out : null };
+}
+
+/** The label columns the transcode writes into every sample's cells table (Singlet-Bio/singlet labels_step CELLS_LABEL_COLUMNS). */
+const CELLS_LABEL_COLUMNS = ["cell_type_cl", "cell_type_label", "cell_type_path", "sex_chrom", "ancestry_hancestro"] as const;
+
+interface ResolvedLabels {
+  /** CL ids asked for, and the ids of the labels asked for (label_term, the labeller's vocabulary). */
+  cellTypeIds: Set<string>;
+  /** Labels with no id in label_term: matched against cell_type_label as written. */
+  cellTypeLabels: Set<string>;
+  sexes: Set<string> | null;
+  ancestryIds: Set<string> | null;
+}
+
+/** Ontology ids for the labels asked for: an id stays an id; a label is looked up in label_term (and the HANCESTRO groups). */
+export async function resolveLabels(db: D1Database, labels: CellLabels): Promise<ResolvedLabels> {
+  const isId = (v: string) => /^[a-z]+:\d+$/i.test(v);
+  const names = [...(labels.cell_type ?? []), ...(labels.ancestry ?? [])].filter((v) => !isId(v)).map((v) => v.toLowerCase());
+  const byLabel = new Map<string, string[]>();
+  for (const [id, label] of Object.entries(HANCESTRO_LABELS)) byLabel.set(label.toLowerCase(), [id]);
+  if (names.length) {
+    try {
+      const rs = await db
+        .prepare(`SELECT term_id, lower(label) AS label FROM label_term WHERE lower(label) IN (${names.map(() => "?").join(",")})`)
+        .bind(...names)
+        .all<{ term_id: string; label: string }>();
+      for (const r of rs.results ?? []) byLabel.set(r.label, [...(byLabel.get(r.label) ?? []), r.term_id]);
+    } catch (e) {
+      if (!/no such table/i.test(String(e))) throw e;
+    }
+  }
+  const cellTypeIds = new Set<string>();
+  const cellTypeLabels = new Set<string>();
+  for (const v of labels.cell_type ?? []) {
+    if (isId(v)) cellTypeIds.add(v.toUpperCase());
+    else {
+      const ids = byLabel.get(v.toLowerCase());
+      if (ids) ids.forEach((x) => cellTypeIds.add(x));
+      else cellTypeLabels.add(v.toLowerCase());
+    }
+  }
+  const ancestryIds = labels.ancestry
+    ? new Set(labels.ancestry.flatMap((v) => (isId(v) ? [v.toUpperCase()] : byLabel.get(v.toLowerCase()) ?? [v])))
+    : null;
+  return { cellTypeIds, cellTypeLabels, sexes: labels.sex ? new Set(labels.sex) : null, ancestryIds };
+}
+
+/**
+ * Rows of a cells table that carry the labels, read from its own label columns; null when the table has none (an object written before
+ * the labels moved into the cells table), so the caller asks the atlas cell index instead. A cell type id matches any level of the call
+ * (cell_type_path, or cell_type_cl in tables without a path), so a query for T cell finds CD4 and CD8 T cells.
+ */
+export async function labelMaskFromTable(table: CellsTable, want: ResolvedLabels, labels: CellLabels): Promise<Uint8Array | null> {
+  const needs: string[] = [];
+  if (labels.cell_type) needs.push(table.has("cell_type_path") ? "cell_type_path" : "cell_type_cl", "cell_type_label");
+  if (labels.sex) needs.push("sex_chrom");
+  if (labels.ancestry) needs.push("ancestry_hancestro");
+  for (const c of needs) if (!table.has(c) || table.info(c)!.dtype !== DT_STR) return null;
+  const n = table.nRows;
+  const mask = new Uint8Array(n).fill(1);
+  if (labels.cell_type) {
+    const pathCol = table.has("cell_type_path") ? await table.strings("cell_type_path") : await table.strings("cell_type_cl");
+    const labelCol = await table.strings("cell_type_label");
+    for (let i = 0; i < n; i++) {
+      const levels = pathCol[i] ? pathCol[i].split(">") : [];
+      const ok = levels.some((x) => want.cellTypeIds.has(x)) || want.cellTypeLabels.has(labelCol[i].toLowerCase());
+      if (!ok) mask[i] = 0;
+    }
+  }
+  if (want.sexes) {
+    const col = await table.strings("sex_chrom");
+    for (let i = 0; i < n; i++) if (mask[i] && !want.sexes.has(col[i] ? col[i].toLowerCase() : "unknown")) mask[i] = 0;
+  }
+  if (want.ancestryIds) {
+    const col = await table.strings("ancestry_hancestro");
+    for (let i = 0; i < n; i++) if (mask[i] && !want.ancestryIds.has(col[i])) mask[i] = 0;
+  }
+  return mask;
+}
+
+interface LabelCells {
+  cols: Map<string, Set<number>>;
+  eligible: number | null;
+  returned: number;
+  complete: boolean;
+  version: string | null;
+}
+
+/** The cells of these samples that carry the labels, from the atlas cell index (one POST; a seeded sample of at most 10,000 cells). */
+async function cidxLabelCells(gsms: string[], labels: CellLabels): Promise<LabelCells | { error: string }> {
+  let res: Response;
+  try {
+    res = await fetch(s1Url("s1/cidx/query"), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ where: { samples: gsms, ...labels }, return: "cells", n: CIDX_MAX_CELLS, seed: 0 }),
+    });
+  } catch (e) {
+    return { error: `the atlas cell index did not answer (${e instanceof Error ? e.message : String(e)})` };
+  }
+  let body: Record<string, unknown> = {};
+  try {
+    body = (await res.json()) as Record<string, unknown>;
+  } catch {
+    /* a non-JSON answer is reported by its status below */
+  }
+  if (!res.ok) {
+    const msg = typeof body.message === "string" ? body.message : typeof body.error === "string" ? body.error : `HTTP ${res.status}`;
+    return { error: `the atlas cell index refused the query: ${msg}` };
+  }
+  const cells = (body.cells ?? {}) as { gsm?: unknown; col?: unknown };
+  const g = Array.isArray(cells.gsm) ? (cells.gsm as unknown[]) : [];
+  const c = Array.isArray(cells.col) ? (cells.col as unknown[]) : [];
+  const cols = new Map<string, Set<number>>();
+  const returned = Math.min(g.length, c.length);
+  for (let i = 0; i < returned; i++) {
+    const gsm = String(g[i]);
+    const col = Number(c[i]);
+    if (!Number.isInteger(col) || col < 0) continue;
+    let set = cols.get(gsm);
+    if (!set) cols.set(gsm, (set = new Set()));
+    set.add(col);
+  }
+  const eligible = typeof body.eligible === "number" ? body.eligible : null;
+  return { cols, eligible, returned, complete: eligible === null || eligible <= returned, version: typeof body.version === "string" ? body.version : null };
+}
 
 interface SampleRow {
   gse_id: string;
@@ -391,6 +538,8 @@ export async function findCells(ctx: S1ToolCtx, args: Record<string, unknown>, o
   const sf = (args.sample_filter && typeof args.sample_filter === "object" && !Array.isArray(args.sample_filter) ? args.sample_filter : {}) as Record<string, unknown>;
   for (const k of Object.keys(sf)) if (!(SAMPLE_FILTER_KEYS as readonly string[]).includes(k)) return toolError(`Unknown sample_filter key '${k}'. Use ${SAMPLE_FILTER_KEYS.join(", ")}.`);
   const scoped = gseIds.length > 0 || gsmIds.length > 0 || Object.keys(sf).some((k) => k !== "include_low_qc");
+  const lab = parseCellLabels(args.cell_labels);
+  if ("error" in lab) return toolError(`cell_labels: ${lab.error}`);
   if (!scoped) return toolError("Say which samples to look in: gse_ids, gsm_ids, or a sample_filter (organism, tissue_group, disease_group, assay_family, min_called, ...).");
 
   const parsed = parseCellFilter(args.cell_filter ?? {});
@@ -448,6 +597,16 @@ export async function findCells(ctx: S1ToolCtx, args: Record<string, unknown>, o
     where.push(`${col} = ?`);
     bind.push(v);
   }
+  // the .s1 label facts of the sample (./s1-labels): a sample-level scope, before any cell is read
+  for (const k of LABEL_FILTER_FIELDS) {
+    const raw = sf[k];
+    if (raw === undefined) continue;
+    const vals = normalizeLabelValues((Array.isArray(raw) ? raw : [raw]).map((v) => String(v)));
+    if (!vals.length) return toolError(`sample_filter.${k} needs a value.`);
+    const m = labelMatchSql("la", "value_norm", vals);
+    where.push(`s.gsm_id IN (SELECT la.gsm_id FROM sample_attr la WHERE la.source = 'pipeline' AND la.attr = '${LABEL_FILTERS[k]}' AND ${m.sql})`);
+    bind.push(...m.params);
+  }
   where.push(`EXISTS (SELECT 1 FROM sample_qc q WHERE q.gsm_id = s.gsm_id AND q.usable = 1 AND COALESCE(q.qc_tier, 0) <= ${sf.include_low_qc === true ? 1 : 0})`);
   // Samples that are not part of the atlas and withheld studies (./alpha) are never searched.
   where.push(sampleServedSql("s.gsm_id"), studyServedSql("s.gse_id"));
@@ -483,7 +642,13 @@ export async function findCells(ctx: S1ToolCtx, args: Record<string, unknown>, o
     });
   }
 
-  // 2. each sample's cells table, at most MAX_REQUESTS reads in all, 6 at a time
+  // 2. the per-cell labels asked for: from each cells table's own label columns; for an object without them, from the atlas cell index
+  const wanted = lab.labels ? await resolveLabels(ctx.db, lab.labels) : null;
+  let labelCells: LabelCells | null = null;
+  let fromTables = 0;
+  const deferred: { r: SampleRow; table: CellsTable }[] = [];
+
+  // 3. each sample's cells table, at most MAX_REQUESTS reads in all, 6 at a time
   type Hit = { gse_id: string; gsm_id: string; rev: string; n_columns: number; n_called: number | null; n_match: number; runs: [number, number][]; runs_truncated: boolean };
   const results: Hit[] = [];
   const errors: { gse_id: string; gsm_id: string; error: string }[] = [];
@@ -510,7 +675,12 @@ export async function findCells(ctx: S1ToolCtx, args: Record<string, unknown>, o
           if (!member || member.kind !== 2) throw new Error("the sample has no cells table");
           const url = sampleObjectUrl(r.key);
           const table = await openCells((off, len) => fetchObjectRange(url, member.off + off, len), member.len, { wholeMax: WHOLE_MAX });
-          const out = await filterCells(table, filter, { maxRuns });
+          let allow: Uint8Array | null = null;
+          if (lab.labels && wanted) {
+            allow = await labelMaskFromTable(table, wanted, lab.labels);
+            if (!allow) return { ok: true as const, r, table, out: null };
+          }
+          const out = await filterCells(table, filter, { maxRuns, allow });
           return { ok: true as const, r, table, out };
         } catch (e) {
           return { ok: false as const, r, error: e instanceof Error ? e.message : String(e) };
@@ -525,11 +695,42 @@ export async function findCells(ctx: S1ToolCtx, args: Record<string, unknown>, o
         continue;
       }
       requests += d.table.requests;
+      if (!d.out) {
+        deferred.push({ r: d.r, table: d.table });
+        continue;
+      }
+      if (lab.labels) fromTables++;
       if (d.out.nMatch > 0) {
         const runs: [number, number][] = [];
         for (let k = 0; k < d.out.runs.length; k += 2) runs.push([d.out.runs[k], d.out.runs[k + 1]]);
         results.push({ gse_id: d.r.gse_id, gsm_id: d.r.gsm_id, rev: d.r.study_rev, n_columns: d.out.nRows, n_called: d.r.n_called, n_match: d.out.nMatch, runs, runs_truncated: d.out.runsTruncated });
       }
+    }
+  }
+  // objects without label columns: one cell-index request for all of them
+  if (deferred.length && lab.labels) {
+    const li = await cidxLabelCells(deferred.map((x) => x.r.gsm_id), lab.labels);
+    requests += 1;
+    if ("error" in li) {
+      for (const x of deferred) errors.push({ gse_id: x.r.gse_id, gsm_id: x.r.gsm_id, error: `no label columns, and ${li.error}`.slice(0, 200) });
+    } else {
+      labelCells = li;
+      for (const x of deferred) {
+        const allow = new Uint8Array(x.table.nRows);
+        for (const c of li.cols.get(x.r.gsm_id) ?? []) if (c < allow.length) allow[c] = 1;
+        try {
+          const out = await filterCells(x.table, filter, { maxRuns, allow });
+          requests += 0;
+          if (out.nMatch > 0) {
+            const runs: [number, number][] = [];
+            for (let k = 0; k < out.runs.length; k += 2) runs.push([out.runs[k], out.runs[k + 1]]);
+            results.push({ gse_id: x.r.gse_id, gsm_id: x.r.gsm_id, rev: x.r.study_rev, n_columns: out.nRows, n_called: x.r.n_called, n_match: out.nMatch, runs, runs_truncated: out.runsTruncated });
+          }
+        } catch (e) {
+          errors.push({ gse_id: x.r.gse_id, gsm_id: x.r.gsm_id, error: (e instanceof Error ? e.message : String(e)).slice(0, 200) });
+        }
+      }
+      results.sort((a, b) => (a.gse_id === b.gse_id ? (a.gsm_id < b.gsm_id ? -1 : 1) : a.gse_id < b.gse_id ? -1 : 1));
     }
   }
   const last = stoppedAt ? rows[rows.indexOf(stoppedAt) - 1] : rows[rows.length - 1];
@@ -546,6 +747,29 @@ export async function findCells(ctx: S1ToolCtx, args: Record<string, unknown>, o
     requests,
     request_limit: maxRequests,
     budget_exhausted: stoppedAt !== null,
+    ...(lab.labels
+      ? {
+          cell_labels: {
+            labels: lab.labels,
+            samples_from_cells_table: fromTables,
+            ...(labelCells
+              ? {
+                  cell_index: {
+                    samples: deferred.length,
+                    index_version: labelCells.version,
+                    cells_labelled: labelCells.eligible,
+                    cells_returned: labelCells.returned,
+                    complete: labelCells.complete,
+                  },
+                }
+              : {}),
+            note:
+              !labelCells || labelCells.complete
+                ? "Every cell of these samples with these labels was considered."
+                : `For samples without label columns the cell index returned a seeded uniform sample of ${fmt(labelCells.returned)} of ${fmt(labelCells.eligible ?? 0)} labelled cells; ask for fewer samples to cover them all.`,
+          },
+        }
+      : {}),
     next_after: nextAfter,
     next: results.length ? `slice_cells with gse_id, gsm_id and runs gives the byte ranges of those cells' matrix chunks.` : null,
   };
