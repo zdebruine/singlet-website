@@ -16,6 +16,8 @@ import { FormatSizeChart, H5AD_RATIO, HBars } from "@/components/landing/charts"
 import { QcFunnel, sampleFunnel } from "@/components/landing/QcFunnel";
 import { GetStarted } from "@/components/landing/GetStarted";
 import { ModalityGrid } from "@/components/landing/Modalities";
+import { STORE_FORMAT_LIVE } from "@/lib/release";
+import { ACCESS, AlphaCtas, RIGOR, RigorFooter, SPEED, SpeedMeasured, TodayVsBeta } from "@/components/landing/AlphaBeta";
 
 // One message per browser view. Each screen fills the visible window (below the header) up to a cap, so a large
 // monitor does not stretch it, and stacks naturally on a phone. Plan: docs/LANDING.md.
@@ -52,6 +54,8 @@ const JUMPS = [
   { href: "#coverage", label: "Coverage" },
   { href: "#layers", label: "Layers" },
   { href: "#qc", label: "Quality control" },
+  { href: "#speed", label: "Speed" },
+  { href: "#rigor", label: "Rigor" },
 ];
 
 /** Hero buttons that open the matching tab of the Get started screen. */
@@ -109,6 +113,11 @@ const Index = () => {
                 </a>
               ))}
             </div>
+            <p className="mt-6 text-[13.5px] text-muted-foreground">
+              A research preview. Try it, tell us what you need, and{" "}
+              <Link to="/beta" className="text-primary underline underline-offset-2">see what's coming in Beta</Link>.
+            </p>
+            <AlphaCtas className="mt-3 flex flex-wrap items-center justify-center gap-3" />
             <nav aria-label="On this page" className="mt-8 flex flex-wrap justify-center gap-x-5 gap-y-2 text-[13.5px] text-muted-foreground">
               {JUMPS.map((j) => (
                 <a key={j.href} href={j.href} className="hover:text-foreground">
@@ -180,7 +189,33 @@ const Index = () => {
           </div>
         </Screen>
 
-        {/* 7 · Start */}
+        {/* 7 · It is fast: data structures and the edge */}
+        <Screen id="speed" label="Speed">
+          <Title sub={STORE_FORMAT_LIVE ? "One object per sample, an index into its cells, and serving from the edge." : "Small files, an index into each one, and serving from the edge."}>Fast because of how it is stored.</Title>
+          <div className="mt-12">
+            <TodayVsBeta today={SPEED.today} beta={SPEED.beta} />
+            <SpeedMeasured />
+          </div>
+        </Screen>
+
+        {/* 8 · It is open */}
+        <Screen id="access" label="Accessibility">
+          <Title sub="Ask in plain English, from your assistant, or from code. No account to download.">Open to anyone who asks.</Title>
+          <div className="mt-12">
+            <TodayVsBeta today={ACCESS.today} beta={ACCESS.beta} />
+          </div>
+        </Screen>
+
+        {/* 9 · It is honest about rigor: what Alpha is, and what Beta does */}
+        <Screen id="rigor" label="Rigor">
+          <Title sub="Alpha shows what is possible. Beta re-runs every sample with a benchmarked engine.">Measured, and shown as measured.</Title>
+          <div className="mt-12">
+            <TodayVsBeta today={RIGOR.today} beta={RIGOR.beta} footer={<RigorFooter />} />
+            <AlphaCtas className="mt-8 flex flex-wrap items-center justify-center gap-3" />
+          </div>
+        </Screen>
+
+        {/* 10 · Start */}
         <Screen id="get-started" label="Get started">
           <Title sub="Pick your tool.">Load singlet into your workspace.</Title>
           <div className="mt-12">

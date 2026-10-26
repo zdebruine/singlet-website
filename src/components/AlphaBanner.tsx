@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { X } from "lucide-react";
 import { FeedbackButton } from "@/components/FeedbackDialog";
 import { cn } from "@/lib/utils";
@@ -49,6 +50,14 @@ export function AlphaBanner() {
           <FeedbackButton category="idea" className="font-medium text-primary hover:underline underline-offset-2">
             send feedback
           </FeedbackButton>
+          <span className="text-muted-foreground" aria-hidden="true"> · </span>
+          <Link to="/beta#join" className="font-medium text-primary hover:underline underline-offset-2">
+            join the Beta
+          </Link>
+          <span className="text-muted-foreground" aria-hidden="true"> · </span>
+          <Link to="/known-issues" className="text-muted-foreground hover:text-foreground underline underline-offset-2">
+            known issues
+          </Link>
         </p>
         <button type="button" onClick={dismiss} className="shrink-0 p-0.5 rounded text-muted-foreground hover:text-foreground" aria-label="Dismiss the Research Alpha notice">
           <X size={14} />
