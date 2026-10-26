@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: CC0-1.0
+# SPDX-License-Identifier: MIT
 """Generates the binary fixtures under src/test/fixtures/v2/cells and src/test/fixtures/v2/sample.
 
 The fixtures are written by the Python reference implementation of the v2 format (singlet-bio repository, python/singlet/v2),

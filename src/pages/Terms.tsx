@@ -38,7 +38,7 @@ const Terms = () => {
             <p className="text-sm leading-relaxed">
               The atlas data is dedicated to the public domain under CC0 1.0 and may be used for any purpose,
               including commercial use, with no attribution required. The <span className="font-mono">singlet</span> software
-              is released under the MIT License. See our{" "}
+              and the code of this website are released under the MIT License. See our{" "}
               <a href="/data-license" className="text-primary hover:underline">License</a> page for details.
               The Service is provided on an as-is basis, and we may modify or discontinue any part of it at any time.
             </p>
