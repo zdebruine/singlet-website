@@ -3,7 +3,7 @@
 Read-only front for the per-sample objects in the R2 bucket `singlet-data` (layout: `docs/format-s1.md` in singlet-bio, section 2).
 
 It exists because our API token cannot edit zone cache rules but can deploy Workers routes (migration decision D9).
-It does not touch the legacy `data/<GSE>/<GSE>.singlet` objects: those stay on the R2 custom domain until retired.
+It does not touch the legacy `data/<GSE>/<GSE>.singlet` objects: those stay on the R2 custom domain behind the data-guard Worker (`workers/data-guard`), which refuses them for every study with a verified .s1 migration once `s1_flags.legacy_bundles` is `retired` (D1 schema/038).
 
 Transition: the handler serves the same keys under `/s1/*` and the old `/v2/*` (sample objects `.s1` or `.s2`), and the cell-index POST endpoints answer under both prefixes. wrangler.toml routes only `/s1/*`; `/v2/*` stays on the old deployed script `singlet-data-v2` until a later cleanup.
 
@@ -125,17 +125,17 @@ quota Durable Object and the SELF fan-out (`--no-self` turns it off, `CIDX_FANOU
 * `src/index.ts`: the Worker entry; wires `env.DATA` and `caches.default`.
 * `wrangler.toml`: route, R2 binding (read only: the code only calls `get` and `head`), observability.
 * `src/routes.ts`, `src/cidx.ts`, `src/gather.ts`, `src/scx.ts`, `src/limits.ts`: the cell index (above).
-* Tests: `src/test/singlet-data-worker.test.ts` and `src/test/singlet-data-cidx.test.ts` (golden answers from singlet-bio in `src/test/fixtures/cidx`) in the repository root (runs in `npm test`; the types are checked by `npm run check`).
+* Tests: `src/test/data-s1-worker.test.ts` and `src/test/data-s1-cidx.test.ts` (golden answers from singlet-bio in `src/test/fixtures/cidx`) in the repository root (runs in `npm test`; the types are checked by `npm run check`).
 
 ## Deploy (owner, once)
 
-1. `cd workers/singlet-data && npx wrangler deploy` (account `2f8a8cc95b6bc0be84ac611fe2e5c3c2`, as for `workers/alpha-proxy`).
+1. `cd workers/data && npx wrangler deploy` (account `2f8a8cc95b6bc0be84ac611fe2e5c3c2`, as for `workers/alpha-proxy`).
 2. Check the route really wins over the R2 custom domain, which is a proxied record for the same hostname:
    `curl -sI https://data.singlet.bio/s1/ref/index.json | grep -i x-served-by` must print `x-served-by: singlet-data`
    (a 404 JSON body is expected until the first object is uploaded). Also check that
    `https://data.singlet.bio/data/GSE138867/GSE138867.singlet` is unchanged (no `x-served-by`).
 3. If the route does not take precedence, remove the route from `wrangler.toml`, set
-   `routes = [{ pattern = "dv2.singlet.bio", custom_domain = true }]`, deploy, and point clients at `https://dv2.singlet.bio/s1/`.
+   `routes = [{ pattern = "ds1.singlet.bio", custom_domain = true }]`, deploy, and point clients at `https://ds1.singlet.bio/s1/`.
 
 Roll back by removing the route (`npx wrangler delete` or delete the route in the dashboard): the R2 custom domain serves the
 bucket exactly as before. The Worker never writes to the bucket.
@@ -143,7 +143,7 @@ bucket exactly as before. The Worker never writes to the bucket.
 ## Local test
 
 ```
-cd workers/singlet-data
+cd workers/data
 npx wrangler r2 object put singlet-data/s1/s/GSM1/00112233445566778899aabbccddeeff.s1 --file some.bin --local
 npx wrangler dev --local --port 8799 --compatibility-date <newest date your wrangler supports>
 curl -si -H "Range: bytes=0-9" http://127.0.0.1:8799/s1/s/GSM1/00112233445566778899aabbccddeeff.s1

@@ -12,8 +12,8 @@ workers_dev = false
 #   deploy, then `curl -sI https://data.singlet.bio/s1/ref/index.json` must show `x-served-by: singlet-data`.
 # If it does not, remove the route and use a Workers Custom Domain on a new hostname instead (the Worker is then the
 # origin and Cloudflare creates the DNS record and certificate):
-#   routes = [{ pattern = "dv2.singlet.bio", custom_domain = true }]
-# and point clients (website Pages variable S1_ORIGIN, Python/R loaders) at https://dv2.singlet.bio/s1/.
+#   routes = [{ pattern = "ds1.singlet.bio", custom_domain = true }]
+# and point clients (website Pages variable S1_ORIGIN, Python/R loaders) at https://ds1.singlet.bio/s1/.
 # The /v2/* route stays on the old deployed script `singlet-data-v2` until the cleanup that retires it; this Worker already
 # serves both /s1/* and /v2/* (R2 key = path) so that route can be moved here later.
 routes = [{ pattern = "data.singlet.bio/s1/*", zone_name = "singlet.bio" }]
