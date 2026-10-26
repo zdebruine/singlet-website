@@ -157,3 +157,18 @@ then load and refresh.
 - No automatic refresh: `refresh.sql` is not in the catalog crank or the enrichment workflow yet.
 - Values used by a single sample and abbreviations that need study context are unmapped; a per-study map would need a
   `gse_id` scope in `ontology_value_map`.
+
+## Handoff (2026-10-26, research beta wind-down)
+
+- **Production D1** (read-only check 2026-10-26): ontology_term 2,622, ontology_closure 40,974, ontology_value_map 2,237,
+  sample_term 62,660, ontology_term_count 2,614, sample_attr rows with ontology_id 62,689, sample_property 22,555,
+  property_value_map 994; cell_feature and sample_cell_summary exist and are empty. These match what was applied on 2026-10-23.
+- **Migration numbering clash:** `main` now has `schema/034_mcp_oauth.sql`. This branch's `034_ontology.sql` and
+  `035_cell_tier.sql` must be renumbered (e.g. 036/037) before merge, together with the references in `docs/`, `CLAUDE.md`,
+  `src/test/ontology.test.ts` and the comments in `scripts/ontology/`. The tables are `CREATE ... IF NOT EXISTS` and already
+  live, so renaming the files changes nothing in D1.
+- **Not merged.** CI and the preview were green on 2026-10-23; rerun CI after the renumbering and a rebase on main.
+- **Open:** load the cell index's `--d1-export` (or the feature job's ingest rows) into `cell_feature` / `sample_cell_summary`;
+  natural language to cell query (waits for the cell-index Worker, website #55); schedule `refresh.sql` and `properties.sql`
+  after ingests; the cohort bit index does not read terms yet; the cell-type labels need the work described in the
+  "Singlet Cell Label Evidence" review (Singlet-Bio/singlet#32 and #44 are the follow-up).

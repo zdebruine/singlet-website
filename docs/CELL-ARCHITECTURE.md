@@ -35,7 +35,7 @@ Rules:
 |---|---|---|
 | `gsm`, `gse_meta`, `sample_qc`, `sample_attr` | catalog, QC, extracted facts | live |
 | `ontology_*`, `sample_term`, `ontology_term_count` | ontology terms per sample and counts | live 2026-10-23 |
-| `sample_property` (+ `property_value_map`) | derived per-sample properties: donor_status (healthy / diseased), perturbation (treated / genetic / control), sample_kind (primary / cell_line / stem_cell / organoid / xenograft); filters `donor_status=`, `perturbation=`, `sample_kind=` | live 2026-10-23: 26,444 rows |
+| `sample_property` (+ `property_value_map`) | derived per-sample properties: donor_status (healthy / diseased), perturbation (treated / genetic / control), sample_kind (primary / cell_line / stem_cell / organoid / xenograft); filters `donor_status=`, `perturbation=`, `sample_kind=` | live 2026-10-23: 22,555 rows |
 | `cell_feature` | registry of per-cell features: id, kind, method, version, gene set source and licence, storage location; `POST /api/ingest/cell_feature` | table live, empty |
 | `sample_cell_summary` | per sample x (label term or feature): cells, cells above two thresholds, quantiles; `POST /api/ingest/sample_cell_summary` | table live, empty |
 
