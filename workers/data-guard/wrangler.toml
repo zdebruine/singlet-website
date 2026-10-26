@@ -18,5 +18,12 @@ routes = [
 binding = "DATA"
 bucket_name = "singlet-data"
 
+# Read only: the legacy-bundle retirement switch (src/retire.ts; website schema/038 s1_flags and s1_migration). Without it nothing
+# is retired.
+[[d1_databases]]
+binding = "DB"
+database_name = "singlet-catalog"
+database_id = "fb42f359-92a0-452c-91e4-f630f627c4c7"
+
 [observability]
 enabled = true

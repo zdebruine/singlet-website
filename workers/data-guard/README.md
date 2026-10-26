@@ -11,6 +11,11 @@ What it enforces (policy in `policy/alpha-policy.json`, rules in `src/policy.ts`
   the file.
 - **Samples not in Alpha** (wrong strand, non-RNA library processed as RNA, empty matrices) are never served: ranged reads into
   their members get 404, and studies with no sample left (`withheld_studies`) get 404 for every request.
+- **Retired legacy bundles** (the .s1 cutover, website `docs/S1-CUTOVER.md`): while the D1 switch `s1_flags.legacy_bundles` is
+  `retired`, every request for `data/<GSE>/*` of a study whose .s1 migration is verified (or retired) gets 410 with a `Link` to
+  `https://data.singlet.bio/s1/m/<GSE>.json`. The switch and each study's status are read from D1 (binding `DB`, read only) and
+  remembered for a minute per isolate, so a flip takes effect within a minute; setting it back to `served` is the rollback. Without the
+  binding, or when D1 cannot be read, nothing is retired.
 
 The Worker reads a bundle's central directory through the R2 binding (zip64 aware) to map a byte range to members; allowed requests go
 to the origin unchanged with `fetch(request)`, so CORS, ETag and Range behaviour stay R2's.
