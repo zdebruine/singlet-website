@@ -24,7 +24,7 @@ const ISSUES: Issue[] = [
       <>
         <p>
           Alpha used only the first sequencing run of each sample, and at most its first 30 million reads. The median sample used
-          15% of its available reads.
+          10% of the reads deposited in SRA for it.
         </p>
         <p>
           This lowers the number of cells called and the UMIs per cell. Against the authors' own Cell Ranger results on 135
