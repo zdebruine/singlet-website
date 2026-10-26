@@ -6,7 +6,7 @@ import Footer from "@/components/Footer";
 import NotFound from "./NotFound";
 import { usePageMeta } from "@/hooks/usePageMeta";
 import { findCapability } from "@/lib/benchmark-capabilities";
-import { commitUrl, datasetLinks, docStatus, loadDoc, paretoFor } from "@/lib/benchmarks";
+import { commitUrl, datasetLinks, docStatus, loadDoc, paretosFor } from "@/lib/benchmarks";
 import {
   BackLink, figureSupported, FigureChart, InProgress, MetricTable, ParetoChart, ReachPanel, ResourcesTable, StateBadge,
 } from "@/components/benchmarks/BenchParts";
@@ -31,9 +31,9 @@ const BenchmarkDetail = () => {
   });
   if (!cap) return <NotFound />;
 
-  const pareto = doc ? paretoFor(doc) : null;
+  const paretos = doc ? paretosFor(doc) : [];
   const figures = (doc?.figures ?? []).filter(figureSupported).slice(0, 3);
-  const panelCount = figures.length + (pareto ? 1 : 0) + (doc?.reach?.length ? 1 : 0);
+  const panelCount = figures.length + paretos.length + (doc?.reach?.length ? 1 : 0);
 
   return (
     <div className="min-h-screen bg-background">
@@ -59,7 +59,7 @@ const BenchmarkDetail = () => {
             {panelCount > 0 && (
               <section className="mt-10 grid gap-4 lg:grid-cols-2 xl:grid-cols-3" aria-label="Comparison panels">
                 {figures.map((f) => <FigureChart key={f.id} figure={f} />)}
-                {pareto && <ParetoChart pareto={pareto} />}
+                {paretos.map((p) => <ParetoChart key={p.title} pareto={p} />)}
                 {doc.reach?.length ? <ReachPanel reach={doc.reach} /> : null}
               </section>
             )}

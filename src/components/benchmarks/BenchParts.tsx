@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Check, Clock, Minus, X } from "lucide-react";
 import {
@@ -54,6 +55,13 @@ function Card({ title, sub, children, note }: { title: string; sub?: string; chi
 const yAxis = (label?: string) => (
   <YAxis tick={AXIS} width={56} label={label ? { value: label, angle: -90, position: "insideLeft", style: { ...AXIS, textAnchor: "middle" } } : undefined} />
 );
+
+/** Series that share a tool (e.g. two Singlet variants) keep the tool colour and fade in steps. */
+function sameToolOpacity(series: { name: string; tool?: string }[], i: number): number {
+  const tool = series[i].tool ?? series[i].name;
+  const same = series.filter((s) => (s.tool ?? s.name) === tool);
+  return same.length < 2 ? 1 : 1 - (same.indexOf(series[i]) * 0.55) / (same.length - 1);
+}
 
 export function figureSupported(f: BenchFigure): boolean {
   if (f.data_file && !(f.series?.length || f.rows?.length)) return false;
@@ -118,8 +126,8 @@ export function FigureChart({ figure: f }: { figure: BenchFigure }) {
           {bars ? (
             <BarChart data={rows}>
               {common}
-              {series.map((s) => (
-                <Bar key={s.name} dataKey={s.name} fill={colorFor(s.tool ?? s.name, names)} isAnimationActive={false}>
+              {series.map((s, si) => (
+                <Bar key={s.name} dataKey={s.name} fill={colorFor(s.tool ?? s.name, names)} fillOpacity={sameToolOpacity(series, si)} isAnimationActive={false}>
                   {byTool && rows.map((r) => <Cell key={String(r.x)} fill={colorFor(String(r.x), cats)} />)}
                 </Bar>
               ))}
@@ -223,9 +231,21 @@ function ruleText(m: BenchMetric): string {
   return "informational";
 }
 
+const COLLAPSED_ROWS = 12;
+
+/** Gating metrics that fail first, then passing, then informational; long lists are collapsed. */
 export function MetricTable({ metrics }: { metrics: BenchMetric[] }) {
+  const [all, setAll] = useState(false);
+  const rank = (m: BenchMetric) => (!isGating(m) ? 2 : m.pass === "fail" ? 0 : 1);
+  const sorted = [...metrics].sort((a, b) => rank(a) - rank(b));
+  const shown = all ? sorted : sorted.slice(0, COLLAPSED_ROWS);
+  const gating = metrics.filter(isGating);
   return (
     <div className="overflow-x-auto">
+      <p className="mb-3 text-[13px] text-muted-foreground">
+        {gating.filter((m) => m.pass === "pass").length} of {gating.length} gating metrics pass
+        {metrics.length > gating.length ? `, ${metrics.length - gating.length} informational` : ""}. Failing metrics are listed first.
+      </p>
       <table className="w-full text-[13.5px]">
         <thead>
           <tr className="border-b border-border text-left text-[12px] uppercase tracking-wider text-muted-foreground">
@@ -237,19 +257,24 @@ export function MetricTable({ metrics }: { metrics: BenchMetric[] }) {
           </tr>
         </thead>
         <tbody>
-          {metrics.map((m) => (
-            <tr key={m.id} className="border-b border-border/60 align-top">
+          {shown.map((m, i) => (
+            <tr key={`${m.id}-${m.dataset}-${i}`} className="border-b border-border/60 align-top">
               <td className="py-2 pr-4 text-foreground">{m.name}<span className="block text-[12px] text-muted-foreground">{m.dataset}</span>{m.corroborated_by?.length ? <span className="block text-[12px] text-muted-foreground">Supplement; corroborated by {m.corroborated_by.join(", ")}</span> : null}</td>
               <td className="py-2 pr-4 tabular">{fmtVal(m.singlet.value, m.unit)}</td>
               <td className="py-2 pr-4 tabular text-muted-foreground">
                 {(m.competitors ?? []).length ? m.competitors!.map((c) => <span key={c.tool} className="block">{c.tool} {fmtVal(c.value, m.unit)}</span>) : "none"}
               </td>
               <td className="py-2 pr-4 text-muted-foreground">{ruleText(m)}</td>
-              <td className="py-2"><StateBadge state={metricVerdictLabel(m) === "na" ? "na" : metricVerdictLabel(m) === "pass" ? "pass" : "fail"} /></td>
+              <td className="py-2"><StateBadge state={metricVerdictLabel(m)} /></td>
             </tr>
           ))}
         </tbody>
       </table>
+      {sorted.length > COLLAPSED_ROWS && (
+        <button type="button" onClick={() => setAll(!all)} className="mt-3 text-[13px] text-primary underline underline-offset-2">
+          {all ? "Show fewer" : `Show all ${sorted.length} metrics`}
+        </button>
+      )}
     </div>
   );
 }

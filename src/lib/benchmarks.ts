@@ -257,10 +257,18 @@ export function paretoOf(d: BenchDoc): Pareto | null {
   return { title: "Quality against runtime", xLabel: "Mean wall time", xUnit: "s", yLabel: metric.name, direction: metric.direction as "higher" | "lower", points };
 }
 
-/** The document's own pareto figure when it has one, else the derived one. */
-export function paretoFor(d: BenchDoc): Pareto | null {
-  const fig = (d.figures ?? []).find((f) => f.kind === "pareto");
-  return (fig && paretoFromFigure(fig)) || paretoOf(d);
+/** The document's own pareto figures when it has any, else the derived one. */
+export function paretosFor(d: BenchDoc): Pareto[] {
+  const own = (d.figures ?? []).filter((f) => f.kind === "pareto").map(paretoFromFigure).filter((p): p is Pareto => !!p);
+  if (own.length) return own;
+  const derived = paretoOf(d);
+  return derived ? [derived] : [];
+}
+
+/** Counts for a document: gating metrics only. */
+export function docCounts(d: BenchDoc) {
+  const g = d.metrics.filter(isGating);
+  return { n_metrics: g.length, n_pass: g.filter((m) => m.pass === "pass").length, n_fail: g.filter((m) => m.pass === "fail").length };
 }
 
 /** Tools x outputs across every document that publishes `reach`. */

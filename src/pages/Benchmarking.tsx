@@ -5,7 +5,7 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { usePageMeta } from "@/hooks/usePageMeta";
 import { CAPABILITIES, GROUPS } from "@/lib/benchmark-capabilities";
-import { loadDoc, loadIndex, NOTEBOOK_URL, reachMatrix, type BenchDoc, type BenchIndexEntry } from "@/lib/benchmarks";
+import { docCounts, docStatus, loadDoc, loadIndex, NOTEBOOK_URL, reachMatrix, type BenchDoc } from "@/lib/benchmarks";
 import { StateBadge } from "@/components/benchmarks/BenchParts";
 import { cn } from "@/lib/utils";
 
@@ -18,18 +18,17 @@ const Benchmarking = () => {
     path: "/benchmarking",
   });
   const { data: index } = useQuery({ queryKey: ["benchmark-index"], queryFn: ({ signal }) => loadIndex(signal), staleTime: 5 * 60_000 });
-  const entry = (slug: string): BenchIndexEntry | undefined => index?.capabilities.find((c) => c.capability === slug);
-  const published = CAPABILITIES.filter((c) => {
-    const s = entry(c.slug)?.status;
-    return s && s !== "missing" && s !== "invalid";
+  const results = useQueries({
+    queries: CAPABILITIES.map((c) => ({ queryKey: ["benchmark", c.slug], queryFn: ({ signal }: { signal: AbortSignal }) => loadDoc(c.slug, signal), staleTime: 5 * 60_000 })),
   });
-  const docs = useQueries({
-    queries: published.map((c) => ({ queryKey: ["benchmark", c.slug], queryFn: ({ signal }: { signal: AbortSignal }) => loadDoc(c.slug, signal), staleTime: 5 * 60_000 })),
-  })
-    .map((q) => q.data)
-    .filter((d): d is BenchDoc => !!d);
+  const docOf = (slug: string): BenchDoc | null => results[CAPABILITIES.findIndex((c) => c.slug === slug)]?.data ?? null;
+  const entry = (slug: string) => {
+    const d = docOf(slug);
+    return { status: docStatus(d), ...(d ? docCounts(d) : { n_metrics: 0, n_pass: 0, n_fail: 0 }), unresolved: index?.capabilities.find((c) => c.capability === slug)?.unresolved_corroboration };
+  };
+  const docs = results.map((q) => q.data).filter((d): d is BenchDoc => !!d);
   const reach = reachMatrix(docs);
-  const passing = CAPABILITIES.filter((c) => entry(c.slug)?.status === "pass").length;
+  const passing = CAPABILITIES.filter((c) => entry(c.slug).status === "pass").length;
 
   return (
     <div className="min-h-screen bg-background">
@@ -64,10 +63,10 @@ const Benchmarking = () => {
                       <h3 className="text-[15px] font-semibold text-foreground">{c.name}</h3>
                       <p className="mt-1 text-[12.5px] text-muted-foreground">vs {c.competitors.join(", ")}</p>
                       <div className="mt-3 flex items-center justify-between gap-2">
-                        <StateBadge state={e?.status ?? "missing"} />
-                        {e && e.n_metrics > 0 && <span className="tabular text-[12px] text-muted-foreground">{e.n_pass}/{e.n_metrics} metrics</span>}
+                        {e.status === "incomplete" && e.n_metrics > 0 ? <span className="text-[12px] font-medium text-muted-foreground">Draft results</span> : <StateBadge state={e.status} />}
+                        {e.n_metrics > 0 && <span className="tabular text-[12px] text-muted-foreground">{e.n_pass}/{e.n_metrics} metrics</span>}
                       </div>
-                      {e?.unresolved_corroboration?.length ? <p className="mt-2 text-[12px] text-muted-foreground">Waiting on real-data corroboration.</p> : null}
+                      {e.unresolved?.length ? <p className="mt-2 text-[12px] text-muted-foreground">Waiting on real-data corroboration.</p> : null}
                     </Link>
                   </li>
                 );

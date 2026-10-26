@@ -1,10 +1,12 @@
+import fs from "node:fs";
+import path from "node:path";
 import { describe, expect, it, vi, afterEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import BenchmarkDetail from "../pages/BenchmarkDetail";
 import {
-  datasetLinks, docStatus, paretoFor, paretoOf, parseDoc, parseIndex, reachMatrix, wordCount, type BenchDoc, type BenchMetric,
+  datasetLinks, docStatus, paretosFor, paretoOf, parseDoc, parseIndex, reachMatrix, wordCount, type BenchDoc, type BenchMetric,
 } from "../lib/benchmarks";
 import { parseRoadmap, roadmapProgress } from "../lib/roadmap";
 import { CAPABILITIES } from "../lib/benchmark-capabilities";
@@ -100,7 +102,7 @@ describe("Pareto frontier", () => {
   it("uses the pareto figure of the document when it has one", () => {
     const d = doc({ figures: [{ id: "p", kind: "pareto", title: "Accuracy vs CPU-h", x: { label: "cpu_h", unit: "CPU-hours" }, y: { label: "Accuracy" },
       series: [{ name: "singlet", tool: "singlet", x: [0.003], y: [0.99], frontier: true }, { name: "cellXY", tool: "cellXY", x: [0.013], y: [0.96], frontier: false }] }] });
-    const p = paretoFor(d)!;
+    const p = paretosFor(d)[0];
     expect(p.title).toBe("Accuracy vs CPU-h");
     expect(p.points.filter((x) => x.frontier).map((x) => x.tool)).toEqual(["singlet"]);
   });
@@ -175,5 +177,21 @@ describe("BenchmarkDetail", () => {
     expect(screen.getByText("012345678").getAttribute("href")).toContain("/commit/0123456789abcdef");
     expect(screen.getByText("python/singlet/celllabels/sex.py")).toBeTruthy();
     expect(screen.getAllByText("Passing").length).toBeGreaterThan(0);
+  });
+});
+
+describe("published result files", () => {
+  const dir = path.resolve(__dirname, "../../public/data/benchmarks");
+  const files = fs.readdirSync(dir).filter((f) => f.endsWith(".json") && f !== "index.json");
+
+  it.each(files)("%s parses, keeps its conclusion under 100 words and has valid verdicts", (f) => {
+    const slug = f.replace(/\.json$/, "");
+    const d = parseDoc(JSON.parse(fs.readFileSync(path.join(dir, f), "utf8")), slug);
+    expect(d, f).not.toBeNull();
+    expect(wordCount(d!.conclusion)).toBeLessThanOrEqual(100);
+    expect(CAPABILITIES.some((c) => c.slug === slug)).toBe(true);
+    for (const m of d!.metrics) expect(["pass", "fail", "na"]).toContain(m.pass);
+    // Never present a document as passing while a gating metric fails.
+    if (d!.metrics.some((m) => m.pass === "fail")) expect(docStatus(d)).toBe("fail");
   });
 });
