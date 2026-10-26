@@ -14,7 +14,7 @@
  */
 import { safeList } from "./json";
 import { sampleServedSql, studyServedSql } from "./alpha";
-import { attachFileFacts, type StudyV2 } from "./file-facts";
+import { attachFileFacts, type StudyS1 } from "./file-facts";
 import { parseCharacteristics, summarizeConditions, type ConditionSummary } from "./conditions";
 import { cellCountVerdict, isSuspectStudyCells, type CellCountVerdict } from "./suspect-cells";
 import {
@@ -116,8 +116,10 @@ export interface StudyRow {
   bundle_bytes: number | null;
   /** Key of the legacy single file; null when it is retired (deleted) or never existed. */
   bundle_key: string | null;
-  /** Set when the study is served from the v2 per-sample layout (manifest URL; whether the legacy file still exists). */
-  v2?: StudyV2 | null;
+  /** Set when the study is served from the per-sample layout (manifest URL; whether the legacy file still exists). */
+  s1?: StudyS1 | null;
+  /** DUAL: alias of `s1`. */
+  v2?: StudyS1 | null;
   bundle_n_samples: number | null;
   file_cells: number | null;
   reference_build: string | null;
@@ -163,8 +165,10 @@ export interface SampleRow {
   source: string | null;
   characteristics: Record<string, string>;
   has_bundle: boolean;
-  /** The study's v2 block when it is served from v2: where its files are once the legacy file is gone. */
-  v2?: StudyV2 | null;
+  /** The study's s1 block when it is served from s1: where its files are once the legacy file is gone. */
+  s1?: StudyS1 | null;
+  /** DUAL: alias of `s1`. */
+  v2?: StudyS1 | null;
   year: number | null;
   score: number | null;
 }

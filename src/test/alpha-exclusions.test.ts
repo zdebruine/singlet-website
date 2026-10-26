@@ -30,7 +30,7 @@ import { createTestD1 } from "./helpers/d1-sqlite";
 const KEY = "sk_live_" + "c".repeat(32);
 const SCHEMA =
   // production has the v2 tables, and the loader's rollup reads them
-  ["032_v2_catalog.sql", "033_v2_sample_rev_key.sql", "010_accounts.sql", "011_product.sql", "012_ai_budget.sql"].map((f) => readFileSync(`schema/${f}`, "utf8")).join("\n") +
+  ["032_v2_catalog.sql", "033_v2_sample_rev_key.sql", "038_s1_catalog.sql", "010_accounts.sql", "011_product.sql", "012_ai_budget.sql"].map((f) => readFileSync(`schema/${f}`, "utf8")).join("\n") +
   readFileSync("schema/001_init_local_nofts.sql", "utf8").replace(/PRAGMA[^;]*;/g, "") +
   `
 CREATE TABLE gse_meta (gse_id TEXT PRIMARY KEY, has_bundle INTEGER, organism_primary TEXT, organisms TEXT, tissue_groups TEXT, disease_groups TEXT, assay_families TEXT,

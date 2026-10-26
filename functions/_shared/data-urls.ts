@@ -2,7 +2,7 @@
  * Where the legacy single-file bundles live. Kept apart from study-core so the modules that decide whether such a URL may be named at all
  * (file-facts) and the ones that read it (bundle-reader) can both import it without a cycle.
  *
- * A study has this file only until its migration is retired (v2_migration.status = 'retired', see isLegacyAlive in v2-catalog); callers that
+ * A study has this file only until its migration is retired (s1_migration.status = 'retired', see isLegacyAlive in s1-catalog); callers that
  * emit the URL ask file-facts first.
  */
 

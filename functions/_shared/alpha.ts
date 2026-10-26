@@ -136,9 +136,9 @@ export function metaRollupSql(id: string, where: string, hasFile: string, stamp:
 }
 
 /** has_bundle over `g`: the legacy key, or (when the v2 tables exist) a study served from v2. */
-export function hasFileSql(withV2: boolean): string {
-  const served = `EXISTS (SELECT 1 FROM v2_study vs JOIN v2_migration vm ON vm.gse_id = vs.gse_id WHERE vs.gse_id = g.id AND vm.status IN ('verified', 'retired'))`;
-  return `CASE WHEN (g.r2_bundle_key IS NOT NULL AND g.r2_bundle_key != '')${withV2 ? ` OR ${served}` : ""} THEN 1 ELSE 0 END`;
+export function hasFileSql(withS1: boolean): string {
+  const served = `EXISTS (SELECT 1 FROM s1_study vs JOIN s1_migration vm ON vm.gse_id = vs.gse_id WHERE vs.gse_id = g.id AND vm.status IN ('verified', 'retired'))`;
+  return `CASE WHEN (g.r2_bundle_key IS NOT NULL AND g.r2_bundle_key != '')${withS1 ? ` OR ${served}` : ""} THEN 1 ELSE 0 END`;
 }
 
 /**

@@ -7,7 +7,7 @@
  *   initialize                → capabilities + serverInfo + instructions
  *   notifications/initialized → 202
  *   ping                      → {}
- *   tools/list                → the seventeen tools below (find_cells, slice_cells and resolve_features are v2-only)
+ *   tools/list                → the seventeen tools below (find_cells, slice_cells and resolve_features are s1-only)
  *   tools/call                → needs a free account: an OAuth access token
  *                               (Authorization: Bearer sat_…, from signing in
  *                               when the client connects; _shared/mcp-oauth) or
@@ -50,12 +50,12 @@ import { MANIFEST_FORMATS } from "./_shared/manifest-core";
 import type { StudyRow, SampleRow } from "./_shared/search-core";
 import { getCohort, saveCohort, ProductError, type ProductCtx } from "./_shared/product";
 import { dietEnabled, diet } from "./_shared/mcp-core";
-import { v2ToolsVisible } from "./_shared/v2-gate";
-import { findCells, resolveFeatures, sliceCells, v2DownloadUrl } from "./_shared/mcp-v2";
+import { s1ToolsVisible } from "./_shared/s1-gate";
+import { findCells, resolveFeatures, sliceCells, s1DownloadUrl } from "./_shared/mcp-s1";
 import { combineRev, fileRev, knownRev, unchangedBody } from "./_shared/rev";
-import { getV2State, isLegacyAlive } from "./_shared/v2-catalog";
-import { configureV2, v2ManifestUrl } from "./_shared/v2-urls";
-import { MODALITIES_PROP } from "./_shared/v2-load-modalities";
+import { getS1State, isLegacyAlive } from "./_shared/s1-catalog";
+import { configureS1, s1ManifestUrl } from "./_shared/s1-urls";
+import { MODALITIES_PROP } from "./_shared/s1-load-modalities";
 import {
   ACCOUNT_URL,
   LOADERS,
@@ -77,8 +77,8 @@ import {
 
 type Env = AppEnv;
 
-// 1.1.0: results carry their data in structuredContent and a short text (verbose=true restores the full text); studies migrated to v2 are
-// answered from the v2 catalog; find_cells, slice_cells and resolve_features; rev / known_rev.
+// 1.1.0: results carry their data in structuredContent and a short text (verbose=true restores the full text); studies migrated to s1 are
+// answered from the catalog; find_cells, slice_cells and resolve_features; rev / known_rev.
 const SERVER_INFO = { name: "singlet-bio", title: "singlet.bio atlas", version: "1.1.0" };
 const PROTOCOL_VERSIONS = ["2025-11-25", "2025-06-18", "2025-03-26"] as const;
 const LATEST_PROTOCOL = PROTOCOL_VERSIONS[0];
@@ -93,13 +93,13 @@ A .singlet file is not just gene counts: it can also carry splice junctions and 
 Every number and every "why" string is computed, not generated — quote them, don't paraphrase. Catalog cell counts can differ from the file's own QC; the file is the truth. Every tool call needs a free singlet.bio account: sign in when your client asks, or send a personal API key from ${ACCOUNT_URL}; calls are counted per account. Downloads themselves (the data.singlet.bio links) never need one. Searches the built-in vocabulary can read cost no AI tokens; a question that needs the AI reading uses your AI allowance (200 readings a day and a monthly token allowance; the monthly allowance is shown in \`_meta.quota\`).`;
 
 
-/** Added to the instructions only once some study is served from v2 (see _shared/v2-gate). */
-const V2_INSTRUCTIONS = `Studies are being moved to a per-sample format (format "singlet-v2": one immutable object per sample plus a manifest). For those studies get_download_url returns the manifest, list_bundle_files and get_partial_download give byte ranges inside the sample objects, find_cells searches cells by their per-cell statistics, slice_cells gives the byte ranges of just those cells' matrix chunks, and resolve_features turns row numbers into feature names. Studies not moved yet keep the single .singlet file.`;
+/** Added to the instructions only once some study is served from s1 (see _shared/s1-gate). */
+const S1_INSTRUCTIONS = `Studies are being moved to a per-sample format (format "singlet-s1": one immutable object per sample plus a manifest). For those studies get_download_url returns the manifest, list_bundle_files and get_partial_download give byte ranges inside the sample objects, find_cells searches cells by their per-cell statistics, slice_cells gives the byte ranges of just those cells' matrix chunks, and resolve_features turns row numbers into feature names. Studies not moved yet keep the single .singlet file.`;
 const REV_INSTRUCTIONS = `Answers about a study carry a \`rev\`; send it back as \`known_rev\` to get {unchanged: true} instead of the same answer again.`;
 const DIET_INSTRUCTIONS = `Results hold their data in structuredContent with a short text; pass verbose=true for the full text too.`;
 
-function instructions(v2: boolean, diet: boolean): string {
-  const extra = [v2 ? V2_INSTRUCTIONS : null, REV_INSTRUCTIONS, diet ? DIET_INSTRUCTIONS : null].filter(Boolean).join(" ");
+function instructions(s1: boolean, diet: boolean): string {
+  const extra = [s1 ? S1_INSTRUCTIONS : null, REV_INSTRUCTIONS, diet ? DIET_INSTRUCTIONS : null].filter(Boolean).join(" ");
   return INSTRUCTIONS_BASE.replace("\n\nA .singlet file is not just gene counts:", `\n\n${extra}\n\nA .singlet file is not just gene counts:`);
 }
 
@@ -348,14 +348,14 @@ const TOOLS = [
   },
 ];
 
-const V2_ONLY = "Only studies already moved to the v2 format are searched or sliced. Not metered.";
+const S1_ONLY = "Only studies already moved to the per-sample format are searched or sliced. Not metered.";
 
 const NEW_TOOLS = [
   {
     name: "find_cells",
     title: "Find cells by their statistics",
     description:
-      "Find cells in v2-format samples by per-cell statistics. Pick samples (gse_ids, gsm_ids, or a sample_filter), then filter their cells (called, UMIs, features, any numeric cells-table column). Returns per sample the matching cells as [start, length] column runs for slice_cells. At most 25 samples and 40 reads of the data host per call; continue with `after`. " + V2_ONLY,
+      "Find cells in samples by per-cell statistics. Pick samples (gse_ids, gsm_ids, or a sample_filter), then filter their cells (called, UMIs, features, any numeric cells-table column). Returns per sample the matching cells as [start, length] column runs for slice_cells. At most 25 samples and 40 reads of the data host per call; continue with `after`. " + S1_ONLY,
     inputSchema: {
       type: "object",
       properties: {
@@ -412,7 +412,7 @@ const NEW_TOOLS = [
     name: "slice_cells",
     title: "Byte ranges for some cells",
     description:
-      "Byte ranges (HTTP Range on the sample object) to read only some cells of one v2 sample's count matrices: a prefix a decoder needs once, and the chunk runs covering the cells. Name cells as `runs` ([start, length] pairs, as find_cells returns), `indices` or `range` [start, end); none means every chunk. " + V2_ONLY,
+      "Byte ranges (HTTP Range on the sample object) to read only some cells of one sample's count matrices: a prefix a decoder needs once, and the chunk runs covering the cells. Name cells as `runs` ([start, length] pairs, as find_cells returns), `indices` or `range` [start, end); none means every chunk. " + S1_ONLY,
     inputSchema: {
       type: "object",
       properties: {
@@ -433,7 +433,7 @@ const NEW_TOOLS = [
     name: "resolve_features",
     title: "Row numbers to feature names",
     description:
-      "Row numbers of a v2 count matrix to feature names (or whitelist column numbers to barcodes). Give a `pack` id (from get_partial_download or slice_cells), or gse_id, gsm_id and file. Up to 500 numbers. Not metered.",
+      "Row numbers of a count matrix to feature names (or whitelist column numbers to barcodes). Give a `pack` id (from get_partial_download or slice_cells), or gse_id, gsm_id and file. Up to 500 numbers. Not metered.",
     inputSchema: {
       type: "object",
       properties: {
@@ -461,25 +461,25 @@ const REV_PROPS: Record<string, Record<string, unknown>> = {
   get_modalities: { known_rev: KNOWN_REV_PROP },
   get_partial_download: { known_rev: KNOWN_REV_PROP },
 };
-/** Inputs that only mean something for a study stored per sample; listed with the v2 tools. */
-const V2_PROPS: Record<string, Record<string, unknown>> = {
+/** Inputs that only mean something for a study stored per sample; listed with the s1 tools. */
+const S1_PROPS: Record<string, Record<string, unknown>> = {
   get_download_url: {
-    include_samples: { type: "boolean", description: "v2 studies: also list the sample objects." },
-    modalities: { ...MODALITIES_PROP, description: `v2 studies: list each sample object with the byte ranges of only these members (25 samples a page). ${MODALITIES_PROP.description}` },
+    include_samples: { type: "boolean", description: "per-sample studies: also list the sample objects." },
+    modalities: { ...MODALITIES_PROP, description: `per-sample studies: list each sample object with the byte ranges of only these members (25 samples a page). ${MODALITIES_PROP.description}` },
     limit: { type: "integer", minimum: 1, maximum: 200 },
     after: { type: "string", description: "next_after of the last page." },
   },
   list_bundle_files: {
-    detail: { type: "boolean", description: "v2 studies: every sample's files, 25 samples a page." },
-    modalities: { ...MODALITIES_PROP, description: `v2 studies: only the files these need, with their bytes. ${MODALITIES_PROP.description}` },
+    detail: { type: "boolean", description: "per-sample studies: every sample's files, 25 samples a page." },
+    modalities: { ...MODALITIES_PROP, description: `per-sample studies: only the files these need, with their bytes. ${MODALITIES_PROP.description}` },
     limit: { type: "integer", minimum: 1, maximum: 500 },
     after: { type: "string", description: "next_after of the last page." },
   },
   get_modalities: {
-    modalities: { ...MODALITIES_PROP, description: `v2 studies: which samples have these, the singlet.load call for them, and with gsm_id that sample's byte ranges. ${MODALITIES_PROP.description}` },
+    modalities: { ...MODALITIES_PROP, description: `per-sample studies: which samples have these, the singlet.load call for them, and with gsm_id that sample's byte ranges. ${MODALITIES_PROP.description}` },
   },
   get_partial_download: {
-    modalities: { ...MODALITIES_PROP, description: `v2 studies: instead of \`file\`, the byte ranges of every member these need. ${MODALITIES_PROP.description}` },
+    modalities: { ...MODALITIES_PROP, description: `per-sample studies: instead of \`file\`, the byte ranges of every member these need. ${MODALITIES_PROP.description}` },
   },
   slice_cells: {
     modalities: { ...MODALITIES_PROP, description: `Instead of \`file\`: the matrices these need. ${MODALITIES_PROP.description}` },
@@ -490,11 +490,11 @@ const ALL_TOOL_NAMES = new Set([...TOOLS, ...NEW_TOOLS].map((t) => t.name));
 
 /**
  * The tools as advertised. The original fourteen always, each with `known_rev` where it applies; `verbose` only when the response diet is on
- * (MCP_DIET=1); the v2 tools and the v2-only inputs only once some study is served from v2 (or V2_TOOLS=1, see _shared/v2-gate).
+ * (MCP_DIET=1); the s1 tools and the s1-only inputs only once some study is served from s1 (or S1_TOOLS=1, see _shared/s1-gate).
  */
-function toolList(opts: { v2: boolean; diet: boolean }) {
-  return (opts.v2 ? [...TOOLS, ...NEW_TOOLS] : TOOLS).map((t) => {
-    const extra = { ...(REV_PROPS[t.name] ?? {}), ...(opts.v2 ? (V2_PROPS[t.name] ?? {}) : {}), ...(opts.diet ? { verbose: VERBOSE_PROP } : {}) };
+function toolList(opts: { s1: boolean; diet: boolean }) {
+  return (opts.s1 ? [...TOOLS, ...NEW_TOOLS] : TOOLS).map((t) => {
+    const extra = { ...(REV_PROPS[t.name] ?? {}), ...(opts.s1 ? (S1_PROPS[t.name] ?? {}) : {}), ...(opts.diet ? { verbose: VERBOSE_PROP } : {}) };
     return Object.keys(extra).length ? { ...t, inputSchema: { ...t.inputSchema, properties: { ...t.inputSchema.properties, ...extra } } } : t;
   });
 }
@@ -692,10 +692,10 @@ function studySummary(r: StudyRow, why: string) {
     n_cells: r.file_cells ?? null,
     year: r.year,
     has_bundle: r.has_bundle,
-    // The legacy file's URL only while that file exists; a study served from v2 also names its manifest.
-    bundle_url: r.has_bundle ? legacyUrl(r.gse_id, r.v2, !!r.bundle_key || !r.v2) : null,
-    format: r.v2 ? r.v2.format : "singlet-v1",
-    manifest_url: r.v2?.manifest_url ?? null,
+    // The legacy file's URL only while that file exists; a study served from s1 also names its manifest.
+    bundle_url: r.has_bundle ? legacyUrl(r.gse_id, r.s1, !!r.bundle_key || !r.s1) : null,
+    format: r.s1 ? r.s1.format : "singlet-v1",
+    manifest_url: r.s1?.manifest_url ?? null,
     bundle_bytes: r.bundle_bytes,
     bundle_n_samples: r.bundle_n_samples,
     file_cells: r.file_cells,
@@ -729,8 +729,8 @@ function sampleSummary(s: SampleRow) {
     status: s.status,
     characteristics: s.characteristics,
     has_bundle: s.has_bundle,
-    bundle_url: s.has_bundle ? legacyUrl(s.gse_id, s.v2) : null,
-    manifest_url: s.v2?.manifest_url ?? null,
+    bundle_url: s.has_bundle ? legacyUrl(s.gse_id, s.s1) : null,
+    manifest_url: s.s1?.manifest_url ?? null,
     study_url: `${SITE}/study/${s.gse_id}`,
   };
 }
@@ -877,11 +877,11 @@ function studyText(d: StudyDetail): string {
   lines.push(
     s.bundle_url
       ? `File: ${s.bundle_url}${s.bundle_bytes ? ` (${fmtBytes(s.bundle_bytes)})` : ""}`
-      : s.v2
-        ? `Files: ${s.v2.manifest_url} (${fmt(s.v2.n_samples)} sample objects${s.v2.bytes ? `, ${fmtBytes(s.v2.bytes)}` : ""})`
+      : s.s1
+        ? `Files: ${s.s1.manifest_url} (${fmt(s.s1.n_samples)} sample objects${s.s1.bytes ? `, ${fmtBytes(s.s1.bytes)}` : ""})`
         : "File: pending (samples processed, file not yet published)"
   );
-  if ((s.bundle_url || s.v2) && s.usable_samples === 0) lines.push("⚠ This file currently contains no usable count data (empty matrices or 0 called cells).");
+  if ((s.bundle_url || s.s1) && s.usable_samples === 0) lines.push("⚠ This file currently contains no usable count data (empty matrices or 0 called cells).");
   else if (s.usable_samples != null && s.assessed_samples != null && s.usable_samples < s.assessed_samples)
     lines.push(`⚠ ${s.assessed_samples - s.usable_samples} of ${s.assessed_samples} samples in the file have no count data: ${s.unusable_gsm_ids.join(", ")}.`);
   for (const n of d.completeness.notes) lines.push(`Completeness: ${n}`);
@@ -902,8 +902,8 @@ async function getStudy(env: Env, args: Record<string, unknown>) {
   const d = await loadStudy(env.DB, id);
   if (!d) return toolError(`${id} is not in the atlas. It may not be single-cell RNA-seq, or it has not been processed yet. Try search_datasets.`);
 
-  const v2 = await getV2State(env.DB, id);
-  const file = await fileRev(env.DB, id, v2?.study.rev ?? null);
+  const s1 = await getS1State(env.DB, id);
+  const file = await fileRev(env.DB, id, s1?.study.rev ?? null);
   const newest = d.samples.reduce((m, x) => (String(x.last_updated ?? "") > m ? String(x.last_updated) : m), "");
   const rev = await combineRev([file?.rev, d.series.last_updated, newest, d.series.n_gsm_done, d.series.n_cells, d.series.usable_samples, d.series.bundle_bytes]);
   if (knownRev(args) === rev) return toolResult(`${id} is unchanged since rev ${rev}.`, unchangedBody(id, rev));
@@ -924,7 +924,7 @@ async function getStudy(env: Env, args: Record<string, unknown>) {
   const structured = {
     gse_id: d.series.id,
     rev,
-    v2: v2 ? { format: "singlet-v2", rev: v2.study.rev, manifest_url: v2ManifestUrl(id), n_samples: v2.study.n_samples, bytes: v2.study.bytes, legacy_available: isLegacyAlive(v2.migration) } : null,
+    s1: s1 ? { format: "singlet-s1", rev: s1.study.rev, manifest_url: s1ManifestUrl(id), n_samples: s1.study.n_samples, bytes: s1.study.bytes, legacy_available: isLegacyAlive(s1.migration) } : null,
     title: d.series.title,
     abstract: d.series.abstract,
     organism: d.series.organism_label,
@@ -941,7 +941,7 @@ async function getStudy(env: Env, args: Record<string, unknown>) {
     n_cells: d.series.n_cells,
     conditions: d.conditions,
     conditions_label: d.conditions_label,
-    has_bundle: !!d.series.bundle_url || !!d.series.v2,
+    has_bundle: !!d.series.bundle_url || !!d.series.s1,
     bundle_url: d.series.bundle_url,
     bundle_bytes: d.series.bundle_bytes,
     usable_samples: d.series.usable_samples,
@@ -984,8 +984,8 @@ async function getDownloadUrl(env: Env, args: Record<string, unknown>) {
     .bind(id)
     .first<{ id: string; title: string | null; bundle_bytes: number | null; has_bundle: number }>();
   if (!row) return toolError(`${id} is not in the atlas.`);
-  const v2 = await getV2State(env.DB, id);
-  if (v2) return v2DownloadUrl({ db: env.DB, waitUntil: () => undefined }, id, row.title, v2, args);
+  const s1 = await getS1State(env.DB, id);
+  if (s1) return s1DownloadUrl({ db: env.DB, waitUntil: () => undefined }, id, row.title, s1, args);
   const available = Number(row.has_bundle) === 1;
   const url = bundleUrl(id);
   // The size of the object as it is served now (the catalog's byte count can predate a repack); the catalog only as a fallback.
@@ -1158,7 +1158,7 @@ async function handleMessage(ctx: CallContext, msg: JsonRpcRequest): Promise<unk
         protocolVersion,
         capabilities: { tools: { listChanged: false }, prompts: { listChanged: false }, resources: { listChanged: false, subscribe: false } },
         serverInfo: SERVER_INFO,
-        instructions: instructions(await v2ToolsVisible(ctx.env), dietEnabled(ctx.env)),
+        instructions: instructions(await s1ToolsVisible(ctx.env), dietEnabled(ctx.env)),
       });
     }
     case "notifications/initialized":
@@ -1168,7 +1168,7 @@ async function handleMessage(ctx: CallContext, msg: JsonRpcRequest): Promise<unk
     case "ping":
       return rpcResult(id, {});
     case "tools/list":
-      return rpcResult(id, { tools: toolList({ v2: await v2ToolsVisible(ctx.env), diet: dietEnabled(ctx.env) }) });
+      return rpcResult(id, { tools: toolList({ s1: await s1ToolsVisible(ctx.env), diet: dietEnabled(ctx.env) }) });
     case "tools/call": {
       const r = await callTool(ctx, params);
       if ("error" in r && r.error) return { ...r.error, id };
@@ -1224,7 +1224,7 @@ async function authFor(env: Env, request: Request, waitUntil: (p: Promise<unknow
 const NEEDS_ACCOUNT = new Set(["initialize", "tools/call", "resources/read"]);
 
 export const onRequestPost: PagesFunction<Env> = async ({ env, request, waitUntil }) => {
-  configureV2(env);
+  configureS1(env);
   await ensureCatalogColumns(env.DB).catch(() => undefined);
   const version = (request.headers.get("MCP-Protocol-Version") ?? "").trim();
   const versionOk = !version || (PROTOCOL_VERSIONS as readonly string[]).includes(version);
@@ -1289,7 +1289,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env }) =>
       transport: "streamable-http",
       endpoint: `${SITE}/mcp`,
       protocol_versions: PROTOCOL_VERSIONS,
-      tools: toolList({ v2: await v2ToolsVisible(env), diet: false }).map((t) => t.name),
+      tools: toolList({ s1: await s1ToolsVisible(env), diet: false }).map((t) => t.name),
       docs: `${SITE}/docs#mcp`,
       note: "POST JSON-RPC 2.0 messages to this URL. Server-initiated streams are not offered.",
     },
