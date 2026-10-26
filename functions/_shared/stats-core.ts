@@ -4,16 +4,17 @@
  *
  * Two correctness rules are enforced here:
  *
- *  1. **Cell totals are partitioned, never silently summed.** Only counts that
- *     pass the plausibility model enter `total_cells`; provably inflated and
- *     unverifiable counts are reported in their own fields so the headline
- *     number is defensible and the discrepancy stays visible.
- *     See ./suspect-cells.
+ *  1. **Cells are cells called in files.** The catalog's `gsm.n_cells` is raw
+ *     barcodes (up to 400x the called cells) and is not reported. `total_cells`
+ *     is kept for older clients and equals `cells_in_files`.
  *
  *  2. **Yield is reported against the real denominator.** `gsm` holds only
  *     samples that were ingested, so DONE/COUNT(gsm) measures survivors, not
  *     yield. `SUM(gse.n_gsm_total)` is the number of samples GEO advertises for
  *     the studies we track, which is the honest denominator for coverage.
+ *
+ *  4. **Research Alpha.** Samples that are not part of the atlas and withheld
+ *     studies (./alpha) are left out of every number here.
  *
  *  3. **One headline definition.** The home page, /about and the MCP
  *     `get_atlas_stats` text lead with `studies_with_files`,
@@ -22,8 +23,8 @@
  *     `geo_samples_known`, `species_count`, …) is catalog metadata and is
  *     labelled as such wherever it is shown.
  */
-import { SUSPECT_CELLS_SQL, UNVERIFIED_CELLS_SQL, COUNTABLE_CELLS_SQL } from "./suspect-cells";
 import { DOWNLOADABLE_SQL } from "./search-core";
+import { sampleServedSql, studyServedSql } from "./alpha";
 import { QC_RULES } from "./qc-rules";
 
 /**
@@ -44,11 +45,6 @@ interface StatsRow {
   total_samples: number;
   success_samples: number;
   failed_samples: number;
-  total_cells: number | null;
-  suspect_cells: number | null;
-  unverified_cells: number | null;
-  suspect_samples: number;
-  unverified_samples: number;
   species_count: number;
   series_count: number;
   avg_mapping_rate: number | null;
@@ -80,16 +76,8 @@ interface CoverageRow {
 export interface CorpusStats {
   total_samples: number;
   success_samples: number;
-  /** Plausible cells only. Excludes suspect + unverified. */
+  /** Kept for older clients: equals cells_in_files (cells called in files). The catalog's raw barcode counts are not reported. */
   total_cells: number;
-  /** Cells in counts the plausibility model rejects. */
-  suspect_cells_excluded: number;
-  /** Cells in implausibly high counts that could not be tested. */
-  unverified_cells_excluded: number;
-  suspect_samples: number;
-  unverified_samples: number;
-  /** total_cells + suspect + unverified. Matches a naive SUM(n_cells). */
-  raw_cells_all: number;
   /** Distinct normalised species (gsm.organism_primary) in the catalog. See SPECIES_COUNT_SQL. */
   species_count: number;
   series_count: number;
@@ -223,6 +211,10 @@ export function accountFor(a: AccountInputs): Accounting {
   };
 }
 
+/** Samples (gsm / sample_qc rows) that are part of the atlas: not excluded, not in a withheld study. */
+const SERVED_GSM = `${sampleServedSql("gsm.gsm_id")} AND ${studyServedSql("gsm.gse_id")}`;
+const SERVED_QC = `${sampleServedSql("q.gsm_id")} AND ${studyServedSql("q.gse_id")}`;
+
 export async function computeStats(db: D1Database): Promise<CorpusStats | null> {
   const [row, failures, fileStats, coverage] = await Promise.all([
     db
@@ -231,21 +223,11 @@ export async function computeStats(db: D1Database): Promise<CorpusStats | null> 
            COUNT(*)                                                   AS total_samples,
            SUM(CASE WHEN status = 'DONE' THEN 1 ELSE 0 END)           AS success_samples,
            SUM(CASE WHEN status IN ('FAIL', 'HARD_FAIL') THEN 1 ELSE 0 END) AS failed_samples,
-           SUM(CASE WHEN status = 'DONE' AND ${COUNTABLE_CELLS_SQL}
-                    THEN COALESCE(n_cells, 0) ELSE 0 END)             AS total_cells,
-           SUM(CASE WHEN status = 'DONE' AND ${SUSPECT_CELLS_SQL}
-                    THEN COALESCE(n_cells, 0) ELSE 0 END)             AS suspect_cells,
-           SUM(CASE WHEN status = 'DONE' AND ${UNVERIFIED_CELLS_SQL}
-                    THEN COALESCE(n_cells, 0) ELSE 0 END)             AS unverified_cells,
-           SUM(CASE WHEN status = 'DONE' AND ${SUSPECT_CELLS_SQL}
-                    THEN 1 ELSE 0 END)                                AS suspect_samples,
-           SUM(CASE WHEN status = 'DONE' AND ${UNVERIFIED_CELLS_SQL}
-                    THEN 1 ELSE 0 END)                                AS unverified_samples,
            ${SPECIES_COUNT_SQL}                                       AS species_count,
            COUNT(DISTINCT gse_id)                                     AS series_count,
            AVG(CASE WHEN status = 'DONE' THEN mapping_rate END)       AS avg_mapping_rate,
            AVG(CASE WHEN status = 'DONE' THEN median_genes END)       AS avg_median_genes
-         FROM gsm`
+         FROM gsm WHERE ${SERVED_GSM}`
       )
       .first<StatsRow>(),
     // Small, status-filtered GROUP BY (a few thousand rows) for the About page.
@@ -253,7 +235,7 @@ export async function computeStats(db: D1Database): Promise<CorpusStats | null> 
       .prepare(
         `SELECT failure_category AS value, COUNT(*) AS count
            FROM gsm
-          WHERE status IN ('FAIL', 'HARD_FAIL')
+          WHERE status IN ('FAIL', 'HARD_FAIL') AND ${SERVED_GSM}
             AND failure_category IS NOT NULL AND failure_category != ''
           GROUP BY failure_category
           ORDER BY count DESC
@@ -264,31 +246,32 @@ export async function computeStats(db: D1Database): Promise<CorpusStats | null> 
       .prepare(
         `SELECT
            (SELECT COUNT(*) FROM gse_meta m WHERE ${DOWNLOADABLE_SQL}) AS studies_with_files,
-           (SELECT COUNT(*) FROM bundle_manifest) AS files_published,
-           (SELECT COUNT(*) FROM gse_meta m WHERE m.has_bundle = 1 AND NOT ${DOWNLOADABLE_SQL}) AS studies_withheld,
-           (SELECT COUNT(*) FROM sample_qc q WHERE q.usable = 1 AND COALESCE(q.qc_tier, 0) = 0
+           (SELECT COUNT(*) FROM bundle_manifest b WHERE ${studyServedSql("b.gse_id")}) AS files_published,
+           (SELECT COUNT(*) FROM gse_meta m WHERE m.has_bundle = 1 AND ${studyServedSql("m.gse_id")} AND NOT ${DOWNLOADABLE_SQL}) AS studies_withheld,
+           (SELECT COUNT(*) FROM sample_qc q WHERE q.usable = 1 AND COALESCE(q.qc_tier, 0) = 0 AND ${SERVED_QC}
                AND q.gse_id IN (SELECT m.gse_id FROM gse_meta m WHERE ${DOWNLOADABLE_SQL})) AS samples_in_files,
-           (SELECT SUM(COALESCE(q.n_cells_called, 0)) FROM sample_qc q WHERE q.usable = 1 AND COALESCE(q.qc_tier, 0) = 0
+           (SELECT SUM(COALESCE(q.n_cells_called, 0)) FROM sample_qc q WHERE q.usable = 1 AND COALESCE(q.qc_tier, 0) = 0 AND ${SERVED_QC}
                AND q.gse_id IN (SELECT m.gse_id FROM gse_meta m WHERE ${DOWNLOADABLE_SQL})) AS cells_in_files,
-           (SELECT COUNT(*) FROM sample_qc WHERE usable = 1 AND qc_tier = 2) AS qc_removed,
-           (SELECT COUNT(*) FROM sample_qc WHERE usable = 1 AND qc_tier = 1) AS qc_low,
-           (SELECT COALESCE(SUM(n_cells_called), 0) FROM sample_qc WHERE usable = 1 AND qc_tier = 1) AS qc_low_cells,
-           (SELECT COUNT(DISTINCT gse_id) FROM sample_qc WHERE usable = 1 AND qc_tier >= 1) AS qc_studies_affected,
-           (SELECT COUNT(*) FROM sample_qc WHERE usable = 0) AS samples_unusable,
-           (SELECT COUNT(*) FROM sample_qc) AS qc_rows,
-           (SELECT COUNT(*) FROM sample_qc WHERE usable = 1) AS usable_all,
-           (SELECT COUNT(*) FROM bundle_manifest b WHERE NOT EXISTS (SELECT 1 FROM sample_qc q WHERE q.gse_id = b.gse_id)) AS awaiting_index,
+           (SELECT COUNT(*) FROM sample_qc q WHERE usable = 1 AND qc_tier = 2 AND ${SERVED_QC}) AS qc_removed,
+           (SELECT COUNT(*) FROM sample_qc q WHERE usable = 1 AND qc_tier = 1 AND ${SERVED_QC}) AS qc_low,
+           (SELECT COALESCE(SUM(n_cells_called), 0) FROM sample_qc q WHERE usable = 1 AND qc_tier = 1 AND ${SERVED_QC}) AS qc_low_cells,
+           (SELECT COUNT(DISTINCT gse_id) FROM sample_qc q WHERE usable = 1 AND qc_tier >= 1 AND ${SERVED_QC}) AS qc_studies_affected,
+           (SELECT COUNT(*) FROM sample_qc q WHERE usable = 0 AND ${SERVED_QC}) AS samples_unusable,
+           (SELECT COUNT(*) FROM sample_qc q WHERE ${SERVED_QC}) AS qc_rows,
+           (SELECT COUNT(*) FROM sample_qc q WHERE usable = 1 AND ${SERVED_QC}) AS usable_all,
+           (SELECT COUNT(*) FROM bundle_manifest b WHERE ${studyServedSql("b.gse_id")} AND NOT EXISTS (SELECT 1 FROM sample_qc q WHERE q.gse_id = b.gse_id)) AS awaiting_index,
            (SELECT COUNT(*) FROM bundle_manifest m
-             WHERE EXISTS (SELECT 1 FROM sample_qc q WHERE q.gse_id = m.gse_id)
-               AND NOT EXISTS (SELECT 1 FROM sample_qc q WHERE q.gse_id = m.gse_id AND q.usable = 1)) AS studies_unusable`
+             WHERE ${studyServedSql("m.gse_id")}
+               AND EXISTS (SELECT 1 FROM sample_qc q WHERE q.gse_id = m.gse_id AND ${SERVED_QC})
+               AND NOT EXISTS (SELECT 1 FROM sample_qc q WHERE q.gse_id = m.gse_id AND q.usable = 1 AND ${SERVED_QC})) AS studies_unusable`
       )
       .first<FileStatsRow>()
       .catch(() => null),
     db
       .prepare(
-        `SELECT SUM(COALESCE(n_gsm_total, 0)) AS geo_samples_known,
+        `SELECT SUM(COALESCE(n_gsm_total, 0)) - (SELECT COUNT(*) FROM alpha_exclusions x WHERE ${studyServedSql("x.gse_id")}) AS geo_samples_known,
                 COUNT(*)                      AS studies_tracked
-           FROM gse`
+           FROM gse g WHERE ${studyServedSql("g.id")}`
       )
       .first<CoverageRow>()
       .catch(() => null),
@@ -297,20 +280,12 @@ export async function computeStats(db: D1Database): Promise<CorpusStats | null> 
   if (!row) return null;
   const total = row.total_samples ?? 0;
   const done = row.success_samples ?? 0;
-  const countable = row.total_cells ?? 0;
-  const suspect = row.suspect_cells ?? 0;
-  const unverified = row.unverified_cells ?? 0;
   const geoKnown = coverage?.geo_samples_known ?? 0;
 
   return {
     total_samples: total,
     success_samples: done,
-    total_cells: countable,
-    suspect_cells_excluded: suspect,
-    unverified_cells_excluded: unverified,
-    suspect_samples: row.suspect_samples ?? 0,
-    unverified_samples: row.unverified_samples ?? 0,
-    raw_cells_all: countable + suspect + unverified,
+    total_cells: fileStats?.cells_in_files ?? 0,
     species_count: row.species_count ?? 0,
     series_count: row.series_count ?? 0,
     avg_mapping_rate: row.avg_mapping_rate,

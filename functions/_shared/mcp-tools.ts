@@ -7,8 +7,8 @@
 import { GSE_RE, bundleUrl, loadStudy, type StudyDetail } from "./study-core";
 import { downloadUrl, studyV2Map } from "./file-facts";
 import { StaleBundleError, getBundleIndex, ensureSampleQcTable, entryRange, strongEtag, withIndexRetry, MAX_INFLATE_BYTES, type ZipEntry } from "./bundle-reader";
-import { publicEntries } from "./restricted";
-import { bundleIndexResponse, loadSampleQc, normalizeQc, SAMPLE_QC_COLUMNS, v2BundleIndexResponse, type SampleQc } from "./bundle-core";
+import { sampleServedSql, servedEntries, studyIsHuman, studyServedSql } from "./alpha";
+import { bundleIndexResponse, loadSampleQc, normalizeQc, publicQc, SAMPLE_QC_COLUMNS, v2BundleIndexResponse, type SampleQc } from "./bundle-core";
 import {
   buildManifestFromIds,
   buildManifestFromSearch,
@@ -80,21 +80,26 @@ export async function getSampleQc(ctx: SampleQcArgs, args: Record<string, unknow
 
   // rev: the file, plus when the QC rows last changed
   const stamp = await ctx.db
-    .prepare(`SELECT COUNT(*) AS n, MAX(updated_at) AS u FROM sample_qc WHERE gse_id = ?`)
+    .prepare(`SELECT COUNT(*) AS n, MAX(updated_at) AS u FROM sample_qc WHERE gse_id = ? AND ${sampleServedSql("sample_qc.gsm_id")}`)
     .bind(gse)
     .first<{ n: number; u: string | null }>()
+    .catch(() => null);
+  // The one pipeline version of the study: the file's own provenance (its manifest), not each summary.json's aligner self-report.
+  const pipeline = await ctx.db
+    .prepare(`SELECT singlet_version FROM bundle_manifest WHERE gse_id = ?`)
+    .bind(gse)
+    .first<{ singlet_version: string | null }>()
     .catch(() => null);
   const rev = await combineRev([(await fileRev(ctx.db, gse))?.rev, stamp?.n, stamp?.u]);
   if (knownRev(args) === rev) return toolResult(`${gse}: per-sample QC is unchanged since rev ${rev}.`, unchangedBody(gse, rev));
 
+  // median_mito_fraction is not reported: the Alpha pipeline never computed it (0 in every summary.json).
   const rows = (wanted ? samples.filter((s) => wanted.has(s.gsm_id)) : samples).map((s) => ({
-    ...s,
+    ...publicQc(s),
     uniquely_mapped_pct: pct(s.uniquely_mapped_pct),
     mapping_rate_pct: pct(s.mapping_rate),
-    median_mito_pct: pct(s.median_mito_fraction || null),
     fraction_reads_in_cells_pct: pct(s.fraction_reads_in_cells),
     sequencing_saturation_pct: pct(s.sequencing_saturation || null),
-    median_mito_fraction: s.median_mito_fraction || null,
     sequencing_saturation: s.sequencing_saturation || null,
     input_reads_capped: s.n_input_reads === 30_000_000,
     qc_status: qcStatus(s.median_genes, s.mapping_rate),
@@ -123,11 +128,10 @@ export async function getSampleQc(ctx: SampleQcArgs, args: Record<string, unknow
     median_umi_across_samples: median(rows.map((r) => r.median_umi ?? NaN)),
     median_genes_across_samples: median(rows.map((r) => r.median_genes ?? NaN)),
     median_uniquely_mapped_pct: median(rows.map((r) => r.uniquely_mapped_pct ?? NaN)),
-    median_mito_pct: median(rows.map((r) => r.median_mito_pct ?? NaN)),
     median_reads_in_cells_pct: median(rows.map((r) => r.fraction_reads_in_cells_pct ?? NaN)),
     protocols: uniq(rows.map((r) => r.protocol)),
     reference_builds: uniq(rows.map((r) => r.reference_build)),
-    singlet_versions: uniq(rows.map((r) => r.singlet_version)),
+    pipeline_version: pipeline?.singlet_version ?? null,
   };
 
   const lines: string[] = [];
@@ -138,7 +142,7 @@ export async function getSampleQc(ctx: SampleQcArgs, args: Record<string, unknow
   lines.push("");
   for (const r of rows) {
     lines.push(
-      `- ${r.qc_status === "low_qc" ? "⚠ LOW QC " : r.qc_status === "removed" ? "✗ REMOVED " : ""}${r.gsm_id}: ${fmt(r.n_cells_called)} cells · ${fmt(r.median_umi)} UMI · ${fmt(r.median_genes)} genes · ${r.uniquely_mapped_pct ?? "—"}% uniquely mapped · ${r.median_mito_pct ?? "—"}% mito · ${r.fraction_reads_in_cells_pct ?? "—"}% reads in cells · ${fmt(r.n_input_reads)} input reads`
+      `- ${r.qc_status === "low_qc" ? "⚠ LOW QC " : r.qc_status === "removed" ? "✗ REMOVED " : ""}${r.gsm_id}: ${fmt(r.n_cells_called)} cells · ${fmt(r.median_umi)} UMI · ${fmt(r.median_genes)} genes · ${r.uniquely_mapped_pct ?? "—"}% uniquely mapped · ${r.fraction_reads_in_cells_pct ?? "—"}% reads in cells · ${fmt(r.n_input_reads)} input reads`
     );
   }
   if (flagged.length || removedRows.length) {
@@ -258,17 +262,20 @@ export async function getModalities(ctx: SampleQcArgs, args: Record<string, unkn
   // Every sample of a study goes through one pipeline invocation, so the first
   // sample is representative; we still report per-sample presence because a
   // sample can drop an output when, say, no chrM variants were called.
+  const human = await studyIsHuman(ctx.db, gse);
+  const offered = MODALITIES.filter((m) => !m.humanOnly || human);
   const perSample = samples.map((s) => {
     const prefix = `samples/${s.gsm_id}/`;
     const files = s.files.map((f) => (f.path.startsWith(prefix) ? f.path.slice(prefix.length) : f.path));
-    return { gsm_id: s.gsm_id, found: resolveModalities(files) };
+    return { gsm_id: s.gsm_id, found: resolveModalities(files, { human }) };
   });
 
   const counts = new Map<string, number>();
   for (const s of perSample) for (const { modality } of s.found) counts.set(modality.name, (counts.get(modality.name) ?? 0) + 1);
 
-  const rows = MODALITIES.filter((m) => counts.has(m.name)).map((m) => ({
+  const rows = offered.filter((m) => counts.has(m.name)).map((m) => ({
     name: m.name,
+    ...(m.label ? { label: m.label } : {}),
     group: m.group,
     kind: m.kind,
     description: m.description,
@@ -276,7 +283,7 @@ export async function getModalities(ctx: SampleQcArgs, args: Record<string, unkn
     python: m.python,
     r: m.r,
   }));
-  const missing = MODALITIES.filter((m) => !counts.has(m.name)).map((m) => m.name);
+  const missing = offered.filter((m) => !counts.has(m.name)).map((m) => m.name);
   // The per-modality lines below read `b`, `path` and `gsm`; the preamble and
   // raw_counts snippets define all three so every line runs as written.
   const exampleGsm = samples[0].gsm_id;
@@ -298,12 +305,12 @@ export async function getModalities(ctx: SampleQcArgs, args: Record<string, unkn
       lines.push(`${group}:`);
     }
     const scope = r.n_samples === samples.length ? "all samples" : `${r.n_samples}/${samples.length} samples`;
-    lines.push(`- ${r.name} (${r.kind}, ${scope}) — ${r.description}`);
+    lines.push(`- ${r.name}${r.label ? ` [${r.label}]` : ""} (${r.kind}, ${scope}) — ${r.description}`);
     lines.push(`    Python: ${r.python}    R: ${r.r}`);
   }
   lines.push("");
   lines.push(
-    "For a conventional combined counts matrix (exonic + intronic, with spliced/unspliced kept as layers) use b.raw_counts(gsm) in Python or singlet_raw_counts(path, gsm) in R — do not sum the matrices by hand, the feature axis has to be projected onto the gene axis first."
+    "For a conventional combined counts matrix (exonic + intronic, with spliced/unspliced kept as layers) use b.raw_counts(gsm) in Python or singlet_raw_counts(path, gsm) in R — do not sum the matrices by hand, the feature axis has to be projected onto the gene axis first. Research Alpha: the spliced/unspliced split double-counts some molecules, so it is not suitable for RNA velocity (https://singlet.bio/known-issues)."
   );
   if (missing.length) {
     lines.push("");
@@ -375,7 +382,7 @@ export async function getPartialDownload(ctx: SampleQcArgs, args: Record<string,
     found = await withIndexRetry(ctx.db, gse, { waitUntil: ctx.waitUntil }, async (index): Promise<Found> => {
       const rev = await legacyRev(index.etag, index.bytes);
       if (knownRev(args) === rev) return { unchanged: rev };
-      const inSample = publicEntries(index.entries).filter((e: ZipEntry) => e.p.startsWith(prefix) && !e.p.endsWith("/"));
+      const inSample = (await servedEntries(ctx.db, gse, index.entries)).filter((e: ZipEntry) => e.p.startsWith(prefix) && !e.p.endsWith("/"));
       if (!inSample.length) return { err: `${gsm} is not in ${gse}.singlet. Use list_bundle_files to see which samples are.` };
       const entry =
         inSample.find((e) => e.p === file) ??
@@ -542,7 +549,7 @@ export async function findMatchedControls(ctx: SampleQcArgs, args: Record<string
       `SELECT m.gse_id, m.organism_primary, m.tissue_groups, m.disease_groups, m.assay_families, m.year,
               b.reference_build
          FROM gse_meta m LEFT JOIN bundle_manifest b ON b.gse_id = m.gse_id
-        WHERE m.gse_id = ?`
+        WHERE m.gse_id = ? AND ${studyServedSql("m.gse_id")}`
     )
     .bind(gse)
     .first<Record<string, unknown>>()
@@ -560,7 +567,7 @@ export async function findMatchedControls(ctx: SampleQcArgs, args: Record<string
   const rows = await ctx.db
     .prepare(
       `SELECT m.gse_id, g.title, m.organism_primary, m.tissue_groups, m.disease_groups, m.assay_families,
-              m.n_done, m.n_cells, m.year,
+              m.n_done, m.n_usable_cells AS n_cells, m.year,
               COALESCE(b.n_gsms_in_bundle, g.r2_bundle_n_gsms) AS n_in_file,
               b.reference_build, COALESCE(b.bytes, g.r2_bundle_bytes) AS bytes
          FROM gse_meta m
@@ -571,6 +578,7 @@ export async function findMatchedControls(ctx: SampleQcArgs, args: Record<string
           AND m.has_bundle = 1
           AND COALESCE(m.n_usable_samples, 1) > 0
           AND COALESCE(m.reference_mismatch, 0) = 0
+          AND ${studyServedSql("m.gse_id")}
           AND m.tissue_groups LIKE ?
         ORDER BY m.n_done DESC
         LIMIT 400`
@@ -688,7 +696,7 @@ export async function findMatchedControls(ctx: SampleQcArgs, args: Record<string
 async function sampleQcFromD1(db: D1Database, gse: string): Promise<SampleQc[]> {
   await ensureSampleQcTable(db).catch(() => undefined);
   const rows = await db
-    .prepare(`SELECT ${SAMPLE_QC_COLUMNS.join(", ")}, matrix_bytes, usable FROM sample_qc WHERE gse_id = ? ORDER BY gsm_id`)
+    .prepare(`SELECT ${SAMPLE_QC_COLUMNS.join(", ")}, matrix_bytes, usable FROM sample_qc WHERE gse_id = ? AND ${sampleServedSql("sample_qc.gsm_id")} ORDER BY gsm_id`)
     .bind(gse)
     .all<SampleQc>()
     .catch(() => null);
@@ -707,7 +715,6 @@ interface ComparisonRow {
   n_samples_catalog: number;
   n_samples_geo: number;
   cells_file_qc: number | null;
-  cells_catalog: number;
   reference_build: string | null;
   singlet_version: string | null;
   year: number | null;
@@ -733,9 +740,8 @@ function comparisonRow(d: StudyDetail, qc: SampleQc[]): ComparisonRow {
     n_samples_catalog: d.series.n_gsm_done,
     n_samples_geo: d.series.n_gsm_total,
     cells_file_qc: qc.length ? qc.reduce((n, s) => n + (s.n_cells_called ?? 0), 0) : null,
-    cells_catalog: d.series.n_cells,
     reference_build: d.series.reference_build ?? uniq(qc.map((s) => s.reference_build))[0] ?? null,
-    singlet_version: d.series.singlet_version ?? uniq(qc.map((s) => s.singlet_version))[0] ?? null,
+    singlet_version: d.series.singlet_version,
     year: d.meta?.year ?? null,
     pubmed_ids: d.series.pubmed_ids,
     bytes: d.series.bundle_bytes,
@@ -802,7 +808,7 @@ export async function compareStudies(ctx: SampleQcArgs, args: Record<string, unk
     lines.push(`${s.gse_id} — ${s.title ?? "(untitled)"}`);
     lines.push(`  ${[s.organism, s.tissue_groups.join("/"), s.disease_groups.join("/"), s.assay_families.join("/"), s.year].filter(Boolean).join(" · ")}`);
     lines.push(`  samples: ${fmt(s.n_samples_in_file)} in the file · ${fmt(s.n_samples_catalog)} processed · ${fmt(s.n_samples_geo)} on GEO`);
-    lines.push(`  cells: ${s.cells_file_qc != null ? fmt(s.cells_file_qc) + " from file QC" : "file QC not recorded"} · ${fmt(s.cells_catalog)} in the catalog`);
+    lines.push(`  cells: ${s.cells_file_qc != null ? fmt(s.cells_file_qc) + " called in the file" : "file QC not recorded"}`);
     lines.push(`  QC medians: ${fmt(s.median_umi)} UMI · ${fmt(s.median_genes)} genes · ${s.median_uniquely_mapped_pct ?? "—"}% uniquely mapped`);
     lines.push(`  reference: ${s.reference_build ?? "not recorded"} · pipeline ${s.singlet_version ?? "not recorded"} · file ${fmtBytes(s.bytes)}`);
     if (s.conditions) lines.push(`  conditions: ${s.conditions}`);
@@ -818,13 +824,13 @@ export async function compareStudies(ctx: SampleQcArgs, args: Record<string, unk
     lines.push("No differences on organism, tissue, disease, assay, reference build, pipeline version or year.");
   }
   lines.push("");
-  lines.push("Where catalog and file counts differ, the file is the truth: the catalog counts every processed sample, the file holds what was packed.");
+  lines.push("Cells are cells called in the file: the sum of each sample's summary.json inside the .singlet file.");
 
   return toolResult(lines.join("\n"), {
     studies,
     differences,
     missing,
-    note: "Catalog cell counts come from the pipeline database; file QC sums each sample's summary.json inside the .singlet file.",
+    note: "Cells are cells called in the file: the sum of each sample's summary.json inside the .singlet file.",
   });
 }
 
@@ -909,9 +915,10 @@ export async function assessStudy(ctx: SampleQcArgs, args: Record<string, unknow
         case "velocity":
           fit.push({
             check: "spliced / unspliced layers",
-            ok: hasSpliced,
+            // Research Alpha counts some molecules in both the exon and the intron matrix, so the split is not fit for velocity.
+            ok: false,
             detail: hasSpliced
-              ? `The file contains intron-aware counts (${paths.filter((x) => /spliced|intron_counts|velocy/i.test(x)).slice(0, 3).join(", ")}), so velocity is possible.`
+              ? `The file has spliced and unspliced counts (${paths.filter((x) => /spliced|intron_counts|velocy/i.test(x)).slice(0, 3).join(", ")}), but in Research Alpha the split double-counts some molecules, so it is not suitable for RNA velocity (https://singlet.bio/known-issues).`
               : "The file ships exon counts only — RNA velocity would need reprocessing from the reads.",
           });
           break;
@@ -995,7 +1002,6 @@ export async function assessStudy(ctx: SampleQcArgs, args: Record<string, unknow
       source: qc.length ? "file" : "none",
       n_samples: qc.length,
       total_cells_called: cellsFile,
-      catalog_cells: d.series.n_cells,
       median_umi: median(qc.map((s) => s.median_umi ?? NaN)),
       median_genes: median(qc.map((s) => s.median_genes ?? NaN)),
       median_uniquely_mapped_pct: median(qc.map((s) => pct(s.uniquely_mapped_pct) ?? NaN)),
@@ -1034,8 +1040,6 @@ export async function assessStudy(ctx: SampleQcArgs, args: Record<string, unknow
   if (lowCells.length) lines.push(`Low-cell samples (< ${LOW_CELLS}): ${lowCells.join(", ")}.`);
   if (lowMapping.length) lines.push(`Low-mapping samples (< ${LOW_MAPPING_PCT}%): ${lowMapping.join(", ")}.`);
   lines.push(readCap);
-  if (cellsFile != null && cellsFile !== d.series.n_cells)
-    lines.push(`Catalog says ${fmt(d.series.n_cells)} cells, the file's own QC says ${fmt(cellsFile)}. The file is the truth.`);
   if (missing_metadata.length) {
     lines.push("Missing metadata:");
     for (const m of missing_metadata) lines.push(`- ${m}`);

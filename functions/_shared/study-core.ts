@@ -6,6 +6,10 @@
  * publications. `qc_flag` is the pipeline's per-sample verdict
  * (HEALTHY | WARN | LOW_QUALITY) and is null until the QC backfill has run for
  * that sample.
+ *
+ * Research Alpha (./alpha): a withheld study is not found (null, a 404), and samples that are not part of the atlas are
+ * left out of the sample list, every count and the completeness ledger, as if GEO did not list them. Cells are cells
+ * called in the file (sample_qc.n_cells_called), never the catalog's raw barcode count.
  */
 import { referenceMismatch } from "./catalog-refresh";
 import { safeList } from "./json";
@@ -19,6 +23,7 @@ import { organismToCommon } from "./vocab";
 import { getV2State, parseJsonObject } from "./v2-catalog";
 import { DATA_BASE, bundleUrl } from "./data-urls";
 import { legacyUrl, studyV2, type StudyV2 } from "./file-facts";
+import { excludedInStudy, isStudyWithheld, sampleServedSql } from "./alpha";
 
 // The legacy URL builder lives in data-urls.ts (no import cycle with the readers); kept importable from here.
 export { DATA_BASE, bundleUrl };
@@ -33,6 +38,7 @@ export interface StudySeries {
   n_gsm_total: number;
   n_gsm_done: number;
   n_gsm_failed: number;
+  /** Cells called in the file's samples that passed QC (null before the file is assessed). */
   n_cells: number;
   pubmed_ids: string[];
   bundle_key: string | null;
@@ -42,7 +48,7 @@ export interface StudySeries {
   bundle_n_samples: number | null;
   /** Reference genome build of the bundle, e.g. "GRCm39-2024-A". Null until the packing job ingests it via bundle_manifest. */
   reference_build: string | null;
-  /** singlet pipeline version the bundle was packed with. */
+  /** singlet pipeline version the file was packed with: the file's own provenance (manifest.json), the one version source. */
   singlet_version: string | null;
   /** When the bundle was packed (manifest_created_at). */
   packed_at: string | null;
@@ -90,6 +96,7 @@ export interface StudyMeta {
 
 export interface StudySample extends Record<string, unknown> {
   gsm_id: string;
+  /** Cells called in the file for this sample (sample_qc); null when the file holds none. */
   n_cells: number | null;
   srr_ids: string[];
   characteristics: Record<string, string>;
@@ -125,6 +132,9 @@ export const GSE_RE = /^GSE\d+$/;
 export async function loadStudy(db: D1Database, rawId: string): Promise<StudyDetail | null> {
   const id = rawId.trim().toUpperCase();
   if (!GSE_RE.test(id)) return null;
+  // A withheld study is not part of the atlas: it is answered exactly like an unknown one.
+  if (await isStudyWithheld(db, id)) return null;
+  const served = sampleServedSql("sample_qc.gsm_id");
 
   const usablePromise = db
     .prepare(
@@ -132,15 +142,16 @@ export async function loadStudy(db: D1Database, rawId: string): Promise<StudyDet
               SUM(CASE WHEN usable IS NULL THEN 1 ELSE 0 END) AS unknown,
               group_concat(CASE WHEN usable = 0 THEN gsm_id END) AS bad,
               SUM(CASE WHEN usable = 1 AND qc_tier = 1 THEN 1 ELSE 0 END) AS low,
-              SUM(CASE WHEN usable = 1 AND qc_tier = 2 THEN 1 ELSE 0 END) AS removed
-         FROM sample_qc WHERE gse_id = ?`
+              SUM(CASE WHEN usable = 1 AND qc_tier = 2 THEN 1 ELSE 0 END) AS removed,
+              SUM(CASE WHEN usable = 1 AND COALESCE(qc_tier, 0) = 0 THEN n_cells_called ELSE 0 END) AS cells
+         FROM sample_qc WHERE gse_id = ? AND ${served}`
     )
     .bind(id)
-    .first<{ n: number; ok: number | null; unknown: number | null; bad: string | null; low: number | null; removed: number | null }>()
+    .first<{ n: number; ok: number | null; unknown: number | null; bad: string | null; low: number | null; removed: number | null; cells: number | null }>()
     .catch(() => null);
   // Per-sample verdicts for the samples QC touched (tier 1 low QC, tier 2 removed).
   const tiersPromise = db
-    .prepare(`SELECT gsm_id, qc_tier, median_genes, mapping_rate FROM sample_qc WHERE gse_id = ? AND usable = 1 AND qc_tier >= 1`)
+    .prepare(`SELECT gsm_id, qc_tier, median_genes, mapping_rate FROM sample_qc WHERE gse_id = ? AND usable = 1 AND qc_tier >= 1 AND ${served}`)
     .bind(id)
     .all<{ gsm_id: string; qc_tier: number; median_genes: number | null; mapping_rate: number | null }>()
     .catch(() => ({ results: [] as { gsm_id: string; qc_tier: number; median_genes: number | null; mapping_rate: number | null }[] }));
@@ -168,11 +179,12 @@ export async function loadStudy(db: D1Database, rawId: string): Promise<StudyDet
     db
       .prepare(
         `SELECT gsm_id, gse_id, organism, organism_primary, protocol, assay_family, modality,
-                tissue, tissue_group, cell_type, donor_id, disease, disease_group, sex, n_cells,
-                mapping_rate, median_genes, median_umis, mt_pct, status, qc_flag, failure_category,
-                failure_detail, singlet_version, pipeline_date, pz_size_bytes, title, source,
+                tissue, tissue_group, cell_type, donor_id, disease, disease_group, sex,
+                (SELECT q.n_cells_called FROM sample_qc q WHERE q.gsm_id = gsm.gsm_id) AS n_cells,
+                mapping_rate, median_genes, median_umis, status, qc_flag, failure_category,
+                failure_detail, pipeline_date, pz_size_bytes, title, source,
                 srr_ids, characteristics, last_updated
-           FROM gsm WHERE gse_id = ? ORDER BY gsm_id ASC`
+           FROM gsm WHERE gse_id = ? AND ${sampleServedSql("gsm.gsm_id")} ORDER BY gsm_id ASC`
       )
       .bind(id)
       .all<Record<string, unknown>>(),
@@ -190,13 +202,20 @@ export async function loadStudy(db: D1Database, rawId: string): Promise<StudyDet
 
     // Bundle manifest (ingested by the packing job): reference build + actual sample count.
     db
-      .prepare(`SELECT reference_build, singlet_version, manifest_created_at, bytes, n_gsms_in_bundle FROM bundle_manifest WHERE gse_id = ?`)
+      .prepare(`SELECT reference_build, singlet_version, manifest_created_at, bytes, n_gsms_in_bundle, gsm_ids FROM bundle_manifest WHERE gse_id = ?`)
       .bind(id)
       .first<Record<string, unknown>>()
       .catch(() => null),
   ]);
 
   if (!seriesRow) return null;
+  // Samples that are not part of the atlas: subtracted from GEO's count and from the file's sample count.
+  const excluded = await excludedInStudy(db, id);
+  const inBundleExcluded = (() => {
+    if (!excluded.size) return 0;
+    const ids = safeList(manifestRow?.gsm_ids);
+    return ids.length ? ids.filter((g) => excluded.has(g)).length : excluded.size;
+  })();
 
   const tiers = (await tiersPromise).results ?? [];
   const lowById = new Map(tiers.filter((t) => Number(t.qc_tier) === 1).map((t) => [t.gsm_id, t]));
@@ -234,7 +253,9 @@ export async function loadStudy(db: D1Database, rawId: string): Promise<StudyDet
 
   const organismLabel = organismToCommon((metaRow?.organism_primary as string | null) ?? (seriesRow.organism as string | null));
   const bundleKey = (seriesRow.r2_bundle_key as string | null) ?? null;
-  const bundleBytes = seriesRow.r2_bundle_bytes != null ? Number(seriesRow.r2_bundle_bytes) : null;
+  // The file's size from its own index (bundle_manifest, refreshed when the object changes) before the ingest's copy in gse.
+  const bundleBytes =
+    manifestRow?.bytes != null ? Number(manifestRow.bytes) : seriesRow.r2_bundle_bytes != null ? Number(seriesRow.r2_bundle_bytes) : null;
   const hasBundle = metaRow ? Number(metaRow.has_bundle ?? 0) === 1 : !!bundleKey;
 
   const v2State = await getV2State(db, id);
@@ -243,12 +264,13 @@ export async function loadStudy(db: D1Database, rawId: string): Promise<StudyDet
   // a study that never had a legacy file has none, and a retired one keeps them.
   const v2Pipeline = v2State ? parseJsonObject(v2State.study.pipeline_json) : null;
 
-  const bundleNSamples =
+  const bundleNSamplesRaw =
     manifestRow?.n_gsms_in_bundle != null
       ? Number(manifestRow.n_gsms_in_bundle)
       : seriesRow.r2_bundle_n_gsms != null
         ? Number(seriesRow.r2_bundle_n_gsms)
         : (v2State?.study.n_samples ?? null);
+  const bundleNSamples = bundleNSamplesRaw != null ? Math.max(0, bundleNSamplesRaw - inBundleExcluded) : null;
   const referenceBuild =
     typeof manifestRow?.reference_build === "string" && manifestRow.reference_build
       ? manifestRow.reference_build
@@ -266,10 +288,10 @@ export async function loadStudy(db: D1Database, rawId: string): Promise<StudyDet
     abstract: (seriesRow.abstract as string | null) ?? null,
     organism: (seriesRow.organism as string | null) ?? null,
     organism_label: organismLabel,
-    n_gsm_total: Number(seriesRow.n_gsm_total ?? 0),
+    n_gsm_total: Math.max(0, Number(seriesRow.n_gsm_total ?? 0) - excluded.size),
     n_gsm_done: Number(seriesRow.n_gsm_done ?? 0),
     n_gsm_failed: Number(seriesRow.n_gsm_failed ?? 0),
-    n_cells: Number(seriesRow.n_cells ?? 0),
+    n_cells: Number(usableRow?.cells ?? 0),
     pubmed_ids: safeList(seriesRow.pubmed_ids),
     bundle_key: legacyGone ? null : bundleKey,
     bundle_bytes: legacyGone ? (v2!.bytes ?? bundleBytes) : bundleBytes,
@@ -319,7 +341,7 @@ export async function loadStudy(db: D1Database, rawId: string): Promise<StudyDet
         cell_types_raw: safeList(metaRow.cell_types_raw),
         n_done: Number(metaRow.n_done ?? 0),
         n_total: Number(metaRow.n_total ?? 0),
-        n_cells: Number(metaRow.n_cells ?? 0),
+        n_cells: Number(usableRow?.cells ?? 0),
         has_bundle: hasBundle,
         year: metaRow.year != null ? Number(metaRow.year) : null,
       }

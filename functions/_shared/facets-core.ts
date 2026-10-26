@@ -15,6 +15,7 @@
  * `meta_cache` (keys `facets:gse:all*` / `facets:gsm:all*`) and refreshed when
  * older than a day, so no request ever runs an unfiltered GROUP BY over `gsm`.
  */
+import { sampleServedSql } from "./alpha";
 import { metaCached } from "./cache";
 import {
   buildSampleWhere,
@@ -148,7 +149,7 @@ export function studyFacetStatements(f: SearchFilters, gseIds: string[] | null):
        cte: `b_${key} AS (SELECT m.gse_id, m.organisms, m.tissue_groups, m.disease_groups, m.assay_families, m.cell_types_raw, m.year,
                           (SELECT reference_build FROM bundle_manifest bm WHERE bm.gse_id=m.gse_id) AS reference_build,
                           (SELECT n_gsms_in_bundle FROM bundle_manifest bm WHERE bm.gse_id=m.gse_id) AS file_samples,
-                          (SELECT SUM(n_cells_called) FROM sample_qc sq WHERE sq.gse_id=m.gse_id) AS file_cells,
+                          COALESCE(m.n_usable_cells, 0) AS file_cells,
                           (SELECT r2_bundle_bytes FROM gse gx WHERE gx.id=m.gse_id) AS file_size
                    FROM gse_meta m${w.clauses.length ? ` WHERE ${w.clauses.join(" AND ")}` : ""})`,
       params: w.params,
@@ -181,7 +182,7 @@ export function studyFacetStatements(f: SearchFilters, gseIds: string[] | null):
   const bsize = baseFor("file_size");
   items.push({ base: bsize, select: `SELECT 'file_size' AS facet, CASE WHEN b.file_size <= 1073741824 THEN '1073741824' WHEN b.file_size <= 5368709120 THEN '5368709120' WHEN b.file_size <= 10737418240 THEN '10737418240' ELSE 'other' END AS value, COUNT(*) AS n FROM ${bsize.name} b WHERE b.file_size IS NOT NULL GROUP BY value` });
   const bprotocol = baseFor("protocol");
-  items.push({ base: bprotocol, select: `SELECT 'protocol' AS facet, CASE WHEN lower(q.protocol) LIKE '%multiome%' OR lower(q.protocol) LIKE '%atac%' THEN 'multiome' WHEN lower(q.protocol) LIKE '%5%prime%' OR lower(q.protocol) LIKE '%5''%' THEN '10x 5''' WHEN lower(q.protocol) LIKE '%v2%' THEN '10xv2' WHEN lower(q.protocol) LIKE '%v3%' THEN '10xv3' ELSE 'other' END AS value, COUNT(DISTINCT q.gse_id) AS n FROM sample_qc q WHERE q.gse_id IN (SELECT gse_id FROM ${bprotocol.name}) GROUP BY value` });
+  items.push({ base: bprotocol, select: `SELECT 'protocol' AS facet, CASE WHEN lower(q.protocol) LIKE '%multiome%' OR lower(q.protocol) LIKE '%atac%' THEN 'multiome' WHEN lower(q.protocol) LIKE '%5%prime%' OR lower(q.protocol) LIKE '%5''%' THEN '10x 5''' WHEN lower(q.protocol) LIKE '%v2%' THEN '10xv2' WHEN lower(q.protocol) LIKE '%v3%' THEN '10xv3' ELSE 'other' END AS value, COUNT(DISTINCT q.gse_id) AS n FROM sample_qc q WHERE q.gse_id IN (SELECT gse_id FROM ${bprotocol.name}) AND ${sampleServedSql("q.gsm_id")} GROUP BY value` });
   const ball = baseFor("none");
   items.push({ base: ball, select: `SELECT '_total' AS facet, NULL AS value, COUNT(*) AS n FROM ${ball.name}` });
 
@@ -293,7 +294,7 @@ async function textScope(
       const ids = [...acc.gse];
       if (acc.gsm.length) {
         const res = await ctx.db
-          .prepare(`SELECT DISTINCT gse_id FROM gsm WHERE gsm_id IN (SELECT value FROM json_each(?))`)
+          .prepare(`SELECT DISTINCT gse_id FROM gsm WHERE gsm_id IN (SELECT value FROM json_each(?)) AND ${sampleServedSql("gsm.gsm_id")}`)
           .bind(JSON.stringify(acc.gsm))
           .all<{ gse_id: string }>();
         ids.push(...res.results.map((r) => r.gse_id));
@@ -313,7 +314,7 @@ export async function computeFacets(ctx: Ctx, f: SearchFilters, level: Level, sc
   if (scopedGseIds) return computeFacetsLive(ctx, f, level, scopedGseIds);
   const unfiltered = !hasAnyFilter(f) && !f.q;
   if (unfiltered) {
-    const key = `facets:v11:${level}:all:${f.has_bundle === true ? "hb1" : "hb0"}`;
+    const key = `facets:v12:${level}:all:${f.has_bundle === true ? "hb1" : "hb0"}`;
     return metaCached(ctx.db, ctx.waitUntil, key, DAY_MS, () => computeFacetsLive(ctx, f, level));
   }
   return computeFacetsLive(ctx, f, level);
@@ -358,7 +359,7 @@ export async function cellTypeVocab(ctx: Ctx, limit = 200): Promise<string[]> {
         .prepare(
           `SELECT lower(trim(cell_type)) AS value, COUNT(*) AS count
              FROM gsm
-            WHERE cell_type IS NOT NULL AND trim(cell_type) != ''
+            WHERE cell_type IS NOT NULL AND trim(cell_type) != '' AND ${sampleServedSql("gsm.gsm_id")}
             GROUP BY lower(trim(cell_type))
             ORDER BY count DESC
             LIMIT ?`

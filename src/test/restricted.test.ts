@@ -18,6 +18,10 @@ describe("restricted members", () => {
       "mt/mt_events.1pz",
       "snp_anything.tsv",
       "x/y.vcf.gz",
+      // Research Alpha: no mitochondrial allele layer and no ancestry call is released (same rule as workers/data-guard)
+      "mt_heteroplasmy.1pz",
+      "mt_variants.tsv",
+      "ancestry_call.json",
     ]) {
       expect(isRestrictedMember(rel), rel).toBe(true);
     }
@@ -31,9 +35,6 @@ describe("restricted members", () => {
       "donor_assignments.tsv",
       "doublet_scores.tsv",
       "sex_call.json",
-      "ancestry_call.json",
-      "mt_heteroplasmy.1pz",
-      "mt_variants.tsv",
       "mt/mt_summary.tsv",
       "mt_reference.fa",
       "summary.json",
@@ -76,7 +77,7 @@ describe("bundle listing", () => {
         e("samples/GSM1/mt/mt_events.1pz"),
       ],
     };
-    const db = { prepare: () => ({ bind: () => ({ first: async () => null }) }) } as unknown as D1Database;
+    const db = { prepare: () => ({ bind: () => ({ first: async () => null, all: async () => ({ results: [] }) }) }) } as unknown as D1Database;
     const res = await bundleIndexResponse(db, "GSE1", index);
     expect(res.samples[0].files.map((f) => f.path)).toEqual(["samples/GSM1/donor/donor_assignments.tsv", "samples/GSM1/exon_counts.1pz"]);
     expect(res.study_files.map((f) => f.path)).toEqual(["manifest.json"]);

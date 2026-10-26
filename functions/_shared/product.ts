@@ -24,6 +24,7 @@
  * Failures throw ProductError (code, message, HTTP status, extra fields); the
  * routes turn it into {error, message, ...extra}. Anything else is a 500.
  */
+import { withheldAmong } from "./alpha";
 import { CORS_HEADERS } from "./cors";
 import { sha256Hex, timingSafeEqual } from "./hash";
 import { nowIso } from "./session";
@@ -463,7 +464,10 @@ export async function getCohort(ctx: ProductCtx, uid: string | null, body: Produ
       ).results
     : [];
   // Where each public study's file is: the legacy single file while it exists, the v2 manifest once it is retired.
-  const rows = (items.results ?? []) as Record<string, unknown>[];
+  // A withheld public study (./alpha) is not part of the atlas: it is left out of the cohort as listed.
+  const all = (items.results ?? []) as Record<string, unknown>[];
+  const withheld = await withheldAmong(db, all.map((r) => r.public_gse_id).filter((g): g is string => typeof g === "string" && !!g));
+  const rows = all.filter((r) => !(typeof r.public_gse_id === "string" && withheld.has(r.public_gse_id)));
   const facts = await studyV2Map(db, rows.map((r) => r.public_gse_id).filter((g): g is string => typeof g === "string" && !!g));
   const withFiles = rows.map((r) => {
     const gse = typeof r.public_gse_id === "string" && r.public_gse_id ? r.public_gse_id : null;

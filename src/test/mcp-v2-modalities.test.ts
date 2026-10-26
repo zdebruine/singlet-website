@@ -21,11 +21,11 @@ const S2 = new Uint8Array(readFileSync("src/test/fixtures/v2/sample/GSM1000001.s
 const SAMPLE = JSON.parse(readFileSync("src/test/fixtures/v2/sample/GSM1000001.manifest.json", "utf8"));
 const M = SAMPLE.members;
 // The fixture object has exon and intron matrices. A junction matrix is listed over the intron matrix's bytes (a real pz2 member, so
-// slice_cells can read it), and mt_heteroplasmy is a stub recipe with nothing stored, as in the GSE145370 pilot.
+// slice_cells can read it). mt_heteroplasmy (a stub recipe in the GSE145370 pilot) is a restricted member in Research Alpha: the v2
+// ingest refuses it, so no sample object here has one.
 const MEMBERS = {
   ...M,
   "sj_counts.1pz": { ...M["intron_counts.1pz"] },
-  "mt_heteroplasmy.1pz": { kind: 4, flags: 1, off: 0, len: 0, out_len: 151, crc32: 1, recipe: "stub-v1", params: {}, needs: [] },
 };
 
 const CATALOG = `
@@ -33,6 +33,7 @@ CREATE TABLE gse (id TEXT PRIMARY KEY, title TEXT, abstract TEXT, organism TEXT,
   pubmed_ids TEXT, r2_bundle_key TEXT, r2_bundle_bytes INTEGER, r2_bundle_n_gsms INTEGER, submitted_date TEXT, last_updated TEXT);
 CREATE TABLE gse_meta (gse_id TEXT PRIMARY KEY, has_bundle INTEGER, organism_primary TEXT, n_usable_samples INTEGER, reference_mismatch INTEGER,
   n_usable_cells INTEGER, n_lowqc_samples INTEGER, n_lowqc_cells INTEGER, year INTEGER);
+CREATE TABLE bundle_manifest (gse_id TEXT PRIMARY KEY, bytes INTEGER, n_gsms_in_bundle INTEGER, gsm_ids TEXT, reference_build TEXT, singlet_version TEXT, manifest_created_at TEXT);
 CREATE TABLE gsm (gsm_id TEXT PRIMARY KEY, gse_id TEXT, organism_primary TEXT, tissue_group TEXT, disease_group TEXT, assay_family TEXT);
 CREATE TABLE sample_qc (gsm_id TEXT PRIMARY KEY, gse_id TEXT, protocol TEXT, reference_build TEXT, n_input_reads INTEGER, uniquely_mapped_pct REAL,
   n_cells_called INTEGER, median_umi REAL, median_genes REAL, mapping_rate REAL, exonic_fraction REAL, intronic_fraction REAL, sequencing_saturation REAL,

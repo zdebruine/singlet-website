@@ -176,7 +176,6 @@ function ExpandedRow({ s, gseId, studyTitle, colSpan, qc }: { s: GsmRow; gseId: 
                   {qc.exonic_fraction != null && <Detail label="Exonic"><span className="font-mono tabular">{fmtPct(qc.exonic_fraction)}</span></Detail>}
                   {qc.intronic_fraction != null && <Detail label="Intronic"><span className="font-mono tabular">{fmtPct(qc.intronic_fraction)}</span></Detail>}
                   <Detail label="Seq. saturation"><NotComputed v={qc.sequencing_saturation} /></Detail>
-                  <Detail label="Median mito"><NotComputed v={qc.median_mito_fraction} /></Detail>
                   {qc.fraction_reads_in_cells != null && <Detail label="Reads in cells"><span className="font-mono tabular">{fmtPct(qc.fraction_reads_in_cells)}</span></Detail>}
                   {qc.total_genes_detected != null && <Detail label="Genes detected"><span className="font-mono tabular">{fmtInt(qc.total_genes_detected)}</span></Detail>}
                   {qc.reference_build && <Detail label="Reference">{qc.reference_build}</Detail>}
@@ -235,7 +234,6 @@ export function StudySamplesTable({ gseId, studyTitle, samples, highlightGsm, co
 
   const hasQc = useMemo(() => samples.some((s) => s.mapping_rate != null || s.median_genes != null), [samples]);
   const hasReads = useMemo(() => !!qcByGsm && samples.some((s) => qcByGsm[s.gsm_id.toUpperCase()]?.n_input_reads != null), [samples, qcByGsm]);
-  const hasCellsCalled = useMemo(() => !!qcByGsm && samples.some((s) => qcByGsm[s.gsm_id.toUpperCase()]?.n_cells_called != null), [samples, qcByGsm]);
   // Saturation was never computed by the pipeline (0/null everywhere); only show the column if a real value exists.
   const hasSaturation = useMemo(() => !!qcByGsm && samples.some((s) => (qcByGsm[s.gsm_id.toUpperCase()]?.sequencing_saturation ?? 0) > 0), [samples, qcByGsm]);
 
@@ -339,8 +337,8 @@ export function StudySamplesTable({ gseId, studyTitle, samples, highlightGsm, co
 
   const columns: { col: SortCol | null; label: string; cls?: string; hidden?: boolean }[] = [
     { col: "gsm_id", label: "Sample" },
-    { col: "n_cells", label: hasCellsCalled ? "Cells (catalog)" : "Cells", cls: "num" },
-    { col: "n_cells_called", label: "Cells (file)", cls: "num", hidden: !hasCellsCalled },
+    // One cell count: cells called in the published file (the API's n_cells). The catalog's raw barcode count is not shown.
+    { col: "n_cells", label: "Cells", cls: "num" },
 
     { col: "mapping_rate", label: "Mapped", cls: "num", hidden: !hasQc },
     { col: "median_genes", label: "Genes / cell", cls: "num", hidden: !hasQc },
@@ -455,7 +453,6 @@ export function StudySamplesTable({ gseId, studyTitle, samples, highlightGsm, co
                         fmtInt(s.n_cells)
                       )}
                     </td>
-                    {hasCellsCalled && <td className="num text-[12.5px] font-mono">{fmtInt(qc?.n_cells_called)}</td>}
 
                     {hasQc && <td className="num text-[12.5px]">{fmtPct(s.mapping_rate)}</td>}
                     {hasQc && <td className="num text-[12.5px]">{fmtInt(s.median_genes)}</td>}

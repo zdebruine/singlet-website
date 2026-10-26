@@ -13,6 +13,7 @@
  * assay_family, protocol, reference_build, year, cell_type, …) require the
  * `gse_meta` join and live on /api/search.
  */
+import { studyServedSql } from "../../_shared/alpha";
 import { serverError } from "../../_shared/errors";
 import { corsOk, corsErr, handleOptions, intParam, clampPageSize } from "../../_shared/cors";
 import { cachedJson, CATALOG_CACHE_TTL } from "../../_shared/cache";
@@ -58,6 +59,9 @@ function boolParam(url: URL, key: string): boolean | null | undefined {
 // D1 read quota on 2026-09-03 (see ../../_shared/cache). Only 200s are stored.
 export const onRequestGet: PagesFunction<Env> = async ({ env, request, waitUntil }) =>
   cachedJson(request, waitUntil, () => listSeries(env, request), CATALOG_CACHE_TTL);
+
+/** Cells called in the study's file (gse_meta.n_usable_cells); the catalog's gse.n_cells (raw barcodes) is not served. */
+const FILE_CELLS = "COALESCE((SELECT m.n_usable_cells FROM gse_meta m WHERE m.gse_id = gse.id), 0)";
 
 async function listSeries(env: Env, request: Request): Promise<Response> {
   try {
@@ -117,8 +121,8 @@ async function listSeries(env: Env, request: Request): Promise<Response> {
       ? `${sort} ${dir} NULLS LAST`
       : `(n_gsm_done > 0) DESC, n_cells DESC`;
 
-    // Build WHERE clauses
-    const conditions: string[] = [];
+    // Build WHERE clauses. Research Alpha: a withheld study is never listed.
+    const conditions: string[] = [studyServedSql("gse.id")];
     const params: (string | number)[] = [];
 
     // Never bind raw input into MATCH (`x*`, `foo"`, `a OR` are FTS5 syntax
@@ -134,11 +138,11 @@ async function listSeries(env: Env, request: Request): Promise<Response> {
       params.push(organism);
     }
     if (minCells != null && !isNaN(minCells)) {
-      conditions.push("n_cells >= ?");
+      conditions.push(`${FILE_CELLS} >= ?`);
       params.push(minCells);
     }
     if (maxCells != null && !isNaN(maxCells)) {
-      conditions.push("n_cells <= ?");
+      conditions.push(`${FILE_CELLS} <= ?`);
       params.push(maxCells);
     }
     if (minSamples != null && !isNaN(minSamples)) {
@@ -175,7 +179,7 @@ async function listSeries(env: Env, request: Request): Promise<Response> {
 
     // Data
     const rows = await env.DB.prepare(
-      `SELECT id, title, organism, n_gsm_total, n_gsm_done, n_gsm_failed, n_cells,
+      `SELECT id, title, organism, n_gsm_total, n_gsm_done, n_gsm_failed, ${FILE_CELLS} AS n_cells,
               pubmed_ids, r2_bundle_key, r2_bundle_bytes, submitted_date, last_updated
        FROM gse ${where}
        ORDER BY ${orderBy}

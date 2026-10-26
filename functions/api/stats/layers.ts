@@ -1,6 +1,6 @@
 /**
  * GET /api/stats/layers — how many downloadable studies hold each layer beyond gene counts
- * (splicing, mitochondrial variants, ancestry, …). See ../../_shared/layers-core.
+ * (splicing, junctions, donors, …). See ../../_shared/layers-core.
  *
  * Computed at most every 12 h (meta_cache) and cached at the edge for an hour. Public.
  */

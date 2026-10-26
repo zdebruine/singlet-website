@@ -7,6 +7,22 @@
  *   // @vitest-environment node
  */
 import { DatabaseSync } from "node:sqlite";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
+/**
+ * schema/035 (Research Alpha exclusions): every public query reads alpha_exclusions and alpha_withheld, so every test
+ * database gets the two tables, empty, as production has them. The triggers need sample_qc and gse_meta, so they are
+ * created only where a test schema has both.
+ */
+const ALPHA_SQL = readFileSync(fileURLToPath(new URL("../../../schema/035_alpha_exclusions.sql", import.meta.url)), "utf8");
+const [ALPHA_TABLES, ALPHA_TRIGGERS] = ALPHA_SQL.split("-- @triggers");
+
+function addAlphaSchema(raw: DatabaseSync): void {
+  raw.exec(ALPHA_TABLES);
+  const has = (t: string) => !!raw.prepare(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?`).get(t);
+  if (has("sample_qc") && has("gse_meta")) raw.exec(ALPHA_TRIGGERS.replace(/^.*\n/, ""));
+}
 
 type Bind = string | number | bigint | null | Uint8Array;
 
@@ -48,6 +64,7 @@ export interface TestD1 {
 export function createTestD1(schemaSql = ""): TestD1 & D1Database {
   const raw = new DatabaseSync(":memory:");
   if (schemaSql) raw.exec(schemaSql);
+  addAlphaSchema(raw);
   const d1: TestD1 = {
     raw,
     prepare: (sql) => new Statement(raw, sql),
