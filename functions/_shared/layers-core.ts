@@ -1,5 +1,5 @@
 /**
- * What the downloadable files hold beyond gene counts: for each layer, how many studies on
+ * What the downloadable files hold beyond gene counts: for each layer Research Alpha offers, how many studies on
  * DOWNLOADABLE_SQL carry it, read from the published file indexes (`bundle_index.entries`).
  *
  * One LIKE scan over bundle_index (no json_each), so it is computed at most every 12 h and shared
@@ -22,20 +22,18 @@ export interface LayerStats {
   computed_at: string;
 }
 
-/** Layer → a file name that only that layer writes (see ./modalities). */
+/**
+ * Layer → a file name that only that layer writes (see ./modalities). Research Alpha counts only the layers it offers:
+ * mtDNA variants and the legacy ancestry call are not released, and doublet scores and the legacy pipeline sex call are
+ * not reliable (./restricted), so they are not counted even though the files are in many legacy bundles.
+ */
 export const LAYER_FILES: { key: string; label: string; file: string; humanOnly?: boolean }[] = [
   { key: "gene_counts", label: "Gene counts", file: "exon_counts.1pz" },
   { key: "splicing", label: "Spliced and unspliced reads", file: "intron_counts.1pz" },
-  { key: "junctions", label: "Splice junctions and exon inclusion", file: "sj_counts.1pz" },
-  { key: "mtdna", label: "Mitochondrial DNA variants", file: "mt_heteroplasmy.1pz" },
-  { key: "vdj", label: "Immune receptor genes (V(D)J)", file: "vdj_gene_usage.1pz" },
+  { key: "junctions", label: "Splice junctions", file: "sj_counts.1pz" },
+  { key: "vdj", label: "TR/IG gene expression (not clonotypes)", file: "vdj_gene_usage.1pz" },
   { key: "donors", label: "Donor demultiplexing", file: "donor_assignments.tsv" },
-  // Continental ancestry is a human call; other species' files carry the same name, so count humans only.
-  { key: "ancestry", label: "Genetic ancestry (human)", file: "ancestry_call.json", humanOnly: true },
-  // The pipeline matches chrY/XIST gene names in upper case, so every mouse sex_call.json says "unknown" (docs/DENSE-METADATA.md).
-  // The file is there but holds no call: count humans only until the pipeline is fixed.
-  { key: "sex", label: "Genetic sex (human)", file: "sex_call.json", humanOnly: true },
-  { key: "doublets", label: "Doublet scores", file: "doublet_scores.tsv" },
+  // The legacy pipeline sex call (sex_call.json) is not offered: genetic sex comes from the s1 cell labels (sex_chrom).
 ];
 
 /** Layer counts over downloadable studies that are served from v2 and have no bundle_index row; null before schema/032 or when there are none. */

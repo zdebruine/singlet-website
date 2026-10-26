@@ -9,6 +9,7 @@
  *
  * Cached at the edge for CATALOG_CACHE_TTL seconds, keyed on the full URL.
  */
+import { sampleServedSql, studyServedSql } from "../../_shared/alpha";
 import { serverError } from "../../_shared/errors";
 import { corsOk, corsErr, handleOptions, intParam, clampPageSize } from "../../_shared/cors";
 import { cachedJson, CATALOG_CACHE_TTL } from "../../_shared/cache";
@@ -22,9 +23,12 @@ interface Env {
 
 const ALLOWED_SORT_COLS = new Set([
   "gsm_id", "gse_id", "organism", "protocol", "tissue", "cell_type",
-  "n_cells", "mapping_rate", "median_genes", "median_umis", "mt_pct",
+  "n_cells", "mapping_rate", "median_genes", "median_umis",
   "status", "qc_flag", "pipeline_date", "pz_size_bytes", "last_updated"
 ]);
+
+/** Cells called in the file for the sample; the catalog's gsm.n_cells (raw barcodes) is not served. */
+const FILE_CELLS = "(SELECT q.n_cells_called FROM sample_qc q WHERE q.gsm_id = gsm.gsm_id)";
 
 // Edge-cached: an uncached full COUNT over `gsm` on every pageview is what
 // exhausted the D1 read quota on 2026-09-03 (see ../../_shared/cache).
@@ -65,7 +69,8 @@ async function listSamples(env: Env, request: Request): Promise<Response> {
       ? `${sort} ${dir} NULLS LAST`
       : `(status = 'DONE') DESC, n_cells DESC`;
 
-    const conditions: string[] = [];
+    // Research Alpha: excluded samples and the samples of withheld studies are never listed.
+    const conditions: string[] = [sampleServedSql("gsm.gsm_id"), studyServedSql("gsm.gse_id")];
     const bindParams: (string | number)[] = [];
 
     // Never bind raw input into MATCH (`x*`, `foo"`, `a OR` are FTS5 syntax
@@ -85,8 +90,8 @@ async function listSamples(env: Env, request: Request): Promise<Response> {
     if (status)           { conditions.push("status = ?");            bindParams.push(status); }
     if (qc_flag)          { conditions.push("qc_flag = ?");           bindParams.push(qc_flag); }
     if (failure_category) { conditions.push("failure_category = ?");  bindParams.push(failure_category); }
-    if (minCells != null && !isNaN(minCells)) { conditions.push("n_cells >= ?"); bindParams.push(minCells); }
-    if (maxCells != null && !isNaN(maxCells)) { conditions.push("n_cells <= ?"); bindParams.push(maxCells); }
+    if (minCells != null && !isNaN(minCells)) { conditions.push(`${FILE_CELLS} >= ?`); bindParams.push(minCells); }
+    if (maxCells != null && !isNaN(maxCells)) { conditions.push(`${FILE_CELLS} <= ?`); bindParams.push(maxCells); }
 
     const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
 
@@ -95,8 +100,8 @@ async function listSamples(env: Env, request: Request): Promise<Response> {
         .bind(...bindParams).first<{ n: number }>(),
       env.DB.prepare(
         `SELECT gsm_id, gse_id, organism, protocol, assay_family, modality, tissue, cell_type, donor_id,
-                disease, sex, n_cells, mapping_rate, median_genes, median_umis, mt_pct,
-                status, qc_flag, failure_category, singlet_version, pipeline_date,
+                disease, sex, ${FILE_CELLS} AS n_cells, mapping_rate, median_genes, median_umis,
+                status, qc_flag, failure_category, pipeline_date,
                 pz_size_bytes, title, source, srr_ids, last_updated
          FROM gsm ${where}
          ORDER BY ${orderBy}

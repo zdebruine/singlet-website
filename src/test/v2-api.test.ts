@@ -21,7 +21,7 @@ CREATE TABLE gse_meta (gse_id TEXT PRIMARY KEY, has_bundle INTEGER, organism_pri
   reference_mismatch INTEGER, n_usable_cells INTEGER, n_lowqc_cells INTEGER);
 CREATE TABLE bundle_manifest (gse_id TEXT PRIMARY KEY, bytes INTEGER, n_files INTEGER, n_gsms_in_bundle INTEGER, manifest_n_gsms INTEGER, gsm_ids TEXT, manifest_created_at TEXT,
   audited_at TEXT, reference_build TEXT, singlet_version TEXT);
-CREATE TABLE sample_qc (gsm_id TEXT PRIMARY KEY, gse_id TEXT, usable INTEGER, qc_tier INTEGER, median_genes REAL, mapping_rate REAL);
+CREATE TABLE sample_qc (gsm_id TEXT PRIMARY KEY, gse_id TEXT, usable INTEGER, qc_tier INTEGER, median_genes REAL, mapping_rate REAL, n_cells_called INTEGER);
 ALTER TABLE gse ADD COLUMN r2_bundle_n_gsms INTEGER;
 ALTER TABLE gsm ADD COLUMN organism_primary TEXT;
 ALTER TABLE gsm ADD COLUMN tissue_group TEXT;

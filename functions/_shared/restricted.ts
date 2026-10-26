@@ -1,33 +1,44 @@
 /**
- * Files that are held back from the public product.
+ * Files that are held back from the public product, and files that are not offered in Research Alpha.
  *
- * Some outputs the pipeline computes carry per-donor germline information (genotype calls, read depth over
- * a SNP panel, allele-specific counts, donor mitochondrial sequence). They are kept in the pipeline and in
- * private storage for internal tools and controlled-access accounts, but are not listed, served or counted
- * by the public site, API or MCP server.
+ * 1. Restricted (private): outputs that carry per-donor germline information (genotype calls, read depth over a SNP
+ *    panel, allele-specific counts, donor mitochondrial sequence, and in Alpha every mitochondrial allele layer and the
+ *    ancestry call). They are kept in the pipeline and in private storage for internal tools and controlled-access
+ *    accounts, but are not listed, served or counted by the public site, API or MCP server, and data.singlet.bio refuses
+ *    range reads of them (workers/data-guard).
+ * 2. Hidden (Alpha): layers that are in the legacy files but are not reliable yet (ambient RNA, doublet scores,
+ *    per-cell non-host calls, the legacy percent-spliced-in matrix, mitochondrial event summaries, and the legacy
+ *    pipeline sex call). The legacy 50-marker ancestry call is private (rule 1).
+ *    The validated per-cell labels written by the s1 transcode (ancestry_hancestro / ancestry_prob, sex_chrom, cell-type
+ *    CL labels) are public, searchable cell metadata: they are columns of the s1 cells table, not members matched here,
+ *    and nothing in this file hides them. They are public bytes inside a whole-file download, but no listing, count, modality
+ *    answer or range recipe offers them. docs: the Known Issues page ("present in the file, do not use").
  *
  * Rules are written as an allowlist per directory so that a new output added to `donor/` or `mt/` is private
- * until someone decides otherwise. They are matched against the path *inside* `samples/<GSM>/`. The same rules
- * live in the packer (`singlet-bio`, python/singlet/bundle.py `is_restricted_member`); keep the two in step.
+ * until someone decides otherwise. They are matched against the path *inside* `samples/<GSM>/`. The private rules
+ * live in three places; keep them in step: here, the packer (`singlet-bio`, python/singlet/bundle.py
+ * `is_restricted_member`) and the data.singlet.bio guard (workers/data-guard/src/policy.ts `isPrivateMember`).
  *
  * `bundle_index` in D1 still holds the full listing of whatever file is stored (internal tools and the catalog
- * crank read it), so every public reader goes through `publicEntries` / `isRestrictedPath` instead of using
- * the raw entries.
+ * crank read it), so every public reader goes through `publicEntries` (or `servedEntries` in ./alpha, which also
+ * drops samples that are not part of the atlas) instead of using the raw entries.
  */
 import { SAMPLE_RE } from "./bundle-reader";
 
-/** Stays public inside donor/: barcode → donor label and doublet calls, no genotypes. */
+/** Stays public inside donor/: barcode → donor label, no genotypes. */
 const DONOR_PUBLIC = new Set(["donor_assignments.tsv"]);
-/** Stays public inside mt/: per-cell event counts. */
+/** Stays public inside mt/: per-cell event counts (not offered in Alpha, see HIDDEN). */
 const MT_PUBLIC = new Set(["mt_summary.tsv"]);
+/** Private members outside donor/ and mt/: allele-level or ancestry-identifying files. */
+const PRIVATE_NAMES = new Set(["ase_counts.tsv", "mt_heteroplasmy.1pz", "mt_variants.tsv", "ancestry_call.json"]);
 
-/** True for a path relative to `samples/<GSM>/`. */
+/** True for a path relative to `samples/<GSM>/`. Same rule as workers/data-guard `isPrivateMember`. */
 export function isRestrictedMember(rel: string): boolean {
   if (rel.startsWith("donor/")) return !DONOR_PUBLIC.has(rel.slice("donor/".length));
   if (rel.startsWith("mt/")) return !MT_PUBLIC.has(rel.slice("mt/".length));
-  if (rel === "ase_counts.tsv") return true;
+  if (PRIVATE_NAMES.has(rel)) return true;
   const name = rel.slice(rel.lastIndexOf("/") + 1);
-  return /^snp_/.test(name) || /\.(vcf|bcf)(\.gz)?$/i.test(name);
+  return /^snp_/.test(name) || /\.(vcf|bcf)(\.gz)?$/i.test(name) || /_mt_(consensus|variants)/.test(name);
 }
 
 /** True for a full archive path (`samples/<GSM>/…`) or a bare member name. */
@@ -38,7 +49,63 @@ export function isRestrictedPath(path: string): boolean {
   return isRestrictedMember(path);
 }
 
-/** The entries a visitor may see, in their original order. */
-export function publicEntries<T extends { p: string }>(entries: T[]): T[] {
-  return entries.filter((e) => !isRestrictedPath(e.p));
+/**
+ * Layers present in legacy files that Alpha does not offer (docs/RESEARCH_ALPHA_PLAN.md §2c), relative to
+ * `samples/<GSM>/`. A layer is hidden by its file; columns inside a public table (`is_doublet` in a cells table,
+ * `prob_doublet` in donor_assignments.tsv) cannot be, and the Known Issues page says so.
+ */
+const HIDDEN_MEMBERS = new Set([
+  // ambient RNA: rho is 0.27x the truth and the summary fraction is always 0
+  "ambient_contamination.tsv",
+  "ambient_contamination.json",
+  "ambient_profile.tsv",
+  // doublets flag 20-25% of cells
+  "doublet_scores.tsv",
+  // legacy PSI is 0 or 1 only; splice_events annotates its rows
+  "splice_psi.1pz",
+  "splice_events.tsv",
+  // per-cell non-host counts unconfirmed taxa (the sample-level summary and abundance stay)
+  "nonhost/nonhost_per_cell.1pz",
+  "nonhost/nonhost_per_cell.tsv",
+  // per-cell mtDNA event counts are derived from the variant calls, which are not released
+  "mt/mt_summary.tsv",
+  // the legacy pipeline sex call (XIST/chrY, upper-case gene names: every non-human call is "unknown"); s1 carries sex_chrom
+  "sex_call.json",
+]);
+
+/** Human-only layers: written for other species too, but without a usable call. None in Alpha (the legacy sex call is hidden for all). */
+const HUMAN_ONLY_MEMBERS = new Set<string>([]);
+
+export interface EntryContext {
+  /** True when the study is human. Human-only layers are hidden when this is false; unknown (undefined) is treated as not human. */
+  human?: boolean;
+  /** Samples that are not part of the atlas: every entry under `samples/<GSM>/` for these is dropped. */
+  excluded?: ReadonlySet<string>;
+}
+
+/** True for a member relative to `samples/<GSM>/` that Alpha does not list or offer. */
+export function isHiddenMember(rel: string, ctx: Pick<EntryContext, "human"> = {}): boolean {
+  if (HIDDEN_MEMBERS.has(rel)) return true;
+  return HUMAN_ONLY_MEMBERS.has(rel) && ctx.human !== true;
+}
+
+/**
+ * The entries a visitor may see, in their original order: no restricted member, and, given a context, no hidden layer
+ * and nothing of an excluded sample. Without a context only the restricted rule applies (callers that need the full
+ * Alpha rule use servedEntries in ./alpha, which loads the context).
+ */
+export function publicEntries<T extends { p: string }>(entries: T[], ctx?: EntryContext): T[] {
+  return entries.filter((e) => {
+    if (isRestrictedPath(e.p)) return false;
+    if (!ctx) return true;
+    const m = SAMPLE_RE.exec(e.p);
+    if (!m) return true;
+    if (ctx.excluded?.has(m[1])) return false;
+    return !isHiddenMember(e.p.slice(m[0].length), ctx);
+  });
+}
+
+/** For a member name relative to the sample (v2 catalog members): restricted or hidden. */
+export function isUnofferedMember(rel: string, ctx: Pick<EntryContext, "human"> = {}): boolean {
+  return isRestrictedMember(rel) || isHiddenMember(rel, ctx);
 }

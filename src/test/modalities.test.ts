@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { MODALITIES, MODALITY_BY_NAME, resolveModalities } from "../../functions/_shared/modalities";
-import { isRestrictedMember } from "../../functions/_shared/restricted";
+import { isHiddenMember, isRestrictedMember } from "../../functions/_shared/restricted";
 
 /**
  * The registry is duplicated three times on purpose — TypeScript for the MCP
@@ -29,8 +29,9 @@ describe("modality registry", () => {
     }
   });
 
-  it("lists no member that is held back from the public product", () => {
-    for (const m of MODALITIES) for (const member of m.members) expect(isRestrictedMember(member), `${m.name}: ${member}`).toBe(false);
+  it("lists no member that is held back from the public product or not offered in Research Alpha", () => {
+    for (const m of MODALITIES)
+      for (const member of m.members) expect(isRestrictedMember(member) || isHiddenMember(member, { human: true }), `${m.name}: ${member}`).toBe(false);
   });
 
   it("covers the modalities the quickstart page promises", () => {
@@ -38,17 +39,10 @@ describe("modality registry", () => {
       "exon_counts",
       "intron_counts",
       "junctions",
-      "splice_psi",
-      "mt_heteroplasmy",
-      "mt_variants",
       "donor_assignments",
-      "sex_call",
-      "ancestry_call",
       "nonhost_species",
       "vdj_gene_usage",
-      "doublet_scores",
       "cell_cycle_scores",
-      "ambient_contamination",
       "summary",
     ]) {
       expect(MODALITY_BY_NAME.has(name), name).toBe(true);
@@ -65,7 +59,8 @@ describe("resolveModalities", () => {
       "mt_variants.tsv",
       "summary.json",
     ]).map((f) => f.modality.name);
-    expect(found).toEqual(["exon_counts", "intron_counts", "junctions", "mt_variants", "summary"]);
+    // mt_variants is not offered in Research Alpha
+    expect(found).toEqual(["exon_counts", "intron_counts", "junctions", "summary"]);
   });
 
   it("matches the newer, nested bundle layout", () => {
@@ -74,17 +69,13 @@ describe("resolveModalities", () => {
       "nonhost/nonhost_em_abundance.tsv",
       "mt/mt_summary.tsv",
     ]);
-    expect(found.map((f) => f.modality.name)).toEqual([
-      "mt_variants",
-      "donor_assignments",
-      "nonhost_species",
-    ]);
-    expect(found.find((f) => f.modality.name === "mt_variants")?.member).toBe("mt/mt_summary.tsv");
+    expect(found.map((f) => f.modality.name)).toEqual(["donor_assignments", "nonhost_species"]);
+    expect(found.find((f) => f.modality.name === "donor_assignments")?.member).toBe("donor/donor_assignments.tsv");
   });
 
   it("prefers the first matching member when both layouts are present", () => {
-    const found = resolveModalities(["mt_variants.tsv", "mt/mt_summary.tsv"]);
-    expect(found[0].member).toBe("mt_variants.tsv");
+    const found = resolveModalities(["donor/donor_assignments.tsv", "donor_assignments.tsv"]);
+    expect(found[0].member).toBe("donor/donor_assignments.tsv");
   });
 
   it("returns nothing for a sample with no recognised files", () => {

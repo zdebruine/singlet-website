@@ -44,6 +44,7 @@ import { requestId } from "./_shared/errors";
 import { loadStudy, bundleUrl, GSE_RE, type StudyDetail } from "./_shared/study-core";
 import { legacyUrl } from "./_shared/file-facts";
 import { computeStats } from "./_shared/stats-core";
+import { alphaToolArgs, studyServedSql } from "./_shared/alpha";
 import { TISSUE_GROUPS, DISEASE_GROUPS, ASSAY_FAMILIES } from "./_shared/vocab";
 import { MANIFEST_FORMATS } from "./_shared/manifest-core";
 import type { StudyRow, SampleRow } from "./_shared/search-core";
@@ -608,7 +609,7 @@ async function readResource(env: Env, uri: string) {
   }
   if (uri === "singlet://vocab") {
     const counts = async (column: string) => {
-      const rows = await env.DB.prepare(`SELECT ${column} AS v, COUNT(*) AS n FROM gse_meta WHERE ${column} IS NOT NULL GROUP BY ${column}`)
+      const rows = await env.DB.prepare(`SELECT ${column} AS v, COUNT(*) AS n FROM gse_meta WHERE ${column} IS NOT NULL AND ${studyServedSql("gse_meta.gse_id")} GROUP BY ${column}`)
         .all<{ v: string; n: number }>()
         .catch(() => null);
       const out: Record<string, number> = {};
@@ -687,7 +688,8 @@ function studySummary(r: StudyRow, why: string) {
     n_samples: r.bundle_n_samples ?? r.n_done,
     sample_count_source: r.bundle_n_samples != null ? "file" : "catalog",
     n_samples_total: r.n_total,
-    n_cells: r.suspect_cells ? null : r.n_cells,
+    // cells called in the file; never the catalog's raw barcode count
+    n_cells: r.file_cells ?? null,
     year: r.year,
     has_bundle: r.has_bundle,
     // The legacy file's URL only while that file exists; a study served from v2 also names its manifest.
@@ -723,7 +725,7 @@ function sampleSummary(s: SampleRow) {
     disease_group: s.disease_group,
     assay: s.assay_family,
     sex: s.sex,
-    n_cells: s.suspect_cells ? null : s.n_cells,
+    n_cells: s.n_cells,
     status: s.status,
     characteristics: s.characteristics,
     has_bundle: s.has_bundle,
@@ -796,7 +798,7 @@ async function searchDatasets(
       if (index === 0 && b.groups) lines.push(`Matches everything (${fmt(b.groups.full)}):`);
       if (index === fullCount && (b.groups?.partial ?? 0) > 0) lines.push(`Partial matches, best first (${fmt(b.groups?.partial)}):`);
       lines.push(`- ${s.gse_id} — ${s.title ?? "(untitled)"}`);
-      lines.push(`  ${[s.organism, s.tissues.join("/"), s.diseases.join("/"), s.assays.join("/")].filter(Boolean).join(" · ")} · ${fmt(s.n_samples)} samples${s.sample_count_source === "catalog" ? " (catalog)" : " in file"} · ${s.file_cells != null ? fmt(s.file_cells) + " cells in file" : s.n_cells != null ? fmt(s.n_cells) + " cells (catalog)" : "cell count unreliable"}${s.year ? " · " + s.year : ""}`);
+      lines.push(`  ${[s.organism, s.tissues.join("/"), s.diseases.join("/"), s.assays.join("/")].filter(Boolean).join(" · ")} · ${fmt(s.n_samples)} samples${s.sample_count_source === "catalog" ? " (catalog)" : " in file"} · ${s.file_cells != null ? fmt(s.file_cells) + " cells in file" : "no cells in a file yet"}${s.year ? " · " + s.year : ""}`);
       if (s.why) lines.push(`  why: ${s.why}`);
       lines.push(`  ${s.has_bundle ? `load: singlet.load("${s.gse_id}")` : "file pending"} · ${s.study_url}`);
     }
@@ -841,7 +843,7 @@ async function searchDatasets(
   lines.push("");
   for (const s of rows) {
     lines.push(`- ${s.gsm_id} (${s.gse_id}) — ${s.title ?? s.study_title ?? ""}`);
-    lines.push(`  ${[s.organism, s.tissue ?? s.tissue_group, s.cell_type, s.disease ?? s.disease_group, s.assay].filter(Boolean).join(" · ")} · ${s.n_cells != null ? fmt(s.n_cells) + " cells" : "cell count unreliable"} · ${s.status}`);
+    lines.push(`  ${[s.organism, s.tissue ?? s.tissue_group, s.cell_type, s.disease ?? s.disease_group, s.assay].filter(Boolean).join(" · ")} · ${s.n_cells != null ? fmt(s.n_cells) + " cells in file" : "not in a file"} · ${s.status}`);
   }
   lines.push("");
   lines.push("Note: files are per study — load the parent GSE and subset to these samples.");
@@ -869,7 +871,7 @@ function studyText(d: StudyDetail): string {
       .filter(Boolean)
       .join(" · ")
   );
-  lines.push(`${fmt(s.n_gsm_done)} of ${fmt(s.n_gsm_total)} samples processed · ${fmt(s.n_cells)} cells${s.n_gsm_failed ? ` · ${fmt(s.n_gsm_failed)} failed` : ""}`);
+  lines.push(`${fmt(s.n_gsm_done)} of ${fmt(s.n_gsm_total)} samples processed · ${fmt(s.n_cells)} cells called in the file${s.n_gsm_failed ? ` · ${fmt(s.n_gsm_failed)} failed` : ""}`);
   if (d.conditions_label) lines.push(`Conditions: ${d.conditions_label}`);
   if (m?.cell_types_raw.length) lines.push(`Cell types recorded: ${m.cell_types_raw.slice(0, 15).join(", ")}`);
   lines.push(
@@ -914,7 +916,7 @@ async function getStudy(env: Env, args: Record<string, unknown>) {
     disease: s.disease ?? null,
     sex: s.sex ?? null,
     donor_id: s.donor_id ?? null,
-    n_cells: s.suspect_cells ? null : s.n_cells,
+    n_cells: s.n_cells,
     status: s.status_text,
     characteristics: s.characteristics,
   }));
@@ -958,13 +960,26 @@ async function getStudy(env: Env, args: Record<string, unknown>) {
   return toolResult(studyText(d), structured);
 }
 
+/** Content-Length of a public object (one HEAD), or null when it cannot be read. */
+async function objectBytes(url: string): Promise<number | null> {
+  try {
+    const res = await fetch(url, { method: "HEAD", signal: AbortSignal.timeout(5000) });
+    if (!res.ok) return null;
+    const n = Number(res.headers.get("Content-Length"));
+    return Number.isFinite(n) && n > 0 ? n : null;
+  } catch {
+    return null;
+  }
+}
+
 async function getDownloadUrl(env: Env, args: Record<string, unknown>) {
   const id = typeof args.gse_id === "string" ? args.gse_id.trim().toUpperCase() : "";
   if (!GSE_RE.test(id)) return toolError("`gse_id` must be a GEO series accession like GSE178957.");
   const row = await env.DB.prepare(
-    `SELECT g.id, g.title, g.r2_bundle_bytes AS bundle_bytes, COALESCE(m.has_bundle, 0) AS has_bundle
+    `SELECT g.id, g.title, COALESCE((SELECT b.bytes FROM bundle_manifest b WHERE b.gse_id = g.id), g.r2_bundle_bytes) AS bundle_bytes,
+            COALESCE(m.has_bundle, 0) AS has_bundle
        FROM gse g LEFT JOIN gse_meta m ON m.gse_id = g.id
-      WHERE g.id = ?`
+      WHERE g.id = ? AND ${studyServedSql("g.id")}`
   )
     .bind(id)
     .first<{ id: string; title: string | null; bundle_bytes: number | null; has_bundle: number }>();
@@ -973,18 +988,20 @@ async function getDownloadUrl(env: Env, args: Record<string, unknown>) {
   if (v2) return v2DownloadUrl({ db: env.DB, waitUntil: () => undefined }, id, row.title, v2, args);
   const available = Number(row.has_bundle) === 1;
   const url = bundleUrl(id);
+  // The size of the object as it is served now (the catalog's byte count can predate a repack); the catalog only as a fallback.
+  const bytes = available ? ((await objectBytes(url)) ?? row.bundle_bytes) : null;
   const structured = {
     gse_id: id,
     title: row.title,
     available,
     url: available ? url : null,
-    bytes: available ? row.bundle_bytes : null,
+    bytes,
     license: "CC0-1.0",
     ...LOADERS(id),
     curl: available ? `curl -L -O ${url}` : null,
   };
   const text = available
-    ? `${id}: ${url}${row.bundle_bytes ? ` (${fmtBytes(row.bundle_bytes)})` : ""}\nCC0 — no account or key needed to download.\nPython: singlet.load("${id}")   R: load("${id}")`
+    ? `${id}: ${url}${bytes ? ` (${fmtBytes(bytes)})` : ""}\nCC0 — no account or key needed to download.\nPython: singlet.load("${id}")   R: load("${id}")`
     : `${id} is in the catalog but its .singlet file has not been built yet.`;
   return toolResult(text, structured);
 }
@@ -998,7 +1015,7 @@ async function getAtlasStats(env: Env) {
   const text = [
     `In published files: ${fmt(s.studies_with_files)} studies · ${fmt(s.samples_in_files)} samples that passed QC · ${fmt(s.cells_in_files)} cells called`,
     `QC: ${fmt(s.qc.removed_samples)} failed samples removed and ${fmt(s.qc.low_qc_samples)} flagged low QC (left out of every count and of searches unless include_low_qc is set)`,
-    `Catalog metadata: ${fmt(s.series_count)} studies · ${fmt(s.success_samples)} samples processed (of ${fmt(s.total_samples)} ingested) · ${fmt(s.total_cells)} cells recorded · ${fmt(s.species_count)} species`,
+    `Catalog metadata: ${fmt(s.series_count)} studies · ${fmt(s.success_samples)} samples processed (of ${fmt(s.total_samples)} ingested) · ${fmt(s.species_count)} species`,
     s.avg_mapping_rate != null ? `Catalog means: mapping rate ${(s.avg_mapping_rate * 100).toFixed(1)}% · median genes per cell ${fmt(s.avg_median_genes)}` : null,
     s.failure_categories.length ? `Most common failure reasons: ${s.failure_categories.slice(0, 5).map((f) => `${f.value} (${fmt(f.count)})`).join(", ")}` : null,
   ]
@@ -1039,7 +1056,7 @@ async function callTool(ctx: CallContext, params: Record<string, unknown>) {
 
 async function callToolInner(ctx: CallContext, params: Record<string, unknown>) {
   const name = typeof params.name === "string" ? params.name : "";
-  const args = (params.arguments && typeof params.arguments === "object" ? params.arguments : {}) as Record<string, unknown>;
+  let args = (params.arguments && typeof params.arguments === "object" ? params.arguments : {}) as Record<string, unknown>;
   if (!ALL_TOOL_NAMES.has(name)) return { error: rpcError(null, -32602, `Unknown tool: ${name}`) };
 
   const hasKey = ctx.auth.ok;
@@ -1071,6 +1088,10 @@ async function callToolInner(ctx: CallContext, params: Record<string, unknown>) 
   const db = { db: ctx.env.DB, waitUntil: ctx.waitUntil };
   const uid = ctx.auth.userId;
   try {
+    // Research Alpha: a withheld study or an excluded sample is answered as not found, and dropped from id lists.
+    const alpha = await alphaToolArgs(ctx.env.DB, args);
+    if (alpha.error) return { result: withQuota(toolError(alpha.error), meta) };
+    args = alpha.args;
     switch (name) {
       case "search_datasets":
         return { result: await searchDatasets(ctx.env, ctx.identity, ctx.waitUntil, args, hasKey) };

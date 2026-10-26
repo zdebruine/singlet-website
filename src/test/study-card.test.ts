@@ -145,7 +145,8 @@ describe("study card summaries", () => {
     expect(c.summary_text).toMatch(/^Subcutaneous adipose tissue from 12 human donors, aged 30 to 41 years\./);
     expect(c.summary_text).toContain("disease (obese 6, lean 6)");
     expect(c.summary_text).toContain("sex (male 6, female 6)");
-    expect(c.summary_text).toContain("The file also has genetic sex, donor demultiplexing, genetic ancestry and doublet scores.");
+    // Research Alpha offers neither the legacy ancestry or sex calls nor doublet scores
+    expect(c.summary_text).toContain("The file also has donor demultiplexing.");
     expect(c.donors).toEqual({ n_labeled: 12, n_samples: 12 });
     expect(c.grounded).toBe(true);
   });
@@ -293,7 +294,7 @@ describe("grounding", () => {
     const rows = rowsOf(input);
     const c = buildStudyCard(input, rows);
     const noFiles = { ...input, file_paths: [] };
-    expect(groundingProblems(c, noFiles, rows).join(" ")).toContain('layer "genetic sex" has no file');
+    expect(groundingProblems(c, noFiles, rows).join(" ")).toContain('layer "donor demultiplexing" has no file');
   });
 
   it("has no summary and is not grounded when no sample is approved", () => {

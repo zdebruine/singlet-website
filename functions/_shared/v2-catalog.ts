@@ -15,7 +15,8 @@
  * served one and v2_study.rev flips last. Every reader tolerates missing tables: before schema/032 is applied, everything
  * is "not migrated" and the legacy path answers.
  */
-import { isRestrictedMember } from "./restricted";
+import { isRestrictedMember, isUnofferedMember } from "./restricted";
+import { sampleServedSql } from "./alpha";
 import { resolveModalities } from "./modalities";
 
 export const GSE_RE = /^GSE\d+$/;
@@ -582,7 +583,7 @@ export async function getV2Sample(db: D1Database, gse: string, gsm: string, rev?
     db
       .prepare(
         `SELECT ${LIGHT_COLUMNS}, members_json, cell_stats_json FROM v2_sample
-          WHERE gse_id = ? AND gsm_id = ? AND rev = ${rev ? "?" : "(SELECT rev FROM v2_study WHERE gse_id = ?)"}`
+          WHERE gse_id = ? AND gsm_id = ? AND rev = ${rev ? "?" : "(SELECT rev FROM v2_study WHERE gse_id = ?)"} AND ${sampleServedSql("v2_sample.gsm_id")}`
       )
       .bind(gse, gsm, rev ?? gse)
       .first<V2SampleFull>()
@@ -598,7 +599,7 @@ export async function listV2Samples(db: D1Database, gse: string, rev: string, op
   const limit = Math.min(500, Math.max(1, Math.floor(opts.limit ?? 500)));
   return guarded(db, [] as V2SampleLight[], async () => {
     const rs = await db
-      .prepare(`SELECT ${LIGHT_COLUMNS} FROM v2_sample WHERE gse_id = ? AND rev = ? AND gsm_id > ? ORDER BY gsm_id LIMIT ?`)
+      .prepare(`SELECT ${LIGHT_COLUMNS} FROM v2_sample WHERE gse_id = ? AND rev = ? AND gsm_id > ? AND ${sampleServedSql("v2_sample.gsm_id")} ORDER BY gsm_id LIMIT ?`)
       .bind(gse, rev, opts.after ?? "", limit)
       .all<V2SampleLight>();
     return rs.results ?? [];
@@ -613,7 +614,7 @@ export async function getV2Samples(db: D1Database, gse: string, gsms: string[], 
     const rs = await db
       .prepare(
         `SELECT ${LIGHT_COLUMNS}, members_json, cell_stats_json FROM v2_sample
-          WHERE gse_id = ? AND rev = ${rev ? "?" : "(SELECT rev FROM v2_study WHERE gse_id = ?)"} AND gsm_id IN (${ids.map(() => "?").join(",")}) ORDER BY gsm_id`
+          WHERE gse_id = ? AND rev = ${rev ? "?" : "(SELECT rev FROM v2_study WHERE gse_id = ?)"} AND gsm_id IN (${ids.map(() => "?").join(",")}) AND ${sampleServedSql("v2_sample.gsm_id")} ORDER BY gsm_id`
       )
       .bind(gse, rev ?? gse, ...ids)
       .all<V2SampleFull>();
@@ -642,9 +643,9 @@ export function parseJsonObject(json: string | null | undefined): Record<string,
   }
 }
 
-/** The members a visitor may see (restricted ones are refused at ingest; this is the second line). */
+/** The members a visitor may see (restricted ones are refused at ingest; this is the second line; layers Alpha does not offer are not listed). */
 export function publicMemberNames(members: Record<string, unknown>): string[] {
-  return Object.keys(members).filter((n) => !isRestrictedMember(n)).sort();
+  return Object.keys(members).filter((n) => !isUnofferedMember(n)).sort();
 }
 
 /** Studies' modality names per sample, parsed from the compact `modalities` column. */

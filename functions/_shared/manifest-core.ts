@@ -10,6 +10,7 @@ import { bundleUrl } from "./study-core";
 import { organismToCommon } from "./vocab";
 import { exportStudyAccessions, type Ctx, type SearchFilters } from "./search-core";
 import { v2Facts } from "./v2-serve";
+import { studyServedSql } from "./alpha";
 
 export const MAX_MANIFEST_STUDIES = 2000;
 export const MANIFEST_FORMATS = ["tsv", "json", "curl", "wget", "python", "r"] as const;
@@ -30,6 +31,7 @@ export interface ManifestRow {
   n_samples_passing_qc: number | null;
   /** Samples in the file flagged low QC: proceed with caution. */
   n_samples_low_qc: number | null;
+  /** Cells called in the file's samples that passed QC (gse_meta.n_usable_cells); never the catalog's raw barcode count. */
   n_cells: number;
   year: number | null;
   pubmed_ids: string[];
@@ -53,20 +55,24 @@ export async function manifestRows(db: D1Database, ids: string[]): Promise<Manif
     const inList = chunk.map(() => "?").join(", ");
     const res = await db
       .prepare(
-        `SELECT g.id AS gse_id, g.title, g.pubmed_ids, g.n_cells AS g_cells, g.r2_bundle_bytes, g.r2_bundle_n_gsms,
-                m.organism_primary, m.tissue_groups, m.disease_groups, m.assay_families, m.n_cells AS m_cells, m.year,
+        `SELECT g.id AS gse_id, g.title, g.pubmed_ids, g.r2_bundle_bytes, g.r2_bundle_n_gsms,
+                m.organism_primary, m.tissue_groups, m.disease_groups, m.assay_families, m.n_usable_cells AS file_cells, m.year,
                 m.n_usable_samples, m.n_lowqc_samples,
-                b.reference_build, b.n_gsms_in_bundle, b.bytes AS b_bytes
+                b.reference_build, b.n_gsms_in_bundle, b.bytes AS b_bytes,
+                (SELECT COUNT(*) FROM alpha_exclusions x WHERE x.gse_id = g.id
+                    AND (b.gsm_ids IS NULL OR x.gsm_id IN (SELECT value FROM json_each(b.gsm_ids)))) AS n_excluded
            FROM gse g
            LEFT JOIN gse_meta m ON m.gse_id = g.id
            LEFT JOIN bundle_manifest b ON b.gse_id = g.id
-          WHERE g.id IN (${inList})`
+          WHERE g.id IN (${inList}) AND ${studyServedSql("g.id")}`
       )
       .bind(...chunk)
       .all<Record<string, unknown>>();
     for (const r of res.results) {
-      const nInFile =
+      // Samples that are not part of the atlas are not counted, even while the legacy file still holds them.
+      const rawInFile =
         r.n_gsms_in_bundle != null ? Number(r.n_gsms_in_bundle) : r.r2_bundle_n_gsms != null ? Number(r.r2_bundle_n_gsms) : null;
+      const nInFile = rawInFile != null ? Math.max(0, rawInFile - Number(r.n_excluded ?? 0)) : null;
       out.push({
         gse_id: String(r.gse_id),
         title: (r.title as string | null) ?? null,
@@ -77,7 +83,7 @@ export async function manifestRows(db: D1Database, ids: string[]): Promise<Manif
         n_samples_in_file: nInFile,
         n_samples_passing_qc: r.n_usable_samples != null ? Number(r.n_usable_samples) : null,
         n_samples_low_qc: r.n_lowqc_samples != null ? Number(r.n_lowqc_samples) : null,
-        n_cells: Number(r.m_cells ?? r.g_cells ?? 0),
+        n_cells: Number(r.file_cells ?? 0),
         year: r.year != null ? Number(r.year) : null,
         pubmed_ids: safeList(r.pubmed_ids),
         reference_build: (r.reference_build as string | null) ?? null,
@@ -140,8 +146,13 @@ function tsvCell(v: unknown): string {
   return s.replace(/[\t\r\n]+/g, " ").trim();
 }
 
-function renderTsv(rows: ManifestRow[]): string {
-  const lines = [TSV_COLUMNS.join("\t")];
+/** A TSV that holds fewer studies than matched says so on its first line (a `#` comment; pandas: comment="#", R: comment.char="#"). */
+function renderTsv(rows: ManifestRow[], total: number): string {
+  const lines =
+    total > rows.length
+      ? [`# truncated: ${rows.length} of ${total} matching studies (limit ${MAX_MANIFEST_STUDIES}); narrow the search to list the rest`]
+      : [];
+  lines.push(TSV_COLUMNS.join("\t"));
   for (const r of rows) lines.push(TSV_COLUMNS.map((c) => tsvCell((r as unknown as Record<string, unknown>)[c])).join("\t"));
   return lines.join("\n") + "\n";
 }
@@ -207,6 +218,8 @@ export interface RenderedManifest {
   format: ManifestFormat;
   total: number;
   returned: number;
+  /** Fewer studies than matched (the 2,000 cap). */
+  truncated: boolean;
   total_bytes: number;
   rows: ManifestRow[];
   body: string;
@@ -231,6 +244,7 @@ export function renderManifest(
         {
           total,
           returned: rows.length,
+          truncated: total > rows.length,
           limit: MAX_MANIFEST_STUDIES,
           license: "CC0",
           ...(extra.applied !== undefined ? { applied: extra.applied } : {}),
@@ -264,7 +278,7 @@ export function renderManifest(
       filename = `${base}.R`;
       break;
     default:
-      body = renderTsv(rows);
+      body = renderTsv(rows, total);
       content_type = "text/tab-separated-values; charset=utf-8";
       filename = `${base}.tsv`;
   }
@@ -272,6 +286,7 @@ export function renderManifest(
     format,
     total,
     returned: rows.length,
+    truncated: total > rows.length,
     total_bytes: rows.reduce((n, r) => n + (r.bytes ?? 0), 0),
     rows,
     body,
@@ -301,5 +316,6 @@ export async function buildManifestFromIds(
 ): Promise<RenderedManifest> {
   const capped = ids.slice(0, MAX_MANIFEST_STUDIES);
   const rows = await manifestRows(db, capped);
-  return renderManifest(rows, ids.length, format);
+  // A withheld or unknown accession is simply not in the manifest; the total counts what could be listed.
+  return renderManifest(rows, rows.length + Math.max(0, ids.length - capped.length), format);
 }

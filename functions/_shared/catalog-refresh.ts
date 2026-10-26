@@ -18,6 +18,7 @@ import { loadRules, toGroup, organismToScientific } from "./vocab";
 import { qcTier } from "./qc-rules";
 import { v2Available } from "./v2-catalog";
 import { v2MatrixBytes } from "./v2-summaries";
+import { META_DRIFT_SQL, hasFileSql, metaRollupSql } from "./alpha";
 
 /** Minimum compressed exon+intron bytes for a sample to hold a real matrix. */
 export const MIN_MATRIX_BYTES = 400;
@@ -248,6 +249,27 @@ export async function refreshRemaining(db: D1Database): Promise<Record<string, n
   return { gsm_normalize: a, sample_usable: b, sample_usable_no_file: e, bundle_manifest: c, gse_meta: d, ...(v2 ? { sample_usable_v2: f } : {}) };
 }
 
+const DRIFT_KEY = "crank:meta_drift_checked";
+const DRIFT_EVERY_MS = 20 * 3600 * 1000;
+
+/**
+ * Marks stale (n_usable_samples = NULL) the downloadable studies whose stored rollup no longer matches sample_qc, so
+ * META_PENDING picks them up: rows moved to another study, an Alpha list loaded or removed without the schema/035
+ * triggers. The scan reads every downloadable study's sample_qc rows (~300k rows), so it runs at most once every 20 h
+ * (stamped in meta_cache) unless `force`. Returns how many studies were marked, or null when it did not run.
+ */
+export async function markMetaDrift(db: D1Database, limit = 500, force = false): Promise<number | null> {
+  if (!force) {
+    const row = await db.prepare(`SELECT updated_at FROM meta_cache WHERE key = ?`).bind(DRIFT_KEY).first<{ updated_at: string }>().catch(() => null);
+    const age = row ? Date.now() - Date.parse(row.updated_at) : Infinity;
+    if (Number.isFinite(age) && age < DRIFT_EVERY_MS) return null;
+  }
+  const r = await db.prepare(`UPDATE gse_meta SET n_usable_samples = NULL WHERE gse_id IN (${META_DRIFT_SQL} LIMIT ?)`).bind(limit).run();
+  const stamp = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
+  await db.prepare(`INSERT OR REPLACE INTO meta_cache (key, value, updated_at) VALUES (?, ?, ?)`).bind(DRIFT_KEY, String(r.meta?.changes ?? 0), stamp).run().catch(() => undefined);
+  return Number(r.meta?.changes ?? 0);
+}
+
 /**
  * The first part of a "A; B" organism field that names a known species. Taking only the first part turned
  * "Homo; Homo sapiens" into "Homo", and a bare genus stayed a bare genus ("Mus").
@@ -385,47 +407,14 @@ export async function refreshNext(db: D1Database, n: number): Promise<{ done: Re
   return { done, errors };
 }
 
-const distinctJson = (col: string, limit = 60) =>
-  `(SELECT json_group_array(v) FROM (SELECT DISTINCT ${col} AS v FROM gsm WHERE gse_id = ?1 AND ${col} IS NOT NULL AND ${col} != '' LIMIT ${limit}))`;
-
 /**
  * `has_bundle` is "a published file exists": the legacy single file (gse.r2_bundle_key, which a retirement leaves in place) or, for a
- * study served from v2, its sample objects. `v2` says whether the v2 tables exist (default: ask).
+ * study served from v2, its sample objects. `v2` says whether the v2 tables exist (default: ask). Samples that are not part of the atlas
+ * (alpha_exclusions) are left out of every rollup; the SQL is shared with the Alpha loader (metaRollupSql in ./alpha).
  */
 export async function recomputeMeta(db: D1Database, gse: string, stamp: string, v2?: boolean): Promise<void> {
   const withV2 = v2 ?? (await v2Available(db));
-  const hasFile = `CASE WHEN (g.r2_bundle_key IS NOT NULL AND g.r2_bundle_key != '')${withV2 ? ` OR ${servedSql("g.id")}` : ""} THEN 1 ELSE 0 END`;
-  await db
-    .prepare(
-      `INSERT INTO gse_meta (gse_id, organism_primary, organisms, tissue_groups, disease_groups, assay_families,
-         tissues_raw, cell_types_raw, n_conditions, n_done, n_total, n_cells, has_bundle, year, updated_at, n_usable_samples, n_usable_cells,
-         n_lowqc_samples, n_lowqc_cells)
-       SELECT g.id,
-         (SELECT organism_primary FROM gsm WHERE gse_id = ?1 AND organism_primary IS NOT NULL GROUP BY organism_primary ORDER BY COUNT(*) DESC LIMIT 1),
-         ${distinctJson("organism_primary")}, ${distinctJson("tissue_group")}, ${distinctJson("disease_group")}, ${distinctJson("assay_family")},
-         ${distinctJson("tissue")}, ${distinctJson("cell_type")},
-         0,
-         (SELECT COUNT(*) FROM gsm WHERE gse_id = ?1 AND status IN ('DONE','DONE_QC_WARN')),
-         MAX(COALESCE(g.n_gsm_total, 0), (SELECT COUNT(*) FROM gsm WHERE gse_id = ?1)),
-         (SELECT COALESCE(SUM(n_cells), 0) FROM gsm WHERE gse_id = ?1 AND status IN ('DONE','DONE_QC_WARN')),
-         ${hasFile},
-         CAST(substr(g.submitted_date, 1, 4) AS INTEGER),
-         ?2,
-         (SELECT COUNT(*) FROM sample_qc WHERE gse_id = ?1 AND usable = 1 AND COALESCE(qc_tier, 0) = 0),
-         (SELECT COALESCE(SUM(n_cells_called), 0) FROM sample_qc WHERE gse_id = ?1 AND usable = 1 AND COALESCE(qc_tier, 0) = 0),
-         (SELECT COUNT(*) FROM sample_qc WHERE gse_id = ?1 AND usable = 1 AND qc_tier = 1),
-         (SELECT COALESCE(SUM(n_cells_called), 0) FROM sample_qc WHERE gse_id = ?1 AND usable = 1 AND qc_tier = 1)
-       FROM gse g WHERE g.id = ?1
-       ON CONFLICT(gse_id) DO UPDATE SET
-         organism_primary = excluded.organism_primary, organisms = excluded.organisms, tissue_groups = excluded.tissue_groups,
-         disease_groups = excluded.disease_groups, assay_families = excluded.assay_families, tissues_raw = excluded.tissues_raw,
-         cell_types_raw = excluded.cell_types_raw, n_done = excluded.n_done, n_total = excluded.n_total, n_cells = excluded.n_cells,
-         has_bundle = excluded.has_bundle, year = COALESCE(gse_meta.year, excluded.year), updated_at = excluded.updated_at,
-         n_usable_samples = excluded.n_usable_samples, n_usable_cells = excluded.n_usable_cells,
-         n_lowqc_samples = excluded.n_lowqc_samples, n_lowqc_cells = excluded.n_lowqc_cells`
-    )
-    .bind(gse, stamp)
-    .run();
+  await db.prepare(metaRollupSql("?1", "g.id = ?1", hasFileSql(withV2), stamp)).bind(gse).run();
   const build = withV2 ? "COALESCE(b.reference_build, (SELECT reference_build FROM v2_study WHERE gse_id = m.gse_id))" : "b.reference_build";
   const row = await db
     .prepare(`SELECT m.organism_primary AS org, ${build} AS build FROM gse_meta m LEFT JOIN bundle_manifest b ON b.gse_id = m.gse_id WHERE m.gse_id = ?`)

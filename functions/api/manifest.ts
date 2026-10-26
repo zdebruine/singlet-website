@@ -62,6 +62,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request, waitUntil
             "Content-Disposition": `attachment; filename="${m.filename}"`,
             "X-Total-Count": String(m.total),
             "X-Export-Limit": String(MAX_MANIFEST_STUDIES),
+            "X-Truncated": m.truncated ? "1" : "0",
           },
         });
       } catch (e) {

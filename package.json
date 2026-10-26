@@ -16,7 +16,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "alpha:sql": "esbuild scripts/alpha/load-exclusions.ts --bundle --platform=node --format=esm --outfile=scripts/alpha/.run-load.mjs --log-level=error && node scripts/alpha/.run-load.mjs"
   },
   "dependencies": {
     "@cloudflare/workers-types": "^4.20241205.0",

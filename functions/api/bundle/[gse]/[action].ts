@@ -12,7 +12,11 @@
  * and sends If-Match; on a mismatch the index is re-read once (bundle-reader.ts, withIndexRetry).
  *
  * Edge-cache keys carry a version: bump it whenever cached answers may be wrong (v2 of `entry`
- * and v2 of `samples` drop the recipes cached from stale offsets; `index` was already v2).
+ * and v2 of `samples` drop the recipes cached from stale offsets; `index` was already v2; index v4, samples v3 and
+ * entry v3 are the Research Alpha rule: no withheld study, excluded sample or hidden layer).
+ *
+ * Research Alpha (../../../_shared/alpha): a withheld study answers 404 like an unknown one, and a sample that is not
+ * part of the atlas, or a layer Alpha does not offer, is not listed and has no entry.
  */
 import { corsOk, corsErr, handleOptions, CORS_HEADERS } from "../../../_shared/cors";
 import { serverError } from "../../../_shared/errors";
@@ -20,8 +24,9 @@ import { checkIngestToken } from "../../../_shared/ingest-auth";
 import { CACHE_TTL_HEADER, cachedJson } from "../../../_shared/cache";
 import { GSE_RE, bundleUrl } from "../../../_shared/study-core";
 import { StaleBundleError, getBundleIndex, readEntry, entryRange, strongEtag, withIndexRetry, MAX_INFLATE_BYTES } from "../../../_shared/bundle-reader";
-import { publicEntries } from "../../../_shared/restricted";
-import { bundleIndexResponse, loadSampleQc, v2BundleIndexResponse } from "../../../_shared/bundle-core";
+import { isUnofferedMember } from "../../../_shared/restricted";
+import { entryContext, isStudyWithheld, servedEntries } from "../../../_shared/alpha";
+import { bundleIndexResponse, loadSampleQc, publicQc, v2BundleIndexResponse } from "../../../_shared/bundle-core";
 import { getV2Presence, getV2Sample, parseMembers, servedState, type V2Presence } from "../../../_shared/v2-catalog";
 import { describeMember, findMember, sampleObjectUrl } from "../../../_shared/v2-serve";
 import { configureV2 } from "../../../_shared/v2-urls";
@@ -61,6 +66,8 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, params, request, w
 
   // A forced refresh has to reach the producer, so it skips the edge cache.
   const cached: typeof cachedJson = refresh ? (_request, _waitUntil, producer) => producer() : cachedJson;
+  // Not cached at the edge on purpose: a study withheld after a response was cached must stop answering at once.
+  if (await isStudyWithheld(env.DB, gse)) return corsErr(`Series ${gse} not found`, 404);
 
   if (action === "index") {
     return cached(
@@ -80,7 +87,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, params, request, w
           return serverError(e, `bundle index ${gse}`, {}, 502);
         }
       },
-      { ttl: DAY, key: "v=3" } // one cache entry per study: extra query parameters must not mint new ones
+      { ttl: DAY, key: "v=4" } // one cache entry per study: extra query parameters must not mint new ones
     );
   }
 
@@ -91,12 +98,12 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, params, request, w
       async () => {
         try {
           const { source, samples } = await loadSampleQc(env.DB, gse, { refresh, waitUntil });
-          return corsOk({ gse_id: gse, source, n_samples: samples.length, samples });
+          return corsOk({ gse_id: gse, source, n_samples: samples.length, samples: samples.map(publicQc) });
         } catch (e) {
           return serverError(e, `bundle samples ${gse}`, {}, 502);
         }
       },
-      { ttl: DAY, key: "v=2" }
+      { ttl: DAY, key: "v=3" }
     );
   }
 
@@ -110,7 +117,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, params, request, w
         const v2 = servedState(pres);
         if (v2) return await v2Entry(env.DB, gse, v2.study.rev, path, ttlFor(pres));
         const found = await withIndexRetry(env.DB, gse, { waitUntil }, async (index) => {
-          const entry = publicEntries(index.entries).find((e) => e.p === path);
+          const entry = (await servedEntries(env.DB, gse, index.entries)).find((e) => e.p === path);
           if (!entry) return null;
           if (entry.u > MAX_INFLATE_BYTES) return { entry, index, range: await entryRange(gse, entry, index), body: null };
           return { entry, index, range: null, body: await readEntry(gse, entry, index) };
@@ -157,7 +164,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, params, request, w
         return serverError(e, `bundle entry ${gse}`, {}, 502);
       }
     };
-    return cachedJson(request, waitUntil, produce, { ttl: DAY, key: `v=2&path=${encodeURIComponent(path)}` });
+    return cachedJson(request, waitUntil, produce, { ttl: DAY, key: `v=3&path=${encodeURIComponent(path)}` });
   }
 
   return corsErr(`Unknown bundle action '${action}'. Use index, samples or entry.`, 400);
@@ -170,6 +177,8 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, params, request, w
 async function v2Entry(db: D1Database, gse: string, rev: string, path: string, ttl: Record<string, string>): Promise<Response> {
   const m = /^samples\/(GSM\d+)\/(.+)$/.exec(path);
   if (!m) return corsErr(`No entry '${path}' in ${gse}: study-level files are inside the v2 manifest (v2/m/${gse}.json).`, 404);
+  const ctx = await entryContext(db, gse);
+  if (ctx.excluded.has(m[1]) || isUnofferedMember(m[2], ctx)) return corsErr(`No entry '${path}' in ${gse}`, 404);
   const sample = await getV2Sample(db, gse, m[1], rev);
   const members = parseMembers(sample?.members_json);
   const name = sample ? findMember(members, m[2]) : null;

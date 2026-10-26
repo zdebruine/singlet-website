@@ -7,7 +7,7 @@
  * the header's section table is RELATIVE to the member start, while the manifest's `chunk_index: [off, len]` is absolute. A chunk's
  * bytes are at   member.off + sections.chunks.off + record.off   for   record.len   bytes.
  */
-import { isRestrictedMember } from "./restricted";
+import { isUnofferedMember } from "./restricted";
 import type { V2Member, V2SampleFull } from "./v2-catalog";
 import { isLegacyAlive, parseMembers, v2ServedStudies } from "./v2-catalog";
 import { v2ManifestUrl, v2Url } from "./v2-urls";
@@ -92,14 +92,14 @@ export function describeMember(name: string, m: V2Member): MemberDescription {
 export function describeMembers(sample: Pick<V2SampleFull, "members_json">): MemberDescription[] {
   const members = parseMembers(sample.members_json);
   return Object.keys(members)
-    .filter((n) => !isRestrictedMember(n))
+    .filter((n) => !isUnofferedMember(n))
     .sort()
     .map((n) => describeMember(n, members[n]));
 }
 
 /** Find a member by the name a caller gave: the exact name, or the name without a directory part. */
 export function findMember(members: Record<string, V2Member>, file: string): string | null {
-  const names = Object.keys(members).filter((n) => !isRestrictedMember(n));
+  const names = Object.keys(members).filter((n) => !isUnofferedMember(n));
   return names.find((n) => n === file) ?? names.find((n) => n.endsWith(`/${file}`)) ?? null;
 }
 

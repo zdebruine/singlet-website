@@ -63,6 +63,7 @@ import {
   applyUsableV2,
   ensureCatalogColumns,
   ensureCrankTables,
+  markMetaDrift,
   markSummariesIndexed,
   refreshNext,
   refreshRemaining,
@@ -744,6 +745,8 @@ async function refreshNextHandler(request: Request, env: Env, origin: string | n
     // all of them are 0 the phase scans are skipped: an idle call (the hourly
     // GitHub Actions crank, most of the time) costs one round of counts.
     // A failed count (-1) is never treated as idle.
+    // Once a day: studies whose stored rollup drifted from sample_qc are marked stale first, so the counts below include them.
+    const drift = await markMetaDrift(env.DB).catch(() => null);
     const before = await refreshRemaining(env.DB);
     const idle = Object.values(before).every((v) => v === 0);
     const { done, errors } = idle
@@ -754,7 +757,7 @@ async function refreshNextHandler(request: Request, env: Env, origin: string | n
     // would tell a caller looping "until remaining_total is 0" to stop.
     const counts = Object.values(remaining);
     const remaining_total = counts.some((v) => v < 0) ? -1 : counts.reduce((a, b) => a + b, 0);
-    return json({ ok: true, done, errors, remaining, remaining_total, ms: Date.now() - started }, 200, origin);
+    return json({ ok: true, done, errors, remaining, remaining_total, meta_drift_marked: drift, ms: Date.now() - started }, 200, origin);
   } catch (e) {
     return serverError(e, "refresh-next");
   } finally {

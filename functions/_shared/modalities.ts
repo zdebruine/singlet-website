@@ -7,7 +7,9 @@
  * in step — the names here are the names users pass to `bundle.read(...)` /
  * `singlet_read(...)`.
  *
- * Layers that carry per-donor germline information are not in this registry; see ./restricted.
+ * Layers that carry per-donor germline information are not in this registry, and neither are the layers Research
+ * Alpha does not offer (ambient RNA, doublet scores, legacy percent-spliced-in, mtDNA variants and heteroplasmy,
+ * genetic ancestry, per-cell non-host, the legacy pipeline sex call): see ./restricted. They may still be inside a whole-file download.
  *
  * `members` lists candidate archive paths inside `samples/<GSM>/` in priority
  * order, because the layout changed across pipeline versions (e.g. donor
@@ -22,6 +24,10 @@ export interface Modality {
   group: string;
   members: string[];
   description: string;
+  /** Offered for human studies only (genetic sex). */
+  humanOnly?: boolean;
+  /** Display name, when it differs from what the file name suggests. */
+  label?: string;
   /** How to get at it once the bundle is open. */
   python: string;
   r: string;
@@ -55,29 +61,10 @@ export const MODALITIES: Modality[] = [
   M("junctions", "matrix", "Splicing", ["sj_counts.1pz"],
     "Per-cell splice-junction counts.",
     `b.junctions(gsm)`, `singlet_read(path, gsm, "junctions")`),
-  M("splice_psi", "matrix", "Splicing", ["splice_psi.1pz"],
-    "Per-cell percent-spliced-in (PSI) per splice event.",
-    `b.splice_psi(gsm)`, `singlet_read(path, gsm, "splice_psi")`),
-  M("splice_events", "table", "Splicing", ["splice_events.tsv"],
-    "Splice-event annotation for the rows of splice_psi.",
-    `b.read("splice_events", gsm)`, `singlet_read(path, gsm, "splice_events")`),
-  // ── Mitochondrial genome ──────────────────────────────────────────────────
-  M("mt_heteroplasmy", "matrix", "Mitochondrial", ["mt_heteroplasmy.1pz"],
-    "Per-cell mitochondrial heteroplasmy (VAF) per chrM variant site.",
-    `b.mt_variants(gsm)`, `singlet_read(path, gsm, "mt_heteroplasmy")`),
-  M("mt_variants", "table", "Mitochondrial", ["mt_variants.tsv", "mt/mt_summary.tsv"],
-    "Called chrM variants with depth, allele counts and annotation.",
-    `b.read("mt_variants", gsm)`, `singlet_read(path, gsm, "mt_variants")`),
   // ── Donor ─────────────────────────────────────────────────────────────────
   M("donor_assignments", "table", "Donor", ["donor/donor_assignments.tsv", "donor_assignments.tsv"],
-    "Genotype-free donor demultiplexing: barcode → donor, with doublet calls.",
+    "Genotype-free donor demultiplexing: barcode → donor label.",
     `b.donors(gsm)`, `singlet_read(path, gsm, "donor_assignments")`),
-  M("ancestry_call", "json", "Donor", ["ancestry_call.json"],
-    "Continental ancestry group with a confidence.",
-    `b.read("ancestry_call", gsm)`, `singlet_read(path, gsm, "ancestry_call")`),
-  M("sex_call", "json", "Donor", ["sex_call.json"],
-    "Genetic sex call from chrX/chrY expression and coverage. Human only: calls for mouse samples are all \"unknown\" so far.",
-    `b.read("sex_call", gsm)`, `singlet_read(path, gsm, "sex_call")`),
   // ── Non-host ──────────────────────────────────────────────────────────────
   M("nonhost_species", "table", "Non-host", ["nonhost/nonhost_em_abundance.tsv", "nonhost_em_abundance.tsv"],
     "Per-taxon non-host (microbial/viral) abundance after EM re-assignment.",
@@ -87,21 +74,12 @@ export const MODALITIES: Modality[] = [
     `b.read("nonhost_summary", gsm)`, `singlet_read(path, gsm, "nonhost_summary")`),
   // ── Immune repertoire ─────────────────────────────────────────────────────
   M("vdj_gene_usage", "matrix", "Immune", ["vdj_gene_usage.1pz"],
-    "Per-cell V(D)J segment usage counts.",
+    "TR/IG gene expression (not clonotypes): per-cell reads on T- and B-cell receptor gene segments.",
     `b.vdj(gsm)`, `singlet_read(path, gsm, "vdj_gene_usage")`),
   // ── Per-cell annotations ──────────────────────────────────────────────────
-  M("doublet_scores", "table", "Annotations", ["doublet_scores.tsv"],
-    "Per-cell doublet score and call.",
-    `b.read("doublet_scores", gsm)`, `singlet_read(path, gsm, "doublet_scores")`),
   M("cell_cycle_scores", "table", "Annotations", ["cell_cycle_scores.tsv"],
     "Per-cell S/G2M scores and phase assignment.",
     `b.read("cell_cycle_scores", gsm)`, `singlet_read(path, gsm, "cell_cycle_scores")`),
-  M("ambient_contamination", "table", "Annotations", ["ambient_contamination.tsv"],
-    "Per-cell ambient-RNA contamination fraction.",
-    `b.read("ambient_contamination", gsm)`, `singlet_read(path, gsm, "ambient_contamination")`),
-  M("ambient_profile", "table", "Annotations", ["ambient_profile.tsv"],
-    "Ambient-RNA expression profile estimated from empty droplets.",
-    `b.read("ambient_profile", gsm)`, `singlet_read(path, gsm, "ambient_profile")`),
   // ── Sample-level QC ───────────────────────────────────────────────────────
   M("summary", "json", "QC", ["summary.json"],
     "Sample-level metrics: cells called, mapping rate, medians, reference build.",
@@ -120,16 +98,19 @@ export const MODALITIES: Modality[] = [
     `b.read("star_log", gsm)`, `singlet_read(path, gsm, "star_log")`),
 ];
 
+MODALITIES.find((m) => m.name === "vdj_gene_usage")!.label = "TR/IG gene expression (not clonotypes)";
+
 export const MODALITY_BY_NAME = new Map(MODALITIES.map((m) => [m.name, m]));
 
 /**
  * Resolve the modality registry against the files a sample actually has.
- * `files` are paths relative to `samples/<GSM>/`.
+ * `files` are paths relative to `samples/<GSM>/`. Human-only modalities are resolved only when `human` is true.
  */
-export function resolveModalities(files: string[]): { modality: Modality; member: string }[] {
+export function resolveModalities(files: string[], opts: { human?: boolean } = {}): { modality: Modality; member: string }[] {
   const have = new Set(files);
   const out: { modality: Modality; member: string }[] = [];
   for (const modality of MODALITIES) {
+    if (modality.humanOnly && opts.human !== true) continue;
     const member = modality.members.find((m) => have.has(m));
     if (member) out.push({ modality, member });
   }

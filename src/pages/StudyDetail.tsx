@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, ChevronDown, ChevronRight, ExternalLink } from "lucide-react";
+import { ChevronDown, ChevronRight, ExternalLink } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { DownloadPanel } from "@/components/DownloadPanel";
@@ -301,7 +301,6 @@ const StudyDetail = () => {
   const {
     processed,
     totalCells,
-    flagged,
     avgMR,
     medGenes,
     organisms,
@@ -340,40 +339,12 @@ const StudyDetail = () => {
       ),
       title: "Samples that passed QC",
     },
-    ...(fileCells != null
-      ? []
-      : [{
-      label: "Cells (catalog)",
-      value:
-
-        totalCells === 0 && flagged > 0 ? (
-          <span className="inline-flex items-center gap-1 text-warning font-normal text-[13px]" title="The reported cell counts for these plate-based samples are implausible and are under review.">
-            <AlertTriangle size={12} /> under review
-          </span>
-        ) : (
-          <>
-            {totalCells > 0 ? fmtCompact(totalCells) : "—"}
-            {flagged > 0 && (
-              <span className="ml-1.5 inline-flex items-center gap-1 text-warning font-normal text-[12px]" title="Cell counts for some plate-based samples are implausible and are under review; they are excluded from this total.">
-                <AlertTriangle size={11} /> {flagged} flagged
-              </span>
-            )}
-          </>
-        ),
-      title:
-        flagged > 0
-          ? `${flagged} of ${processed.length} processed samples report implausible cell counts (a known plate-based pipeline issue). They are excluded from this total.`
-          : "Cell counts as recorded in the catalog metadata, not the cells called in the published file.",
-    }]),
-    ...(fileCells != null
-      ? [
-          {
-            label: "Cells",
-            value: fmtCompact(fileCells),
-            title: `Cells called in the published .singlet file, from its per-sample QC summaries. The catalog metadata records ${fmtCompact(totalCells)}.`,
-          },
-        ]
-      : []),
+    // One cell count: cells called in the published file. The catalog's raw barcode count is not shown.
+    {
+      label: "Cells",
+      value: (fileCells ?? totalCells) > 0 ? fmtCompact(fileCells ?? totalCells) : "—",
+      title: "Cells called in the published .singlet file, from its per-sample QC summaries.",
+    },
 
     // QC tiles only for metrics that were actually recorded; a study with none
     // gets one sentence instead (below the grid), never an em-dash tile.

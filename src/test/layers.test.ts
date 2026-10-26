@@ -8,7 +8,7 @@ CREATE TABLE gse_meta (gse_id TEXT PRIMARY KEY, organism_primary TEXT, has_bundl
 CREATE TABLE bundle_index (gse_id TEXT PRIMARY KEY, bytes INTEGER, entries TEXT, indexed_at TEXT);
 INSERT INTO gse_meta VALUES ('GSE1', 'Homo sapiens', 1, 4, 0, 0), ('GSE2', 'Mus musculus', 1, 2, 0, 0), ('GSE3', 'Homo sapiens', 1, 0, 1, 0), ('GSE4', 'Homo sapiens', 1, 3, 0, 1), ('GSE5', 'Mus musculus', 1, 2, 0, 0);
 INSERT INTO bundle_index VALUES
-  ('GSE1', 1, '["samples/A/exon_counts.1pz","samples/A/intron_counts.1pz","samples/A/donor/snp_ad.1pz","samples/A/ancestry_call.json","samples/A/sex_call.json"]', ''),
+  ('GSE1', 1, '["samples/A/exon_counts.1pz","samples/A/intron_counts.1pz","samples/A/donor/snp_ad.1pz","samples/A/ancestry_call.json","samples/A/sex_call.json","samples/A/doublet_scores.tsv"]', ''),
   ('GSE2', 1, '["samples/B/exon_counts.1pz","samples/B/intron_counts.1pz","samples/B/sex_call.json"]', ''),
   ('GSE3', 1, '["samples/C/exon_counts.1pz","samples/C/ancestry_call.json"]', ''),
   ('GSE4', 1, '["samples/D/exon_counts.1pz","samples/D/ancestry_call.json"]', ''),
@@ -25,11 +25,12 @@ describe("computeLayerStats", () => {
     expect(by.splicing.studies).toBe(2);
     // The donor genotype member is in GSE1's listing but is not a public layer.
     expect(by.snps).toBeUndefined();
-    expect(by.mtdna.studies).toBe(0);
-    // Ancestry counts human studies only: GSE5 (mouse) has the file but is not counted.
-    expect(by.ancestry).toMatchObject({ studies: 1, of: 1 });
+    // Research Alpha does not offer mtDNA variants, genetic ancestry or doublet scores, so they are not counted.
+    expect(by.mtdna).toBeUndefined();
+    expect(by.ancestry).toBeUndefined();
+    expect(by.doublets).toBeUndefined();
     expect(by.splicing.of).toBe(3);
-    // Mouse sex_call.json files hold only "unknown": GSE2 and GSE5 have the file but are not counted.
-    expect(by.sex).toMatchObject({ studies: 1, of: 1 });
+    // The legacy pipeline sex call is not counted for any species (genetic sex comes from the s1 cell labels).
+    expect(by.sex).toBeUndefined();
   });
 });

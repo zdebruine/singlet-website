@@ -25,6 +25,7 @@ import {
   type V2State,
 } from "./v2-catalog";
 import { MODALITIES } from "./modalities";
+import { sampleServedSql, studyServedSql } from "./alpha";
 import { PackError, resolveBarcodeNames, resolveFeatureNames, resolvePackId, type PackFetcher, type PackIndexEntry } from "./v2-packs";
 import {
   V2FetchError,
@@ -448,6 +449,8 @@ export async function findCells(ctx: V2ToolCtx, args: Record<string, unknown>, o
     bind.push(v);
   }
   where.push(`EXISTS (SELECT 1 FROM sample_qc q WHERE q.gsm_id = s.gsm_id AND q.usable = 1 AND COALESCE(q.qc_tier, 0) <= ${sf.include_low_qc === true ? 1 : 0})`);
+  // Samples that are not part of the atlas and withheld studies (./alpha) are never searched.
+  where.push(sampleServedSql("s.gsm_id"), studyServedSql("s.gse_id"));
   if (afterGse) {
     where.push(`(s.gse_id > ? OR (s.gse_id = ? AND s.gsm_id > ?))`);
     bind.push(afterGse, afterGse, afterGsm);
