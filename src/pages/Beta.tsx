@@ -5,7 +5,7 @@ import Footer from "@/components/Footer";
 import { FeedbackButton } from "@/components/FeedbackDialog";
 import { BetaSignupForm } from "@/components/BetaSignupForm";
 import { usePageMeta } from "@/hooks/usePageMeta";
-import { ANNOTATIONS_LIVE, STORE_FORMAT_LIVE } from "@/lib/release";
+import { ANNOTATIONS_LIVE, S1_FORMAT_LIVE } from "@/lib/release";
 
 // Sneak peek of Research Beta, from Singlet-Bio/singlet docs/research-beta.md. Every item is a Beta goal, not a claim
 // about today's files. Measured progress lives on /benchmarking#beta.
@@ -56,7 +56,7 @@ const ITEMS: Item[] = [
   {
     title: "Download only what you ask for",
     body: "Beta goal: per-request slicing, so you pick the layers you need (counts, spliced/unspliced, or USA mode) and download just those bytes.",
-    today: STORE_FORMAT_LIVE ? "Alpha serves whole samples and cell ranges." : "Alpha serves one file per study.",
+    today: S1_FORMAT_LIVE ? "Alpha serves whole samples and cell ranges." : "Alpha serves one file per study.",
   },
   {
     title: "More samples, more species, curated metadata",
@@ -80,7 +80,7 @@ const Beta = () => {
           <h1 className="mt-1 font-display text-3xl md:text-4xl font-bold tracking-tightest text-foreground">What's coming in Beta</h1>
           <p className="mt-3 text-[15px] text-muted-foreground">
             Beta is a full re-run of every sample, on all of its reads, with a new, benchmarked engine
-            {STORE_FORMAT_LIVE ? ", in the same per-sample format as Alpha" : ""}. It will be released at{" "}
+            {S1_FORMAT_LIVE ? ", in the same per-sample format as Alpha" : ""}. It will be released at{" "}
             <span className="font-mono text-foreground">beta.singlet.bio</span>. Alpha, the site you are on, is a research preview
             that is here to collect feedback. What you tell us shapes Beta.
           </p>

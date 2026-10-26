@@ -16,7 +16,7 @@ import { FormatSizeChart, H5AD_RATIO, HBars } from "@/components/landing/charts"
 import { QcFunnel, sampleFunnel } from "@/components/landing/QcFunnel";
 import { GetStarted } from "@/components/landing/GetStarted";
 import { ModalityGrid } from "@/components/landing/Modalities";
-import { STORE_FORMAT_LIVE } from "@/lib/release";
+import { S1_FORMAT_LIVE } from "@/lib/release";
 import { ACCESS, AlphaCtas, RIGOR, RigorFooter, SPEED, SpeedMeasured, TodayVsBeta } from "@/components/landing/AlphaBeta";
 
 // One message per browser view. Each screen fills the visible window (below the header) up to a cap, so a large
@@ -191,7 +191,7 @@ const Index = () => {
 
         {/* 7 · It is fast: data structures and the edge */}
         <Screen id="speed" label="Speed">
-          <Title sub={STORE_FORMAT_LIVE ? "One object per sample, an index into its cells, and serving from the edge." : "Small files, an index into each one, and serving from the edge."}>Fast because of how it is stored.</Title>
+          <Title sub={S1_FORMAT_LIVE ? "One object per sample, an index into its cells, and serving from the edge." : "Small files, an index into each one, and serving from the edge."}>Fast because of how it is stored.</Title>
           <div className="mt-12">
             <TodayVsBeta today={SPEED.today} beta={SPEED.beta} />
             <SpeedMeasured />
