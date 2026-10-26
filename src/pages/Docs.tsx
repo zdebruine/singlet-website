@@ -510,7 +510,9 @@ if (singlet_has(path, "donor_assignments", gsm))
             <Section id="bulk-manifests" title="Bulk downloads and manifests">
               <p>
                 <Mono>GET /api/manifest</Mono> takes the same filters as <Mono>/api/search</Mono> (organism,
-                tissue_group, disease_group, assay_family, cell_type, q, min_cells, year_min/max, has_bundle) and
+                tissue_group, disease_group, assay_family, cell_type, q, min_cells, year_min/max, has_bundle, and the
+                ontology filters tissue_term, cell_type_term, development_stage_term, disease_term, ancestry_term and
+                sex_term, which take ontology ids or labels and include narrower terms) and
                 returns every matching study — up to 2,000 — as a manifest or a ready-to-run download script, chosen
                 with <Mono>format=</Mono>. Each row reports <Mono>n_samples_passing_qc</Mono> (<Link to="/about#qc">how QC works</Link>):
               </p>

@@ -80,6 +80,7 @@ const BATCH_SIZE = 100;
 
 const GSE_RE = /^GSE\d+$/;
 const GSM_RE = /^GSM\d+$/;
+const REGISTRY_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._:/+-]{0,199}$/;
 
 /** Studies indexed per POST /api/ingest/index-bundle call. */
 const MAX_INDEX_PER_CALL = 25;
@@ -198,6 +199,54 @@ const TABLES: Record<string, TableSpec> = {
     stamp: "updated_at",
     enums: { source: ["geo", "pipeline", "model"] },
     required: ["gse_id", "attr", "value_norm", "source", "extractor_version"],
+  },
+  // Cell tier (schema/035_cell_tier.sql, docs/CELL-ARCHITECTURE.md): the feature registry and per-sample summaries of
+  // cell labels and features, written by the annotation and feature jobs. Per-cell values never come through here.
+  cell_feature: {
+    pk: "feature_id",
+    noDerived: true,
+    columns: {
+      feature_id: "text",
+      feature_set: "text",
+      kind: "text",
+      label: "text",
+      description: "text",
+      method: "text",
+      method_version: "text",
+      source_ref: "text",
+      licence: "text",
+      organisms: "text",
+      ontology_id: "text",
+      categories: "text",
+      thresholds: "text",
+      comparable: "text",
+      storage: "text",
+      status: "text",
+    },
+    stamp: "updated_at",
+    enums: { kind: ["score", "category", "flag"], storage: ["shard", "sidecar"], status: ["active", "retired"], comparable: ["atlas", "sample"] },
+    required: ["feature_set", "kind", "label", "method", "method_version", "storage"],
+  },
+  sample_cell_summary: {
+    pk: "gsm_id",
+    conflict: ["subject", "item", "gsm_id"],
+    noDerived: true,
+    columns: {
+      gsm_id: "text",
+      gse_id: "text",
+      subject: "text",
+      item: "text",
+      n_cells: "int",
+      n_hi1: "int",
+      n_hi2: "int",
+      q50: "real",
+      q90: "real",
+      mean: "real",
+      version: "text",
+    },
+    stamp: "updated_at",
+    enums: { subject: ["cell_type", "sex", "ancestry", "feature"] },
+    required: ["gse_id", "subject", "item", "n_cells", "version"],
   },
   study_card: {
     noDerived: true,
@@ -405,10 +454,16 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, params }
       if (out.gse_id != null && (typeof out.gse_id !== "string" || !GSE_RE.test(out.gse_id))) {
         return json({ error: `Row ${i}: gse_id must match /^GSE\\d+$/` }, 400, origin);
       }
-    } else {
+    } else if ((spec.pk ?? "gse_id") === "gse_id") {
       const gseId = out.gse_id;
       if (typeof gseId !== "string" || !GSE_RE.test(gseId)) {
         return json({ error: `Row ${i}: gse_id must match /^GSE\\d+$/` }, 400, origin);
+      }
+    } else {
+      // Registry tables keyed by their own id (cell_feature.feature_id).
+      const id = out[spec.pk!];
+      if (typeof id !== "string" || !REGISTRY_ID_RE.test(id)) {
+        return json({ error: `Row ${i}: ${spec.pk} must match ${REGISTRY_ID_RE}` }, 400, origin);
       }
     }
     clean.push(out);

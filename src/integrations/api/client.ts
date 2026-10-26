@@ -35,6 +35,7 @@ import type {
   SampleQc,
   NlSearchQuery,
   NlSearchResponse,
+  OntologyTerm,
   QuotaInfo,
   SampleRow,
   SearchQuery,
@@ -191,6 +192,9 @@ const EMPTY_APPLIED = (): FacetsResponse["applied"] => ({
   has_pubmed: null,
   max_file_bytes: null,
   has_conditions: null,
+  terms: {},
+  term_exact: false,
+  props: {},
   match_mode: {},
 });
 
@@ -215,6 +219,9 @@ function normalizeApplied(v: unknown): FacetsResponse["applied"] {
     has_pubmed: typeof a.has_pubmed === "boolean" ? a.has_pubmed : null,
     max_file_bytes: numOrNull(a.max_file_bytes),
     has_conditions: typeof a.has_conditions === "boolean" ? a.has_conditions : null,
+    terms: Object.fromEntries(Object.entries(rec(a.terms)).map(([k, v]) => [k, strArr(v)]).filter(([, v]) => v.length)),
+    term_exact: a.term_exact === true,
+    props: Object.fromEntries(Object.entries(rec(a.props)).map(([k, v]) => [k, strArr(v)]).filter(([, v]) => v.length)),
     match_mode: rec(a.match_mode) as Record<string, "any" | "all">,
   };
 }
@@ -701,6 +708,9 @@ function searchParams(q: SearchQuery): Record<string, ParamValue> {
     has_pubmed: q.has_pubmed,
     max_file_bytes: q.max_file_bytes,
     has_conditions: q.has_conditions,
+    ...Object.fromEntries(Object.entries(q.terms ?? {}).filter(([, v]) => v.length).map(([name, v]) => [`${name}_term`, v])),
+    term_expand: q.term_exact ? "none" : undefined,
+    ...Object.fromEntries(Object.entries(q.props ?? {}).filter(([, v]) => v.length)),
     ...Object.fromEntries(Object.entries(q.match_mode ?? {}).map(([field, mode]) => [`${field}_mode`, mode])),
     sort: q.sort,
     page: q.page,
@@ -802,6 +812,23 @@ export const apiClient = {
         .map((x) => rec(x))
         .filter((x) => typeof x.key === "string")
         .map((x) => ({ key: String(x.key), label: str(x.label), studies: num(x.studies), of: num(x.of, num(r.studies)) })),
+    };
+  },
+
+  /** GET /api/ontology/terms — terms for one ontology filter: the most used, a label search, or `values` resolved. */
+  async ontologyTerms(filter: string, opts: { q?: string; values?: string[]; limit?: number } = {}, signal?: AbortSignal): Promise<{ terms: OntologyTerm[]; resolved: (OntologyTerm & { value: string } | { id: null; value: string })[]; available: boolean }> {
+    const r = rec(await get<unknown>("/api/ontology/terms", { filter, q: opts.q || undefined, values: opts.values?.length ? opts.values.join("|") : undefined, limit: opts.limit }, signal));
+    const term = (x: unknown): OntologyTerm => {
+      const t = rec(x);
+      return { id: str(t.id), label: str(t.label), ontology: str(t.ontology), n_samples: num(t.n_samples), n_studies: num(t.n_studies) };
+    };
+    return {
+      available: r.available !== false,
+      terms: arr<unknown>(r.terms).map(term),
+      resolved: arr<unknown>(r.resolved).map((x) => {
+        const t = rec(x);
+        return t.id ? { ...term(t), value: str(t.value) } : { id: null, value: str(t.value) };
+      }),
     };
   },
 
