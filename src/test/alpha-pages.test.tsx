@@ -13,7 +13,7 @@ import Benchmarking from "../pages/Benchmarking";
 import KnownIssues from "../pages/KnownIssues";
 import Beta from "../pages/Beta";
 import { ALPHA_PANELS, parseAlpha, parseScbc } from "../lib/alpha-benchmarks";
-import { ANNOTATIONS_LIVE, STORE_FORMAT_LIVE } from "../lib/release";
+import { ANNOTATIONS_LIVE, S1_FORMAT_LIVE } from "../lib/release";
 import { SPEED } from "../components/landing/AlphaBeta";
 import { CAPABILITIES } from "../lib/benchmark-capabilities";
 
@@ -155,18 +155,18 @@ describe("/beta", () => {
 });
 
 describe("release gates", () => {
-  it("describes only what is served today while the store format is not live", () => {
+  it("describes only what is served today while the .s1 format is not live", () => {
     const home = read("src/components/landing/AlphaBeta.tsx");
     expect(home).toMatch(/Measured on pilot and test sets, not yet atlas-wide/);
-    if (!STORE_FORMAT_LIVE) {
+    if (!S1_FORMAT_LIVE) {
       const { container } = render(<ul>{SPEED.today.map((t, i) => <li key={i}>{t}</li>)}</ul>);
       expect(container.textContent).toMatch(/\.1pz/);
       expect(container.textContent).not.toMatch(/pz2|manifest|cell index/);
     }
   });
 
-  it("shows annotations only with the store format", () => {
-    expect(ANNOTATIONS_LIVE).toBe(STORE_FORMAT_LIVE);
+  it("shows annotations only with the .s1 format", () => {
+    expect(ANNOTATIONS_LIVE).toBe(S1_FORMAT_LIVE);
     const { container } = renderPage(<KnownIssues />);
     expect(container.textContent).toMatch(ANNOTATIONS_LIVE ? /Annotations in Alpha, and their accuracy/ : /Not in Alpha/);
   });

@@ -2,11 +2,11 @@ import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { FeedbackButton } from "@/components/FeedbackDialog";
 import { H5AD_RATIO } from "@/components/landing/charts";
-import { STORE_FORMAT_LIVE } from "@/lib/release";
+import { S1_FORMAT_LIVE } from "@/lib/release";
 
 // Home-page stories, each split into what Alpha does today and what Beta adds. Plan: docs/LANDING.md and
-// Singlet-Bio/singlet-agents docs/RESEARCH_ALPHA_PLAN.md ("Alpha vision"). The Speed story follows STORE_FORMAT_LIVE
-// (src/lib/release.ts): legacy .singlet files until the transcode is served, then the store format, whose numbers are
+// Singlet-Bio/singlet-agents docs/RESEARCH_ALPHA_PLAN.md ("Alpha vision"). The Speed story follows S1_FORMAT_LIVE
+// (src/lib/release.ts): legacy .singlet files until the transcode is served, then the .s1 format, whose numbers are
 // labelled as measured on pilot and test sets until atlas-wide numbers exist.
 
 function Column({ label, tone, items }: { label: string; tone: "alpha" | "beta"; items: ReactNode[] }) {
@@ -53,14 +53,14 @@ const SPEED_LEGACY = {
     <>Search, the catalog API and downloads run at the Cloudflare edge: Pages Functions, Workers, D1 and R2.</>,
   ],
   beta: [
-    <>One immutable object per sample in a new store format, with a cell index so you fetch only the cells you ask for.</>,
+    <>One immutable object per sample in the new .s1 format, with a cell index so you fetch only the cells you ask for.</>,
     <>Download only the layers you ask for.</>,
     <>Size and load-time numbers measured across the whole atlas, published on the benchmarks page.</>,
   ],
 };
 
-/** After the transcode: the per-sample store format (.s1, pz2). */
-const SPEED_STORE = {
+/** After the transcode: the per-sample .s1 format (pz2 codec). */
+const SPEED_S1 = {
   today: [
     <>One immutable object per sample, listed in a small manifest per study, so you fetch a single sample with an HTTP range read, not a whole study.</>,
     <>Count matrices use the <Mono>pz2</Mono> codec; gene names live in shared packs instead of being repeated in every file.</>,
@@ -74,7 +74,7 @@ const SPEED_STORE = {
   ],
 };
 
-export const SPEED = STORE_FORMAT_LIVE ? SPEED_STORE : SPEED_LEGACY;
+export const SPEED = S1_FORMAT_LIVE ? SPEED_S1 : SPEED_LEGACY;
 
 /** Measured on pilot and test sets (Singlet-Bio/singlet docs/v2-performance.md), not atlas-wide. */
 export const SPEED_MEASURED = [
@@ -83,9 +83,9 @@ export const SPEED_MEASURED = [
   { value: "0.36 s", label: "to load one sample into Python over HTTP", detail: "including the download" },
 ];
 
-/** The store format's pilot numbers; shown only once the store format is what Alpha serves. */
+/** The .s1 format's pilot numbers; shown only once the .s1 format is what Alpha serves. */
 export function SpeedMeasured() {
-  if (!STORE_FORMAT_LIVE) return null;
+  if (!S1_FORMAT_LIVE) return null;
   return (
     <div className="max-w-[960px] mx-auto mt-6">
       <ul className="grid gap-3 sm:grid-cols-3">
