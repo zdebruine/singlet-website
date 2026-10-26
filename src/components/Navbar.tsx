@@ -4,6 +4,7 @@ import { Menu, X } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { SearchBox } from "@/components/SearchBox";
 import { AccountMenu } from "@/components/auth/AccountMenu";
+import { AlphaBanner, AlphaTag } from "@/components/AlphaBanner";
 import { cn } from "@/lib/utils";
 
 /** Public navigation. "Your data" lives in the account menu, not here. */
@@ -32,8 +33,14 @@ const Navbar = ({ search = true }: { search?: boolean }) => {
 
   return (
     <header className={cn("site-navbar sticky top-0 z-40 bg-background", !isHome && "border-b border-border")}>
+      <AlphaBanner />
       <nav className="container-site h-14 flex items-center gap-6" aria-label="Main">
-        {!isHome && <Logo variant="lockup" theme="auto" height={24} />}
+        {!isHome && (
+          <span className="inline-flex items-center gap-1.5">
+            <Logo variant="lockup" theme="auto" height={24} />
+            <AlphaTag className="-translate-y-1.5" />
+          </span>
+        )}
 
         <div className="hidden md:flex items-center gap-6">
           {NAV.map((l) => (

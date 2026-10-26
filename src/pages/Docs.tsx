@@ -805,7 +805,7 @@ sc.pp.highly_variable_genes(adata, batch_key="gsm_id")`}
               />
               <h3>In the packages</h3>
               <p className="text-sm text-muted-foreground">
-                <code className="code-inline">find()</code> works without a key at the 10/day anonymous client limit; a key raises the limit to your account allowance (200/day).
+                <code className="code-inline">find()</code> works without a key, but then reads every question with the built-in vocabulary only. With a key, a question that needs an AI reading uses your account's limits: 200 AI readings a day (reset at 00:00 UTC) and a monthly AI token allowance.
                 The key is only sent with searches; loading and downloading never use it.
               </p>
               <div className="grid md:grid-cols-2 gap-3 mt-3">
@@ -881,10 +881,10 @@ accs <- singlet::find("microglia in the aging mouse brain")`}
                 <Mono>export_manifest</Mono>, <Mono>find_matched_controls</Mono>, <Mono>compare_studies</Mono>,{" "}
                 <Mono>assess_study</Mono>, <Mono>get_cohort</Mono>, <Mono>save_cohort</Mono>, and for studies stored
                 per sample <Mono>find_cells</Mono>, <Mono>slice_cells</Mono> and <Mono>resolve_features</Mono>. Inputs, outputs and
-                key requirements for each are in the <Link to="/docs/mcp#tools">tool reference</Link>.
+                notes for each are in the <Link to="/docs/mcp#tools">tool reference</Link>. Every tool call needs sign-in or a key.
               </p>
               <p>
-                Try it from a terminal (no key needed for this call):
+                Try it from a terminal (listing the tools needs no key; calling one does):
               </p>
               <CodeBlock
                 label="bash"

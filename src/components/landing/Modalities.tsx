@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { GitBranch, Scissors, Shield, Dna } from "lucide-react";
+import { GitBranch, Scissors, Shield } from "lucide-react";
 import type { ReactNode } from "react";
 
 /** A true modality: a distinct measurement stored in the file, not a score derived from another one. */
@@ -18,28 +18,22 @@ export const MODALITIES: Modality[] = [
   {
     icon: <Scissors {...ICON} />,
     name: "Spliced and unspliced counts",
-    what: "Exonic and intronic reads counted separately for every cell, ready for RNA velocity.",
+    what: "Exonic and intronic reads counted separately for every cell. Not yet suited to RNA velocity (see the docs).",
   },
   {
     icon: <GitBranch {...ICON} />,
     name: "Splice junctions",
-    what: "Reads crossing each exon-exon junction, per cell, with how often each exon is included.",
-  },
-  {
-    icon: <Dna {...ICON} />,
-    name: "Mitochondrial variants",
-    what: "Per-cell allele counts at mitochondrial DNA positions, for heteroplasmy and lineage tracing.",
-    note: "select studies",
+    what: "Reads crossing each exon-exon junction, per cell.",
   },
   {
     icon: <Shield {...ICON} />,
-    name: "V(D)J segments",
-    what: "Per-cell counts of immune receptor V, D and J gene segments, informative in T and B cells.",
+    name: "Immune receptor genes",
+    what: "Per-cell expression of T- and B-cell receptor V, D and J gene segments. Not clonotypes.",
     note: "immune cells",
   },
 ];
 
-/** The modalities, then a line about everything else we compute from the transcriptome. */
+/** The layers served in Research Alpha, then a line on what is not offered yet. */
 export function ModalityGrid() {
   return (
     <div>
@@ -58,9 +52,10 @@ export function ModalityGrid() {
         ))}
       </ul>
       <p className="mt-12 text-center text-[14.5px] text-muted-foreground max-w-[640px] mx-auto">
-        We also compute doublet scores, cell-cycle phase, ambient RNA and sample-level calls from the transcriptome. All of it is free to download.{" "}
+        Research Alpha serves transcriptomics only. Mitochondrial allele data, genotypes, ancestry, ambient-RNA and doublet calls are not
+        offered in Alpha; more layers come with Beta.{" "}
         <Link to="/docs#modalities" className="text-primary hover:underline">
-          Every modality in the docs →
+          Layers in the docs →
         </Link>
       </p>
     </div>

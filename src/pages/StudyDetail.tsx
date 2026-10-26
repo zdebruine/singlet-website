@@ -14,7 +14,7 @@ import { DataSummary } from "@/components/study/DataSummary";
 import { FileTreePanel } from "@/components/study/FileTreePanel";
 import { ProvenancePanel } from "@/components/study/ProvenancePanel";
 import { RelatedStudies } from "@/components/study/RelatedStudies";
-import { apiClient, bundleUrl } from "@/integrations/api/client";
+import { apiClient, bundleUrl, isApiError } from "@/integrations/api/client";
 import type { GseDetailResponse, GsmRow, PublicationRow } from "@/integrations/api/types";
 import { usePageMeta } from "@/hooks/usePageMeta";
 import { fmtCompact, fmtInt, fmtPct, isProcessed, organismLabel } from "@/lib/catalog-display";
@@ -101,7 +101,8 @@ const StudyDetail = () => {
     queryFn: () => apiClient.gse(gseId),
     enabled: /^GSE\d+$/.test(gseId),
     staleTime: 300_000,
-    retry: 1,
+    // A 404 is an answer, not a failure: do not retry it.
+    retry: (count, err) => !(isApiError(err) && err.status === 404) && count < 1,
   });
   // The site shows approved samples only: processed, not flagged low QC, with count data in the file.
   // Failed and low-QC samples are triaged on the backend and never listed here.
@@ -272,13 +273,16 @@ const StudyDetail = () => {
   }
 
   if (error || !data || !derived || !series) {
+    // A clean 404 (or an id that is not a GSE accession) means the study is not in the atlas;
+    // anything else is a failed request, which says so instead.
+    const unreachable = !!error && !(isApiError(error) && error.status === 404);
     return (
       <Shell>
         <div className="py-12 text-center">
-          <h1 className="text-2xl mb-2">Study not found</h1>
+          <h1 className="text-2xl mb-2">{unreachable ? "Study unavailable" : "No such study"}</h1>
           <p className="text-muted-foreground mb-5">
-            <span className="font-mono">{gseId || "This accession"}</span> is not in the catalog
-            {error && !/404/.test(String((error as Error).message)) ? " right now — the catalog may be unreachable" : ""}.
+            <span className="font-mono">{gseId || "This accession"}</span>
+            {unreachable ? " could not be loaded right now — the catalog may be unreachable. Try again in a minute." : " is not in the singlet.bio atlas."}
           </p>
           <div className="flex justify-center gap-3">
             <Link to="/browse" className="btn-secondary btn-sm">Browse the atlas</Link>

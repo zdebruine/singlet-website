@@ -28,8 +28,9 @@ const Terms = () => {
               Singlet Bio is an open single-cell resource. It consists of a public single-cell dataset (the atlas),
               the open-source <span className="font-mono">singlet</span> software package (Python, R, and C++), and this website,
               which lets you browse and download the data. Data downloads are
-              public, served from our CDN with no account and no API key required. An account exists only to
-              raise the daily limit on AI-assisted searches and to issue API keys for programmatic search.
+              public, served from data.singlet.bio with no account and no API key required. A free account is needed to use the MCP
+              server (every tool call needs sign-in or a personal API key), to issue API keys, and for AI-assisted searches beyond the
+              website's own search box; AI-assisted searches are limited per account by day and by month.
             </p>
           </section>
 

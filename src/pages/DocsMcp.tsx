@@ -74,24 +74,24 @@ const EXAMPLES: { ask: string; tools: string; gets: string }[] = [
   },
 ];
 
-const TOOLS: { name: string; input: string; returns: string; key: string }[] = [
-  { name: "search_datasets", input: "query, level?, limit?, page?, organism?, tissue?, disease?, assay?, min_cells?, include_unbuilt?", returns: "Matching studies or samples with a reason for each match. The only tool that can call a language model, and only when the built-in vocabulary cannot read the question; only those fresh AI readings are metered", key: "No — 10 AI readings a day without, 200 with" },
-  { name: "get_study", input: "gse_id, known_rev?", returns: "Title, abstract, groups, conditions, samples (first 60), file URL, and a rev", key: "No" },
-  { name: "get_download_url", input: "gse_id, include_samples?, limit?, after?", returns: "The .singlet URL, size and loader lines; for a study stored per sample, its manifest and optionally its sample objects", key: "No" },
-  { name: "get_atlas_stats", input: "—", returns: "Studies, usable samples and cells in published files (the site's headline numbers), plus catalog metadata: samples processed, cells recorded, species, failure reasons", key: "No" },
-  { name: "get_sample_qc", input: "gse_id, gsm_ids?, known_rev?", returns: "Per-sample QC from the file itself, totals and warnings", key: "No" },
-  { name: "list_bundle_files", input: "gse_id, gsm_id?, detail?, limit?, after?, known_rev?", returns: "Everything inside the file, with sizes; for a study stored per sample, a grouped summary and one sample's files with their byte ranges", key: "No" },
-  { name: "get_modalities", input: "gse_id, gsm_id?, known_rev?", returns: "Which modalities the file carries, with Python and R readers for each", key: "No" },
-  { name: "get_partial_download", input: "gse_id, gsm_id, file, known_rev?", returns: "Byte range, curl and Python for one file; for a study stored per sample, the member's range inside the sample's immutable object", key: "No" },
-  { name: "export_manifest", input: "query? / filters? / gse_ids?, format", returns: "TSV, JSON, curl, wget, Python or R manifest", key: "No" },
-  { name: "find_matched_controls", input: "gse_id, min_samples?, same_assay?", returns: "Candidate control studies with reasons and caveats", key: "No" },
-  { name: "compare_studies", input: "gse_ids (2–8)", returns: "Side-by-side fields and their differences", key: "No" },
-  { name: "assess_study", input: "gse_id, purpose?", returns: "Deterministic usability report and fit checks", key: "No" },
-  { name: "get_cohort", input: "id, token?", returns: "A saved, version-pinned cohort and its studies", key: "Yes for private and workspace cohorts; a share-link token (sco_…) alone opens a link cohort" },
-  { name: "save_cohort", input: "name, gse_ids, notes?, visibility?, workspace_id?", returns: "Saves up to 2,000 studies as a cohort pinned to the current catalogue", key: "Yes" },
-  { name: "find_cells", input: "gse_ids? / gsm_ids? / sample_filter?, cell_filter?, limit_samples?, after?", returns: "Per sample, the cells matching a filter on called status, UMIs, features or any numeric cells-table column, as column runs. Studies stored per sample only; reads at most 25 samples a call", key: "No" },
-  { name: "slice_cells", input: "gse_id, gsm_id, file?, runs? / indices? / range?", returns: "The byte ranges that cover just those cells in a sample's count matrices (a prefix once, then chunk runs). Studies stored per sample only", key: "No" },
-  { name: "resolve_features", input: "indices, pack? / gse_id, gsm_id, file?", returns: "Feature names for matrix row numbers (or barcodes for whitelist column numbers). Studies stored per sample only", key: "No" },
+const TOOLS: { name: string; input: string; returns: string; note?: string }[] = [
+  { name: "search_datasets", input: "query, level?, limit?, page?, organism?, tissue?, disease?, assay?, min_cells?, include_unbuilt?", returns: "Matching studies or samples with a reason for each match. The only tool that can call a language model, and only when the built-in vocabulary cannot read the question; only those fresh AI readings are metered", note: "Fresh AI readings are metered (see Limits)" },
+  { name: "get_study", input: "gse_id, known_rev?", returns: "Title, abstract, groups, conditions, samples (first 60), file URL, and a rev" },
+  { name: "get_download_url", input: "gse_id, include_samples?, limit?, after?", returns: "The .singlet URL, size and loader lines; for a study stored per sample, its manifest and optionally its sample objects" },
+  { name: "get_atlas_stats", input: "—", returns: "Studies, usable samples and cells in published files (the site's headline numbers), plus catalog metadata: samples processed, cells recorded, species, failure reasons" },
+  { name: "get_sample_qc", input: "gse_id, gsm_ids?, known_rev?", returns: "Per-sample QC from the file itself, totals and warnings" },
+  { name: "list_bundle_files", input: "gse_id, gsm_id?, detail?, limit?, after?, known_rev?", returns: "Everything inside the file, with sizes; for a study stored per sample, a grouped summary and one sample's files with their byte ranges" },
+  { name: "get_modalities", input: "gse_id, gsm_id?, known_rev?", returns: "Which modalities the file carries, with Python and R readers for each" },
+  { name: "get_partial_download", input: "gse_id, gsm_id, file, known_rev?", returns: "Byte range, curl and Python for one file; for a study stored per sample, the member's range inside the sample's immutable object" },
+  { name: "export_manifest", input: "query? / filters? / gse_ids?, format", returns: "TSV, JSON, curl, wget, Python or R manifest" },
+  { name: "find_matched_controls", input: "gse_id, min_samples?, same_assay?", returns: "Candidate control studies with reasons and caveats" },
+  { name: "compare_studies", input: "gse_ids (2–8)", returns: "Side-by-side fields and their differences" },
+  { name: "assess_study", input: "gse_id, purpose?", returns: "Deterministic usability report and fit checks" },
+  { name: "get_cohort", input: "id, token?", returns: "A saved, version-pinned cohort and its studies", note: "Private and workspace cohorts need access from your account; a share-link token (sco_…) opens a link cohort" },
+  { name: "save_cohort", input: "name, gse_ids, notes?, visibility?, workspace_id?", returns: "Saves up to 2,000 studies as a cohort pinned to the current catalogue", note: "Saved to your account" },
+  { name: "find_cells", input: "gse_ids? / gsm_ids? / sample_filter?, cell_filter?, limit_samples?, after?", returns: "Per sample, the cells matching a filter on called status, UMIs, features or any numeric cells-table column, as column runs. Studies stored per sample only; reads at most 25 samples a call" },
+  { name: "slice_cells", input: "gse_id, gsm_id, file?, runs? / indices? / range?", returns: "The byte ranges that cover just those cells in a sample's count matrices (a prefix once, then chunk runs). Studies stored per sample only" },
+  { name: "resolve_features", input: "indices, pack? / gse_id, gsm_id, file?", returns: "Feature names for matrix row numbers (or barcodes for whitelist column numbers). Studies stored per sample only" },
 ];
 
 function Section({ id, title, children, collapsible }: { id: string; title: string; children: React.ReactNode; collapsible?: boolean }) {
@@ -115,7 +115,7 @@ export default function DocsMcp() {
   usePageMeta({
     title: "Use singlet from Claude, Cursor or ChatGPT",
     description:
-      "Connect an AI assistant to the singlet.bio atlas: search public single-cell studies, read their QC, download one sample by byte range and export a cohort manifest — no account needed to start.",
+      "Connect an AI assistant to the singlet.bio atlas: search public single-cell studies, read their QC, download one sample by byte range and export a cohort manifest — tool calls need a free account; downloads need none.",
     path: "/docs/mcp",
   });
 
@@ -175,7 +175,10 @@ export default function DocsMcp() {
             <p>
               Hosted at <code className="code-inline">{MCP_URL}</code>. Tools need a free singlet.bio account: add the URL to your
               client and sign in with GitHub or Google when it asks. Clients that only take a header can send a personal API key from{" "}
-              <Link to="/account">your account</Link> instead. Downloads never need either.
+              <Link to="/account">your account</Link> instead. Without either, <code className="code-inline">initialize</code> and every{" "}
+              <code className="code-inline">tools/call</code> answer HTTP 401 with <code className="code-inline">sign_in_required</code>, which is
+              what makes a client start sign-in; <code className="code-inline">tools/list</code> and <code className="code-inline">ping</code> stay
+              open. Downloads from <code className="code-inline">data.singlet.bio</code> never need an account.
             </p>
             <Tabs defaultValue="claude">
               <TabsList className="flex-wrap h-auto">
@@ -218,7 +221,8 @@ export default function DocsMcp() {
               </TabsContent>
             </Tabs>
 
-            <h3 className="mt-8">Check it works</h3>
+            <h3 className="mt-8">Check it is reachable</h3>
+            <p className="text-sm text-muted-foreground">Listing the tools needs no sign-in; calling one does.</p>
             <CodeBlock
               label="bash"
               code={`curl -sX POST ${MCP_URL} -H "Content-Type: application/json" \\
@@ -233,7 +237,7 @@ export default function DocsMcp() {
                   <th>Tool</th>
                   <th>Input</th>
                   <th>Returns</th>
-                  <th>Needs a key?</th>
+                  <th>Notes</th>
                 </tr>
               </thead>
               <tbody>
@@ -244,13 +248,13 @@ export default function DocsMcp() {
                     </td>
                     <td className="text-sm">{t.input}</td>
                     <td className="text-sm">{t.returns}</td>
-                    <td className="text-sm">{t.key}</td>
+                    <td className="text-sm">{t.note ?? "—"}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
             <p className="text-sm text-muted-foreground">
-              Every tool also returns the machine-readable version of its answer, so an assistant can act on the numbers
+              Every tool needs sign-in or a personal API key. Every tool also returns the machine-readable version of its answer, so an assistant can act on the numbers
               rather than re-typing them.
             </p>
           </Section>
@@ -258,16 +262,23 @@ export default function DocsMcp() {
           <Section id="limits" title="Limits" collapsible>
             <ul>
               <li>
-                Tool calls are per account: 60 a minute. AI-interpreted search draws on a monthly AI token allowance;
-                vocabulary-only and repeated questions use none. What is left comes back with every answer (in{" "}
-                <code className="code-inline">_meta.quota</code>). When it runs out the question is still answered, read
-                with the built-in vocabulary only, and the answer says so.
+                Tool calls are counted per account and month, and limited to 60 a minute per account. There is no cap on
+                the number of calls in a day or a month.
               </li>
               <li>
                 Only <code className="code-inline">search_datasets</code> calls a language model, to turn your question
-                into filters when the built-in vocabulary cannot; that call is what the daily budget meters. Every
-                number, every match reason and every caveat is computed from the catalog or read out of the study's own
-                file — quote them, don't paraphrase them.
+                into filters when the built-in vocabulary cannot. Vocabulary-only and repeated questions cost nothing. A
+                fresh AI reading counts against two limits: 200 AI readings a day per account (reset at 00:00 UTC) and a
+                monthly AI token allowance (renewed on the first of the month, UTC). What is left of the monthly allowance
+                comes back with every tool result in <code className="code-inline">_meta.quota</code> (
+                <code className="code-inline">used</code>, <code className="code-inline">limit</code>,{" "}
+                <code className="code-inline">remaining</code>, <code className="code-inline">resets_at</code>). When either
+                limit is reached the question is still answered, read with the built-in vocabulary only, and the answer says
+                so (<code className="code-inline">quota_exceeded: true</code>).
+              </li>
+              <li>
+                Every number, every match reason and every caveat is computed from the catalog or read out of the study's
+                own file — quote them, don't paraphrase them.
               </li>
               <li>
                 Cell counts in the catalog come from the processing database; the counts in the file's QC come from the
@@ -282,7 +293,7 @@ export default function DocsMcp() {
                 Disease and tissue labels are study-level, taken from GEO text. Matched controls are candidates to check,
                 not drop-in replacements.
               </li>
-              <li>Data is CC0 and downloads never need a key or an account.</li>
+              <li>Data is CC0 and downloads from <code className="code-inline">data.singlet.bio</code> never need a key or an account.</li>
             </ul>
           </Section>
 
@@ -298,9 +309,9 @@ export default function DocsMcp() {
                 <Link to="/account#connectors">your account</Link> needs a new sign-in.
               </li>
               <li>
-                <strong>"Today's AI-search budget is used up"</strong> — the daily allowance of fresh AI readings. The
-                search still answers, read with the built-in vocabulary only. Wait for the reset time in{" "}
-                <code className="code-inline">_meta.quota</code>, or add a key.
+                <strong>The AI reading is used up for today or this month</strong> — the search still answers, read with the
+                built-in vocabulary only. The daily count resets at 00:00 UTC; the monthly allowance renews on the date in{" "}
+                <code className="code-inline">_meta.quota.resets_at</code>.
               </li>
               <li>
                 <strong>A first call on a very large study is slow</strong> — the file's directory is read over the

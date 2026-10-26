@@ -19,7 +19,6 @@ import DataLicense from "./pages/DataLicense.tsx";
 import Terms from "./pages/Terms.tsx";
 import Privacy from "./pages/Privacy.tsx";
 import SplicePatternSpec from "./pages/SplicePatternSpec.tsx";
-import HpcDashboard from "./pages/HpcDashboard.tsx";
 import AuthCallback from "./pages/AuthCallback.tsx";
 import Account from "./pages/Account.tsx";
 import Brand from "./pages/Brand.tsx";
@@ -115,7 +114,8 @@ const App = () => (
               <Route path="/terms" element={<Terms />} />
               <Route path="/privacy" element={<Privacy />} />
               <Route path="/specs/splice-patterns" element={<SplicePatternSpec />} />
-              <Route path="/hpc-dashboard" element={<HpcDashboard />} />
+              {/* Internal campaign snapshot: not part of the public site (the /api/hpc endpoints are unchanged). */}
+              <Route path="/hpc-dashboard" element={<Navigate to="/" replace />} />
 
               {/* Retired routes → their new home */}
               <Route path="/download" element={<Navigate to="/docs#install" replace />} />

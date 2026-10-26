@@ -6,6 +6,7 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { Logo } from "@/components/Logo";
 import { SearchBox } from "@/components/SearchBox";
+import { AlphaTag } from "@/components/AlphaBanner";
 import { apiClient } from "@/integrations/api/client";
 import { usePageMeta } from "@/hooks/usePageMeta";
 import { fmtCompact, fmtInt } from "@/lib/catalog-display";
@@ -49,7 +50,7 @@ function Skeleton({ h = "h-48" }: { h?: string }) {
 const JUMPS = [
   { href: "#demo", label: "See it work" },
   { href: "#coverage", label: "Coverage" },
-  { href: "#layers", label: "Modalities" },
+  { href: "#layers", label: "Layers" },
   { href: "#qc", label: "Quality control" },
 ];
 
@@ -86,7 +87,10 @@ const Index = () => {
         <section aria-label="Search" className="relative flex flex-col items-center justify-center min-h-[min(calc(100svh-3.5rem),960px)] py-16 border-b border-border">
           <div className="container-site w-full flex flex-col items-center text-center">
             <h1 className="sr-only">singlet.bio: AI-ready single-cell data</h1>
-            <Logo variant="lockup" theme="auto" height={52} link={false} />
+            <span className="inline-flex items-start gap-2">
+              <Logo variant="lockup" theme="auto" height={52} link={false} />
+              <AlphaTag className="mt-0.5" />
+            </span>
             <div className="mt-10 w-full max-w-[680px]">
               <SearchBox variant="hero" placeholder={`Try "${EXAMPLE_QUERIES[0]}"`} />
               <p className="mt-3 text-[13px] text-muted-foreground tabular">
@@ -155,8 +159,8 @@ const Index = () => {
         </Screen>
 
         {/* 4 · It holds more than counts */}
-        <Screen id="layers" label="Modalities">
-          <Title sub="Beyond gene expression, in every study file.">Every modality, one file.</Title>
+        <Screen id="layers" label="Layers">
+          <Title sub="Spliced and unspliced counts and splice junctions; other layers where the data allow.">Gene expression, plus splicing.</Title>
           <div className="mt-12">
             <ModalityGrid />
           </div>
@@ -164,7 +168,7 @@ const Index = () => {
 
         {/* 5 · It is clean */}
         <Screen id="qc" label="Quality control">
-          <Title sub="Only high-quality samples are included.">Rigorous quality control.</Title>
+          <Title sub="Every sample is measured. Samples below the QC cut-off are flagged and left out of counts and search by default.">Quality control on every sample.</Title>
           <div className="mt-12 max-w-[760px] mx-auto">{stats ? <QcFunnel steps={sampleFunnel(stats.accounting)} /> : <Skeleton />}</div>
         </Screen>
 
@@ -173,7 +177,6 @@ const Index = () => {
           <Title sub="The same count matrix, compared with common formats.">{H5AD_RATIO.toFixed(1)}× smaller than AnnData.</Title>
           <div className="mt-12 max-w-[760px] mx-auto">
             <FormatSizeChart />
-            <p className="mt-4 text-center text-[12px] text-muted-foreground">Medians from the .1pz format benchmark (3,198 datasets).</p>
           </div>
         </Screen>
 
