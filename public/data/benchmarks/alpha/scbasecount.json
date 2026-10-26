@@ -1,0 +1,172 @@
+{
+ "schema": "singlet.alpha.benchmark",
+ "schema_version": "1.0.0",
+ "id": "scbasecount",
+ "title": "Alpha against scBaseCount and the authors' Cell Ranger results",
+ "measured_at": "2026-10-24",
+ "data": "Singlet Research Alpha files as published, scBaseCount release 2026-01-12, and matrices deposited by the authors in GEO.",
+ "source": {
+  "repo": "https://github.com/Singlet-Bio/singlet",
+  "commit": "b891bd71f4064957d7938651935d686839720529",
+  "files": [
+   "docs/scbasecount-comparison.md",
+   "docs/scbasecount-comparison/atlaswide.json",
+   "docs/scbasecount-comparison/coverage_headline.json",
+   "docs/scbasecount-comparison/samples.tsv"
+  ],
+  "code": "bench/scbasecount/"
+ },
+ "coverage": {
+  "shared_samples": 22896,
+  "singlet_non10x_samples": 11265,
+  "protocols": [
+   {
+    "protocol": "10x Genomics 3' and 5'",
+    "singlet": true,
+    "scbasecount": true
+   },
+   {
+    "protocol": "10x Multiome (gene expression)",
+    "singlet": true,
+    "scbasecount": true
+   },
+   {
+    "protocol": "Drop-seq, inDrop",
+    "singlet": true,
+    "scbasecount": false
+   },
+   {
+    "protocol": "Seq-Well",
+    "singlet": true,
+    "scbasecount": false
+   },
+   {
+    "protocol": "BD Rhapsody",
+    "singlet": true,
+    "scbasecount": false
+   },
+   {
+    "protocol": "Parse",
+    "singlet": true,
+    "scbasecount": false
+   },
+   {
+    "protocol": "Smart-seq and other plate-based",
+    "singlet": true,
+    "scbasecount": false
+   }
+  ],
+  "other": [
+   {
+    "item": "Every barcode with at least 100 reads stored, so cells can be re-called",
+    "singlet": true,
+    "scbasecount": false
+   },
+   {
+    "item": "License",
+    "singlet": "CC0",
+    "scbasecount": "none stated"
+   },
+   {
+    "item": "Access",
+    "singlet": "HTTPS download, no account",
+    "scbasecount": "Google Cloud bucket (requester-pays)"
+   }
+  ]
+ },
+ "cell_calls": {
+  "against": "the authors' deposited Cell Ranger matrices",
+  "singlet_median_recovery": 0.73,
+  "singlet_recovery_range": [
+   0.2,
+   0.97
+  ],
+  "scbasecount_median_recovery": 0.99,
+  "singlet_precision_range": [
+   0.98,
+   1
+  ],
+  "note": "Singlet's calls are precise but miss low-RNA cells: the knee filter is conservative and Alpha used a fraction of the reads."
+ },
+ "depth": {
+  "samples": 10582,
+  "basis": "human samples processed by both atlases, correct strand, non-empty matrices, labelled 3', 5' or Multiome gene expression by scBaseCount",
+  "reads_used_median": 0.135,
+  "umi_ratio_median": 0.322,
+  "umi_ratio_p10_p90": [
+   0.097,
+   1.009
+  ],
+  "cell_ratio_median": 0.668,
+  "cell_ratio_p10_p90": [
+   0.242,
+   0.948
+  ],
+  "median_umi_per_cell": {
+   "singlet": 1700,
+   "scbasecount": 4874
+  },
+  "median_genes_per_cell": {
+   "singlet": 807.5,
+   "scbasecount": 1978
+  },
+  "full_depth": {
+   "samples": 408,
+   "umi_ratio_median": 0.867,
+   "cell_ratio_median": 0.862
+  }
+ },
+ "depth_matched": {
+  "note": "scBaseCount's counts for each cell were thinned to Singlet's total for that cell. The noise floor is two independent thinnings of scBaseCount compared with each other.",
+  "rows": [
+   {
+    "category": "human 3' v3",
+    "depth_matched": 0.637,
+    "noise_floor": 0.644,
+    "pseudobulk_spearman": 0.947
+   },
+   {
+    "category": "human 3' v3",
+    "depth_matched": 0.614,
+    "noise_floor": 0.626,
+    "pseudobulk_spearman": 0.956
+   },
+   {
+    "category": "human 3' v2",
+    "depth_matched": 0.642,
+    "noise_floor": 0.674,
+    "pseudobulk_spearman": 0.936
+   },
+   {
+    "category": "mouse 3' v3",
+    "depth_matched": 0.406,
+    "noise_floor": 0.438,
+    "pseudobulk_spearman": 0.952
+   },
+   {
+    "category": "mouse 3' v3",
+    "depth_matched": 0.789,
+    "noise_floor": 0.824,
+    "pseudobulk_spearman": 0.949
+   },
+   {
+    "category": "mouse nuclei",
+    "depth_matched": 0.552,
+    "noise_floor": 0.57,
+    "pseudobulk_spearman": 0.945
+   },
+   {
+    "category": "Multiome GEX",
+    "depth_matched": 0.843,
+    "noise_floor": 0.882,
+    "pseudobulk_spearman": 0.954
+   },
+   {
+    "category": "macaque",
+    "depth_matched": 0.963,
+    "noise_floor": 0.997,
+    "pseudobulk_spearman": 0.983
+   }
+  ]
+ }
+}

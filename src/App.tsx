@@ -19,6 +19,10 @@ import DataLicense from "./pages/DataLicense.tsx";
 import Terms from "./pages/Terms.tsx";
 import Privacy from "./pages/Privacy.tsx";
 import SplicePatternSpec from "./pages/SplicePatternSpec.tsx";
+import KnownIssues from "./pages/KnownIssues.tsx";
+import Beta from "./pages/Beta.tsx";
+import Benchmarking from "./pages/Benchmarking.tsx";
+import BenchmarkDetail from "./pages/BenchmarkDetail.tsx";
 import AuthCallback from "./pages/AuthCallback.tsx";
 import Account from "./pages/Account.tsx";
 import Brand from "./pages/Brand.tsx";
@@ -93,6 +97,10 @@ const App = () => (
               <Route path="/docs/mcp" element={<DocsMcp />} />
               <Route path="/about" element={<About />} />
               <Route path="/brand" element={<Brand />} />
+              <Route path="/known-issues" element={<KnownIssues />} />
+              <Route path="/beta" element={<Beta />} />
+              <Route path="/benchmarking" element={<Benchmarking />} />
+              <Route path="/benchmarking/:capability" element={<BenchmarkDetail />} />
 
               {/* Accessions */}
               <Route path="/series/:gseId" element={<SeriesRedirect />} />
@@ -124,10 +132,10 @@ const App = () => (
               <Route path="/byod" element={<Navigate to="/docs#pipeline" replace />} />
               <Route path="/pipeline" element={<Navigate to="/about#status" replace />} />
               <Route path="/notebooks" element={<ExternalRedirect href={NOTEBOOKS_URL} />} />
-              <Route path="/benchmarks" element={<Navigate to="/" replace />} />
+              <Route path="/benchmarks" element={<Navigate to="/benchmarking" replace />} />
               <Route path="/blog" element={<Navigate to="/" replace />} />
               <Route path="/blog/*" element={<Navigate to="/" replace />} />
-              <Route path="/validation" element={<Navigate to="/browse" replace />} />
+              <Route path="/validation" element={<Navigate to="/benchmarking" replace />} />
               <Route path="/atlas-docs" element={<Navigate to="/docs" replace />} />
               <Route path="/dashboard" element={<Navigate to="/" replace />} />
               <Route path="/invest" element={<Navigate to="/" replace />} />

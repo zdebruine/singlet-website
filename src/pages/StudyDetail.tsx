@@ -567,6 +567,10 @@ const StudyDetail = () => {
             pipeline version before merging this study with another.{" "}
             <Link to="/about#processing" className="text-primary hover:underline">How processing works →</Link>
           </p>
+          <p className="text-[12px] text-muted-foreground leading-relaxed px-0.5">
+            This is a Research Alpha file: it used at most 30M reads per sample, and some molecules are counted twice.{" "}
+            <Link to="/known-issues" className="text-primary hover:underline">Known issues →</Link>
+          </p>
         </aside>
       </div>
 

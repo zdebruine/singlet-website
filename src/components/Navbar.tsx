@@ -11,11 +11,13 @@ import { cn } from "@/lib/utils";
 const NAV = [
   { to: "/browse", label: "Browse" },
   { to: "/docs", label: "Docs" },
+  { to: "/benchmarking", label: "Benchmarks" },
   { to: "/about", label: "About" },
+  { to: "/beta", label: "Beta", title: "See what's coming in Beta" },
 ];
 
 /**
- * A plain white bar: logo on the left, three links and the account on the right.
+ * A plain white bar: logo on the left, the links, "Join the Beta" and the account on the right.
  * Exactly one search input per page: the header search is hidden on pages that render their own
  * (home hero, /browse sticky bar, 404 page).
  */
@@ -24,6 +26,7 @@ const Navbar = ({ search = true }: { search?: boolean }) => {
   const [open, setOpen] = useState(false);
   const isHome = location.pathname === "/";
   const showSearch = search && !isHome && location.pathname !== "/browse";
+  const onBeta = location.pathname === "/beta";
 
   useEffect(() => {
     setOpen(false);
@@ -42,11 +45,12 @@ const Navbar = ({ search = true }: { search?: boolean }) => {
           </span>
         )}
 
-        <div className="hidden md:flex items-center gap-6">
+        <div className="hidden md:flex items-center gap-5">
           {NAV.map((l) => (
             <Link
               key={l.to}
               to={l.to}
+              title={l.title}
               className={cn("text-[14px] transition-colors", isActive(l.to) ? "text-foreground font-medium" : "text-muted-foreground hover:text-foreground")}
             >
               {l.label}
@@ -57,7 +61,12 @@ const Navbar = ({ search = true }: { search?: boolean }) => {
         <div className="flex-1" />
 
         <div className="hidden md:flex items-center gap-6">
-          {showSearch && <SearchBox variant="compact" className="w-64 lg:w-72" />}
+          {showSearch && <SearchBox variant="compact" className="hidden lg:block w-60 xl:w-72" />}
+          {!onBeta && (
+            <Link to="/beta#join" className="btn-primary btn-sm whitespace-nowrap hidden lg:inline-flex">
+              Join the Beta
+            </Link>
+          )}
           <AccountMenu className="navbar-account" />
         </div>
 
@@ -85,6 +94,11 @@ const Navbar = ({ search = true }: { search?: boolean }) => {
                 {l.label}
               </Link>
             ))}
+            {!onBeta && (
+              <Link to="/beta#join" className="btn-primary btn-sm self-start">
+                Join the Beta
+              </Link>
+            )}
             <div className="border-t border-border pt-3">
               <AccountMenu className="navbar-account text-sm" variant="menu" />
             </div>

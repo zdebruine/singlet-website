@@ -3,7 +3,7 @@ import Footer from "@/components/Footer";
 import { usePageMeta } from "@/hooks/usePageMeta";
 
 const Privacy = () => {
-  usePageMeta({ title: "Privacy", description: "What singlet.bio stores when you browse, search, sign in, create an API key or use the MCP server, and where AI processing happens.", path: "/privacy" });
+  usePageMeta({ title: "Privacy", description: "What singlet.bio stores when you browse, search, sign in, create an API key, use the MCP server, send feedback or join the Beta list, and where AI processing happens.", path: "/privacy" });
   return (
   <div className="min-h-screen bg-background">
     <Navbar />
@@ -12,7 +12,7 @@ const Privacy = () => {
         <h1 className="font-display text-3xl md:text-4xl font-bold text-foreground tracking-tightest mb-8">
           Privacy Policy
         </h1>
-        <p className="text-xs text-muted-foreground mb-8 font-mono">Last updated: September 30, 2026</p>
+        <p className="text-xs text-muted-foreground mb-8 font-mono">Last updated: October 26, 2026</p>
 
         <div className="prose prose-sm max-w-none space-y-8 text-muted-foreground">
           <section>
@@ -147,8 +147,31 @@ const Privacy = () => {
             </p>
           </section>
 
+          <section id="beta" className="scroll-mt-20">
+            <h2 className="font-display text-lg font-bold text-foreground mb-3">7. Feedback and the Beta List</h2>
+            <p className="text-sm leading-relaxed mb-2">
+              The feedback form stores your message, the category you pick, the path of the page you sent it from (never its query
+              string), your browser type (user agent), and an email address only if you give one. The Beta sign-up form on{" "}
+              <span className="font-mono">/beta</span> stores your email address and, only if you fill them in, your name,
+              institution, role and what you would use Singlet for, plus whether you opted in to updates. Neither stores your
+              network address. For both:
+            </p>
+            <ul className="list-disc list-inside text-sm space-y-1">
+              <li>If you are signed in, the entry is linked to your account.</li>
+              <li>
+                To limit abuse, each entry carries the same identity key as the AI-search counter in section 3: a salted, one-way
+                hash of your network address, or your account.
+              </li>
+              <li>
+                We use a Beta sign-up only to tell you when Beta opens and, if you opted in, to send occasional updates before then.
+                We never sell or share it.
+              </li>
+              <li>To remove an entry, ask through the contact in section 12; we delete it.</li>
+            </ul>
+          </section>
+
           <section>
-            <h2 className="font-display text-lg font-bold text-foreground mb-3">7. Data Retention</h2>
+            <h2 className="font-display text-lg font-bold text-foreground mb-3">8. Data Retention</h2>
             <p className="text-sm leading-relaxed">
               Standard technical logs are retained for a limited period for security and operational purposes, then
               discarded or aggregated. Expired sessions and unfinished sign-ins are deleted. Account data is kept while
@@ -157,7 +180,7 @@ const Privacy = () => {
           </section>
 
           <section>
-            <h2 className="font-display text-lg font-bold text-foreground mb-3">8. Third-Party Services</h2>
+            <h2 className="font-display text-lg font-bold text-foreground mb-3">9. Third-Party Services</h2>
             <p className="text-sm leading-relaxed">
               The website, its database, file storage, downloads and the default language model all run on Cloudflare
               (Pages, D1, R2, Workers AI and AI Gateway). GitHub or Google handle sign-in if you choose them, and
@@ -167,7 +190,7 @@ const Privacy = () => {
           </section>
 
           <section>
-            <h2 className="font-display text-lg font-bold text-foreground mb-3">9. Cookies and Tracking</h2>
+            <h2 className="font-display text-lg font-bold text-foreground mb-3">10. Cookies and Tracking</h2>
             <p className="text-sm leading-relaxed">
               We do not use third-party advertising or cross-site tracking cookies. Any cookies used are limited to
               what is necessary for the website to function: signing in sets one first-party cookie that keeps you
@@ -176,14 +199,14 @@ const Privacy = () => {
           </section>
 
           <section>
-            <h2 className="font-display text-lg font-bold text-foreground mb-3">10. Changes to This Policy</h2>
+            <h2 className="font-display text-lg font-bold text-foreground mb-3">11. Changes to This Policy</h2>
             <p className="text-sm leading-relaxed">
               We may update this Privacy Policy from time to time. Material changes will be reflected on this page with an updated date.
             </p>
           </section>
 
           <section>
-            <h2 className="font-display text-lg font-bold text-foreground mb-3">11. Contact</h2>
+            <h2 className="font-display text-lg font-bold text-foreground mb-3">12. Contact</h2>
             <p className="text-sm leading-relaxed">
               For privacy-related questions, open an issue on{" "}
               <a href="https://github.com/Singlet-Bio/singlet/issues" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">GitHub Issues</a>.

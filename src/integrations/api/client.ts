@@ -743,6 +743,19 @@ export const apiClient = {
       await accountPost("/api/feedback", input);
     },
   },
+  beta: {
+    async signup(input: {
+      email: string;
+      name?: string;
+      institution?: string;
+      role?: string;
+      interests?: string;
+      updates: boolean;
+      website?: string;
+    }) {
+      await accountPost("/api/beta-signup", input);
+    },
+  },
   product: {
     async dashboard(): Promise<ProductDashboard> {
       return (await productPost({ action: "dashboard" })) as ProductDashboard;
