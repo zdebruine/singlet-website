@@ -72,7 +72,7 @@ const FIXTURES: Record<string, StudyInput> = {
   knockout: study(
     "GSE900002",
     repeat(6, (i) => ({ c: `tissue: Spleen ;; genotype: ${i < 3 ? "WT" : "Ifnar1-/-"} ;; age: 8-12 weeks ;; strain: C57BL/6`, protocol: "10xv2" })),
-    { organism: "Mus musculus" },
+    { organism: "Mus musculus", files: ["sex_call.json", "donor_assignments.tsv"] },
   ),
   // 4. cell line experiment, treated vs DMSO
   cellLine: study(
@@ -162,6 +162,8 @@ describe("study card summaries", () => {
     expect(c.summary_text).toMatch(/^Spleen from 6 mouse samples, aged 10 weeks\./);
     expect(c.summary_text).toContain("genotype (wild type 3, Ifnar1-/- 3)");
     expect(c.platforms).toEqual([{ value: "10x 3' v2 scRNA-seq", n: 6 }]);
+    // sex_call.json is in the file but its mouse calls are all "unknown", so it is not listed as a layer.
+    expect(c.layers).toEqual(["donor demultiplexing"]);
   });
 
   it("reports a cell line experiment with treatment and vehicle groups", () => {

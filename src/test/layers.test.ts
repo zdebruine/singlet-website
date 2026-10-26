@@ -8,11 +8,11 @@ CREATE TABLE gse_meta (gse_id TEXT PRIMARY KEY, organism_primary TEXT, has_bundl
 CREATE TABLE bundle_index (gse_id TEXT PRIMARY KEY, bytes INTEGER, entries TEXT, indexed_at TEXT);
 INSERT INTO gse_meta VALUES ('GSE1', 'Homo sapiens', 1, 4, 0, 0), ('GSE2', 'Mus musculus', 1, 2, 0, 0), ('GSE3', 'Homo sapiens', 1, 0, 1, 0), ('GSE4', 'Homo sapiens', 1, 3, 0, 1), ('GSE5', 'Mus musculus', 1, 2, 0, 0);
 INSERT INTO bundle_index VALUES
-  ('GSE1', 1, '["samples/A/exon_counts.1pz","samples/A/intron_counts.1pz","samples/A/donor/snp_ad.1pz","samples/A/ancestry_call.json"]', ''),
-  ('GSE2', 1, '["samples/B/exon_counts.1pz","samples/B/intron_counts.1pz"]', ''),
+  ('GSE1', 1, '["samples/A/exon_counts.1pz","samples/A/intron_counts.1pz","samples/A/donor/snp_ad.1pz","samples/A/ancestry_call.json","samples/A/sex_call.json"]', ''),
+  ('GSE2', 1, '["samples/B/exon_counts.1pz","samples/B/intron_counts.1pz","samples/B/sex_call.json"]', ''),
   ('GSE3', 1, '["samples/C/exon_counts.1pz","samples/C/ancestry_call.json"]', ''),
   ('GSE4', 1, '["samples/D/exon_counts.1pz","samples/D/ancestry_call.json"]', ''),
-  ('GSE5', 1, '["samples/E/exon_counts.1pz","samples/E/ancestry_call.json"]', '');
+  ('GSE5', 1, '["samples/E/exon_counts.1pz","samples/E/ancestry_call.json","samples/E/sex_call.json"]', '');
 `;
 
 describe("computeLayerStats", () => {
@@ -29,5 +29,7 @@ describe("computeLayerStats", () => {
     // Ancestry counts human studies only: GSE5 (mouse) has the file but is not counted.
     expect(by.ancestry).toMatchObject({ studies: 1, of: 1 });
     expect(by.splicing.of).toBe(3);
+    // Mouse sex_call.json files hold only "unknown": GSE2 and GSE5 have the file but are not counted.
+    expect(by.sex).toMatchObject({ studies: 1, of: 1 });
   });
 });

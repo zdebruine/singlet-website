@@ -146,7 +146,8 @@ export function cellsLabel(n: number | null): string | null {
 const TO_DAYS: Record<string, number> = { years: 365.25, months: 30.44, weeks: 7, days: 1 };
 
 const LAYER_FILES: { file: string; label: string; humanOnly?: boolean }[] = [
-  { file: "sex_call.json", label: "genetic sex" },
+  // Mouse sex_call.json files hold only "unknown" until the pipeline matches mouse gene names (docs/DENSE-METADATA.md).
+  { file: "sex_call.json", label: "genetic sex", humanOnly: true },
   { file: "donor_assignments.tsv", label: "donor demultiplexing" },
   { file: "ancestry_call.json", label: "genetic ancestry", humanOnly: true },
   { file: "doublet_scores.tsv", label: "doublet scores" },

@@ -2,6 +2,13 @@
 
 Changes to what singlet.bio publishes. Newest first.
 
+## 2026-10-24 — Genetic sex is counted for human studies only
+
+Every mouse sample's `sex_call.json` reads "unknown": the pipeline matches the chrY and XIST gene names in upper case, so mouse
+symbols (Xist, Uty, Ddx3y, …) never match. The file is present, but it holds no call. The layer statistics (`/api/stats/layers`),
+the study summaries, the search index export and the docs now count and list genetic sex for human studies only, as they already did for ancestry. Mouse
+calls return when the pipeline matches mouse gene names and the files are rebuilt.
+
 ## 2026-10-22 — Studies are starting to move to one object per sample
 
 A study can now be stored as one object per sample plus a manifest, instead of one `.singlet` file per study. The first study in this

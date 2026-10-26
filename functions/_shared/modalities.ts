@@ -76,7 +76,7 @@ export const MODALITIES: Modality[] = [
     "Continental ancestry group with a confidence.",
     `b.read("ancestry_call", gsm)`, `singlet_read(path, gsm, "ancestry_call")`),
   M("sex_call", "json", "Donor", ["sex_call.json"],
-    "Genetic sex call from chrX/chrY expression and coverage.",
+    "Genetic sex call from chrX/chrY expression and coverage. Human only: calls for mouse samples are all \"unknown\" so far.",
     `b.read("sex_call", gsm)`, `singlet_read(path, gsm, "sex_call")`),
   // ── Non-host ──────────────────────────────────────────────────────────────
   M("nonhost_species", "table", "Non-host", ["nonhost/nonhost_em_abundance.tsv", "nonhost_em_abundance.tsv"],

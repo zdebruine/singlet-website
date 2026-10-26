@@ -14,7 +14,7 @@ const SCHEMA = `
 CREATE TABLE gsm (gsm_id TEXT PRIMARY KEY, gse_id TEXT, status TEXT, organism_primary TEXT, tissue_group TEXT, tissue TEXT,
   disease_group TEXT, disease TEXT, sex TEXT);
 CREATE TABLE sample_qc (gsm_id TEXT PRIMARY KEY, n_cells_called INTEGER, protocol TEXT, singlet_version TEXT, qc_tier INTEGER, usable INTEGER);
-CREATE TABLE gse_meta (gse_id TEXT PRIMARY KEY, has_bundle INTEGER, n_usable_samples INTEGER, reference_mismatch INTEGER, year INTEGER);
+CREATE TABLE gse_meta (gse_id TEXT PRIMARY KEY, organism_primary TEXT, has_bundle INTEGER, n_usable_samples INTEGER, reference_mismatch INTEGER, year INTEGER);
 CREATE TABLE bundle_index (gse_id TEXT PRIMARY KEY, entries TEXT);
 ${readFileSync("schema/030_search_facts.sql", "utf8")}`;
 
@@ -22,8 +22,8 @@ async function seed() {
   const DB = createTestD1(SCHEMA);
   const raw = DB.raw;
   raw.exec(`
-    INSERT INTO gse_meta VALUES ('GSE1', 1, 2, 0, 2021), ('GSE2', 0, 0, 0, 2022);
-    INSERT INTO bundle_index VALUES ('GSE1', 'a/exon_counts.1pz a/intron_counts.1pz a/sex_call.json'), ('GSE2', 'x');
+    INSERT INTO gse_meta VALUES ('GSE1', 'Homo sapiens', 1, 2, 0, 2021), ('GSE2', 'Mus musculus', 0, 0, 0, 2022), ('GSE3', 'Mus musculus', 1, 2, 0, 2022);
+    INSERT INTO bundle_index VALUES ('GSE1', 'a/exon_counts.1pz a/intron_counts.1pz a/sex_call.json'), ('GSE2', 'x'), ('GSE3', 'a/exon_counts.1pz a/sex_call.json');
     INSERT INTO gsm VALUES
       ('GSM1', 'GSE1', 'DONE', 'Homo sapiens', 'Brain', 'cortex', NULL, NULL, 'Female'),
       ('GSM2', 'GSE1', 'DONE', 'Homo sapiens', 'Brain', NULL, NULL, NULL, 'unknown'),
@@ -79,7 +79,8 @@ describe("GET /api/ingest/export", () => {
   it("gives each study's file layers", async () => {
     const env = await seed();
     const p = await (await get(env, "table=studies")).json<{ rows: unknown[][]; next: string | null }>();
-    expect(p.rows).toEqual([["GSE1", "gene_counts|splicing|sex"], ["GSE2", ""]]);
+    // GSE3 is mouse: its sex_call.json holds only "unknown", so the sex layer is not listed.
+    expect(p.rows).toEqual([["GSE1", "gene_counts|splicing|sex"], ["GSE2", ""], ["GSE3", "gene_counts"]]);
     expect(p.next).toBeNull();
   });
 

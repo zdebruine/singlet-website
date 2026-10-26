@@ -32,7 +32,9 @@ export const LAYER_FILES: { key: string; label: string; file: string; humanOnly?
   { key: "donors", label: "Donor demultiplexing", file: "donor_assignments.tsv" },
   // Continental ancestry is a human call; other species' files carry the same name, so count humans only.
   { key: "ancestry", label: "Genetic ancestry (human)", file: "ancestry_call.json", humanOnly: true },
-  { key: "sex", label: "Genetic sex", file: "sex_call.json" },
+  // The pipeline matches chrY/XIST gene names in upper case, so every mouse sex_call.json says "unknown" (docs/DENSE-METADATA.md).
+  // The file is there but holds no call: count humans only until the pipeline is fixed.
+  { key: "sex", label: "Genetic sex (human)", file: "sex_call.json", humanOnly: true },
   { key: "doublets", label: "Doublet scores", file: "doublet_scores.tsv" },
 ];
 
