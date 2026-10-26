@@ -1,10 +1,13 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { FeedbackButton } from "@/components/FeedbackDialog";
+import { H5AD_RATIO } from "@/components/landing/charts";
+import { STORE_FORMAT_LIVE } from "@/lib/release";
 
 // Home-page stories, each split into what Alpha does today and what Beta adds. Plan: docs/LANDING.md and
-// Singlet-Bio/singlet-agents docs/RESEARCH_ALPHA_PLAN.md ("Alpha vision"). Alpha and Beta share the store format (per-sample
-// objects, pz2); its numbers are labelled as measured on pilot and test sets until atlas-wide numbers exist.
+// Singlet-Bio/singlet-agents docs/RESEARCH_ALPHA_PLAN.md ("Alpha vision"). The Speed story follows STORE_FORMAT_LIVE
+// (src/lib/release.ts): legacy .singlet files until the transcode is served, then the store format, whose numbers are
+// labelled as measured on pilot and test sets until atlas-wide numbers exist.
 
 function Column({ label, tone, items }: { label: string; tone: "alpha" | "beta"; items: ReactNode[] }) {
   return (
@@ -42,7 +45,22 @@ const A = ({ to, children }: { to: string; children: ReactNode }) => (
 );
 const Mono = ({ children }: { children: ReactNode }) => <code className="code-inline">{children}</code>;
 
-export const SPEED = {
+/** Today: legacy .singlet study files (zip64 of .1pz members). */
+const SPEED_LEGACY = {
+  today: [
+    <>Count matrices are stored as compressed <Mono>.1pz</Mono> members, {H5AD_RATIO.toFixed(1)}× smaller than AnnData.</>,
+    <>Each study file is a zip64 archive with a per-member index, so one sample's matrix is a single HTTP range read, not the whole file.</>,
+    <>Search, the catalog API and downloads run at the Cloudflare edge: Pages Functions, Workers, D1 and R2.</>,
+  ],
+  beta: [
+    <>One immutable object per sample in a new store format, with a cell index so you fetch only the cells you ask for.</>,
+    <>Download only the layers you ask for.</>,
+    <>Size and load-time numbers measured across the whole atlas, published on the benchmarks page.</>,
+  ],
+};
+
+/** After the transcode: the per-sample store format (.s1, pz2). */
+const SPEED_STORE = {
   today: [
     <>One immutable object per sample, listed in a small manifest per study, so you fetch a single sample with an HTTP range read, not a whole study.</>,
     <>Count matrices use the <Mono>pz2</Mono> codec; gene names live in shared packs instead of being repeated in every file.</>,
@@ -56,6 +74,8 @@ export const SPEED = {
   ],
 };
 
+export const SPEED = STORE_FORMAT_LIVE ? SPEED_STORE : SPEED_LEGACY;
+
 /** Measured on pilot and test sets (Singlet-Bio/singlet docs/v2-performance.md), not atlas-wide. */
 export const SPEED_MEASURED = [
   { value: "4.0×", label: "smaller than the previous files", detail: "58 samples from 45 studies" },
@@ -63,7 +83,9 @@ export const SPEED_MEASURED = [
   { value: "0.36 s", label: "to load one sample into Python over HTTP", detail: "including the download" },
 ];
 
+/** The store format's pilot numbers; shown only once the store format is what Alpha serves. */
 export function SpeedMeasured() {
+  if (!STORE_FORMAT_LIVE) return null;
   return (
     <div className="max-w-[960px] mx-auto mt-6">
       <ul className="grid gap-3 sm:grid-cols-3">

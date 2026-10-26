@@ -11,13 +11,15 @@ import { cn } from "@/lib/utils";
 const NAV = [
   { to: "/browse", label: "Browse" },
   { to: "/docs", label: "Docs" },
-  { to: "/benchmarking", label: "Benchmarks" },
+  { to: "/benchmarking", label: "Benchmarks", wide: true },
   { to: "/about", label: "About" },
-  { to: "/beta", label: "Beta", title: "See what's coming in Beta" },
+  { to: "/beta", label: "Beta", title: "See what's coming in Beta", wide: true },
 ];
 
 /**
- * A plain white bar: logo on the left, the links, "Join the Beta" and the account on the right.
+ * A plain white bar: logo on the left, the links, the search, "Join the Beta" (wide screens and the mobile menu) and the
+ * account on the right. Benchmarks and Beta drop out of the bar below lg so the search keeps its room; the banner and
+ * footer link both.
  * Exactly one search input per page: the header search is hidden on pages that render their own
  * (home hero, /browse sticky bar, 404 page).
  */
@@ -51,7 +53,7 @@ const Navbar = ({ search = true }: { search?: boolean }) => {
               key={l.to}
               to={l.to}
               title={l.title}
-              className={cn("text-[14px] transition-colors", isActive(l.to) ? "text-foreground font-medium" : "text-muted-foreground hover:text-foreground")}
+              className={cn("text-[14px] transition-colors", l.wide && "hidden lg:inline", isActive(l.to) ? "text-foreground font-medium" : "text-muted-foreground hover:text-foreground")}
             >
               {l.label}
             </Link>
@@ -61,9 +63,9 @@ const Navbar = ({ search = true }: { search?: boolean }) => {
         <div className="flex-1" />
 
         <div className="hidden md:flex items-center gap-6">
-          {showSearch && <SearchBox variant="compact" className="hidden lg:block w-60 xl:w-72" />}
+          {showSearch && <SearchBox variant="compact" className="w-56 lg:w-64 xl:w-72" />}
           {!onBeta && (
-            <Link to="/beta#join" className="btn-primary btn-sm whitespace-nowrap hidden lg:inline-flex">
+            <Link to="/beta#join" className="btn-primary btn-sm whitespace-nowrap hidden xl:inline-flex">
               Join the Beta
             </Link>
           )}

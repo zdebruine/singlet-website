@@ -7,12 +7,24 @@ import { FeedbackButton } from "@/components/FeedbackDialog";
 import { usePageMeta } from "@/hooks/usePageMeta";
 import { CAPABILITIES, GROUPS } from "@/lib/benchmark-capabilities";
 import { docCounts, docStatus, loadDoc, NOTEBOOK_URL, reachMatrix, type BenchDoc } from "@/lib/benchmarks";
-import { ALPHA_PENDING } from "@/lib/alpha-benchmarks";
+import { ALPHA_PANELS } from "@/lib/alpha-benchmarks";
+import { ANNOTATIONS_LIVE } from "@/lib/release";
 import { BetaBanner, StateBadge } from "@/components/benchmarks/BenchParts";
-import { AlphaPendingPanel, ScbcSection } from "@/components/benchmarks/AlphaParts";
+import { AlphaPendingPanel, AnnotationsPanel, ScbcSection } from "@/components/benchmarks/AlphaParts";
 import { cn } from "@/lib/utils";
 
 const MARK = { yes: "Yes", partial: "Partial", no: "No" } as const;
+
+/** The one-line cause shown with every Alpha result that falls short. */
+function CauseLine() {
+  return (
+    <>
+      Why the shortfall: in this benchmark the median sample used 10% of its SRA reads, and the knee filter misses low-RNA cells.
+      Pass and fail are shown against each rule as measured.{" "}
+      <Link to="/known-issues" className="text-primary underline underline-offset-2">Known issues</Link>
+    </>
+  );
+}
 
 /** Two separate sections: what the Alpha files measure today, and the Beta engine that will re-run them. */
 const Benchmarking = () => {
@@ -60,11 +72,13 @@ const Benchmarking = () => {
 
           <ScbcSection />
 
-          <h3 className="mt-10 text-[17px] font-semibold text-foreground">More Alpha measurements</h3>
-          <p className="mt-1 max-w-3xl text-[13.5px] text-muted-foreground">Results appear here as each run finishes.</p>
-          <div className="mt-4 space-y-4">
-            {ALPHA_PENDING.map((p) => <AlphaPendingPanel key={p.id} id={p.id} name={p.name} what={p.what} />)}
+          <div className="mt-10 space-y-6">
+            {ALPHA_PANELS.map((p) => (
+              <AlphaPendingPanel key={p.id} id={p.id} name={p.name} what={p.what} files={p.files} note={p.cause ? <CauseLine /> : undefined} />
+            ))}
           </div>
+
+          {ANNOTATIONS_LIVE && <AnnotationsPanel />}
         </section>
 
         {/* ------------------------------------------------------------- Beta */}

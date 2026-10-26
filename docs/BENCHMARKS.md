@@ -14,11 +14,20 @@
   Singlet-Bio/singlet `docs/scbasecount-comparison/` (`atlaswide.json`, `coverage_headline.json`, `samples.tsv`; the commit is in the
   file's `source`). The per-sample table keeps only the correctly stranded samples of the write-up's equal-depth table, by category,
   with no accessions.
-- `alpha/alpha-cellranger-concordance.json`, `alpha/alpha-engine.json`, `alpha/alpha-census.json`: show "Benchmark running" until the
-  file exists. Drop a file in and its panel fills; no code change. Accepted shapes (`src/lib/alpha-benchmarks.ts`):
-  - a results-contract 1.x document (`schema: "singlet.benchmark.capability"`), rendered as conclusion plus metric table; or
-  - a summary: `{ title, conclusion | summary, measured_at?, headline?: [{label, value, detail?}], tables?: [{title, columns, rows, note?}],
-    caveats?: [], source?: {repo, commit, files?, code?} }`.
+- Panels (`ALPHA_PANELS` in `src/lib/alpha-benchmarks.ts`); each shows "Benchmark running" until one of its files exists:
+  - concordance with the authors' Cell Ranger matrices: `alpha/alpha-cell-calling.json`, `alpha/alpha-gex-counts.json`;
+  - the Alpha engine at campaign settings on public 10x data: `alpha/alpha-engine-campaign.json`;
+  - the atlas census: `alpha/alpha-census.json`.
+
+  The first three are results-contract 1.x documents from Singlet-Bio/singlet `bench/alpha/` (PR #52), rendered as conclusion,
+  supported figures, metric table (pooled rows first) and caveats. The census is a summary document
+  (`{ title, conclusion | summary, measured_at?, headline?: [{label, value, detail?}], tables?: [{title, columns, rows, note?}],
+  caveats?: [], source?: {repo, commit?, files?, code?} }`).
+- Before copying, reduce each file to the included atlas: drop `artifacts` that are not uploaded, and remove counts of samples or
+  studies outside Alpha (before-exclusion totals, exclusions by reason, withheld studies). The census copy keeps only the public
+  level, labelled "as of the Alpha release". A test (`src/test/alpha-pages.test.tsx`) fails on words such as "withheld" or "excluded".
+- Annotation accuracy (`AnnotationsPanel`, from singlet-bio `docs/cell_annotation.md`) shows only when `ANNOTATIONS_LIVE` in
+  `src/lib/release.ts` is true.
 - Never list, count or link samples or studies that are not in Alpha.
 
 ## Beta preview

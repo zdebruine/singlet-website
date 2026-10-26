@@ -6,29 +6,39 @@
  *   - a results-contract document (schema "singlet.benchmark.capability", see src/lib/benchmarks.ts), or
  *   - a summary document: { title, conclusion | summary, measured_at | generated_at?, headline?: [{ label, value, detail? }],
  *     tables?: [{ title, columns: string[], rows: (string | number | null)[][], note? }], caveats?: string[], source?: { repo?, commit?, files?, code? } }.
- * A missing file (or the SPA's HTML fallback) shows "Benchmark running". The scBaseCount comparison has its own
+ * Files that hold counts of samples or studies not in Alpha must be reduced to the included atlas before they are copied
+ * here (docs/BENCHMARKS.md). A missing file (or the SPA's HTML fallback) shows "Benchmark running". The scBaseCount comparison has its own
  * richer shape (schema "singlet.alpha.benchmark") and its own panel.
  */
 import { parseDoc, RESULTS_BASE, type BenchDoc } from "@/lib/benchmarks";
 
 export const ALPHA_BASE = `${RESULTS_BASE}/alpha`;
 
-/** The Alpha measurements that are still running, in display order. */
-export const ALPHA_PENDING = [
+/**
+ * The Alpha measurement panels, in display order. Each reads one or more files; it shows "Benchmark running" until at
+ * least one of them exists. `cause` marks the panels whose results need the one-line explanation of the shortfall.
+ */
+export const ALPHA_PANELS = [
   {
-    id: "alpha-cellranger-concordance",
+    id: "concordance",
     name: "Alpha files against the authors' Cell Ranger matrices",
-    what: "Published Alpha files compared with the matrices the authors deposited in GEO, on a few hundred samples stratified by chemistry and species: cells recovered, precision and per-cell agreement.",
+    what: "Published Alpha files compared with the matrices the authors deposited in GEO, on samples stratified by species, chemistry and size: cells recovered, precision and per-cell agreement.",
+    files: ["alpha-cell-calling", "alpha-gex-counts"],
+    cause: true,
   },
   {
-    id: "alpha-engine",
+    id: "engine",
     name: "The Alpha engine on public 10x datasets",
-    what: "The engine and flags that made the Alpha files (at most 30M reads, 4 threads) run on public 10x datasets and scored with the same scorers as the Beta benchmarks.",
+    what: "The engine and settings that made the Alpha files (the first 30M reads, 4 threads) run on public 10x datasets, against 10x's published results and STARsolo on all reads.",
+    files: ["alpha-engine-campaign"],
+    cause: true,
   },
   {
-    id: "alpha-census",
-    name: "Atlas QC census",
-    what: "Strand, library type, matrix contents and read depth across every sample in Alpha.",
+    id: "census",
+    name: "Atlas census",
+    what: "Studies, samples, cells, species, chemistry and read depth across Alpha.",
+    files: ["alpha-census"],
+    cause: false,
   },
 ] as const;
 
@@ -111,6 +121,10 @@ async function getJson(url: string, signal?: AbortSignal): Promise<unknown> {
 
 export const loadAlpha = async (id: string, signal?: AbortSignal) => parseAlpha(await getJson(`${ALPHA_BASE}/${id}.json`, signal), id);
 
+/** Every file of a panel that exists, in order. */
+export const loadAlphaPanel = async (files: readonly string[], signal?: AbortSignal) =>
+  (await Promise.all(files.map((f) => loadAlpha(f, signal)))).filter((r): r is AlphaResult => !!r);
+
 // ---------------------------------------------------------------- the scBaseCount / Cell Ranger comparison
 
 export interface ScbcDoc {
@@ -120,13 +134,14 @@ export interface ScbcDoc {
   data: string;
   source: Required<Pick<AlphaSource, "repo" | "commit">> & AlphaSource;
   coverage: {
-    shared_samples: number;
-    singlet_non10x_samples: number;
     protocols: { protocol: string; singlet: boolean; scbasecount: boolean }[];
     other: { item: string; singlet: boolean | string; scbasecount: boolean | string }[];
   };
   cell_calls: {
     against: string;
+    basis: string;
+    n: number;
+    rows: { category: string; singlet_recovery: number; scbasecount_recovery: number; singlet_precision: number }[];
     singlet_median_recovery: number;
     singlet_recovery_range: [number, number];
     scbasecount_median_recovery: number;

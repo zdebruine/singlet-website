@@ -4,6 +4,7 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { FeedbackButton } from "@/components/FeedbackDialog";
 import { usePageMeta } from "@/hooks/usePageMeta";
+import { ANNOTATIONS_LIVE } from "@/lib/release";
 
 // Known issues in the Research Alpha files, each with what Beta changes. Owner rule: excluded samples and studies are
 // never listed, counted or linked here; the page states the inclusion criteria only.
@@ -26,13 +27,13 @@ const ISSUES: Issue[] = [
           15% of its available reads.
         </p>
         <p>
-          This lowers the number of cells called and the UMIs per cell. Against the authors' own Cell Ranger results, Alpha finds a
-          median of 73% of their cells.{" "}
+          This lowers the number of cells called and the UMIs per cell. Against the authors' own Cell Ranger results on 135
+          samples, Alpha finds a median of 65% of their cells, with a quarter of their UMIs per cell.{" "}
           <Link to="/benchmarking#alpha" className="text-primary underline underline-offset-2">See the measurements</Link>.
         </p>
       </>
     ),
-    beta: <p>Every read of every run is used, with no cap.</p>,
+    beta: <p>Beta goal: use every read of every run, with no cap.</p>,
   },
   {
     id: "counting",
@@ -47,7 +48,7 @@ const ISSUES: Issue[] = [
         <p>The spliced and unspliced layers are not suited to RNA velocity.</p>
       </>
     ),
-    beta: <p>Every molecule is counted once, as spliced, unspliced or ambiguous. Counts do not depend on the thread count.</p>,
+    beta: <p>Beta goal: count every molecule once, as spliced, unspliced or ambiguous, with counts that no longer depend on the thread count.</p>,
   },
   {
     id: "cell-calling",
@@ -61,33 +62,67 @@ const ISSUES: Issue[] = [
         <p>Every barcode with at least 100 reads is stored in the file, so you can call cells again with your own method.</p>
       </>
     ),
-    beta: <p>Modern droplet calling, benchmarked in public against independent truth.</p>,
+    beta: <p>Beta goal: modern droplet calling, benchmarked in public against independent truth.</p>,
   },
-  {
-    id: "not-in-alpha",
-    title: "Not in Alpha",
-    alpha: (
-      <>
-        <ul className="list-disc pl-5 space-y-1">
-          <li>Cell-type annotations.</li>
-          <li>Chromosomal sex and genetic ancestry.</li>
-          <li>Doublet and ambient-RNA estimates.</li>
-          <li>Mitochondrial DNA variants and heteroplasmy.</li>
-          <li>Germline genotypes.</li>
-        </ul>
-        <p>
-          Some layers made by earlier pipeline versions are known to be unreliable. They are not offered on the site, through the
-          API or the MCP server, or in downloads.
-        </p>
-      </>
-    ),
-    beta: (
-      <p>
-        Each annotation ships with a public benchmark. Genotypes are never released. Where derived information is useful, such as
-        donor-relative mtDNA heteroplasmy, it is released in a privacy-preserving form.
-      </p>
-    ),
-  },
+  ANNOTATIONS_LIVE
+    ? {
+        id: "annotations",
+        title: "Annotations in Alpha, and their accuracy",
+        alpha: (
+          <>
+            <ul className="list-disc pl-5 space-y-1.5">
+              <li>
+                <span className="font-medium">Chromosomal sex</span>, human and mouse: 98.1% of samples agree with the sex in their
+                GEO metadata (153 of 156; the 3 disagreements were GEO errors). Some cells stay "ambiguous".
+              </li>
+              <li>
+                <span className="font-medium">Cell type</span>, as Cell Ontology labels. Accuracy per study against curated labels:
+                compartment 0.84, lineage 0.75, cell type 0.43, subtype 0.32. The deeper levels are a preview.
+              </li>
+              <li>
+                <span className="font-medium">Genetic ancestry</span>, as continental HANCESTRO groups. Computed only for human donors
+                with enough genotype coverage, which is a minority of studies. Validated on donors simulated from 1000 Genomes and on a
+                small set of donors with self-reported ancestry. Mixed ancestry is reported as "admixed". No genotypes are published.
+              </li>
+            </ul>
+            <p>Doublet, ambient-RNA and mitochondrial DNA allele layers are not in Alpha.</p>
+            <p>
+              <Link to="/benchmarking#alpha-annotations" className="text-primary underline underline-offset-2">How accuracy was measured</Link>
+            </p>
+          </>
+        ),
+        beta: (
+          <p>
+            Beta goal: a trained cell-type classifier with calibrated probabilities, and a larger ancestry benchmark. Donor-relative
+            mtDNA heteroplasmy, released without genotypes, is being designed.
+          </p>
+        ),
+      }
+    : {
+        id: "not-in-alpha",
+        title: "Not in Alpha",
+        alpha: (
+          <>
+            <ul className="list-disc pl-5 space-y-1">
+              <li>Cell-type annotations.</li>
+              <li>Chromosomal sex and genetic ancestry.</li>
+              <li>Doublet and ambient-RNA estimates.</li>
+              <li>Mitochondrial DNA variants and heteroplasmy.</li>
+              <li>Germline genotypes.</li>
+            </ul>
+            <p>
+              Some layers made by earlier pipeline versions are known to be unreliable. They are not offered on the site or through
+              the API and MCP server. Some whole-study downloads still contain them; do not use them.
+            </p>
+          </>
+        ),
+        beta: (
+          <p>
+            Beta goal: annotations that each ship with a public benchmark. Genotypes are never released. Donor-relative mtDNA
+            heteroplasmy, released without genotypes, is being designed.
+          </p>
+        ),
+      },
   {
     id: "modalities",
     title: "Other modalities: partial or missing",
@@ -103,7 +138,7 @@ const ISSUES: Issue[] = [
         </ul>
       </>
     ),
-    beta: <p>Multimodal layers are added one by one, each with a public benchmark.</p>,
+    beta: <p>Beta goal: add multimodal layers one by one, each with a public benchmark.</p>,
   },
   {
     id: "coverage",
@@ -119,13 +154,13 @@ const ISSUES: Issue[] = [
         </p>
       </>
     ),
-    beta: <p>Strand and chemistry are tested on every sample. More samples and more species are added.</p>,
+    beta: <p>Beta goal: test strand and chemistry on every sample, and add more samples and species.</p>,
   },
   {
     id: "metadata",
     title: "Metadata: some labels are uncurated",
     alpha: <p>Some metadata from GEO, such as sex, tissue and disease labels, is not curated and may be wrong.</p>,
-    beta: <p>Curated metadata mapped to standard ontologies.</p>,
+    beta: <p>Beta goal: curated metadata mapped to standard ontologies.</p>,
   },
   {
     id: "two-numbers",
@@ -136,7 +171,7 @@ const ISSUES: Issue[] = [
         truth.
       </p>
     ),
-    beta: <p>The catalog is rebuilt from the files, so both give the same number.</p>,
+    beta: <p>Beta goal: rebuild the catalog from the files, so both give the same number.</p>,
   },
 ];
 

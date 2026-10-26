@@ -2,8 +2,8 @@ import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Check, Clock, ExternalLink, Minus } from "lucide-react";
 import { commitUrl } from "@/lib/benchmarks";
-import { loadAlpha, loadScbc, pct, times, type AlphaResult, type AlphaSource, type ScbcDoc } from "@/lib/alpha-benchmarks";
-import { MetricTable } from "@/components/benchmarks/BenchParts";
+import { loadAlphaPanel, loadScbc, pct, times, type AlphaResult, type AlphaSource, type ScbcDoc } from "@/lib/alpha-benchmarks";
+import { FigureChart, figureSupported, MetricTable } from "@/components/benchmarks/BenchParts";
 import { fmtInt } from "@/lib/catalog-display";
 
 /** One number with its label: the stat tile used across the Alpha panels. */
@@ -59,10 +59,10 @@ export function ScbcPanels({ doc }: { doc: ScbcDoc }) {
           scBaseCount (Arc Institute) processes 10x Genomics libraries only. Singlet also processes other droplet and plate-based
           protocols, and keeps every barcode so cells can be re-called.
         </p>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 max-w-3xl">
-          <Stat value={fmtInt(cov.singlet_non10x_samples)} label="samples from protocols scBaseCount does not process" detail="Drop-seq, inDrop, Seq-Well, BD Rhapsody, Parse, Smart-seq and others" />
-          <Stat value={fmtInt(cov.shared_samples)} label="samples processed by both atlases" detail="matched by SRA experiment" />
-        </div>
+        <p className="mt-4 max-w-3xl rounded border border-dashed border-border px-4 py-3 text-[13.5px] text-muted-foreground">
+          <span className="font-medium text-foreground">Coverage — updated after the Alpha release.</span> Sample counts for this
+          comparison are recomputed on the Alpha atlas once the catalog is loaded. Today's totals are in the census below.
+        </p>
         <div className="mt-4 overflow-x-auto max-w-3xl">
           <table className="w-full text-[13.5px]">
             <thead>
@@ -94,11 +94,33 @@ export function ScbcPanels({ doc }: { doc: ScbcDoc }) {
 
       <Panel title="Cell recovery against the authors' Cell Ranger results" id="alpha-cells">
         <div className="grid gap-3 sm:grid-cols-3">
-          <Stat value={pct(cc.singlet_median_recovery)} label="of the authors' cells found (median)" detail={`range ${pct(cc.singlet_recovery_range[0])}–${pct(cc.singlet_recovery_range[1])}; scBaseCount ${pct(cc.scbasecount_median_recovery)}`} />
-          <Stat value={`${pct(cc.singlet_precision_range[0])}–${pct(cc.singlet_precision_range[1])}`} label="of Singlet's cells are in the authors' sets" detail="precision, on correctly stranded samples" />
+          <Stat value={pct(cc.singlet_median_recovery)} label="of the authors' cells found (median)" detail={`${cc.n} samples; range ${pct(cc.singlet_recovery_range[0])}–${pct(cc.singlet_recovery_range[1])}; scBaseCount ${pct(cc.scbasecount_median_recovery)}`} />
+          <Stat value={`${pct(cc.singlet_precision_range[0])}–${pct(cc.singlet_precision_range[1])}`} label="of Singlet's cells are in the authors' sets" detail={`precision, the same ${cc.n} samples`} />
           <Stat value={times(dp.cell_ratio_median)} label="cells per sample, against scBaseCount (median)" detail={`${fmtInt(dp.samples)} shared human samples`} />
         </div>
-        <p className="mt-3 max-w-3xl text-[13.5px] text-muted-foreground">{cc.note}</p>
+        <div className="mt-4 overflow-x-auto max-w-3xl">
+          <table className="w-full text-[13.5px]">
+            <thead>
+              <tr className="border-b border-border text-left text-[12px] uppercase tracking-wider text-muted-foreground">
+                <th className="py-2 pr-4 font-medium">Sample</th>
+                <th className="py-2 pr-4 font-medium">Singlet recovery</th>
+                <th className="py-2 pr-4 font-medium">scBaseCount recovery</th>
+                <th className="py-2 font-medium">Singlet precision</th>
+              </tr>
+            </thead>
+            <tbody>
+              {cc.rows.map((r, i) => (
+                <tr key={i} className="border-b border-border/60 tabular">
+                  <td className="py-1.5 pr-4 text-foreground">{r.category}</td>
+                  <td className="py-1.5 pr-4">{pct(r.singlet_recovery)}</td>
+                  <td className="py-1.5 pr-4 text-muted-foreground">{pct(r.scbasecount_recovery)}</td>
+                  <td className="py-1.5 text-muted-foreground">{pct(r.singlet_precision)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="mt-3 max-w-3xl text-[13.5px] text-muted-foreground">Basis: {cc.basis}. {cc.note}</p>
       </Panel>
 
       <Panel title="Depth: UMIs per cell" id="alpha-depth">
@@ -169,7 +191,19 @@ function AlphaResultView({ result }: { result: AlphaResult }) {
     return (
       <>
         <p className="max-w-3xl text-[14.5px] text-foreground">{d.conclusion}</p>
-        <div className="mt-4"><MetricTable metrics={d.metrics} /></div>
+        {(d.figures ?? []).some(figureSupported) && (
+          <div className="mt-4 grid gap-4 lg:grid-cols-2">
+            {(d.figures ?? []).filter(figureSupported).slice(0, 2).map((f) => <FigureChart key={f.id} figure={f} />)}
+          </div>
+        )}
+        <div className="mt-4"><MetricTable metrics={d.metrics} pooledFirst /></div>
+        {d.caveats && d.caveats.length > 0 && (
+          <details className="mt-3 text-[13px] text-muted-foreground">
+            <summary className="cursor-pointer text-foreground">Caveats and methods</summary>
+            <ul className="mt-2 list-disc pl-5 space-y-1">{d.caveats.map((c) => <li key={c}>{c}</li>)}</ul>
+            <p className="mt-2 whitespace-pre-line">{d.methods.replace(/\*\*/g, "")}</p>
+          </details>
+        )}
         <SourceLine source={{ repo: "https://github.com/Singlet-Bio/singlet", commit: d.singlet.commit }} measured={d.generated_at.slice(0, 10)} />
       </>
     );
@@ -212,14 +246,22 @@ function AlphaResultView({ result }: { result: AlphaResult }) {
   );
 }
 
-/** One Alpha measurement that may not have results yet: "Benchmark running" until its JSON is published. */
-export function AlphaPendingPanel({ id, name, what }: { id: string; name: string; what: string }) {
-  const { data, isLoading } = useQuery({ queryKey: ["alpha-benchmark", id], queryFn: ({ signal }) => loadAlpha(id, signal), staleTime: 5 * 60_000 });
+/** One Alpha measurement panel: "Benchmark running" until at least one of its files is published. */
+export function AlphaPendingPanel({ id, name, what, files, note }: { id: string; name: string; what: string; files: readonly string[]; note?: ReactNode }) {
+  const { data, isLoading } = useQuery({ queryKey: ["alpha-benchmark", ...files], queryFn: ({ signal }) => loadAlphaPanel(files, signal), staleTime: 5 * 60_000 });
   if (isLoading) return <div className="h-32 rounded bg-secondary animate-pulse" aria-hidden="true" />;
-  if (!data) return <Running name={name} what={what} />;
+  if (!data?.length) return <Running name={name} what={what} />;
   return (
-    <Panel title={data.kind === "contract" ? data.doc.title : data.title} id={id}>
-      <AlphaResultView result={data} />
+    <Panel title={name} id={`alpha-${id}`}>
+      {note && <p className="mb-4 max-w-3xl text-[13.5px] text-muted-foreground">{note}</p>}
+      <div className="space-y-8">
+        {data.map((r, i) => (
+          <div key={i}>
+            <h4 className="mb-2 text-[14.5px] font-semibold text-foreground">{r.kind === "contract" ? r.doc.title : r.title}</h4>
+            <AlphaResultView result={r} />
+          </div>
+        ))}
+      </div>
     </Panel>
   );
 }
@@ -230,4 +272,38 @@ export function ScbcSection() {
   if (isLoading) return <div className="mt-8 h-64 rounded bg-secondary animate-pulse" aria-hidden="true" />;
   if (!data) return <div className="mt-8"><Running name="Alpha against scBaseCount and Cell Ranger" what="Coverage, cell recovery, depth and gene-profile agreement on shared samples." /></div>;
   return <ScbcPanels doc={data} />;
+}
+
+const ANNOTATION_DOC = "https://github.com/Singlet-Bio/singlet/blob/main/docs/cell_annotation.md";
+
+/** Per-cell labels in Alpha and their measured accuracy (singlet-bio docs/cell_annotation.md). Shown once the labels are served. */
+export function AnnotationsPanel() {
+  return (
+    <Panel title="Annotations" id="alpha-annotations">
+      <p className="max-w-3xl text-[14px] text-muted-foreground">
+        Per-cell labels from Singlet's validated labeller. Accuracy is measured on real data with independent labels; the evidence
+        is small, so read these as early numbers.
+      </p>
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Stat value="0.84" label="cell-type accuracy, compartment level" detail="16 studies with curated labels, per study" />
+        <Stat value="0.75" label="lineage level" detail="cell type 0.43, subtype 0.32: deeper levels are a preview" />
+        <Stat value="98.1%" label="of samples agree with GEO sex metadata" detail="153 of 156 called, of 157 samples; the 3 disagreements were GEO errors" />
+        <Stat value="22" label="real donors in the ancestry check" detail="with self-reported ancestry; donors simulated from 1000 Genomes corroborate only" />
+      </div>
+      <ul className="mt-4 max-w-3xl list-disc pl-5 space-y-1 text-[13.5px] text-muted-foreground">
+        <li>Cell type: Cell Ontology labels. A cell stops at the deepest level its evidence supports.</li>
+        <li>Chromosomal sex: human and mouse. Some cells stay "ambiguous".</li>
+        <li>
+          Genetic ancestry: continental HANCESTRO groups, only for human donors with enough genotype coverage, a minority of
+          studies. Mixed ancestry is reported as "admixed". No genotypes are published.
+        </li>
+      </ul>
+      <p className="mt-3 text-[12px] text-muted-foreground">
+        Source:{" "}
+        <a href={ANNOTATION_DOC} target="_blank" rel="noopener noreferrer" className="font-mono text-primary underline underline-offset-2">
+          docs/cell_annotation.md
+        </a>
+      </p>
+    </Panel>
+  );
 }

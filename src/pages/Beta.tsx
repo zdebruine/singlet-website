@@ -5,6 +5,7 @@ import Footer from "@/components/Footer";
 import { FeedbackButton } from "@/components/FeedbackDialog";
 import { BetaSignupForm } from "@/components/BetaSignupForm";
 import { usePageMeta } from "@/hooks/usePageMeta";
+import { ANNOTATIONS_LIVE, STORE_FORMAT_LIVE } from "@/lib/release";
 
 // Sneak peek of Research Beta, from Singlet-Bio/singlet docs/research-beta.md. Every item is a Beta goal, not a claim
 // about today's files. Measured progress lives on /benchmarking#beta.
@@ -18,37 +19,48 @@ interface Item {
 const ITEMS: Item[] = [
   {
     title: "Every read of every run",
-    body: "Each sample is aligned from all of its reads, across all of its sequencing runs. Strand and chemistry are tested on every sample before counting.",
+    body: "Beta goal: align each sample from all of its reads, across all of its sequencing runs, after testing its strand and chemistry.",
     today: "Alpha used the first run and at most 30M reads per sample.",
   },
   {
     title: "Every molecule counted once",
-    body: "Each molecule is assigned once, as spliced, unspliced or ambiguous, so the layers can be used for RNA velocity.",
+    body: "Beta goal: count each molecule once, as spliced, unspliced or ambiguous, so the layers can be used for RNA velocity and counts no longer depend on the thread count.",
     today: "Alpha can count some molecules twice.",
   },
   {
     title: "Modern droplet calling",
-    body: "Cells are separated from empty droplets with a modern caller that keeps low-RNA cells, benchmarked against independent truth. Every barcode is still stored.",
+    body: "Beta goal: separate cells from empty droplets with a modern caller that keeps low-RNA cells, benchmarked against independent truth. Every barcode is still stored.",
     today: "Alpha used a conservative knee filter.",
   },
+  ANNOTATIONS_LIVE
+    ? {
+        title: "Better annotations",
+        body: "Beta goal: a trained cell-type classifier (celltype_nn) with calibrated probabilities, and a larger ancestry benchmark.",
+        today: "Alpha has cell type, chromosomal sex and ancestry labels, with measured accuracy.",
+      }
+    : {
+        title: "Annotations, each with a public benchmark",
+        body: "Beta goal: cell type, chromosomal sex and genetic ancestry for every cell where the data allow, each with a public benchmark.",
+        today: "Alpha has no per-cell annotations.",
+      },
   {
     title: "Multimodal layers, each with a public benchmark",
-    body: "Antibody tags, hashtags, chromatin accessibility, spatial coordinates, CRISPR guides and immune receptor clonotypes are added one by one. Each ships with a public benchmark against the standard tools.",
+    body: "Beta goal: add antibody tags, hashtags, chromatin accessibility, spatial coordinates, CRISPR guides and immune receptor clonotypes one by one, each with a public benchmark against the standard tools.",
     today: "Alpha is transcriptomics only.",
   },
   {
     title: "Derived information without genotypes",
-    body: "Genotypes are never released. Where donor-level information is useful, a controlled-access, privacy-preserving path releases derived values instead: Hamming-distance or similarity matrices, lineage trees, and mtDNA heteroplasmy relative to each donor.",
+    body: "Genotypes are never released. Being designed: a controlled-access, privacy-preserving path that releases derived values instead, such as Hamming-distance or similarity matrices, lineage trees, and mtDNA heteroplasmy relative to each donor.",
     today: "Alpha releases no genotype or mtDNA variant data.",
   },
   {
     title: "Download only what you ask for",
-    body: "Per-request slicing: pick the samples, cells and layers you need (counts, spliced/unspliced, or USA mode) and download just those bytes.",
-    today: "Alpha serves whole samples and cell ranges.",
+    body: "Beta goal: per-request slicing, so you pick the layers you need (counts, spliced/unspliced, or USA mode) and download just those bytes.",
+    today: STORE_FORMAT_LIVE ? "Alpha serves whole samples and cell ranges." : "Alpha serves one file per study.",
   },
   {
     title: "More samples, more species, curated metadata",
-    body: "More studies and samples, more species, and metadata curated to standard ontologies for tissue, disease, cell type and development stage.",
+    body: "Beta goal: more studies and samples, more species, and metadata curated to standard ontologies for tissue, disease, cell type and development stage.",
     today: "Some Alpha metadata is uncurated.",
   },
 ];
@@ -67,8 +79,8 @@ const Beta = () => {
           <p className="text-[12.5px] font-medium uppercase tracking-wider text-primary">Estimated Q1 2027</p>
           <h1 className="mt-1 font-display text-3xl md:text-4xl font-bold tracking-tightest text-foreground">What's coming in Beta</h1>
           <p className="mt-3 text-[15px] text-muted-foreground">
-            Beta is a full re-run of every sample, on all of its reads, with a new, benchmarked engine. It uses the same per-sample
-            format as Alpha and is released at{" "}
+            Beta is a full re-run of every sample, on all of its reads, with a new, benchmarked engine
+            {STORE_FORMAT_LIVE ? ", in the same per-sample format as Alpha" : ""}. It will be released at{" "}
             <span className="font-mono text-foreground">beta.singlet.bio</span>. Alpha, the site you are on, is a research preview
             that is here to collect feedback. What you tell us shapes Beta.
           </p>

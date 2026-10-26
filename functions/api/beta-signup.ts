@@ -1,5 +1,5 @@
 /**
- * POST /api/beta-signup — the Beta sign-up form on /beta (D1 table `beta_signups`, schema/035_beta_signups.sql).
+ * POST /api/beta-signup — the Beta sign-up form on /beta (D1 table `beta_signups`, schema/037_beta_signups.sql).
  *
  * Body: { email, name?, institution?, role?, interests?, updates?: boolean, website? }
  * Anyone can sign up; each sender is limited to a few new sign-ups per hour. A signed-in visitor's account id is attached.

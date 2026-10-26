@@ -1,7 +1,7 @@
--- 035_beta_signups.sql — the Beta sign-up form on /beta (POST /api/beta-signup).
+-- 037_beta_signups.sql — the Beta sign-up form on /beta (POST /api/beta-signup).
 --
 -- Apply to production (singlet-catalog) before merging the code that uses it:
---   wrangler d1 execute singlet-catalog --remote --file=schema/035_beta_signups.sql
+--   wrangler d1 execute singlet-catalog --remote --file=schema/037_beta_signups.sql
 -- Every statement is idempotent. user_id references users(id) from 010_accounts.sql.
 --
 -- One row per email address (lower-cased). A repeat sign-up with the same address changes nothing, so a visitor cannot

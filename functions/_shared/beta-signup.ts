@@ -1,5 +1,5 @@
 /**
- * Beta sign-up form: validation and storage (schema/035_beta_signups.sql).
+ * Beta sign-up form: validation and storage (schema/037_beta_signups.sql).
  * Anyone may sign up; each sender is throttled by their identity subject, as for feedback (functions/_shared/feedback.ts).
  * One row per email address: a repeat sign-up changes nothing and answers the same way, so the form never reveals
  * whether an address is already on the list.

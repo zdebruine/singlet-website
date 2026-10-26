@@ -17,8 +17,6 @@
   "code": "bench/scbasecount/"
  },
  "coverage": {
-  "shared_samples": 22896,
-  "singlet_non10x_samples": 11265,
   "protocols": [
    {
     "protocol": "10x Genomics 3' and 5'",
@@ -76,15 +74,61 @@
  },
  "cell_calls": {
   "against": "the authors' deposited Cell Ranger matrices",
-  "singlet_median_recovery": 0.73,
+  "basis": "correctly stranded samples with an author matrix and a non-empty Singlet matrix",
+  "n": 7,
+  "singlet_median_recovery": 0.763,
   "singlet_recovery_range": [
-   0.2,
-   0.97
+   0.204,
+   0.971
   ],
-  "scbasecount_median_recovery": 0.99,
+  "scbasecount_median_recovery": 0.995,
   "singlet_precision_range": [
-   0.98,
-   1
+   0.983,
+   1.0
+  ],
+  "rows": [
+   {
+    "category": "human 3' v3",
+    "singlet_recovery": 0.971,
+    "scbasecount_recovery": 0.992,
+    "singlet_precision": 0.999
+   },
+   {
+    "category": "human 3' v2",
+    "singlet_recovery": 0.925,
+    "scbasecount_recovery": 0.995,
+    "singlet_precision": 1.0
+   },
+   {
+    "category": "mouse 3' v3",
+    "singlet_recovery": 0.204,
+    "scbasecount_recovery": 0.985,
+    "singlet_precision": 1.0
+   },
+   {
+    "category": "mouse 3' v3",
+    "singlet_recovery": 0.954,
+    "scbasecount_recovery": 0.996,
+    "singlet_precision": 1.0
+   },
+   {
+    "category": "mouse nuclei",
+    "singlet_recovery": 0.561,
+    "scbasecount_recovery": 0.995,
+    "singlet_precision": 0.983
+   },
+   {
+    "category": "Multiome GEX",
+    "singlet_recovery": 0.726,
+    "scbasecount_recovery": 0.819,
+    "singlet_precision": 0.986
+   },
+   {
+    "category": "rat",
+    "singlet_recovery": 0.763,
+    "scbasecount_recovery": 0.999,
+    "singlet_precision": 1.0
+   }
   ],
   "note": "Singlet's calls are precise but miss low-RNA cells: the knee filter is conservative and Alpha used a fraction of the reads."
  },

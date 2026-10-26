@@ -233,10 +233,13 @@ function ruleText(m: BenchMetric): string {
 
 const COLLAPSED_ROWS = 12;
 
-/** Gating metrics that fail first, then passing, then informational; long lists are collapsed. */
-export function MetricTable({ metrics }: { metrics: BenchMetric[] }) {
+/**
+ * Gating metrics that fail first, then passing, then informational; long lists are collapsed. `pooledFirst` lists the
+ * pooled (all-sample) rows before the per-stratum rows, each group still failing first.
+ */
+export function MetricTable({ metrics, pooledFirst = false }: { metrics: BenchMetric[]; pooledFirst?: boolean }) {
   const [all, setAll] = useState(false);
-  const rank = (m: BenchMetric) => (!isGating(m) ? 2 : m.pass === "fail" ? 0 : 1);
+  const rank = (m: BenchMetric) => (pooledFirst && m.dataset !== "pooled" ? 3 : 0) + (!isGating(m) ? 2 : m.pass === "fail" ? 0 : 1);
   const sorted = [...metrics].sort((a, b) => rank(a) - rank(b));
   const shown = all ? sorted : sorted.slice(0, COLLAPSED_ROWS);
   const gating = metrics.filter(isGating);
@@ -244,7 +247,7 @@ export function MetricTable({ metrics }: { metrics: BenchMetric[] }) {
     <div className="overflow-x-auto">
       <p className="mb-3 text-[13px] text-muted-foreground">
         {gating.filter((m) => m.pass === "pass").length} of {gating.length} gating metrics pass
-        {metrics.length > gating.length ? `, ${metrics.length - gating.length} informational` : ""}. Failing metrics are listed first.
+        {metrics.length > gating.length ? `, ${metrics.length - gating.length} informational` : ""}. {pooledFirst ? "Pooled results come first, then each stratum; failing metrics first within each." : "Failing metrics are listed first."}
       </p>
       <table className="w-full text-[13.5px]">
         <thead>

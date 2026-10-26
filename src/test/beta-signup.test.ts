@@ -7,7 +7,7 @@ import { onRequest } from "../../functions/api/beta-signup";
 
 // The real migration, with the users table it references.
 const SCHEMA =
-  `CREATE TABLE users (id TEXT PRIMARY KEY);\nINSERT INTO users VALUES ('u1');\n` + readFileSync("schema/035_beta_signups.sql", "utf8");
+  `CREATE TABLE users (id TEXT PRIMARY KEY);\nINSERT INTO users VALUES ('u1');\n` + readFileSync("schema/037_beta_signups.sql", "utf8");
 const db = () => createTestD1(SCHEMA);
 
 const input = (over: Record<string, unknown> = {}) => {
