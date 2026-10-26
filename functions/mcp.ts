@@ -89,7 +89,7 @@ Recommended order: search_datasets → assess_study or get_study → get_sample_
 
 A .singlet file is not just gene counts: it can also carry splice junctions and exon inclusion (percent spliced in), mitochondrial heteroplasmy and chrM variants, genotype-free donor demultiplexing, non-host (microbial/viral) abundance, V(D)J usage and per-cell doublet/cell-cycle/ambient annotations. Older bundles have fewer of these — call get_modalities before telling a user a modality is available.
 
-Every number and every "why" string is computed, not generated — quote them, don't paraphrase. Catalog cell counts can differ from the file's own QC; the file is the truth. Every tool call needs a free singlet.bio account: sign in when your client asks, or send a personal API key from ${ACCOUNT_URL}; calls are counted per account. Downloads themselves (the data.singlet.bio links) never need one. Searches the built-in vocabulary can read cost no AI tokens; a question that needs the AI reading uses your monthly AI token allowance (shown in \`_meta.allowance\`).`;
+Every number and every "why" string is computed, not generated — quote them, don't paraphrase. Catalog cell counts can differ from the file's own QC; the file is the truth. Every tool call needs a free singlet.bio account: sign in when your client asks, or send a personal API key from ${ACCOUNT_URL}; calls are counted per account. Downloads themselves (the data.singlet.bio links) never need one. Searches the built-in vocabulary can read cost no AI tokens; a question that needs the AI reading uses your AI allowance (200 readings a day and a monthly token allowance; the monthly allowance is shown in \`_meta.quota\`).`;
 
 
 /** Added to the instructions only once some study is served from v2 (see _shared/v2-gate). */
@@ -131,7 +131,7 @@ const TOOLS = [
     name: "search_datasets",
     title: "Search single-cell studies",
     description:
-      "Find public scRNA-seq studies (or individual samples) in the singlet.bio atlas from a plain-English question, e.g. \"microglia in the aging mouse brain\" or \"human PBMC covid-19 10x\". GEO accessions (GSE…, GSM…) are looked up directly. The question is turned into structured filters (organism, tissue, disease, assay, cell type) which are ANDed and never relaxed silently; when nothing matches, `suggestions` says what dropping one filter would return. Each result carries a deterministic `why` explaining the match, the download URL and one-line Python/R loaders. Needs a free singlet.bio account (sign in when connecting, or an API key from https://singlet.bio/account). Questions the built-in vocabulary can read (and repeats of any question) use no AI tokens; a question that needs a fresh AI reading uses your monthly AI token allowance. Remaining allowance is in `_meta.allowance`.",
+      "Find public scRNA-seq studies (or individual samples) in the singlet.bio atlas from a plain-English question, e.g. \"microglia in the aging mouse brain\" or \"human PBMC covid-19 10x\". GEO accessions (GSE…, GSM…) are looked up directly. The question is turned into structured filters (organism, tissue, disease, assay, cell type) which are ANDed and never relaxed silently; when nothing matches, `suggestions` says what dropping one filter would return. Each result carries a deterministic `why` explaining the match, the download URL and one-line Python/R loaders. Needs a free singlet.bio account (sign in when connecting, or an API key from https://singlet.bio/account). Questions the built-in vocabulary can read (and repeats of any question) use no AI tokens; a question that needs a fresh AI reading uses your monthly AI token allowance. Remaining monthly allowance is in `_meta.quota`.",
     inputSchema: {
       type: "object",
       properties: {
@@ -503,7 +503,7 @@ const DEFAULT_MCP_RATE_PER_MIN = 60;
 /** Requests are small JSON-RPC messages; anything bigger is refused before parsing. */
 const MAX_BODY_BYTES = 256 * 1024;
 const MAX_BATCH = 10;
-/** Only AI-interpreted search spends the daily budget. */
+/** Only AI-interpreted search spends the AI budgets (daily count and monthly tokens). */
 const METERED_TOOLS = new Set(["search_datasets"]);
 
 // ── Prompts ─────────────────────────────────────────────────────────────────

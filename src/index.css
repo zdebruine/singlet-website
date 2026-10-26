@@ -144,6 +144,18 @@
     color: var(--primary);
   }
 
+  /* Release label: the "alpha" pill next to the wordmark and the slim notice above the header */
+  .alpha-tag {
+    @apply inline-flex items-center rounded-full px-1.5 h-[17px] text-[10px] font-semibold uppercase tracking-wider leading-none whitespace-nowrap select-none cursor-default;
+    background: color-mix(in srgb, var(--primary) 8%, transparent);
+    border: 1px solid color-mix(in srgb, var(--primary) 30%, transparent);
+    color: var(--primary);
+  }
+  .alpha-banner {
+    background: color-mix(in srgb, var(--primary) 6%, var(--background, transparent));
+    border-bottom: 1px solid color-mix(in srgb, var(--primary) 18%, transparent);
+  }
+
   /* AI-derived UI only */
   .ai-chip {
     @apply inline-flex items-center gap-1 rounded px-2 h-6 text-xs font-medium whitespace-nowrap;

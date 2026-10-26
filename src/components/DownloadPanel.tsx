@@ -100,8 +100,8 @@ export function DownloadPanel({ accession, bundleUrl, bundleBytes, v2 = null, st
           <span className="flag self-start">File pending</span>
         )}
       </div>
-        // min-w-0 lets each block shrink to its column so long lines scroll inside
-        // the block instead of being clipped; the narrow sidebar soft-wraps instead.
+        {/* min-w-0 lets each block shrink to its column so long lines scroll inside
+            the block instead of being clipped; the narrow sidebar soft-wraps instead. */}
         <div className="p-3 space-y-2 [&>*]:min-w-0">
           <div className="inline-flex rounded border border-border overflow-hidden" role="group" aria-label="Language">
             {LANGS.map((l) => (

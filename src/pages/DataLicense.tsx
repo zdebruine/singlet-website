@@ -138,7 +138,7 @@ const DataLicense = () => {
                         <p className="text-sm text-muted-foreground leading-relaxed mb-4">
                             Citation is not required, but it helps others find the resource and supports continued work.
                             If you use the atlas or the <span className="font-mono">singlet</span> software in a publication,
-                            please cite Singlet Bio and include the release version (e.g., "Singlet Bio Release 2026-Q3").
+                            please cite Singlet Bio and the release you used: "Singlet Research Alpha (October 2026)".
                         </p>
                         <p className="text-sm text-muted-foreground leading-relaxed">
                             For specific datasets, include the original GEO accession number.
