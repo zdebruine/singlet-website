@@ -6,6 +6,8 @@ const LINKS: { label: string; to?: string; href?: string }[] = [
   { label: "Docs", to: "/docs" },
   { label: "MCP", to: "/docs/mcp" },
   { label: "About", to: "/about" },
+  { label: "Benchmarks", to: "/benchmarking" },
+  { label: "Roadmap", to: "/roadmap" },
   { label: "Cite", to: "/about#cite" },
   { label: "GitHub", href: GITHUB_REPO },
 ];
