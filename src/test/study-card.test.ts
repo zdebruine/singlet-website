@@ -294,7 +294,7 @@ describe("grounding", () => {
     const rows = rowsOf(input);
     const c = buildStudyCard(input, rows);
     const noFiles = { ...input, file_paths: [] };
-    expect(groundingProblems(c, noFiles, rows).join(" ")).toContain('layer "genetic sex" has no file');
+    expect(groundingProblems(c, noFiles, rows).join(" ")).toContain('layer "donor demultiplexing" has no file');
   });
 
   it("has no summary and is not grounded when no sample is approved", () => {
