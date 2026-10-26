@@ -1,0 +1,170 @@
+{
+ "title": "Atlas census, as of the Alpha release",
+ "conclusion": "At the Alpha release, the atlas held 7,040 studies, 47,702 samples and 228.0M cells. The median sample used 10% of its SRA reads: 89% of samples hit the 30M-read cap, and 37% had more than one run, of which only the first was used. These totals will be regenerated after the catalog load.",
+ "measured_at": "2026-10-26T15:29:00+00:00",
+ "headline": [
+  {
+   "label": "studies",
+   "value": "7,040",
+   "detail": "as of the Alpha release"
+  },
+  {
+   "label": "samples",
+   "value": "47,702",
+   "detail": "as of the Alpha release"
+  },
+  {
+   "label": "cells called",
+   "value": "228.0M",
+   "detail": "knee filter on the capped reads"
+  },
+  {
+   "label": "of each sample's SRA reads used (median)",
+   "value": "10%",
+   "detail": "p10–p90 4%–42%; 40,237 samples with both counts"
+  },
+  {
+   "label": "cells per sample (median)",
+   "value": "3,493",
+   "detail": "p10–p90 634–9,540"
+  },
+  {
+   "label": "genes per cell (median of sample medians)",
+   "value": "811",
+   "detail": "mapping rate median 83%"
+  }
+ ],
+ "tables": [
+  {
+   "title": "By species",
+   "columns": [
+    "Species",
+    "Studies",
+    "Samples",
+    "Cells"
+   ],
+   "rows": [
+    [
+     "human",
+     "3,199",
+     "27,222",
+     "120.4M"
+    ],
+    [
+     "mouse",
+     "3,569",
+     "18,675",
+     "98.6M"
+    ],
+    [
+     "human+mouse (barnyard)",
+     "213",
+     "1,499",
+     "7.6M"
+    ],
+    [
+     "zebrafish",
+     "36",
+     "115",
+     "0.4M"
+    ],
+    [
+     "macaque",
+     "9",
+     "96",
+     "0.6M"
+    ],
+    [
+     "rat",
+     "25",
+     "95",
+     "0.4M"
+    ]
+   ]
+  },
+  {
+   "title": "By chemistry (ten largest)",
+   "columns": [
+    "Chemistry",
+    "Studies",
+    "Samples",
+    "Cells"
+   ],
+   "rows": [
+    [
+     "10x 3' v3",
+     "4,712",
+     "28,842",
+     "162.7M"
+    ],
+    [
+     "10x 3' v2",
+     "1,624",
+     "11,740",
+     "45.4M"
+    ],
+    [
+     "10x 5' (GEO-curated; counted with a 3' label)",
+     "310",
+     "2,864",
+     "14.2M"
+    ],
+    [
+     "Drop-seq",
+     "125",
+     "875",
+     "0.2M"
+    ],
+    [
+     "10x Multiome GEX",
+     "178",
+     "743",
+     "3.2M"
+    ],
+    [
+     "10x Visium",
+     "79",
+     "507",
+     "1.2M"
+    ],
+    [
+     "CEL-seq2",
+     "148",
+     "445",
+     "0.2M"
+    ],
+    [
+     "BD Rhapsody",
+     "104",
+     "382",
+     "0.6M"
+    ],
+    [
+     "MARS-seq2",
+     "130",
+     "270",
+     "0.1M"
+    ],
+    [
+     "DNBelab C4",
+     "17",
+     "260",
+     "0.0M"
+    ]
+   ],
+   "note": "Chemistry labels are the catalog's; some 10x 5' libraries carry a 3' label."
+  }
+ ],
+ "caveats": [
+  "Totals are as of the Alpha release and will be regenerated after the catalog load.",
+  "Mouse samples had not been screened for wrong-strand counting when this census ran.",
+  "Cell counts are Singlet's knee-filter calls on reads capped at the first 30M of the first SRA run; they undercount against Cell Ranger and EmptyDrops.",
+  "Alpha matrices come from three builds of the atlas engine; all predate the molecule-count fix."
+ ],
+ "source": {
+  "repo": "https://github.com/Singlet-Bio/singlet",
+  "files": [
+   "bench/alpha/ (PR #52)"
+  ]
+ }
+}
