@@ -19,6 +19,10 @@ export function isWithheld(gse: string): boolean {
   return WITHHELD.has(gse);
 }
 
+export function isExcludedSample(gsm: string): boolean {
+  return EXCLUDED.has(gsm);
+}
+
 /** Germline or mtDNA allele data, for a path relative to samples/<GSM>/ (or a bare member name). */
 export function isPrivateMember(rel: string): boolean {
   if (rel.startsWith("donor/")) return !DONOR_PUBLIC.has(rel.slice("donor/".length));
