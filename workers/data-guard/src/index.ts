@@ -5,9 +5,12 @@
 // The Worker reads only the bundle's central directory, through the R2 binding, to see which members a request touches.
 import { classify, isExcludedSample, isWithheld, POLICY_VERSION } from "./policy";
 import { membersInRange, readZipIndex, type ZipIndex } from "./zip";
+import { isLegacyRetired, s1ManifestUrl } from "./retire";
 
 interface Env {
   DATA: R2Bucket;
+  /** D1 singlet-catalog, read only: the legacy-bundle retirement switch (./retire). Optional. */
+  DB?: D1Database;
 }
 
 const KEY_RE = /^\/data\/(GSE\d+)\/([^/]+)$/;
@@ -67,6 +70,14 @@ export default {
     if (!m) return fetch(request);
     const [, gse, file] = m;
     if (isWithheld(gse)) return text(404, "Not found");
+    // retired legacy file (s1_flags.legacy_bundles = 'retired' and a verified .s1 migration): gone for good, here is the replacement
+    if (request.method !== "OPTIONS" && (await isLegacyRetired(env, gse))) {
+      const manifest = s1ManifestUrl(gse);
+      return text(410, `This study is served in the .s1 format now: ${manifest} lists every sample object (singlet.load("${gse}") reads it).`, {
+        Link: `<${manifest}>; rel="alternate"; type="application/json"`,
+        "X-Legacy-Retired": "1",
+      });
+    }
     if (request.method === "OPTIONS" || request.method === "HEAD" || !file.endsWith(".singlet")) return fetch(request);
     if (request.method !== "GET") return text(405, "Method not allowed", { Allow: "GET, HEAD, OPTIONS" });
 
