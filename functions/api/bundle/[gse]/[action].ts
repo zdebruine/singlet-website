@@ -13,7 +13,8 @@
  *
  * Edge-cache keys carry a version: bump it whenever cached answers may be wrong (v2 of `entry`
  * and v2 of `samples` drop the recipes cached from stale offsets; `index` was already v2; index v4, samples v3 and
- * entry v3 are the Research Alpha rule: no withheld study, excluded sample or hidden layer).
+ * entry v3 are the Research Alpha rule: no withheld study, excluded sample or hidden layer; index v5, samples v4 and entry v4
+ * drop the answers cached before the .s1 catalog load and release policy c).
  *
  * Research Alpha (../../../_shared/alpha): a withheld study answers 404 like an unknown one, and a sample that is not
  * part of the atlas, or a layer Alpha does not offer, is not listed and has no entry.
@@ -88,7 +89,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, params, request, w
           return serverError(e, `bundle index ${gse}`, {}, 502);
         }
       },
-      { ttl: DAY, key: "v=4" } // one cache entry per study: extra query parameters must not mint new ones
+      { ttl: DAY, key: "v=5" } // one cache entry per study: extra query parameters must not mint new ones
     );
   }
 
@@ -104,7 +105,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, params, request, w
           return serverError(e, `bundle samples ${gse}`, {}, 502);
         }
       },
-      { ttl: DAY, key: "v=3" }
+      { ttl: DAY, key: "v=4" }
     );
   }
 
@@ -165,7 +166,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, params, request, w
         return serverError(e, `bundle entry ${gse}`, {}, 502);
       }
     };
-    return cachedJson(request, waitUntil, produce, { ttl: DAY, key: `v=3&path=${encodeURIComponent(path)}` });
+    return cachedJson(request, waitUntil, produce, { ttl: DAY, key: `v=4&path=${encodeURIComponent(path)}` });
   }
 
   return corsErr(`Unknown bundle action '${action}'. Use index, samples or entry.`, 400);
