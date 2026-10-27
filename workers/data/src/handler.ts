@@ -17,6 +17,8 @@
  * The handler is runtime-neutral (no `env`, no `caches` global): `index.ts` wires the bindings, the tests wire fakes.
  */
 
+import { isBlocked } from "./policy";
+
 export const CACHE_MAX_BYTES = 500 * 1024 * 1024;
 /**
  * Up to this size a cold full-object GET is teed (one R2 read feeds the client and the cache). Above it the client is
@@ -422,7 +424,7 @@ export async function handle(request: Request, deps: Deps): Promise<Response> {
   }
   const head = method === "HEAD";
   const cls = classify(request.url);
-  if (!cls) return jsonError(404, "not_found", "No such object.", {}, head);
+  if (!cls || isBlocked(cls.key)) return jsonError(404, "not_found", "No such object.", {}, head);
 
   const rangeHeader = request.headers.get("range");
   const ctx: Ctx = { deps, cls, head, headers: request.headers, rangeHeader, spec: parseRange(rangeHeader), alreadyCached: false };

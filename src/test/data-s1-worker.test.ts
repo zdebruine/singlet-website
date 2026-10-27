@@ -198,8 +198,8 @@ describe("classify", () => {
     expect(ok(SAMPLE)).toMatchObject({ key: SAMPLE_KEY, contentType: "application/octet-stream" });
     expect(ok(`/s1/ref/${HEX}.pack`)).toMatchObject({ key: `s1/ref/${HEX}.pack` });
     expect(ok("/s1/ref/index.json")).toMatchObject({ contentType: "application/json; charset=utf-8" });
-    expect(ok("/s1/m/GSE145370.json")).toMatchObject({ key: "s1/m/GSE145370.json" });
-    expect(ok("/s1/cells/GSE145370.cells")).toMatchObject({ key: "s1/cells/GSE145370.cells", contentType: "application/octet-stream" });
+    expect(ok("/s1/m/GSE100001.json")).toMatchObject({ key: "s1/m/GSE100001.json" });
+    expect(ok("/s1/cells/GSE100001.cells")).toMatchObject({ key: "s1/cells/GSE100001.cells", contentType: "application/octet-stream" });
   });
 
   it("serves the campaign's other public keys: label sidecars and the atlas cell index, with their cache classes; never the ledger", () => {
@@ -207,11 +207,11 @@ describe("classify", () => {
     expect(ok("/s1/cidx/current.json")).toMatchObject({ key: "s1/cidx/current.json" });
     expect(ok(`/s1/cidx/obj/${HEX}.scx`)).toMatchObject({ cacheControl: "public, max-age=31536000, immutable" });
     expect(ok("/s1/cidx/v/20261101T0000Z-0123abcd.json")).toMatchObject({ contentType: "application/json; charset=utf-8" });
-    expect(ok("/s1/m/GSE145370.json")!.cacheControl).toBe("public, max-age=300");
+    expect(ok("/s1/m/GSE100001.json")!.cacheControl).toBe("public, max-age=300");
     // the campaign's ledger and anything outside the grammar stay private (404)
-    expect(ok("/s1/ledger/GSE145370.jsonl")).toBeNull();
+    expect(ok("/s1/ledger/GSE100001.jsonl")).toBeNull();
     expect(ok(`/s1/a/GSM1/${HEX}.tsv`)).toBeNull();
-    expect(ok("/store/m/GSE145370.json")).toBeNull();
+    expect(ok("/store/m/GSE100001.json")).toBeNull();
   });
 
   it.each([
@@ -254,8 +254,8 @@ describe("classify", () => {
     expect(ok(`/s1/s/GSM1/${HEX}.s2`)).toMatchObject({ key: `s1/s/GSM1/${HEX}.s2` });
     expect(ok(`/v2/ref/${HEX}.pack`)).toMatchObject({ key: `v2/ref/${HEX}.pack` });
     expect(ok("/v2/ref/index.json")).toMatchObject({ key: "v2/ref/index.json" });
-    expect(ok("/v2/m/GSE145370.json")).toMatchObject({ key: "v2/m/GSE145370.json" });
-    expect(ok("/v2/cells/GSE145370.cells")).toMatchObject({ key: "v2/cells/GSE145370.cells" });
+    expect(ok("/v2/m/GSE100001.json")).toMatchObject({ key: "v2/m/GSE100001.json" });
+    expect(ok("/v2/cells/GSE100001.cells")).toMatchObject({ key: "v2/cells/GSE100001.cells" });
     expect(ok("/v2/cidx/current.json")).toMatchObject({ key: "v2/cidx/current.json" });
     expect(ok(`/v2/s/GSM1/${HEX}.s3`)).toBeNull();
     expect(ok("/v3/m/GSE1.json")).toBeNull();
@@ -351,8 +351,8 @@ describe("handle: headers by key class", () => {
     [SAMPLE, "application/octet-stream", "public, max-age=31536000, immutable", SAMPLE_KEY],
     [`/s1/ref/${HEX}.pack`, "application/octet-stream", "public, max-age=31536000, immutable", `s1/ref/${HEX}.pack`],
     ["/s1/ref/index.json", "application/json; charset=utf-8", "public, max-age=300", "s1/ref/index.json"],
-    ["/s1/m/GSE145370.json", "application/json; charset=utf-8", "public, max-age=300", "s1/m/GSE145370.json"],
-    ["/s1/cells/GSE145370.cells", "application/octet-stream", "public, max-age=300", "s1/cells/GSE145370.cells"],
+    ["/s1/m/GSE100001.json", "application/json; charset=utf-8", "public, max-age=300", "s1/m/GSE100001.json"],
+    ["/s1/cells/GSE100001.cells", "application/octet-stream", "public, max-age=300", "s1/cells/GSE100001.cells"],
   ];
 
   it.each(fixtures)("%s", async (path, type, cacheControl, key) => {
