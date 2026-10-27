@@ -150,7 +150,7 @@ const ISSUES: Issue[] = [
         </p>
         <p>
           Alpha includes RNA libraries that passed three checks: the reads match the expected strand orientation, the library is
-          gene expression (not antibody, hashtag, guide, V(D)J or chromatin), and the count matrix is not empty.
+          gene expression (not antibody, hashtag, guide, V(D)J or chromatin), and at least one cell was called from the count matrix.
         </p>
       </>
     ),
