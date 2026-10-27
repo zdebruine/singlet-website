@@ -123,6 +123,29 @@ describe("label facts from sample_cell_summary", () => {
     ]);
   });
 
+  it("ancestry: named by the labeller's groups when the index dictionary carries no names (production layout)", async () => {
+    const unnamed = {
+      dicts: {
+        cell_type: DIRECTORY.dicts.cell_type,
+        ancestry: [
+          { code: 0, id: null, label: "unknown", anc: [] },
+          { code: 1, id: "HANCESTRO:0005", label: "HANCESTRO:0005", anc: [] },
+          { code: 2, id: "HANCESTRO:0010", anc: [] },
+          { code: 3, id: "HANCESTRO:0306", label: "HANCESTRO:0306", anc: [] },
+        ],
+      },
+    };
+    expect(termsFromDirectory(unnamed).terms.filter((t) => t.subject === "ancestry").map((t) => t.label)).toEqual(["European", "African", "admixed ancestry"]);
+    const db = createTestD1(SCHEMA);
+    for (const f of buildLabelSqlFiles(parseSummaryCsv(CSV).rows, unnamed, { studiesPerFile: 1 }).files) db.raw.exec(f.sql);
+    const want = ["GSM1:European:HANCESTRO:0005", "GSM2:African:HANCESTRO:0010", "GSM2:admixed ancestry:HANCESTRO:0306"];
+    expect(facts(db, "ancestry_genetic").map((r) => `${r.gsm_id}:${r.value_norm}:${r.ontology_id}`)).toEqual(want);
+    // a label_term already holding the ids as names (loaded before this fix) never becomes the fact's name
+    db.raw.exec(`UPDATE label_term SET label = term_id WHERE subject = 'ancestry'`);
+    for (const st of labelFactsSql(["GSE1"])) db.raw.exec(st);
+    expect(facts(db, "ancestry_genetic").map((r) => `${r.gsm_id}:${r.value_norm}:${r.ontology_id}`)).toEqual(want);
+  });
+
   it("cell type: calls roll up to every ancestor in the labeller's vocabulary, never to 'cell'; small shares are left out", async () => {
     const { db } = await loaded();
     const ct = facts(db, "cell_type").filter((r) => r.gsm_id === "GSM1");
