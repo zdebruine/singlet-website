@@ -1,7 +1,8 @@
 /**
  * GET /sitemap.xml
- * Static routes plus one /study/<GSE> entry per study that has a downloadable
- * bundle (gse_meta.has_bundle = 1). Built from D1, served through the edge
+ * Static routes plus one /study/<GSE> entry per study a visitor can open and
+ * download: the same DOWNLOADABLE_SQL rule as the headline count, so a study
+ * with an empty or withheld file is not listed. Built from D1, served through the edge
  * cache for a day — the catalog changes roughly daily and crawlers re-fetch
  * far less often than that.
  *
@@ -10,6 +11,7 @@
  * limit; if the atlas ever grows past it this should become a sitemap index.
  */
 import { cachedJson } from "./_shared/cache";
+import { DOWNLOADABLE_SQL } from "./_shared/search-core";
 
 interface Env {
   DB: D1Database;
@@ -25,6 +27,9 @@ const STATIC_ROUTES: { path: string; changefreq: string; priority: string }[] = 
   { path: "/quickstart", changefreq: "weekly", priority: "0.8" },
   { path: "/docs", changefreq: "weekly", priority: "0.8" },
   { path: "/about", changefreq: "weekly", priority: "0.7" },
+  { path: "/known-issues", changefreq: "weekly", priority: "0.7" },
+  { path: "/beta", changefreq: "weekly", priority: "0.7" },
+  { path: "/benchmarking", changefreq: "weekly", priority: "0.7" },
   { path: "/data-license", changefreq: "yearly", priority: "0.3" },
   { path: "/terms", changefreq: "yearly", priority: "0.2" },
   { path: "/privacy", changefreq: "yearly", priority: "0.2" },
@@ -45,10 +50,10 @@ function lastmod(v: unknown): string | null {
 async function build(db: D1Database): Promise<string> {
   const rows = await db
     .prepare(
-      `SELECT gse_id, updated_at
-         FROM gse_meta
-        WHERE has_bundle = 1
-        ORDER BY gse_id
+      `SELECT m.gse_id, m.updated_at
+         FROM gse_meta m
+        WHERE ${DOWNLOADABLE_SQL}
+        ORDER BY m.gse_id
         LIMIT ?`
     )
     .bind(MAX_URLS - STATIC_ROUTES.length)
@@ -100,5 +105,5 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request, waitUntil
         });
       }
     },
-    { ttl: TTL_SECONDS, key: "v=1" }
+    { ttl: TTL_SECONDS, key: "v=2" }
   );

@@ -100,19 +100,19 @@ describe("the headline numbers", () => {
     expect([counted!.n, counted!.samples, counted!.cells]).toEqual([stats!.studies_with_files, stats!.samples_in_files, stats!.cells_in_files]);
   });
 
-  it("falls back to the catalog count for cells until n_usable_cells has been filled in", async () => {
+  it("never totals the catalog's raw barcode counts, even before n_usable_cells is filled in", async () => {
     const db = createTestD1(SCHEMA);
     await db.exec("UPDATE gse_meta SET n_usable_cells = NULL");
     const plan = planStudyQuery(parseSearchParams(new URL("https://singlet.bio/api/search")));
     const counted = await db.prepare(plan.countSql).bind(...plan.countParams).first<{ cells: number }>();
-    expect(counted!.cells).toBe(470); // n_cells of GSE1 + GSE5: a catalog number, never zero
+    expect(counted!.cells).toBe(0); // gse_meta.n_cells (raw barcodes, up to 400x the called cells) is not a cell count
   });
 
-  it("a search that includes unbuilt studies says it is counting catalog metadata", async () => {
+  it("a search that includes unbuilt studies counts catalog samples but only cells called in files", async () => {
     const db = createTestD1(SCHEMA);
     const plan = planStudyQuery(parseSearchParams(new URL("https://singlet.bio/api/search?has_bundle=0")));
     const counted = await db.prepare(plan.countSql).bind(...plan.countParams).first<{ n: number; samples: number; cells: number }>();
-    expect(counted).toEqual({ n: 5, samples: 8, cells: 1480 }); // n_done and n_cells over all five studies
+    expect(counted).toEqual({ n: 5, samples: 8, cells: 250 }); // n_done over all five studies; n_usable_cells 150 + 0 + 30 + 70
   });
 
   it("DOWNLOADABLE_SQL is the one definition, so studies in search = studies counted", async () => {

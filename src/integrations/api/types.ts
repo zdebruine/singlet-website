@@ -67,8 +67,8 @@ export interface StudyRow {
   bundle_bytes: number | null;
   /** Key of the legacy single file; null once it is retired (deleted). */
   bundle_key: string | null;
-  /** Set when the study is stored in the v2 per-sample layout; `legacy_available: false` means the single file is gone. */
-  v2?: StudyV2 | null;
+  /** Set when the study is stored in the per-sample layout; `legacy_available: false` means the single file is gone. */
+  s1?: StudyS1 | null;
   bundle_n_samples: number | null;
   file_cells: number | null;
   reference_build: string | null;
@@ -325,9 +325,9 @@ export interface CorpusStats {
 
 // ── Study / sample detail (/api/gse/:id, /api/gsm/:id) ──────────────────────
 
-/** A study stored in the v2 per-sample layout: one immutable object per sample plus a manifest. */
-export interface StudyV2 {
-  format: "singlet-v2";
+/** A study stored in the per-sample layout: one immutable object per sample plus a manifest. */
+export interface StudyS1 {
+  format: "singlet-s1";
   rev: string;
   manifest_url: string;
   n_samples: number;
@@ -353,8 +353,8 @@ export interface GseRow {
   bundle_url: string | null;
   /** Number of samples actually present in the bundle, when indexed by the packing job. */
   bundle_n_samples: number | null;
-  /** Set when the study is stored in the v2 per-sample layout. */
-  v2?: StudyV2 | null;
+  /** Set when the study is stored in the per-sample layout. */
+  s1?: StudyS1 | null;
   reference_build: string | null;
   /** Pipeline version that packed the file, from the bundle manifest. */
   singlet_version: string | null;
@@ -656,10 +656,10 @@ export interface BundleSampleFiles {
 export interface BundleIndexResponse {
   gse_id: string;
   bytes: number;
-  /** "singlet-v2" when the listing comes from the per-sample layout (one object per sample). */
-  format?: "singlet-v2";
+  /** "singlet-s1" when the listing comes from the per-sample layout (one object per sample). */
+  format?: "singlet-s1";
   manifest_url?: string | null;
-  /** v2 listings: more samples are listed than their files are. */
+  /** s1 listings: more samples are listed than their files are. */
   files_truncated?: boolean;
   reference_build: string | null;
   singlet_version: string | null;

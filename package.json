@@ -1,7 +1,7 @@
 {
   "name": "singlet-website",
   "private": true,
-  "license": "CC0-1.0",
+  "license": "MIT",
   "version": "0.0.0",
   "type": "module",
   "scripts": {
@@ -10,13 +10,15 @@
     "enrich:ingest": "esbuild scripts/enrich/ingest.ts --bundle --platform=node --format=esm --outfile=scripts/enrich/.run-ingest.mjs --log-level=error && node scripts/enrich/.run-ingest.mjs",
     "enrich:cards": "esbuild scripts/enrich/make-cards.ts --bundle --platform=node --format=esm --outfile=scripts/enrich/.run-cards.mjs --log-level=error && node scripts/enrich/.run-cards.mjs",
     "eval:search": "esbuild scripts/search-eval/run.ts --bundle --platform=node --format=esm --outfile=scripts/search-eval/.run.mjs --log-level=error && node scripts/search-eval/.run.mjs",
-    "check": "vitest run && tsc -p tsconfig.functions.json --noEmit && wrangler pages functions build --outdir /tmp/fnbuild && tsc -p workers/data-v2/tsconfig.json --noEmit",
+    "check": "vitest run && tsc -p tsconfig.functions.json --noEmit && wrangler pages functions build --outdir /tmp/fnbuild && tsc -p workers/data/tsconfig.json --noEmit",
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "alpha:sql": "esbuild scripts/alpha/load-exclusions.ts --bundle --platform=node --format=esm --outfile=scripts/alpha/.run-load.mjs --log-level=error && node scripts/alpha/.run-load.mjs",
+    "s1:labels-sql": "esbuild scripts/s1/load-labels.ts --bundle --platform=node --format=esm --outfile=scripts/s1/.run-load.mjs --log-level=error && node scripts/s1/.run-load.mjs"
   },
   "dependencies": {
     "@cloudflare/workers-types": "^4.20241205.0",

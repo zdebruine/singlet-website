@@ -12,6 +12,7 @@
  * A failed query is a 500, never an empty list: cachedJson stores only 200s,
  * so a D1 hiccup must not leave the panel empty for the whole TTL.
  */
+import { studyServedSql } from "../../../_shared/alpha";
 import { serverError } from "../../../_shared/errors";
 import { corsOk, corsErr, handleOptions } from "../../../_shared/cors";
 import { cachedJson } from "../../../_shared/cache";
@@ -78,7 +79,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, params, request, w
         await ensureCatalogColumns(env.DB).catch(() => undefined);
         const self = await env.DB.prepare(
           `SELECT g.pubmed_ids, m.organism_primary, m.tissue_groups, m.disease_groups
-             FROM gse g LEFT JOIN gse_meta m ON m.gse_id = g.id WHERE g.id = ?`
+             FROM gse g LEFT JOIN gse_meta m ON m.gse_id = g.id WHERE g.id = ? AND ${studyServedSql("g.id")}`
         )
           .bind(id)
           .first<Record<string, unknown>>();
@@ -92,10 +93,10 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, params, request, w
         for (const pmid of pmids) {
           if (out.length >= LIMIT) break;
           const res = await env.DB.prepare(
-            `SELECT g.id AS gse_id, g.title, m.organism_primary, m.tissue_groups, m.disease_groups, m.n_done, m.n_cells, m.year
+            `SELECT g.id AS gse_id, g.title, m.organism_primary, m.tissue_groups, m.disease_groups, m.n_done, m.n_usable_cells AS n_cells, m.year
                FROM gse g JOIN gse_meta m ON m.gse_id = g.id
               WHERE g.id != ? AND g.pubmed_ids LIKE ? AND ${DOWNLOADABLE_SQL}
-              ORDER BY m.n_cells DESC LIMIT ?`
+              ORDER BY COALESCE(m.n_usable_cells, 0) DESC LIMIT ?`
           )
             .bind(id, `%"${pmid}"%`, LIMIT)
             .all<Record<string, unknown>>();
@@ -115,12 +116,12 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, params, request, w
         const disease = firstReal(safeList(self.disease_groups));
         if (out.length < LIMIT && organism && tissue) {
           const res = await env.DB.prepare(
-            `SELECT m.gse_id, g.title, m.organism_primary, m.tissue_groups, m.disease_groups, m.n_done, m.n_cells, m.year
+            `SELECT m.gse_id, g.title, m.organism_primary, m.tissue_groups, m.disease_groups, m.n_done, m.n_usable_cells AS n_cells, m.year
                FROM gse_meta m JOIN gse g ON g.id = m.gse_id
               WHERE m.gse_id != ? AND m.organism_primary = ? AND ${DOWNLOADABLE_SQL}
                 AND EXISTS (SELECT 1 FROM json_each(m.tissue_groups) t WHERE t.value = ?)
                 ${disease ? `AND EXISTS (SELECT 1 FROM json_each(m.disease_groups) d WHERE d.value = ?)` : ""}
-              ORDER BY m.n_cells DESC LIMIT ?`
+              ORDER BY COALESCE(m.n_usable_cells, 0) DESC LIMIT ?`
           )
             .bind(...(disease ? [id, organism, tissue, disease, LIMIT * 2] : [id, organism, tissue, LIMIT * 2]))
             .all<Record<string, unknown>>();

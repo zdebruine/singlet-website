@@ -11,8 +11,8 @@ State on 2026-10-16. Everything below is on branches with open PRs; nothing is m
 ## Already done for you (this session)
 * Production D1 migrations 012 and 013 applied (spend tables, `n_usable_cells` backfilled).
 * Branch protection on `main` in the website and Singlet-Bio repos (PR + `build` check, no force push).
-* GitHub secret `SINGLET_INGEST_TOKEN` created in the website repo (value never printed). Its SHA-256 digest is
-  `92cffe38c7f1c494c8cd564aa8b97869099bf34f441d2e03d537e498cf9973e8`.
+* GitHub secret `SINGLET_INGEST_TOKEN` created in the website repo (value never printed). Its SHA-256 digest is the
+  Pages variable `INGEST_TOKEN_SHA256`; it is not recorded in this repository.
 * Pages **Preview**: `INGEST_TOKEN_SHA256` and `ANON_IP_SALT` set. Pages **Production**: `ANON_IP_SALT` set.
 * R2 bucket `singlet-data` CORS: GET/HEAD with Range from singlet.bio, www, the alpha preview and localhost:8080;
   exposes Content-Length, Content-Range, Accept-Ranges and ETag.
@@ -21,11 +21,13 @@ State on 2026-10-16. Everything below is on branches with open PRs; nothing is m
 ## Needs you, in this order
 
 ### 1. Production digest (one command, then merge)
+Set `INGEST_TOKEN_SHA256` in your shell first: the SHA-256 of the plain token held in the GitHub secret `SINGLET_INGEST_TOKEN`
+(`printf '%s' "$TOKEN" | sha256sum`). Never commit the digest or the token.
 Do this just before merging website #7, because the old code on `main` also reads this variable and the old
 ingest poster would start getting 401s:
 ```bash
 cd singlet-website
-printf '%s' 92cffe38c7f1c494c8cd564aa8b97869099bf34f441d2e03d537e498cf9973e8 \
+printf '%s' "$INGEST_TOKEN_SHA256" \
   | npx wrangler pages secret put INGEST_TOKEN_SHA256 --project-name singlet --env production
 ```
 Anything that posts to `/api/ingest/*` (the Purdue jobs, the dashboard) must send the token behind this digest.

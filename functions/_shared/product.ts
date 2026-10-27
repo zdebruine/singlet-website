@@ -24,10 +24,11 @@
  * Failures throw ProductError (code, message, HTTP status, extra fields); the
  * routes turn it into {error, message, ...extra}. Anything else is a 500.
  */
+import { withheldAmong } from "./alpha";
 import { CORS_HEADERS } from "./cors";
 import { sha256Hex, timingSafeEqual } from "./hash";
 import { nowIso } from "./session";
-import { downloadUrl, studyV2Map } from "./file-facts";
+import { downloadUrl, studyS1Map } from "./file-facts";
 
 export const PROJECT_CAP = 5;
 export const WORKSPACE_CAP = 3;
@@ -463,12 +464,15 @@ export async function getCohort(ctx: ProductCtx, uid: string | null, body: Produ
       ).results
     : [];
   // Where each public study's file is: the legacy single file while it exists, the v2 manifest once it is retired.
-  const rows = (items.results ?? []) as Record<string, unknown>[];
-  const facts = await studyV2Map(db, rows.map((r) => r.public_gse_id).filter((g): g is string => typeof g === "string" && !!g));
+  // A withheld public study (./alpha) is not part of the atlas: it is left out of the cohort as listed.
+  const all = (items.results ?? []) as Record<string, unknown>[];
+  const withheld = await withheldAmong(db, all.map((r) => r.public_gse_id).filter((g): g is string => typeof g === "string" && !!g));
+  const rows = all.filter((r) => !(typeof r.public_gse_id === "string" && withheld.has(r.public_gse_id)));
+  const facts = await studyS1Map(db, rows.map((r) => r.public_gse_id).filter((g): g is string => typeof g === "string" && !!g));
   const withFiles = rows.map((r) => {
     const gse = typeof r.public_gse_id === "string" && r.public_gse_id ? r.public_gse_id : null;
-    const v2 = gse ? (facts.get(gse) ?? null) : null;
-    return gse ? { ...r, file_url: downloadUrl(gse, v2), format: v2 ? v2.format : "singlet-v1" } : r;
+    const s1 = gse ? (facts.get(gse) ?? null) : null;
+    return gse ? { ...r, file_url: downloadUrl(gse, s1), format: s1 ? s1.format : "singlet-v1" } : r;
   });
   return { cohort: publicCohort(c), items: withFiles, comments: comments ?? [], can_edit: uid !== null && uid === c.owner_id };
 }

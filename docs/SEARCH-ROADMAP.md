@@ -11,7 +11,7 @@ Repositories involved:
 | `zdebruine/singlet-website` (public, this repo) | catalog schema, enrichment ingest, search API, MCP server, site |
 | `Singlet-Bio/singlet` (public) | Python/R clients: cohort loading, partial reads |
 | `singlet-agents` (private) | batch jobs on Clipper (enrichment runs, phenotype runs), the cell phenotype engine (`feat/cell-phenotype`) |
-| `singlet-cloud` (private) | paid layer; the conversational scoping agent and large cohort exports land here once the public primitives exist |
+| `singlet-cloud` (private) | the Workbench, with a free academic allowance; the conversational scoping agent and large cohort exports land here once the public primitives exist |
 
 ## 1. Where search stands today
 
@@ -25,7 +25,7 @@ What exists (all in `functions/_shared/`):
 - `nl-search-core.ts`: only the interpreted organism is a hard filter; everything else is a ranking signal.
   Zero results produce "drop this filter" suggestions.
 - `conditions.ts`: per-study condition keys parsed from `gsm.characteristics` (2 to 12 distinct values).
-- MCP: 14 tools, `search_datasets` fronting `/api/nl-search`; `get_partial_download` gives byte ranges for one file.
+- MCP: 17 tools, `search_datasets` fronting `/api/nl-search`; `get_partial_download` gives byte ranges for one file.
 - Eval: `scripts/search-eval` with 39 keyword and 25 sentence queries; production flow scores 26/39 on the keyword set.
 
 What the live catalog holds (production D1, 2026-10-20):
@@ -107,10 +107,10 @@ Query shapes the system must handle, with examples drawn from the personas above
 5. **Explain every inclusion and exclusion.** Per study and per sample: which facts matched, which filter
    excluded it, with the evidence string. Low QC, reference mismatch and the QC tiers keep their current
    semantics (`docs/QC.md`).
-6. **Public primitives, paid conversation.** Enrichment, the cohort query executor, counts, manifests and
+6. **Public primitives, Workbench conversation.** Enrichment, the cohort query executor, counts, manifests and
    the MCP tools are catalog infrastructure and belong on singlet.bio (CC0 data, open code). The multi-turn
    scoping agent, large cohort exports materialised on Clipper, and anything that spends model tokens per
-   turn beyond the free daily quota run in singlet-cloud on the same primitives.
+   turn beyond the free daily quota run in the Workbench (free academic allowance) on the same primitives.
 
 ## 4. Metadata: what to extract, how to store it, how to trust it
 
@@ -215,7 +215,7 @@ The engine is proprietary and stays in `singlet-agents`. What crosses into the p
   bundle, which keeps published files immutable and is the recommended first step.
 - In D1, per sample: `cell_pheno_summary(gsm_id, label_id, n_cells, n_conf80, pheno_version)` and per
   study roll-ups in `gse_meta` (`cell_labels` JSON, `n_labeled_cells`). This is what cohort queries count.
-- Whether the per-cell labels are published CC0 in the public files or stay a Cloud feature is a business
+- Whether the per-cell labels are published CC0 in the public files or stay a Workbench feature is a
   decision to make before task T13 starts; the catalog counts can be public either way.
 
 Can we reliably detect what the user wants in cell types? Yes at the ontology level: the query term maps to a
@@ -295,7 +295,7 @@ density. Cells are columns. So:
    `singlet.load(cohort=...)` in the Python client, and `singlet_load_cohort()` in R, fetch the ranges in
    parallel (free egress from the public domain), decode the chunks, keep the selected columns, and return one
    AnnData/Seurat object with obs columns filled from `sample_attr` and the labels. Large cohorts
-   (hundreds of studies) are materialised as h5ad on Clipper by a Cloud job from the same manifest.
+   (hundreds of studies) are materialised as h5ad on Clipper by a Workbench job from the same manifest.
 4. **Caching.** Manifests are deterministic for (query, catalog version), so they are cached in the Cache
    API keyed by the query hash plus `extractor_version` + `pheno_version`. Popular cohorts (PBMC healthy
    adult, all microglia, all cardiomyocytes) can later be pre-sliced into their own `.singlet` objects.
@@ -504,14 +504,14 @@ Each task names the files it owns; two tasks never own the same file.
 
 ## 9. Decisions needed before the agents start
 
-1. Publish per-cell phenotype labels in the public files (CC0) or keep them Cloud-only with public counts.
+1. Publish per-cell phenotype labels in the public files (CC0) or keep them in the Workbench only, with public counts.
 2. Accept the ontology set in 4.3 (UBERON, CL, MONDO, HANCESTRO, EFO, PATO, ChEBI) and the rule that the
    28 tissue groups and 12 disease groups become derived roll-ups.
 3. Model-inferred facts count in default searches at confidence ≥ 0.8 with a visible badge (recommended),
    or declared facts only by default.
 4. Enrichment model and budget: Haiku 5.5 via the Anthropic API from Clipper (recommended, roughly
    $100 to $200 for the full catalog on the first pass at the measured per-study cost), or Workers AI.
-5. The public / Cloud split in section 3 point 6.
+5. The public / Workbench split in section 3 point 6.
 
 ## 10. Session brief for the orchestrator
 

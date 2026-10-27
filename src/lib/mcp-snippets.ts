@@ -1,7 +1,7 @@
 // Shared MCP config snippets used by /docs, /docs/mcp and /quickstart.
 export const MCP_URL = "https://singlet.bio/mcp";
 
-/** With no key: search runs at the 10/day anonymous allowance; every tool but save_cohort (and get_cohort on a private cohort) works. */
+/** With no key: the client signs in when it connects (OAuth). Without sign-in or a key, initialize and every tools/call answer 401. */
 export const claudeDesktopConfigNoKey = `{
   "mcpServers": {
     "singlet": {

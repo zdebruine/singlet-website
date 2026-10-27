@@ -13,7 +13,9 @@
  * 100-bound-parameter limit.
  */
 import { safeList } from "./json";
-import { attachFileFacts, type StudyV2 } from "./file-facts";
+import { sampleServedSql, studyServedSql } from "./alpha";
+import { LABEL_FILTERS, LABEL_FILTER_FIELDS, labelMatchSql, normalizeLabelValues, type LabelFilterField } from "./s1-labels";
+import { attachFileFacts, type StudyS1 } from "./file-facts";
 import { parseCharacteristics, summarizeConditions, type ConditionSummary } from "./conditions";
 import { cellCountVerdict, isSuspectStudyCells, type CellCountVerdict } from "./suspect-cells";
 import {
@@ -41,6 +43,10 @@ export interface SearchFilters {
   disease_group: string[];
   assay_family: string[];
   cell_type: string[];
+  /** .s1 cell labels (./s1-labels): genetic sex, genetic ancestry and labelled cell type (CL id or label), from the label facts. */
+  sex_genetic: string[];
+  ancestry_genetic: string[];
+  cell_type_label: string[];
   min_cells: number | null;
   has_bundle: boolean | null;
   /** Count and list samples flagged low QC too (they are left out by default). */
@@ -115,8 +121,10 @@ export interface StudyRow {
   bundle_bytes: number | null;
   /** Key of the legacy single file; null when it is retired (deleted) or never existed. */
   bundle_key: string | null;
-  /** Set when the study is served from the v2 per-sample layout (manifest URL; whether the legacy file still exists). */
-  v2?: StudyV2 | null;
+  /** Set when the study is served from the per-sample layout (manifest URL; whether the legacy file still exists). */
+  s1?: StudyS1 | null;
+  /** DUAL: alias of `s1`. */
+  v2?: StudyS1 | null;
   bundle_n_samples: number | null;
   file_cells: number | null;
   reference_build: string | null;
@@ -162,8 +170,10 @@ export interface SampleRow {
   source: string | null;
   characteristics: Record<string, string>;
   has_bundle: boolean;
-  /** The study's v2 block when it is served from v2: where its files are once the legacy file is gone. */
-  v2?: StudyV2 | null;
+  /** The study's s1 block when it is served from s1: where its files are once the legacy file is gone. */
+  s1?: StudyS1 | null;
+  /** DUAL: alias of `s1`. */
+  v2?: StudyS1 | null;
   year: number | null;
   score: number | null;
 }
@@ -207,9 +217,16 @@ export interface Ctx {
 export const DEFAULT_LIMIT = 20;
 export const MAX_LIMIT = 200;
 export const MAX_EXPORT = 5000;
-/** Per-sample cap applied when ranking by cells so plate-protocol artifacts don't dominate. */
-const CAP_CELLS_PER_SAMPLE = 250_000;
-const CAPPED_STUDY_CELLS = `MIN(m.n_cells, ${CAP_CELLS_PER_SAMPLE} * MAX(m.n_done, 1))`;
+/**
+ * Cells a study holds, as everything public counts them: cells called in its file's samples that passed QC (gse_meta.n_usable_cells,
+ * excluded samples left out). The catalog's n_cells is raw barcodes, up to 400x higher, and is never shown or ranked on.
+ */
+const FILE_CELLS = "COALESCE(m.n_usable_cells, 0)";
+const CAPPED_STUDY_CELLS = FILE_CELLS;
+/** A sample's cells: cells called in the file (sample_qc), null when the file holds none for it. */
+const SAMPLE_FILE_CELLS = "(SELECT q.n_cells_called FROM sample_qc q WHERE q.gsm_id = s.gsm_id)";
+/** fts_gsm rows of samples that are not part of the atlas do not make a study or sample match. */
+const FTS_GSM_SERVED = "gsm_id NOT IN (SELECT gsm_id FROM alpha_exclusions)";
 const MAX_TERMS = 6;
 const RANKED_CANDIDATE_LIMIT = 200;
 const ABSTRACT_CHARS = 300;
@@ -369,6 +386,9 @@ export function emptyFilters(): SearchFilters {
     disease_group: [],
     assay_family: [],
     cell_type: [],
+    sex_genetic: [],
+    ancestry_genetic: [],
+    cell_type_label: [],
     min_cells: null,
     has_bundle: null,
     include_low_qc: false,
@@ -408,6 +428,9 @@ export function parseSearchParams(url: URL): SearchParams {
     disease_group: multi(url, "disease_group"),
     assay_family: multi(url, "assay_family"),
     cell_type: multi(url, "cell_type"),
+    sex_genetic: multi(url, "sex_genetic"),
+    ancestry_genetic: multi(url, "ancestry_genetic"),
+    cell_type_label: multi(url, "cell_type_label"),
     min_cells: intOrNull(url.searchParams.get("min_cells")),
     has_bundle,
     include_low_qc: bool("include_low_qc") === true,
@@ -463,6 +486,9 @@ export function normalizeFilters<T extends SearchFilters>(f: T, rules: VocabRule
       disease_group: group("disease_group", f.disease_group),
       assay_family: group("assay_family", f.assay_family),
       cell_type: uniq(f.cell_type.map((v) => v.trim().toLowerCase()).filter(Boolean)),
+      sex_genetic: normalizeLabelValues(f.sex_genetic ?? []),
+      ancestry_genetic: normalizeLabelValues(f.ancestry_genetic ?? []),
+      cell_type_label: normalizeLabelValues(f.cell_type_label ?? []),
     },
     dropped,
   };
@@ -478,6 +504,7 @@ export function canonicalQuery(p: SearchParams | (SearchFilters & Partial<Search
   add("disease_group", p.disease_group);
   add("assay_family", p.assay_family);
   add("cell_type", p.cell_type);
+  for (const k of LABEL_FILTER_FIELDS) add(k, p[k] ?? []);
   add("reference_build", p.reference_build);
   add("protocol", p.protocol);
   if (p.min_cells != null) sp.set("min_cells", String(p.min_cells));
@@ -507,6 +534,7 @@ export function hasAnyFilter(f: SearchFilters): boolean {
     f.disease_group.length > 0 ||
     f.assay_family.length > 0 ||
     f.cell_type.length > 0 ||
+    LABEL_FILTER_FIELDS.some((k) => (f[k]?.length ?? 0) > 0) ||
     f.min_cells != null ||
     f.year_min != null ||
     f.year_max != null
@@ -641,7 +669,7 @@ export interface Built {
 
 export interface StudyWhereOpts {
   /** Facet field whose own constraint should be skipped (contextual facet counts). */
-  exclude?: ArrayFilterField | "year" | "min_cells" | "q" | "reference_build" | "protocol" | "file_samples" | "file_cells" | "file_size";
+  exclude?: ArrayFilterField | LabelFilterField | "year" | "min_cells" | "q" | "reference_build" | "protocol" | "file_samples" | "file_cells" | "file_size";
   /** Restrict to these gse_ids (JSON array string is built here). */
   gseIds?: string[] | null;
 }
@@ -670,25 +698,34 @@ export function buildStudyWhere(f: SearchFilters, opts: StudyWhereOpts = {}): Bu
       for (const value of f.cell_type) {
         const match = cellTypeMatch([value]);
         if (match) {
-          clauses.push(`m.gse_id IN (SELECT gse_id FROM fts_gsm WHERE fts_gsm MATCH ?)`);
+          clauses.push(`m.gse_id IN (SELECT gse_id FROM fts_gsm WHERE fts_gsm MATCH ? AND ${FTS_GSM_SERVED})`);
           params.push(match);
         }
       }
     } else {
       const match = cellTypeMatch(f.cell_type);
       if (match) {
-        clauses.push(`m.gse_id IN (SELECT gse_id FROM fts_gsm WHERE fts_gsm MATCH ?)`);
+        clauses.push(`m.gse_id IN (SELECT gse_id FROM fts_gsm WHERE fts_gsm MATCH ? AND ${FTS_GSM_SERVED})`);
         params.push(match);
       } else {
         clauses.push("0");
       }
     }
   }
+  for (const k of LABEL_FILTER_FIELDS) {
+    const vals = f[k] ?? [];
+    if (!vals.length || ex === k) continue;
+    const m = labelMatchSql("sl", "value", vals);
+    clauses.push(`m.gse_id IN (SELECT sl.gse_id FROM study_label sl WHERE sl.attr = '${LABEL_FILTERS[k]}' AND ${m.sql})`);
+    params.push(...m.params);
+  }
   if (f.min_cells != null && ex !== "min_cells") {
-    clauses.push("m.n_cells >= ?");
+    clauses.push(`${FILE_CELLS} >= ?`);
     params.push(f.min_cells);
   }
   if (f.has_bundle === true) clauses.push(downloadableSql(f.include_low_qc));
+  // Withheld studies are not part of the atlas, whatever else is asked (downloadableSql says the same).
+  else clauses.push(studyServedSql("m.gse_id"));
   if (f.year_min != null && ex !== "year") {
     clauses.push("m.year >= ?");
     params.push(f.year_min);
@@ -702,7 +739,7 @@ export function buildStudyWhere(f: SearchFilters, opts: StudyWhereOpts = {}): Bu
     params.push(f.min_file_samples);
   }
   if (f.min_file_cells != null && ex !== "file_cells") {
-    clauses.push("COALESCE((SELECT SUM(q.n_cells_called) FROM sample_qc q WHERE q.gse_id = m.gse_id), 0) >= ?");
+    clauses.push(`${f.include_low_qc ? `${FILE_CELLS} + COALESCE(m.n_lowqc_cells, 0)` : FILE_CELLS} >= ?`);
     params.push(f.min_file_cells);
   }
   const multiExists = (values: string[], mode: "any" | "all" | undefined, sql: string) => {
@@ -721,7 +758,7 @@ export function buildStudyWhere(f: SearchFilters, opts: StudyWhereOpts = {}): Bu
     WHEN lower(q.protocol) LIKE '%v3%' THEN '10xv3'
     ELSE 'other' END`;
   if (ex !== "protocol") multiExists(f.protocol, f.match_mode.protocol,
-    `SELECT ${protocolExpr} AS value FROM sample_qc q WHERE q.gse_id = m.gse_id AND ${protocolExpr} IN (SELECT value FROM json_each(?))`);
+    `SELECT ${protocolExpr} AS value FROM sample_qc q WHERE q.gse_id = m.gse_id AND ${sampleServedSql("q.gsm_id")} AND ${protocolExpr} IN (SELECT value FROM json_each(?))`);
   if (f.has_pubmed === true) clauses.push("EXISTS (SELECT 1 FROM gse gx WHERE gx.id = m.gse_id AND gx.pubmed_ids IS NOT NULL AND gx.pubmed_ids NOT IN ('', '[]'))");
   if (f.max_file_bytes != null && ex !== "file_size") {
     clauses.push("EXISTS (SELECT 1 FROM gse gx WHERE gx.id = m.gse_id AND gx.r2_bundle_bytes <= ?)");
@@ -763,11 +800,21 @@ export function buildSampleWhere(f: SearchFilters, opts: StudyWhereOpts = {}): B
       clauses.push("0");
     }
   }
+  for (const k of LABEL_FILTER_FIELDS) {
+    const vals = f[k] ?? [];
+    if (!vals.length || ex === k) continue;
+    const m = labelMatchSql("la", "value_norm", vals);
+    clauses.push(`s.gsm_id IN (SELECT la.gsm_id FROM sample_attr la WHERE la.source = 'pipeline' AND la.attr = '${LABEL_FILTERS[k]}' AND ${m.sql})`);
+    params.push(...m.params);
+  }
   if (f.min_cells != null && ex !== "min_cells") {
-    clauses.push("s.n_cells >= ?");
+    clauses.push(`${SAMPLE_FILE_CELLS} >= ?`);
     params.push(f.min_cells);
   }
+  // Samples that are not part of the atlas, and every sample of a withheld study, are never listed.
+  clauses.push(sampleServedSql("s.gsm_id"));
   if (f.has_bundle === true) clauses.push(downloadableSql(f.include_low_qc));
+  else clauses.push(studyServedSql("s.gse_id"));
   // Samples removed by QC (tier 2) are never listed; low-QC ones (tier 1) only when asked for.
   clauses.push(`NOT EXISTS (SELECT 1 FROM sample_qc qq WHERE qq.gsm_id = s.gsm_id AND qq.qc_tier >= ${f.include_low_qc ? 2 : 1})`);
   // Default sample results list approved samples only: processed, with count data in the file.
@@ -795,7 +842,7 @@ export function buildSampleWhere(f: SearchFilters, opts: StudyWhereOpts = {}): B
 const HITS_CTE = `
   fg AS (SELECT id AS gse_id, rank AS s FROM fts_gse WHERE fts_gse MATCH ? AND ${RANK_GSE}),
   fs AS (SELECT gse_id, MIN(rank) AS s, COUNT(*) AS n
-           FROM fts_gsm WHERE fts_gsm MATCH ? AND ${RANK_GSM}
+           FROM fts_gsm WHERE fts_gsm MATCH ? AND ${RANK_GSM} AND ${FTS_GSM_SERVED}
           GROUP BY gse_id),
   hits AS (
     SELECT gse_id, MIN(s_gse) AS s_gse, MIN(s_gsm) AS s_gsm, MAX(n_match) AS n_match FROM (
@@ -814,7 +861,7 @@ export async function studyHitIds(db: D1Database, match: string): Promise<string
     .prepare(
       `SELECT id AS gse_id FROM fts_gse WHERE fts_gse MATCH ?1
        UNION
-       SELECT DISTINCT gse_id FROM fts_gsm WHERE fts_gsm MATCH ?1`
+       SELECT DISTINCT gse_id FROM fts_gsm WHERE fts_gsm MATCH ?1 AND ${FTS_GSM_SERVED}`
     )
     .bind(match)
     .all<{ gse_id: string }>();
@@ -863,16 +910,16 @@ interface StudyDbRow {
 
 /**
  * "Downloadable": a file exists, it holds at least one sample that passed QC (n_usable_samples counts those; low-QC
- * samples are in n_lowqc_samples), and the reference matches the species. With `includeLow`, a study whose only
+ * samples are in n_lowqc_samples), the reference matches the species, and the study is not withheld (./alpha). With `includeLow`, a study whose only
  * samples are low QC counts too.
  */
 export function downloadableSql(includeLow = false): string {
   const samples = includeLow ? "COALESCE(m.n_usable_samples, 1) + COALESCE(m.n_lowqc_samples, 0)" : "COALESCE(m.n_usable_samples, 1)";
-  return `(m.has_bundle = 1 AND ${samples} > 0 AND COALESCE(m.reference_mismatch, 0) = 0)`;
+  return `(m.has_bundle = 1 AND ${samples} > 0 AND COALESCE(m.reference_mismatch, 0) = 0 AND ${studyServedSql("m.gse_id")})`;
 }
 export const DOWNLOADABLE_SQL = downloadableSql(false);
 
-/** Cells in the file: samples that passed QC, plus the low-QC ones when asked (removed samples never count). */
+/** Cells in the file: samples that passed QC, plus the low-QC ones when asked (removed and excluded samples never count). The same rollup the totals sum. */
 const studySelect = (includeLow: boolean) => `
   m.gse_id, m.organism_primary, m.organisms, m.tissue_groups, m.disease_groups, m.assay_families,
   m.tissues_raw, m.cell_types_raw, m.n_conditions, m.n_done, m.n_total, m.n_cells, m.has_bundle, m.year,
@@ -880,16 +927,16 @@ const studySelect = (includeLow: boolean) => `
   g.title, g.abstract, g.r2_bundle_bytes, g.r2_bundle_key, g.n_gsm_failed, g.pubmed_ids,
   (SELECT b.n_gsms_in_bundle FROM bundle_manifest b WHERE b.gse_id = m.gse_id) AS bundle_n_samples,
   (SELECT b.reference_build FROM bundle_manifest b WHERE b.gse_id = m.gse_id) AS reference_build,
-  (SELECT SUM(q.n_cells_called) FROM sample_qc q WHERE q.gse_id = m.gse_id AND COALESCE(q.usable, 1) = 1 AND COALESCE(q.qc_tier, 0) ${includeLow ? "< 2" : "= 0"}) AS file_cells`;
+  ${includeLow ? `${FILE_CELLS} + COALESCE(m.n_lowqc_cells, 0)` : FILE_CELLS} AS file_cells`;
 
 function studyOrder(sort: Sort, hasQ: boolean): string {
   switch (sort) {
     case "cells":
-      return "m.n_cells DESC, m.gse_id DESC";
+      return `${FILE_CELLS} DESC, m.gse_id DESC`;
     case "samples":
-      return "m.n_done DESC, m.n_cells DESC";
+      return `m.n_done DESC, ${FILE_CELLS} DESC`;
     case "year":
-      return "m.year DESC NULLS LAST, m.n_cells DESC";
+      return `m.year DESC NULLS LAST, ${FILE_CELLS} DESC`;
     case "accession":
       return "CAST(substr(m.gse_id, 4) AS INTEGER) DESC";
     default:
@@ -932,7 +979,7 @@ export function planStudyQuery(p: SearchParams, matchOverride?: string | null, c
     const lookup = [`m.gse_id IN (SELECT value FROM json_each(?))`];
     params.push(jsonArray(gseIds));
     if (acc.gsm.length) {
-      lookup.push(`m.gse_id IN (SELECT gse_id FROM gsm WHERE gsm_id IN (SELECT value FROM json_each(?)))`);
+      lookup.push(`m.gse_id IN (SELECT gse_id FROM gsm WHERE gsm_id IN (SELECT value FROM json_each(?)) AND ${sampleServedSql("gsm.gsm_id")})`);
       params.push(jsonArray(acc.gsm));
     }
     clauses.push(`(${lookup.join(" OR ")})`);
@@ -951,19 +998,15 @@ export function planStudyQuery(p: SearchParams, matchOverride?: string | null, c
   const hitCols = match ? "h.s_gse, h.s_gsm, h.n_match," : "NULL AS s_gse, NULL AS s_gsm, NULL AS n_match,";
   // Downloadable studies are totalled from what is in their files (usable samples, cells called in them), the
   // numbers the home page shows; a search that includes unbuilt studies falls back to catalog counts.
-  // n_usable_cells is filled as studies are recomputed; until then the catalog count stands in.
   const fileBasis = p.has_bundle === true;
   // Default: only samples that passed QC. With include_low_qc the flagged ones are added back.
   const sAdd = p.include_low_qc ? " + COALESCE(m.n_lowqc_samples, 0)" : "";
   const cAdd = p.include_low_qc ? " + COALESCE(m.n_lowqc_cells, 0)" : "";
   const samplesWin = fileBasis ? `SUM(COALESCE(m.n_usable_samples, 0)${sAdd}) OVER ()` : "SUM(m.n_done) OVER ()";
-  const cellsWin = fileBasis
-    ? `CASE WHEN COUNT(m.n_usable_cells) OVER () = 0 THEN SUM(m.n_cells) OVER () ELSE SUM(COALESCE(m.n_usable_cells, 0)${cAdd}) OVER () END`
-    : "SUM(m.n_cells) OVER ()";
+  // Cells are always cells called in files (a catalog study without a file has none).
+  const cellsWin = `SUM(COALESCE(m.n_usable_cells, 0)${cAdd}) OVER ()`;
   const samplesAgg = fileBasis ? `SUM(COALESCE(m.n_usable_samples, 0)${sAdd})` : "SUM(m.n_done)";
-  const cellsAgg = fileBasis
-    ? `CASE WHEN COUNT(m.n_usable_cells) = 0 THEN SUM(m.n_cells) ELSE SUM(COALESCE(m.n_usable_cells, 0)${cAdd}) END`
-    : "SUM(m.n_cells)";
+  const cellsAgg = `SUM(COALESCE(m.n_usable_cells, 0)${cAdd})`;
   const sql = `${cte}
     SELECT ${studySelect(p.include_low_qc)}, ${hitCols} ${scoreExpr} AS score,
            COUNT(*) OVER () AS _total, ${samplesWin} AS _samples, ${cellsWin} AS _cells
@@ -1000,7 +1043,8 @@ function shapeStudy(r: StudyDbRow): StudyRow {
   // Keep the pair self-consistent so the UI never shows "11 / 11 · 19 failed".
   const nFailed = Math.max(0, Number(r.n_gsm_failed ?? 0));
   const nTotal = Math.max(Number(r.n_total ?? 0), nDone + nFailed);
-  const nCells = Number(r.n_cells ?? 0);
+  // Cells called in the file (samples that passed QC); never the catalog's raw barcode count.
+  const nCells = Number(r.file_cells ?? 0);
   const assay = safeList(r.assay_families);
   return {
     gse_id: r.gse_id,
@@ -1195,13 +1239,13 @@ async function rankedCandidateIds(db: D1Database, p: SearchParams, signals: Soft
   const evParts: string[] = [];
   const evParams: (string | number)[] = [];
   if (cellMatch) {
-    evParts.push(`CASE WHEN m.gse_id IN (SELECT gse_id FROM fts_gsm WHERE fts_gsm MATCH ?) THEN 4 ELSE 0 END`);
+    evParts.push(`CASE WHEN m.gse_id IN (SELECT gse_id FROM fts_gsm WHERE fts_gsm MATCH ? AND ${FTS_GSM_SERVED}) THEN 4 ELSE 0 END`);
     evParams.push(cellMatch);
   }
   if (match) {
-    soft.push(`m.gse_id IN (SELECT id FROM fts_gse WHERE fts_gse MATCH ? UNION SELECT gse_id FROM fts_gsm WHERE fts_gsm MATCH ?)`);
+    soft.push(`m.gse_id IN (SELECT id FROM fts_gse WHERE fts_gse MATCH ? UNION SELECT gse_id FROM fts_gsm WHERE fts_gsm MATCH ? AND ${FTS_GSM_SERVED})`);
     params.push(match, match);
-    evParts.push(`CASE WHEN m.gse_id IN (SELECT id FROM fts_gse WHERE fts_gse MATCH ? UNION SELECT gse_id FROM fts_gsm WHERE fts_gsm MATCH ?) THEN 2 ELSE 0 END`);
+    evParts.push(`CASE WHEN m.gse_id IN (SELECT id FROM fts_gse WHERE fts_gse MATCH ? UNION SELECT gse_id FROM fts_gsm WHERE fts_gsm MATCH ? AND ${FTS_GSM_SERVED}) THEN 2 ELSE 0 END`);
     evParams.push(match, match);
   }
   if (!soft.length) return [];
@@ -1287,7 +1331,7 @@ export async function runStudySearch(
     groups = { full: kept.filter((x) => x.full).length, partial: kept.filter((x) => !x.full).length };
     total = kept.length;
     samples = kept.reduce((sum, x) => sum + (x.row.usable_samples ?? x.row.bundle_n_samples ?? x.row.n_done) + (p.include_low_qc ? x.row.low_qc_samples ?? 0 : 0), 0);
-    cells = kept.reduce((sum, x) => sum + (x.row.file_cells ?? x.row.n_cells), 0);
+    cells = kept.reduce((sum, x) => sum + (x.row.file_cells ?? 0), 0);
     const start = (p.page - 1) * p.limit;
     rows = kept.slice(start, start + p.limit).map((x) => x.row);
   }
@@ -1519,7 +1563,7 @@ export async function conditionsFor(ctx: Ctx, gseIds: string[]): Promise<Map<str
          SELECT gse_id, characteristics,
                 ROW_NUMBER() OVER (PARTITION BY gse_id ORDER BY gsm_id) AS rn
            FROM gsm
-          WHERE gse_id IN (SELECT value FROM json_each(?))
+          WHERE gse_id IN (SELECT value FROM json_each(?)) AND ${sampleServedSql("gsm.gsm_id")}
        ) WHERE rn <= ${CONDITIONS_SAMPLE_CAP}`
     )
     .bind(jsonArray(misses))
@@ -1655,22 +1699,22 @@ interface SampleDbRow {
 
 const SAMPLE_SELECT = `
   s.gsm_id, s.gse_id, g.title AS study_title, s.organism, s.organism_primary, s.protocol, s.assay_family,
-  s.tissue, s.tissue_group, s.cell_type, s.disease, s.disease_group, s.sex, s.n_cells, s.median_umis, s.status,
+  s.tissue, s.tissue_group, s.cell_type, s.disease, s.disease_group, s.sex, ${SAMPLE_FILE_CELLS} AS n_cells, s.median_umis, s.status,
   s.failure_category, s.title, s.source, s.characteristics, m.has_bundle, m.year`;
 
 function sampleOrder(sort: Sort, hasQ: boolean): string {
   switch (sort) {
     case "cells":
     case "samples":
-      return "s.n_cells DESC NULLS LAST, s.gsm_id DESC";
+      return "n_cells DESC NULLS LAST, s.gsm_id DESC";
     case "year":
-      return "m.year DESC NULLS LAST, s.n_cells DESC";
+      return "m.year DESC NULLS LAST, n_cells DESC";
     case "accession":
       return "CAST(substr(s.gsm_id, 4) AS INTEGER) DESC";
     default:
       return hasQ
-        ? "score ASC, (s.status = 'DONE') DESC, s.n_cells DESC"
-        : "(s.status = 'DONE') DESC, s.n_cells DESC NULLS LAST, s.gsm_id DESC";
+        ? "score ASC, (s.status = 'DONE') DESC, n_cells DESC"
+        : "(s.status = 'DONE') DESC, n_cells DESC NULLS LAST, s.gsm_id DESC";
   }
 }
 
@@ -1698,10 +1742,10 @@ function planSampleQuery(p: SearchParams, matchOverride?: string | null) {
       params.push(jsonArray(acc.gse));
     }
     clauses.length = 0;
-    clauses.push(`(${parts.join(" OR ")})`);
+    clauses.push(`(${parts.join(" OR ")})`, sampleServedSql("s.gsm_id"), studyServedSql("s.gse_id"));
   } else if (match) {
     cte = `WITH
-      fs AS (SELECT gsm_id, rank AS s FROM fts_gsm WHERE fts_gsm MATCH ? AND ${RANK_GSM}),
+      fs AS (SELECT gsm_id, rank AS s FROM fts_gsm WHERE fts_gsm MATCH ? AND ${RANK_GSM} AND ${FTS_GSM_SERVED}),
       fg AS (SELECT id AS gse_id, rank AS s FROM fts_gse WHERE fts_gse MATCH ? AND ${RANK_GSE}),
       hit_ids AS (
         SELECT gsm_id FROM fs
@@ -1721,7 +1765,7 @@ function planSampleQuery(p: SearchParams, matchOverride?: string | null) {
   const whereSql = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
   const sql = `${cte}
     SELECT ${SAMPLE_SELECT}, ${scoreExpr} AS score,
-           COUNT(*) OVER () AS _total, SUM(s.n_cells) OVER () AS _cells
+           COUNT(*) OVER () AS _total, SUM(${SAMPLE_FILE_CELLS}) OVER () AS _cells
       FROM gsm s
       ${join}
       LEFT JOIN gse g ON g.id = s.gse_id
@@ -1730,7 +1774,7 @@ function planSampleQuery(p: SearchParams, matchOverride?: string | null) {
      ORDER BY ${sampleOrder(p.sort, !!match)}
      LIMIT ? OFFSET ?`;
   const countSql = `${cte}
-    SELECT COUNT(*) AS n, SUM(s.n_cells) AS cells
+    SELECT COUNT(*) AS n, SUM(${SAMPLE_FILE_CELLS}) AS cells
       FROM gsm s ${join} LEFT JOIN gse_meta m ON m.gse_id = s.gse_id ${whereSql}`;
   return {
     sql,
@@ -1826,6 +1870,9 @@ export function pickFilters(p: SearchFilters): SearchFilters {
     disease_group: p.disease_group,
     assay_family: p.assay_family,
     cell_type: p.cell_type,
+    sex_genetic: p.sex_genetic ?? [],
+    ancestry_genetic: p.ancestry_genetic ?? [],
+    cell_type_label: p.cell_type_label ?? [],
     min_cells: p.min_cells,
     has_bundle: p.has_bundle,
     include_low_qc: p.include_low_qc,

@@ -31,7 +31,9 @@ likelihood over five continental populations (AFR, EUR, EAS, SAS, AMR) using 50 
 **Genetic sex** (`sex_calling.h`). Called from expression: XIST versus chrY genes (UTY, DDX3Y, KDM5D, EIF1AY,
 ZFY, RPS4Y1, USP9Y), summed over all cells in the GSM. Same pooling issue as ancestry. The gene names are matched
 exactly in upper case, so mouse genes (Xist, Uty, Ddx3y, ...) never match and mouse calls are most likely all
-"unknown" (not yet confirmed by reading a mouse `sex_call.json`).
+"unknown" (confirmed: every mouse `sex_call.json` reads "unknown"). Pipeline fix needed in Singlet-Bio/singlet: match gene
+names case-insensitively, or map mouse symbols to the human ones. Until then the website counts the sex layer over human
+studies only (`functions/_shared/layers-core.ts`, `study-card.ts`) and the docs say so.
 
 **SNP genotypes and donors** (`donor_demux.h`). A vireo-style Beta-Binomial mixture separates donors *within* a
 GSM from per-cell allele counts on a SNP panel. Donors are not matched *across* GSMs of a study.

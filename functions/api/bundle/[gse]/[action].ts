@@ -12,7 +12,12 @@
  * and sends If-Match; on a mismatch the index is re-read once (bundle-reader.ts, withIndexRetry).
  *
  * Edge-cache keys carry a version: bump it whenever cached answers may be wrong (v2 of `entry`
- * and v2 of `samples` drop the recipes cached from stale offsets; `index` was already v2).
+ * and v2 of `samples` drop the recipes cached from stale offsets; `index` was already v2; index v4, samples v3 and
+ * entry v3 are the Research Alpha rule: no withheld study, excluded sample or hidden layer; index v5, samples v4 and entry v4
+ * drop the answers cached before the .s1 catalog load and release policy c).
+ *
+ * Research Alpha (../../../_shared/alpha): a withheld study answers 404 like an unknown one, and a sample that is not
+ * part of the atlas, or a layer Alpha does not offer, is not listed and has no entry.
  */
 import { corsOk, corsErr, handleOptions, CORS_HEADERS } from "../../../_shared/cors";
 import { serverError } from "../../../_shared/errors";
@@ -20,25 +25,27 @@ import { checkIngestToken } from "../../../_shared/ingest-auth";
 import { CACHE_TTL_HEADER, cachedJson } from "../../../_shared/cache";
 import { GSE_RE, bundleUrl } from "../../../_shared/study-core";
 import { StaleBundleError, getBundleIndex, readEntry, entryRange, strongEtag, withIndexRetry, MAX_INFLATE_BYTES } from "../../../_shared/bundle-reader";
-import { publicEntries } from "../../../_shared/restricted";
-import { bundleIndexResponse, loadSampleQc, v2BundleIndexResponse } from "../../../_shared/bundle-core";
-import { getV2Presence, getV2Sample, parseMembers, servedState, type V2Presence } from "../../../_shared/v2-catalog";
-import { describeMember, findMember, sampleObjectUrl } from "../../../_shared/v2-serve";
-import { configureV2 } from "../../../_shared/v2-urls";
+import { isUnofferedMember } from "../../../_shared/restricted";
+import { entryContext, isStudyWithheld, servedEntries } from "../../../_shared/alpha";
+import { bundleIndexResponse, loadSampleQc, publicQc, s1BundleIndexResponse } from "../../../_shared/bundle-core";
+import { getS1Presence, getS1Sample, parseMembers, servedState, type S1Presence } from "../../../_shared/s1-catalog";
+import { describeMember, findMember, sampleObjectUrl } from "../../../_shared/s1-serve";
+import { configureS1 } from "../../../_shared/s1-urls";
 
 interface Env {
   DB: D1Database;
   INGEST_TOKEN_SHA256?: string;
+  S1_ORIGIN?: string;
   V2_ORIGIN?: string;
 }
 
 const DAY = 86400;
 /**
- * A study that has a row in the v2 catalog, served or still being moved, is cached at the edge for five minutes and not a day: its answer changes
- * when the migration is verified or retired. (The keys carry no v2 rev: that would cost a D1 read before every cache lookup.)
+ * A study that has a row in the catalog, served or still being moved, is cached at the edge for five minutes and not a day: its answer changes
+ * when the migration is verified or retired. (The keys carry no s1 rev: that would cost a D1 read before every cache lookup.)
  */
-const V2_EDGE_TTL = 300;
-const ttlFor = (p: V2Presence): Record<string, string> => (p.study || p.migration ? { [CACHE_TTL_HEADER]: String(V2_EDGE_TTL) } : {});
+const S1_EDGE_TTL = 300;
+const ttlFor = (p: S1Presence): Record<string, string> => (p.study || p.migration ? { [CACHE_TTL_HEADER]: String(S1_EDGE_TTL) } : {});
 
 function contentTypeFor(path: string): string {
   if (path.endsWith(".json")) return "application/json; charset=utf-8";
@@ -53,7 +60,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, params, request, w
   const action = String(params.action ?? "");
   if (!GSE_RE.test(gse)) return corsErr("Invalid series id", 400);
 
-  configureV2(env);
+  configureS1(env);
   const url = new URL(request.url);
   // ?refresh=1 re-reads the file and rewrites the cached index. It is for the
   // catalog crank, so it needs the ingest token; for everyone else it is ignored.
@@ -61,6 +68,8 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, params, request, w
 
   // A forced refresh has to reach the producer, so it skips the edge cache.
   const cached: typeof cachedJson = refresh ? (_request, _waitUntil, producer) => producer() : cachedJson;
+  // Not cached at the edge on purpose: a study withheld after a response was cached must stop answering at once.
+  if (await isStudyWithheld(env.DB, gse)) return corsErr(`Series ${gse} not found`, 404);
 
   if (action === "index") {
     return cached(
@@ -68,10 +77,10 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, params, request, w
       waitUntil,
       async () => {
         try {
-          // A study stored in the v2 layout is listed from the v2 catalog.
-          const pres = await getV2Presence(env.DB, gse);
-          const v2 = servedState(pres);
-          if (v2) return corsOk(await v2BundleIndexResponse(env.DB, gse, v2), { headers: ttlFor(pres) });
+          // A study stored in the per-sample layout is listed from the catalog.
+          const pres = await getS1Presence(env.DB, gse);
+          const s1 = servedState(pres);
+          if (s1) return corsOk(await s1BundleIndexResponse(env.DB, gse, s1), { headers: ttlFor(pres) });
           // verify: one HEAD compares the cached row with the live object, so the size and listing are not
           // those of a file that has since been overwritten. The answer is edge-cached for a day.
           const index = await getBundleIndex(env.DB, gse, { refresh, verify: true, waitUntil });
@@ -80,7 +89,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, params, request, w
           return serverError(e, `bundle index ${gse}`, {}, 502);
         }
       },
-      { ttl: DAY, key: "v=3" } // one cache entry per study: extra query parameters must not mint new ones
+      { ttl: DAY, key: "v=5" } // one cache entry per study: extra query parameters must not mint new ones
     );
   }
 
@@ -91,12 +100,12 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, params, request, w
       async () => {
         try {
           const { source, samples } = await loadSampleQc(env.DB, gse, { refresh, waitUntil });
-          return corsOk({ gse_id: gse, source, n_samples: samples.length, samples });
+          return corsOk({ gse_id: gse, source, n_samples: samples.length, samples: samples.map(publicQc) });
         } catch (e) {
           return serverError(e, `bundle samples ${gse}`, {}, 502);
         }
       },
-      { ttl: DAY, key: "v=2" }
+      { ttl: DAY, key: "v=4" }
     );
   }
 
@@ -106,11 +115,11 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, params, request, w
     // An entry never changes under the same study file, so one cache entry per (study, path).
     const produce = async (): Promise<Response> => {
       try {
-        const pres = await getV2Presence(env.DB, gse);
-        const v2 = servedState(pres);
-        if (v2) return await v2Entry(env.DB, gse, v2.study.rev, path, ttlFor(pres));
+        const pres = await getS1Presence(env.DB, gse);
+        const s1 = servedState(pres);
+        if (s1) return await s1Entry(env.DB, gse, s1.study.rev, path, ttlFor(pres));
         const found = await withIndexRetry(env.DB, gse, { waitUntil }, async (index) => {
-          const entry = publicEntries(index.entries).find((e) => e.p === path);
+          const entry = (await servedEntries(env.DB, gse, index.entries)).find((e) => e.p === path);
           if (!entry) return null;
           if (entry.u > MAX_INFLATE_BYTES) return { entry, index, range: await entryRange(gse, entry, index), body: null };
           return { entry, index, range: null, body: await readEntry(gse, entry, index) };
@@ -157,20 +166,22 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, params, request, w
         return serverError(e, `bundle entry ${gse}`, {}, 502);
       }
     };
-    return cachedJson(request, waitUntil, produce, { ttl: DAY, key: `v=2&path=${encodeURIComponent(path)}` });
+    return cachedJson(request, waitUntil, produce, { ttl: DAY, key: `v=4&path=${encodeURIComponent(path)}` });
   }
 
   return corsErr(`Unknown bundle action '${action}'. Use index, samples or entry.`, 400);
 };
 
 /**
- * An entry of a study stored in the v2 layout: no inflating at the edge (the members are zstd or pz2), just where the bytes are. A derived
+ * An entry of a study stored in the per-sample layout: no inflating at the edge (the members are zstd or pz2), just where the bytes are. A derived
  * member (regenerated by a recipe) has none; the singlet package rebuilds it.
  */
-async function v2Entry(db: D1Database, gse: string, rev: string, path: string, ttl: Record<string, string>): Promise<Response> {
+async function s1Entry(db: D1Database, gse: string, rev: string, path: string, ttl: Record<string, string>): Promise<Response> {
   const m = /^samples\/(GSM\d+)\/(.+)$/.exec(path);
-  if (!m) return corsErr(`No entry '${path}' in ${gse}: study-level files are inside the v2 manifest (v2/m/${gse}.json).`, 404);
-  const sample = await getV2Sample(db, gse, m[1], rev);
+  if (!m) return corsErr(`No entry '${path}' in ${gse}: study-level files are inside the s1 manifest (s1/m/${gse}.json).`, 404);
+  const ctx = await entryContext(db, gse);
+  if (ctx.excluded.has(m[1]) || isUnofferedMember(m[2], ctx)) return corsErr(`No entry '${path}' in ${gse}`, 404);
+  const sample = await getS1Sample(db, gse, m[1], rev);
   const members = parseMembers(sample?.members_json);
   const name = sample ? findMember(members, m[2]) : null;
   if (!sample || !name) return corsErr(`No entry '${path}' in ${gse}`, 404);
@@ -178,7 +189,7 @@ async function v2Entry(db: D1Database, gse: string, rev: string, path: string, t
   return corsOk({
     gse_id: gse,
     path,
-    format: "singlet-v2",
+    format: "singlet-s1",
     url: sampleObjectUrl(sample.key),
     range: d.range,
     method: d.kind === 1 ? "pz2" : d.kind === 3 ? "zstd" : d.kind === 5 ? "stored" : "derived",

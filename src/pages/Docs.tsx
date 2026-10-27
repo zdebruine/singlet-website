@@ -31,10 +31,6 @@ const GSE = EXAMPLE_GSE;
 const GSM = "GSM4120733";
 /** Second study for the multi-study example (3 samples, ~51 MB). */
 const GSE_2 = "GSE146974";
-/** A bundle with donor/, mt/ and nonhost/ outputs, for the modality examples. */
-const MODALITY_GSE = "GSE128639";
-const MODALITY_GSM = "GSM3681519";
-
 type SectionId = (typeof SECTIONS)[number]["id"];
 
 /** Anchors inside a section, mapped to the section that holds them. */
@@ -62,20 +58,20 @@ function useSelectedSection(): SectionId {
 
 const SelectedSection = createContext<SectionId>("install");
 
-/** Every layer a .singlet file can hold, with the name the bundle API reads it by. */
-const MODALITIES: [string, string][] = [
-  ["Combined raw counts (exon + intron)", "raw_counts()"],
-  ["Per-feature exon / intron matrices", "exon_counts, intron_counts"],
-  ["Splice junctions", "junctions"],
-  ["Exon inclusion (percent spliced in)", "splice_psi"],
-  ["mtDNA heteroplasmy", "mt_heteroplasmy"],
-  ["mtDNA variant calls", "mt_variants"],
-  ["Donor demultiplexing", "donor_assignments"],
-  ["Genetic sex and ancestry", "sex_call, ancestry_call"],
-  ["Non-host species", "nonhost_species"],
-  ["V(D)J segment usage", "vdj_gene_usage"],
-  ["Doublets, cell cycle, ambient RNA", "doublet_scores, cell_cycle_scores, ambient_contamination"],
-  ["Per-sample QC", "summary, pileup_stats, provenance"],
+/**
+ * What Research Alpha serves for each sample, with the name the loaders read it by. Only these: the private layers (genotype,
+ * mtDNA alleles) and the unreliable ones (ambient RNA, doublets, per-cell non-host calls, the legacy 0/1 PSI) are not written to the
+ * .s1 objects. The labels' accuracy is Singlet-Bio/singlet docs/cell_annotation.md.
+ */
+const MODALITIES: [string, string, string][] = [
+  ["Gene counts: spliced + unspliced, and each as a layer", "counts, spliced, unspliced", "Default of load()"],
+  ["Splice junctions", "splice_junctions", "Reads per junction and cell"],
+  ["Exon inclusion (percent spliced in)", "psi", "Computed from the junctions when read"],
+  ["Cell calls and per-cell QC", "cells table", "Called (knee filter), UMIs and genes, exon and intron"],
+  ["Per-sample QC and provenance", "manifest", "Reads used and available, strand fraction, library type, release policy"],
+  ["Cell type (Cell Ontology, with every level of the call)", "label sidecar, cell index", "Per-study accuracy by depth: compartment 0.84, lineage 0.75, cell type 0.43, subtype 0.32. The last two are previews"],
+  ["Chromosomal sex (human, mouse)", "label sidecar, cell index", "XIST against chrY: 98.1% of samples agree with GEO (153 of 156 called)"],
+  ["Genetic ancestry (human donors with enough covered sites)", "label sidecar, cell index", "Continental group (HANCESTRO) at q ≥ 0.8, else admixed. Validated on 1000 Genomes simulations and 22 self-reported donors (no call contradicted the report)"],
 ];
 
 const Mono = ({ children }: { children: React.ReactNode }) => <code className="code-inline">{children}</code>;
@@ -83,7 +79,7 @@ const Mono = ({ children }: { children: React.ReactNode }) => <code className="c
 const Docs = () => {
   usePageMeta({
     title: "Docs",
-    description: "Install singlet, load a study as AnnData or SingleCellExperiment in one line, search the atlas, read every modality in a .singlet file, and download just part of a study.",
+    description: "Install singlet, load a study as AnnData or SingleCellExperiment in one line, search the atlas and its cell labels, read the per-sample .s1 objects, and download just part of a study.",
     path: "/docs",
   });
   const active = useSelectedSection();
@@ -212,8 +208,7 @@ head(colData(sce)$gsm_id)`}
               <p className="text-sm text-muted-foreground">
                 In R, call <Mono>singlet::load()</Mono> and <Mono>singlet::find()</Mono> with the prefix: the package's{" "}
                 <Mono>load()</Mono> and <Mono>find()</Mono> mask <Mono>base::load</Mono> and <Mono>utils::find</Mono>.
-                In Python a sample accession works too: <Mono>singlet.load("{GSM}")</Mono> downloads the whole parent
-                study, then keeps that sample's cells.
+                A sample accession works too: <Mono>singlet.load("{GSM}")</Mono> fetches only that sample's object.
               </p>
               <h3>Several studies at once</h3>
               <p>
@@ -229,29 +224,40 @@ head(colData(sce)$gsm_id)`}
               </div>
               <h3>Files on disk</h3>
               <p>
-                Studies are being moved to a per-sample layout: one immutable object per sample at{" "}
-                <Mono>https://data.singlet.bio/v2/s/&lt;GSM&gt;/&lt;digest&gt;.s2</Mono> and a manifest at{" "}
-                <Mono>https://data.singlet.bio/v2/m/&lt;GSE&gt;.json</Mono> that lists every sample, member and byte range. The
-                API tells you which layout a study has (<Mono>series.v2</Mono> in <Mono>GET /api/gse/:id</Mono>), and{" "}
-                <Mono>singlet.load</Mono> reads both the same way.
-              </p>
-              <p>
-                Until a study is moved, and for as long as its old file is kept, it is a single <Mono>.singlet</Mono> file at{" "}
-                <Mono>https://data.singlet.bio/data/&lt;GSE&gt;/&lt;GSE&gt;.singlet</Mono>, from about 300 KB to over 20 GB
-                (about 9 in 10 are under 1 GB). You can download it with curl and load the local path the same way. Inside it the samples are not
-                separate downloads: filter on <Mono>obs["gsm_id"]</Mono> after loading, or see{" "}
-                <a href="#partial-download">Download just part of a study</a>.
+                Every study is a set of immutable per-sample objects in the <Mono>.s1</Mono> format, one per sample at{" "}
+                <Mono>https://data.singlet.bio/s1/s/&lt;GSM&gt;/&lt;digest&gt;.s1</Mono>, and a study manifest at{" "}
+                <Mono>https://data.singlet.bio/s1/m/&lt;GSE&gt;.json</Mono> that lists every sample, member and byte range. The
+                matrices inside use the pz2 codec (rANS-coded sparse chunks of cells, decodable one chunk at a time). An object never
+                changes: its name carries its digest, so a byte range you read once stays valid. <Mono>GET /api/gse/:id</Mono> returns
+                the manifest URL as <Mono>series.s1.manifest_url</Mono>.
               </p>
               <CodeBlock
                 label="bash"
-                code={`curl -LO https://data.singlet.bio/data/${GSE}/${GSE}.singlet`}
+                code={`curl -s https://data.singlet.bio/s1/m/${GSE}.json | head -c 600   # the manifest: samples, keys, sizes, members`}
               />
-              <CodeBlock
-                className="mt-3"
-                label="python"
-                code={`import singlet
-adata = singlet.load("${GSE}.singlet")   # a local path loads the same way`}
-              />
+              <div className="grid md:grid-cols-2 gap-3 mt-3">
+                <CodeBlock
+                  label="python"
+                  code={`import singlet
+
+study = singlet.open_study("${GSE}")       # reads only the manifest
+adata = singlet.load("${GSM}")              # one sample: fetches only that object's members
+sub   = singlet.cells("${GSE}", where="n_umi_exon > 5000")   # only those cells' chunks
+adata = singlet.load("/data/${GSM}.s1")     # a downloaded object, read from disk`}
+                />
+                <CodeBlock
+                  label="r"
+                  code={`library(singlet)
+
+st  <- singlet_study("${GSE}")              # the manifest
+sce <- singlet::load("${GSM}")              # one sample
+sub <- singlet_cells("${GSE}", where = "n_umi_exon > 5000")`}
+                />
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Downloads need no account. To mirror a study, fetch the manifest and then each <Mono>key</Mono> it lists; the
+                loaders read a local directory with the same layout (<Mono>SINGLET_DATA_BASE</Mono>).
+              </p>
             </Section>
 
             {/* ── Search ── */}
@@ -306,13 +312,14 @@ studies = pd.read_csv(url, sep="\\t")`}
               </p>
             </Section>
 
-            {/* ── .singlet file ── */}
-            <Section id="singlet-file" title="What's in a .singlet file">
+            {/* ── .s1 sample objects ── */}
+            <Section id="singlet-file" title="What's in a .s1 sample">
               <p>
-                A <Mono>.singlet</Mono> file is a ZIP64 archive. Inside are sparse count matrices stored as{" "}
-                <Mono>.1pz</Mono> blocks (zstd-compressed, readable without unpacking the whole archive) and a few JSON
-                metadata files. The loaders read only the members they need. Per-sample members live under{" "}
-                <Mono>samples/&lt;GSM&gt;/</Mono>; every <Mono>.1pz</Mono> matrix is stored features × cells.
+                A <Mono>.s1</Mono> object holds one sample's members end to end; the manifest gives each member's offset and length,
+                so a loader reads only the members it needs with HTTP range requests. Count matrices are features × cells pz2 members
+                that share side-information packs (gene names, barcode whitelists) published once at{" "}
+                <Mono>s1/ref/&lt;id&gt;.pack</Mono> and listed in <Mono>s1/ref/index.json</Mono>. A member is stored, or rebuilt on read
+                from a recipe over other members (a TSV from its table, PSI from the junctions).
               </p>
               <table>
                 <thead>
@@ -323,97 +330,52 @@ studies = pd.read_csv(url, sep="\\t")`}
                 </thead>
                 <tbody>
                   <tr>
-                    <td><Mono>exon_counts.1pz</Mono></td>
-                    <td>Features × cells, reads assigned to exons (per exon feature). Summed per gene this is <Mono>adata.layers["spliced"]</Mono>.</td>
-                  </tr>
-                  <tr>
-                    <td><Mono>intron_counts.1pz</Mono></td>
-                    <td>Features × cells, intronic reads (for RNA velocity or nuclear fraction). Summed per gene this is <Mono>adata.layers["unspliced"]</Mono>.</td>
-                  </tr>
-                  <tr>
-                    <td><Mono>cell_calls.tsv</Mono></td>
-                    <td>Which barcodes the pipeline called as cells, with their scores.</td>
+                    <td><Mono>exon_counts.1pz</Mono>, <Mono>intron_counts.1pz</Mono></td>
+                    <td>Features × cells, exonic and intronic UMIs. Summed per gene these are <Mono>layers["spliced"]</Mono> and <Mono>layers["unspliced"]</Mono>; <Mono>X</Mono> is their sum.</td>
                   </tr>
                   <tr>
                     <td><Mono>sj_counts.1pz</Mono></td>
-                    <td>Splice junctions × cells.</td>
+                    <td>Splice junctions × cells, with a junction support flag.</td>
                   </tr>
                   <tr>
-                    <td><Mono>splice_psi.1pz</Mono></td>
-                    <td>Per-junction percent-spliced-in, where computable.</td>
+                    <td><Mono>cells</Mono></td>
+                    <td>The per-cell table: barcode, whether it was called (the knee filter), UMIs and genes detected, exon and intron.</td>
                   </tr>
                   <tr>
-                    <td><Mono>mt_heteroplasmy.1pz</Mono></td>
-                    <td>Mitochondrial variant allele fractions per cell.</td>
-                  </tr>
-                  <tr>
-                    <td><Mono>mt_variants.tsv</Mono></td>
-                    <td>Called chrM variants: depth, allele counts, annotation.</td>
-                  </tr>
-                  <tr>
-                    <td><Mono>donor/donor_assignments.tsv</Mono></td>
-                    <td>Genotype-free donor demultiplexing: barcode → donor, with doublet calls. Some bundles only.</td>
-                  </tr>
-                  <tr>
-                    <td><Mono>nonhost/nonhost_em_abundance.tsv</Mono></td>
-                    <td>Microbial and viral abundance per taxon. Some bundles only.</td>
-                  </tr>
-                  <tr>
-                    <td><Mono>vdj_gene_usage.1pz</Mono></td>
-                    <td>V(D)J gene usage per cell (when the library supports it).</td>
-                  </tr>
-                  <tr>
-                    <td><Mono>summary.json</Mono>, <Mono>pileup_stats.json</Mono></td>
-                    <td>Per-sample QC: cells called, mapping rate, median genes and UMIs.</td>
-                  </tr>
-                  <tr>
-                    <td><Mono>study_meta.json</Mono></td>
-                    <td>GEO series metadata and per-sample characteristics.</td>
-                  </tr>
-                  <tr>
-                    <td><Mono>feature_vocab.json</Mono></td>
-                    <td>Gene ids and symbols for the reference the study was mapped to.</td>
-                  </tr>
-                  <tr>
-                    <td><Mono>manifest.json</Mono></td>
-                    <td>Member list, sizes, checksums, pipeline version (<Mono>singlet_version</Mono>) and packing time (<Mono>created_at</Mono>).</td>
+                    <td><Mono>summary.json</Mono>, <Mono>pileup_stats.json</Mono>, <Mono>provenance.json</Mono></td>
+                    <td>Per-sample QC and how the sample was made.</td>
                   </tr>
                 </tbody>
               </table>
-              <h3 id="modalities" className="scroll-mt-24">Reading anything other than gene counts</h3>
               <p>
-                <Mono>load()</Mono> returns the gene-level matrix. Everything else is addressable by name through the
-                bundle API, which reads one member at a time from the downloaded file. The splicing, heteroplasmy and
-                V(D)J matrices are in bundles from every pipeline version; the donor, non-host and
-                per-cell annotation outputs are only in some bundles, so check rather than assume. The example below uses{" "}
-                <Link to={`/study/${MODALITY_GSE}`}>{MODALITY_GSE}</Link>, which has them.
+                The study manifest also records per sample: reads used and available, strand fraction and library-type verdict, the
+                release policy version, and the label sidecar. The labels are a separate public file per sample,{" "}
+                <Mono>s1/a/&lt;GSM&gt;/&lt;digest&gt;.parquet</Mono> (named in <Mono>samples[i].annotations</Mono>), one row per called
+                cell: <Mono>cell_type_cl</Mono>, <Mono>cell_type_label</Mono>, <Mono>cell_type_path</Mono> with a confidence per level,{" "}
+                <Mono>sex_chrom</Mono> / <Mono>sex_score</Mono>, <Mono>ancestry_hancestro</Mono> / <Mono>ancestry_prob</Mono>, joined to
+                the matrix by <Mono>col</Mono>. Raw genotype inputs are never written to a public file.
+              </p>
+              <h3 id="modalities" className="scroll-mt-24">What Alpha serves</h3>
+              <p>
+                <Mono>load()</Mono> returns the gene-level counts. Ask for other members by name with <Mono>modalities=</Mono>; the
+                labels are read from the sidecar or across studies from the atlas cell index.
               </p>
               <div className="grid md:grid-cols-2 gap-3">
                 <CodeBlock
                   label="python"
-                  code={`b = singlet.open_bundle("${MODALITY_GSE}")
-gsm = "${MODALITY_GSM}"
-b.modalities(gsm)                    # what this sample has
+                  code={`adata = singlet.load("${GSM}", modalities=["counts", "splice_junctions", "psi"])
 
-b.raw_counts(gsm)                    # exon + intron, spliced/unspliced layers
-b.raw_counts(gsm, gene_level=False)  # native exon/intron feature axis
-b.mt_variants(gsm)                   # heteroplasmy, cells x chrM sites
-if b.has("donor_assignments", gsm):
-    donors = b.donors(gsm)
-if b.has("nonhost_species", gsm):
-    taxa = b.nonhost(gsm)`}
+import pandas as pd
+study = singlet.open_study("${GSE}")
+url = "https://data.singlet.bio/" + study.doc["samples"][0]["annotations"]["a2026-10"]["key"]
+labels = pd.read_parquet(url)        # one row per called cell, joined on col`}
                 />
                 <CodeBlock
-                  label="r"
-                  code={`path <- download("${MODALITY_GSE}")
-gsm  <- "${MODALITY_GSM}"
-singlet_modalities(path, gsm)
+                  label="python — the atlas cell index"
+                  code={`from singlet.s1 import atlas
 
-singlet_raw_counts(path, gsm)
-singlet_raw_counts(path, gsm, gene_level = FALSE)
-singlet_read(path, gsm, "mt_variants")
-if (singlet_has(path, "donor_assignments", gsm))
-  donors <- singlet_read(path, gsm, "donor_assignments")`}
+n = atlas.count_cells(organism="Homo sapiens", cell_type="T cell", by=["sex"])
+cells = atlas.find_cells(cell_type="CL:0000084", ancestry="European")`}
                 />
               </div>
               <table>
@@ -421,88 +383,48 @@ if (singlet_has(path, "donor_assignments", gsm))
                   <tr>
                     <th>What</th>
                     <th>Name</th>
+                    <th>Notes</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {MODALITIES.map(([what, name]) => (
-                    <tr key={name}>
+                  {MODALITIES.map(([what, name, note]) => (
+                    <tr key={what}>
                       <td>{what}</td>
                       <td><Mono>{name}</Mono></td>
+                      <td>{note}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
               <p className="text-sm text-muted-foreground">
-                From an assistant, the <Mono>get_modalities</Mono> MCP tool returns the Python and R line for each one.
+                Cell type, sex and ancestry are searchable: <Mono>cell_type_label</Mono>, <Mono>sex_genetic</Mono> and{" "}
+                <Mono>ancestry_genetic</Mono> filter <Mono>/api/search</Mono> and the MCP tools, and <Mono>find_cells</Mono> filters
+                single cells by them. From an assistant, <Mono>get_modalities</Mono> lists what each sample holds.
               </p>
             </Section>
 
             {/* ── Download just part of a study ── */}
             <Section id="partial-download" title="Download just part of a study">
               <p>
-                A <Mono>.singlet</Mono> file is a ZIP64 archive, so you don't have to fetch the whole thing to see
-                what's inside or to pull out one sample. This is an HTTP API (and MCP) feature: the Python and R packages
-                always download the whole study file, including for <Mono>singlet.load("GSM…")</Mono>.
+                Every sample is its own object, so one sample is one download, and one member of it is one HTTP range. The Python and R
+                loaders do this for you (<Mono>singlet.load("GSM…")</Mono>, <Mono>singlet.cells(…)</Mono>); the catalog endpoints below
+                give the same ranges to any client.
               </p>
               <p>
-                For a study stored per sample (see <a href="#singlet-file">Files on disk</a>), the same three endpoints answer from the
-                catalog: <Mono>index</Mono> lists each sample object and its members (with <Mono>format: "singlet-v2"</Mono>),
-                and <Mono>entry</Mono> says where a member's bytes are inside the sample object instead of inflating it. Those
-                objects never change, so a range you have once stays valid; the MCP tools <Mono>slice_cells</Mono> and{" "}
-                <Mono>find_cells</Mono> go further and give the ranges for just some cells.
+                <Mono>GET /api/bundle/:gse/index</Mono> lists every sample object and its members (<Mono>format: "singlet-s1"</Mono>),
+                and <Mono>GET /api/bundle/:gse/samples</Mono> the per-sample QC, without downloading anything:
               </p>
+              <CodeBlock label="bash" code={`curl "https://singlet.bio/api/bundle/${GSE}/index"`} />
               <p>
-                <Mono>GET /api/bundle/:gse/index</Mono> lists every member — per-sample files, compressed and
-                uncompressed size — without downloading anything:
+                <Mono>GET /api/bundle/:gse/entry?path=samples/&lt;GSM&gt;/&lt;member&gt;</Mono> says where a member's bytes are inside its
+                sample object: a URL, a byte range and the command to fetch it.
               </p>
-              <CodeBlock
-                label="bash"
-                code={`curl "https://singlet.bio/api/bundle/${GSE}/index"`}
-              />
-              <p>
-                Per-sample QC (mapping rate, cells called, median genes and UMIs, input reads) read straight from the file
-                is at <Mono>GET /api/bundle/:gse/samples</Mono>:
-              </p>
-              <CodeBlock
-                label="bash"
-                code={`curl "https://singlet.bio/api/bundle/${GSE}/samples"`}
-              />
-              <p>
-                <Mono>GET /api/bundle/:gse/entry?path=…</Mono> returns one member. Entries up to 4 MB come back
-                directly. Larger ones (most count matrices) come back as a small JSON recipe — a byte range on{" "}
-                <Mono>data.singlet.bio</Mono> plus a ready-to-run command — instead of the file itself, so you only ever
-                transfer the bytes you asked for:
-              </p>
-              <CodeBlock
-                label="bash"
-                code={`curl "https://singlet.bio/api/bundle/${GSE}/entry?path=samples/${GSM}/exon_counts.1pz"`}
-              />
-              <CodeBlock
-                className="mt-3"
-                label="json"
-                code={`{
-  "gse_id": "${GSE}",
-  "path": "samples/${GSM}/exon_counts.1pz",
-  "url": "https://data.singlet.bio/data/${GSE}/${GSE}.singlet",
-  "range": "bytes=293772-10257905",
-  "method": "stored",
-  "bytes_compressed": 9964134,
-  "bytes_uncompressed": 9964134,
-  "how": "curl -r 293772-10257905 \\"https://data.singlet.bio/data/${GSE}/${GSE}.singlet\\" -o exon_counts.1pz"
-}`}
-              />
-              <p>The <Mono>how</Mono> field is the command to run — about 10 MB instead of the 193 MB study:</p>
-              <CodeBlock
-                label="bash"
-                code={`curl -r 293772-10257905 "https://data.singlet.bio/data/${GSE}/${GSE}.singlet" -o exon_counts.1pz`}
-              />
+              <CodeBlock label="bash" code={`curl "https://singlet.bio/api/bundle/${GSE}/entry?path=samples/${GSM}/exon_counts.1pz"`} />
               <p className="text-sm text-muted-foreground">
-                <Mono>.1pz</Mono> matrices are added to the archive without ZIP compression (they are already
-                zstd-compressed), so they report <Mono>"method": "stored"</Mono> and the ranged download is the finished
-                file, features × cells. Read it with <Mono>singlet.read_1pz()</Mono> in Python or <Mono>read_1pz()</Mono>{" "}
-                in R. Only large JSON or TSV members can report <Mono>"method": "deflate-raw"</Mono>; for those the{" "}
-                <Mono>how</Mono> command pipes the range through a raw-inflate step. From an assistant,{" "}
-                <Mono>get_partial_download</Mono> returns the same recipe.
+                From an assistant, <Mono>list_bundle_files</Mono> and <Mono>get_partial_download</Mono> return the same ranges;{" "}
+                <Mono>find_cells</Mono> picks cells by their statistics or labels and <Mono>slice_cells</Mono> gives the ranges of just
+                those cells' matrix chunks. Read a fetched member with <Mono>singlet.read_1pz()</Mono> in Python or{" "}
+                <Mono>read_1pz()</Mono> in R.
               </p>
             </Section>
 
@@ -532,7 +454,7 @@ if (singlet_has(path, "donor_assignments", gsm))
                   </tr>
                   <tr>
                     <td><Mono>curl</Mono> / <Mono>wget</Mono></td>
-                    <td>A shell script / URL list that downloads every matching <Mono>.singlet</Mono> file.</td>
+                    <td>A shell script / URL list that downloads every matching study (its manifest and sample objects).</td>
                   </tr>
                   <tr>
                     <td><Mono>python</Mono> / <Mono>r</Mono></td>
@@ -566,9 +488,9 @@ python load_studies.py`}
                 number from the atlas is always traceable back to how it was made:
               </p>
               <ul>
-                <li><Mono>reference_build</Mono> — the genome build and annotation the sample was mapped to (see <Link to="/about#references">About singlet</Link> for the exact builds per organism). Recorded per cell in <Mono>obs["reference_build"]</Mono> and in <Mono>feature_vocab.json</Mono> inside the bundle.</li>
-                <li><Mono>singlet_version</Mono> — the pipeline release that produced the bundle, in the file's <Mono>manifest.json</Mono>, the study page and <Mono>/api/gse/:id</Mono>.</li>
-                <li><Mono>created_at</Mono> — when the <Mono>.singlet</Mono> file was packed, in the file's <Mono>manifest.json</Mono> (returned as <Mono>created_at</Mono> by <Mono>/api/bundle/:gse/index</Mono> and as <Mono>packed_at</Mono> by <Mono>/api/gse/:id</Mono>), and shown as "Packed" on the study page.</li>
+                <li><Mono>reference_build</Mono> — the genome build and annotation the sample was mapped to (see <Link to="/about#references">About singlet</Link> for the exact builds per organism). Recorded per cell in <Mono>obs["reference_build"]</Mono> and in the study manifest.</li>
+                <li><Mono>singlet_version</Mono> — the pipeline release that produced the counts, in the study manifest (<Mono>pipeline</Mono>), the study page and <Mono>/api/gse/:id</Mono>.</li>
+                <li><Mono>created_at</Mono> — when the study's objects were written, in its manifest (returned as <Mono>created_at</Mono> by <Mono>/api/bundle/:gse/index</Mono> and as <Mono>packed_at</Mono> by <Mono>/api/gse/:id</Mono>), and shown as "Packed" on the study page. The manifest's <Mono>rev</Mono> changes whenever any sample object or study file does.</li>
               </ul>
               <p>
                 The pipeline version is not the same for every file. Published files record <Mono>2.0.0</Mono> (about
@@ -576,7 +498,7 @@ python load_studies.py`}
                 and input was capped at 30,000,000 reads per sample (see{" "}
                 <Link to="/about#processing">What a study goes through</Link>). Before merging studies, check that they
                 share a reference build and pipeline version. The atlas data is <Mono>CC0</Mono>{" "}
-                (public domain, no attribution required); the pipeline and packages are <Mono>MIT</Mono> licensed.
+                (public domain, no attribution required); the pipeline, packages and site code are <Mono>MIT</Mono> licensed.
                 Details on the <Link to="/data-license">license page</Link>.
               </p>
             </Section>
@@ -599,7 +521,7 @@ python load_studies.py`}
                 <tbody>
                   <tr>
                     <td>Format</td>
-                    <td>One <Mono>.singlet</Mono> file per study; loads as AnnData or SingleCellExperiment in one line</td>
+                    <td>One <Mono>.s1</Mono> object per sample plus a study manifest; loads as AnnData or SingleCellExperiment in one line</td>
                     <td>Raw FASTQ/SRA plus whatever matrix the authors uploaded, if any — format varies per study</td>
                     <td>Whatever your pipeline emits</td>
                   </tr>
@@ -685,21 +607,18 @@ BiocManager::install(c("SingleCellExperiment", "SummarizedExperiment", "S4Vector
               </ul>
               <h3>Beyond gene counts</h3>
               <p>
-                <Mono>download()</Mono> fetches a study's bundle without reading it (pass a GSE accession), and the{" "}
-                <Mono>singlet_*</Mono> readers reach every other per-sample output. Matrices come back features × cells,
-                the Bioconductor orientation. See <a href="#modalities" className="text-primary hover:underline">Modalities</a>{" "}
+                <Mono>singlet_study()</Mono> reads a study's manifest, <Mono>singlet_study_modalities()</Mono> says what each sample
+                holds, and <Mono>singlet_cells()</Mono> fetches only the chunks of the cells you ask for. Matrices come back
+                features × cells, the Bioconductor orientation. See <a href="#modalities" className="text-primary hover:underline">What Alpha serves</a>{" "}
                 for the full list.
               </p>
               <CodeBlock
                 label="r"
-                code={`path <- download("${MODALITY_GSE}")
-gsm  <- "${MODALITY_GSM}"
-singlet_modalities(path, gsm)                 # what this sample has
+                code={`st <- singlet_study("${GSE}")
+singlet_study_modalities(st)                  # what each sample has
 
-sce <- singlet_raw_counts(path, gsm)          # counts, spliced, unspliced
-singlet_read(path, gsm, "mt_heteroplasmy")
-if (singlet_has(path, "nonhost_species", gsm))
-  taxa <- singlet_read(path, gsm, "nonhost_species")`}
+sce <- singlet::load("${GSM}")                 # counts, spliced, unspliced
+sub <- singlet_cells(st, where = "n_umi_exon > 5000", samples = "${GSM}")`}
               />
             </Section>
 
@@ -716,9 +635,9 @@ if (singlet_has(path, "nonhost_species", gsm))
                   <tr>
                     <td><Mono>singlet.load(acc_or_path, ...)</Mono></td>
                     <td>
-                      <Mono>AnnData</Mono>. Accepts a GSE or GSM accession, a local <Mono>.singlet</Mono> path, or a list
-                      of these (concatenated with an outer join on genes). A GSM downloads the whole parent study, then
-                      keeps that sample's cells.
+                      <Mono>AnnData</Mono>. Accepts a GSE or GSM accession, a local <Mono>.s1</Mono> path, or a list
+                      of these (concatenated with an outer join on genes). A GSM fetches only that sample's object;{" "}
+                      <Mono>modalities=</Mono> picks members beyond the gene counts.
                     </td>
                   </tr>
                   <tr>
@@ -730,15 +649,8 @@ if (singlet_has(path, "nonhost_species", gsm))
                     <td><Mono>find</Mono> followed by <Mono>load</Mono>, as one <Mono>AnnData</Mono>. Each match is a full study download.</td>
                   </tr>
                   <tr>
-                    <td><Mono>singlet.download(acc)</Mono></td>
-                    <td>Downloads a study's <Mono>.singlet</Mono> file to the cache and returns its path, without reading it.</td>
-                  </tr>
-                  <tr>
-                    <td><Mono>singlet.open_bundle(acc_or_path)</Mono></td>
-                    <td>
-                      A <Mono>SingletBundle</Mono> — the handle for everything that isn't gene counts. See{" "}
-                      <a href="#modalities" className="text-primary hover:underline">Modalities</a>.
-                    </td>
+                    <td><Mono>singlet.open_study(gse)</Mono>, <Mono>singlet.cells(gse, where=…)</Mono></td>
+                    <td>The study's manifest (nothing else is fetched); a cell-level slice that reads only the matrix chunks of the matching cells.</td>
                   </tr>
                   <tr>
                     <td><Mono>singlet.read_1pz(path)</Mono></td>
@@ -804,7 +716,7 @@ sc.pp.highly_variable_genes(adata, batch_key="gsm_id")`}
               />
               <h3>In the packages</h3>
               <p className="text-sm text-muted-foreground">
-                <code className="code-inline">find()</code> works without a key at the 10/day anonymous client limit; a key raises the limit to your account allowance (200/day).
+                <code className="code-inline">find()</code> works without a key, but then reads every question with the built-in vocabulary only. With a key, a question that needs an AI reading uses your account's limits: 200 AI readings a day (reset at 00:00 UTC) and a monthly AI token allowance.
                 The key is only sent with searches; loading and downloading never use it.
               </p>
               <div className="grid md:grid-cols-2 gap-3 mt-3">
@@ -880,10 +792,10 @@ accs <- singlet::find("microglia in the aging mouse brain")`}
                 <Mono>export_manifest</Mono>, <Mono>find_matched_controls</Mono>, <Mono>compare_studies</Mono>,{" "}
                 <Mono>assess_study</Mono>, <Mono>get_cohort</Mono>, <Mono>save_cohort</Mono>, and for studies stored
                 per sample <Mono>find_cells</Mono>, <Mono>slice_cells</Mono> and <Mono>resolve_features</Mono>. Inputs, outputs and
-                key requirements for each are in the <Link to="/docs/mcp#tools">tool reference</Link>.
+                notes for each are in the <Link to="/docs/mcp#tools">tool reference</Link>. Every tool call needs sign-in or a key.
               </p>
               <p>
-                Try it from a terminal (no key needed for this call):
+                Try it from a terminal (listing the tools needs no key; calling one does):
               </p>
               <CodeBlock
                 label="bash"
@@ -925,7 +837,7 @@ accs <- singlet::find("microglia in the aging mouse brain")`}
               <ul>
                 <li>Build the C++ pipeline with CMake from the repository, following its README. You need a C++17 toolchain, zstd, STAR, and a STAR index for the reference you map to (see <Link to="/about#references">About singlet</Link> for the builds the atlas uses).</li>
                 <li>Plan for alignment-scale compute: tens of GB of RAM for a human or mouse STAR index, and hours per sample on a workstation.</li>
-                <li>The output directory holds the same per-sample matrices listed under <a href="#singlet-file">What's in a .singlet file</a>; <Mono>singlet.load_dir()</Mono> reads it as <Mono>AnnData</Mono>.</li>
+                <li>The output directory holds the per-sample matrices listed under <a href="#singlet-file">What's in a .s1 sample</a>; <Mono>singlet.load_dir()</Mono> reads it as <Mono>AnnData</Mono>.</li>
                 <li>To keep private results next to the public catalogue, pack them into a <Mono>.singlet</Mono> file and add it under <a href="#private-projects">Private projects</a>.</li>
                 <li>Build steps, the CLI reference and known issues are on <a href={GITHUB_REPO} target="_blank" rel="noopener noreferrer">GitHub</a>; questions and bugs go to <a href={GITHUB_ISSUES} target="_blank" rel="noopener noreferrer">GitHub Issues</a>.</li>
               </ul>

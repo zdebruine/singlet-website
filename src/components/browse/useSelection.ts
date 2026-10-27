@@ -8,11 +8,11 @@ export interface SelectedStudy {
   n_cells: number;
   bundle_bytes: number | null;
   has_bundle: boolean;
-  /** Where to download the study: its single file, or its v2 manifest once the single file is retired. Absent in older saved selections. */
+  /** Where to download the study: its single file, or its s1 manifest once the single file is retired. Absent in older saved selections. */
   file_url?: string;
 }
 
-const fileUrlOf = (row: StudyRow | SelectedStudy): string => ("file_url" in row && row.file_url ? row.file_url : studyFileUrl(row.gse_id, "v2" in row ? row.v2 : null));
+const fileUrlOf = (row: StudyRow | SelectedStudy): string => ("file_url" in row && row.file_url ? row.file_url : studyFileUrl(row.gse_id, "s1" in row ? row.s1 : null));
 
 const KEY = "singlet.browse.selection.v1";
 

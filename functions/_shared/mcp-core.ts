@@ -1,5 +1,5 @@
 /**
- * Result helpers shared by the MCP tools (mcp-tools.ts) and the v2 tools (mcp-v2.ts). Kept apart so the two do not import each other.
+ * Result helpers shared by the MCP tools (mcp-tools.ts) and the s1 tools (mcp-s1.ts). Kept apart so the two do not import each other.
  */
 export const SITE = "https://singlet.bio";
 export const ACCOUNT_URL = `${SITE}/account`;

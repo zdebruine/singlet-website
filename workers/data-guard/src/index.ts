@@ -3,7 +3,7 @@
 //
 // Allowed requests are passed to the origin unchanged (fetch(request)), so CORS, ETag and Range behaviour stay R2's own.
 // The Worker reads only the bundle's central directory, through the R2 binding, to see which members a request touches.
-import { classify, isWithheld, POLICY_VERSION } from "./policy";
+import { classify, isExcludedSample, isWithheld, POLICY_VERSION } from "./policy";
 import { membersInRange, readZipIndex, type ZipIndex } from "./zip";
 import { isLegacyRetired, s1ManifestUrl } from "./retire";
 
@@ -16,6 +16,8 @@ interface Env {
 const KEY_RE = /^\/data\/(GSE\d+)\/([^/]+)$/;
 // v2 study manifests of withheld studies (exact routes in wrangler.toml; everything else under /v2/* stays with data-v2)
 const V2_MANIFEST_RE = /^\/v2\/m\/(GSE\d+)\.json$/;
+// v2 sample objects (v2/s/<GSM>/<hash>.s2) of excluded samples
+const V2_SAMPLE_RE = /^\/v2\/s\/(GSM\d+)\//;
 const cache = new Map<string, ZipIndex>();
 const CACHE_MAX = 256;
 
@@ -59,8 +61,11 @@ function parseRange(h: string | null, size: number): [number, number] | null | "
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+    if (url.pathname.startsWith("/store/")) return text(404, "Not found");
     const v2 = V2_MANIFEST_RE.exec(url.pathname);
     if (v2) return isWithheld(v2[1]) ? text(404, "Not found") : fetch(request);
+    const v2s = V2_SAMPLE_RE.exec(url.pathname);
+    if (v2s) return isExcludedSample(v2s[1]) ? text(404, "Not found") : fetch(request);
     const m = KEY_RE.exec(url.pathname);
     if (!m) return fetch(request);
     const [, gse, file] = m;
@@ -88,14 +93,11 @@ export default {
     if (range === "bad") return text(416, "Only one byte range per request is supported.");
 
     if (range === null) {
-      // Whole-file download: refuse while the file still holds members that are not part of Alpha. Per-cell mtDNA
-      // allele layers are in every legacy bundle; they are removed by the Alpha repack, not by this check.
-      const blocked = idx.members.some((x) => {
-        const v = classify(x.name);
-        return v === "excluded" || (v === "private" && !/(^|\/)(mt_heteroplasmy\.1pz|mt_variants\.tsv)$/.test(x.name));
-      });
-      if (blocked)
-        return text(503, "This study file is being repackaged for Singlet Research Alpha. Full downloads return shortly; ranged reads of its public members work now.", {
+      // Whole-file download: refuse while the file still holds any member that is not part of Alpha (excluded samples,
+      // genotype or mtDNA allele layers). Every legacy bundle holds per-cell mtDNA layers, so this refuses them all; the
+      // study's .s1 objects are the download.
+      if (idx.members.some((x) => classify(x.name) !== "ok"))
+        return text(503, "This legacy study file is retired in Singlet Research Alpha. Download the study's .s1 objects instead (see https://singlet.bio/docs); ranged reads of its public members work for now.", {
           "Retry-After": "86400",
         });
       return fetch(request);

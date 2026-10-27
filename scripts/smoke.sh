@@ -64,18 +64,18 @@ if printf '%s' "$body" | grep -q -E 'snp_(ad|dp)|\.vcf|ase_counts|mt_events|_cov
 # restricted-sidecar migration) leaves its cached offsets pointing into other bytes. For one study that was rewritten
 # in place (GSE111113) and one original upload (GSE138867): the index lists the size HEAD reports, and the first four
 # bytes of a sample's exon matrix, read by Range from where the API says they start, are the .1pz magic "TP1Z".
-# Update the accessions when those studies are re-packed into the v2 layout and the legacy bundles are retired.
+# Update the accessions when those studies are re-packed into the per-sample layout and the legacy bundles are retired.
 smoke_bundle_offsets() { # gse
   local gse="$1" idx idxbytes path tmp ct start range url live magic
   fetch "$BASE/api/bundle/$gse/index"
   idx=$(printf '%s' "$body" | tr -d ' \r\n')
-  # A study served from the v2 layout has no legacy bundle to compare: its index lists v2 objects.
-  if [ "$code" = 200 ] && printf '%s' "$idx" | grep -q '"format":"singlet-v2"'; then ok "bundle offsets $gse skipped (served from v2)"; return; fi
+  # A study served from the per-sample layout has no legacy bundle to compare: its index lists sample objects.
+  if [ "$code" = 200 ] && printf '%s' "$idx" | grep -q '"format":"singlet-s1"'; then ok "bundle offsets $gse skipped (served from s1)"; return; fi
   idxbytes=$(printf '%s' "$idx" | grep -o '"bytes":[0-9]*' | head -n 1 | grep -o '[0-9]*$')
   path=$(printf '%s' "$idx" | grep -o 'samples/GSM[0-9]*/exon_counts\.1pz' | head -n 1)
   if [ "$code" != 200 ] || [ -z "$idxbytes" ] || [ -z "$path" ]; then bad "bundle offsets $gse (index $code, bytes '${idxbytes:-?}', matrix '${path:-none}')"; return; fi
   url="https://data.singlet.bio/data/$gse/$gse.singlet"
-  # The legacy file is gone (retired after the study moved to v2): nothing to compare.
+  # The legacy file is gone (retired after the study moved to s1): nothing to compare.
   if [ "$(curl -s -o /dev/null -m 30 -I -w '%{http_code}' "$url")" = 404 ]; then ok "bundle offsets $gse skipped (legacy file retired)"; return; fi
   live=$(curl -sI -m 30 "$url" | tr -d '\r' | grep -i '^content-length:' | head -n 1 | grep -o '[0-9]*$')
   if [ "$live" = "$idxbytes" ]; then ok "bundle size $gse matches the object ($live)"; else bad "bundle size $gse (index $idxbytes, object ${live:-?})"; fi
@@ -97,9 +97,9 @@ smoke_bundle_offsets() { # gse
 smoke_bundle_offsets GSE111113
 smoke_bundle_offsets GSE138867
 
-# A retired study is one whose single .singlet file is deleted (v2_migration.status = 'retired'). It must answer from v2 and name no legacy URL:
-# the study detail has no bundle URL and says the legacy file is gone, the bundle index lists v2 objects, the search row and the manifest name
-# the v2 manifest, the manifest object is there, and the old file is really a 404. Name the studies in SMOKE_RETIRED (space separated, e.g.
+# A retired study is one whose single .singlet file is deleted (s1_migration.status = 'retired'). It must answer from s1 and name no legacy URL:
+# the study detail has no bundle URL and says the legacy file is gone, the bundle index lists sample objects, the search row and the manifest name
+# the s1 manifest, the manifest object is there, and the old file is not served (404, or 410 from the data guard while the switch is on). Name the studies in SMOKE_RETIRED (space separated, e.g.
 # SMOKE_RETIRED="GSE145370" once that study is retired); with it empty nothing is checked. src/test/retired-study.test.ts runs the same
 # assertions on fixtures for every endpoint and tool.
 smoke_retired() { # gse
@@ -107,22 +107,37 @@ smoke_retired() { # gse
   fetch "$BASE/api/gse/$gse"
   flat=$(printf '%s' "$body" | tr -d ' \r\n')
   if [ "$code" != 200 ]; then bad "retired $gse detail ($code)"; return; fi
-  if printf '%s' "$flat" | grep -q '"legacy_available":false' && printf '%s' "$flat" | grep -q '"bundle_url":null'; then ok "retired $gse: detail has no bundle URL, v2 block says the legacy file is gone"; else bad "retired $gse: detail still offers the legacy file (is its migration status retired?)"; fi
+  if printf '%s' "$flat" | grep -q '"legacy_available":false' && printf '%s' "$flat" | grep -q '"bundle_url":null'; then ok "retired $gse: detail has no bundle URL, s1 block says the legacy file is gone"; else bad "retired $gse: detail still offers the legacy file (is its migration status retired?)"; fi
   if printf '%s' "$flat" | grep -q -E "/data/$gse/|$gse\\.singlet"; then bad "retired $gse: detail names the legacy file"; else ok "retired $gse: detail names no legacy file"; fi
   murl=$(printf '%s' "$flat" | grep -o '"manifest_url":"[^"]*"' | head -n 1 | sed 's/"manifest_url":"//; s/"$//')
   if [ -n "$murl" ] && [ "$(curl -s -o /dev/null -m 30 -I -w '%{http_code}' "$murl")" = 200 ]; then ok "retired $gse: manifest answers ($murl)"; else bad "retired $gse: manifest missing (${murl:-no manifest_url})"; fi
   legacy="https://data.singlet.bio/data/$gse/$gse.singlet"
-  if [ "$(curl -s -o /dev/null -m 30 -I -w '%{http_code}' "$legacy")" = 404 ]; then ok "retired $gse: legacy object is gone"; else bad "retired $gse: legacy object still answers"; fi
+  # 404 once the bytes are archived and deleted, 410 from the data-guard Worker while s1_flags.legacy_bundles = 'retired'
+  case "$(curl -s -o /dev/null -m 30 -I -w '%{http_code}' "$legacy")" in 404|410) ok "retired $gse: legacy object is not served" ;; *) bad "retired $gse: legacy object still answers" ;; esac
   fetch "$BASE/api/bundle/$gse/index"
   flat=$(printf '%s' "$body" | tr -d ' \r\n')
-  if [ "$code" = 200 ] && printf '%s' "$flat" | grep -q '"format":"singlet-v2"' && ! printf '%s' "$flat" | grep -q -E "/data/$gse/|$gse\\.singlet"; then ok "retired $gse: bundle index lists v2 objects"; else bad "retired $gse: bundle index ($code)"; fi
+  if [ "$code" = 200 ] && printf '%s' "$flat" | grep -q '"format":"singlet-s1"' && ! printf '%s' "$flat" | grep -q -E "/data/$gse/|$gse\\.singlet"; then ok "retired $gse: bundle index lists sample objects"; else bad "retired $gse: bundle index ($code)"; fi
   fetch "$BASE/api/search?level=gse&q=$gse&limit=5"
   flat=$(printf '%s' "$body" | tr -d ' \r\n')
   if [ "$code" = 200 ] && printf '%s' "$flat" | grep -q "\"gse_id\":\"$gse\"" && ! printf '%s' "$flat" | grep -q -E "\"bundle_key\":\"data/$gse/|/data/$gse/"; then ok "retired $gse: search row has no legacy key"; else bad "retired $gse: search row ($code)"; fi
   fetch "$BASE/api/manifest?q=$gse&format=tsv"
-  if [ "$code" = 200 ] && printf '%s' "$body" | grep -q "v2/m/$gse.json" && ! printf '%s' "$body" | grep -q -E "/data/$gse/|$gse\\.singlet"; then ok "retired $gse: manifest export names the v2 manifest"; else bad "retired $gse: manifest export ($code)"; fi
+  if [ "$code" = 200 ] && printf '%s' "$body" | grep -q "s1/m/$gse.json" && ! printf '%s' "$body" | grep -q -E "/data/$gse/|$gse\\.singlet"; then ok "retired $gse: manifest export names the s1 manifest"; else bad "retired $gse: manifest export ($code)"; fi
 }
 for g in ${SMOKE_RETIRED:-}; do smoke_retired "$g"; done
+
+# .s1 serving (workers/data on data.singlet.bio/s1/*): for the studies in SMOKE_S1 (space separated, e.g. SMOKE_S1="GSE138867"), the manifest
+# answers from the Worker, its first sample object answers a ranged read with 206, and the API names that manifest. Empty: nothing is checked.
+smoke_s1() { # gse
+  local gse="$1" m key hdr
+  m="https://data.singlet.bio/s1/m/$gse.json"
+  hdr=$(curl -s -I -m 30 "$m" | tr -d '\r')
+  if printf '%s' "$hdr" | grep -qi '^x-served-by: singlet-data'; then ok "s1 $gse: manifest served by the data Worker"; else bad "s1 $gse: manifest not served by singlet-data"; fi
+  key=$(curl -s -m 30 "$m" | grep -o '"key": *"s1/s/[^"]*"' | head -n 1 | sed 's/"key": *"//; s/"$//')
+  if [ -n "$key" ] && [ "$(curl -s -o /dev/null -m 30 -H 'Range: bytes=0-63' -w '%{http_code}' "https://data.singlet.bio/$key")" = 206 ]; then ok "s1 $gse: sample object answers a range ($key)"; else bad "s1 $gse: sample object range (${key:-no key in the manifest})"; fi
+  fetch "$BASE/api/gse/$gse"
+  if [ "$code" = 200 ] && printf '%s' "$body" | tr -d ' \r\n' | grep -q "\"manifest_url\":\"$m\""; then ok "s1 $gse: API names the s1 manifest"; else bad "s1 $gse: API does not name $m ($code)"; fi
+}
+for g in ${SMOKE_S1:-}; do smoke_s1 "$g"; done
 
 check "manifest tsv"         200 "$BASE/api/manifest?gse=GSE138867&format=tsv" "GSE138867"
 check "auth me (signed out)" 200 "$BASE/api/auth/me"                        "\"user\": *null|\"user\":null"
@@ -158,7 +173,7 @@ fi
 xfo=$(curl -s -m 30 -o /dev/null -D - "$BASE/" | tr -d '\r' | grep -i '^x-frame-options:' | head -n 1)
 if printf '%s' "$xfo" | grep -q -i -E '^x-frame-options: *DENY$'; then ok "x-frame-options on /"; else bad "x-frame-options on / (got '${xfo:-none}')"; fi
 
-# MCP: tools/list returns the original 14 tools, or 17 once a study is served from v2 (find_cells, slice_cells, resolve_features are listed only then).
+# MCP: tools/list returns the original 14 tools, or 17 once a study is served from s1 (find_cells, slice_cells, resolve_features are listed only then).
 mcp=$(curl -s -m 30 -X POST "$BASE/mcp" -H 'content-type: application/json' \
   -H 'accept: application/json, text/event-stream' \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}')

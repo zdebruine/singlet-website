@@ -72,7 +72,7 @@ const FIXTURES: Record<string, StudyInput> = {
   knockout: study(
     "GSE900002",
     repeat(6, (i) => ({ c: `tissue: Spleen ;; genotype: ${i < 3 ? "WT" : "Ifnar1-/-"} ;; age: 8-12 weeks ;; strain: C57BL/6`, protocol: "10xv2" })),
-    { organism: "Mus musculus" },
+    { organism: "Mus musculus", files: ["sex_call.json", "donor_assignments.tsv"] },
   ),
   // 4. cell line experiment, treated vs DMSO
   cellLine: study(
@@ -145,7 +145,8 @@ describe("study card summaries", () => {
     expect(c.summary_text).toMatch(/^Subcutaneous adipose tissue from 12 human donors, aged 30 to 41 years\./);
     expect(c.summary_text).toContain("disease (obese 6, lean 6)");
     expect(c.summary_text).toContain("sex (male 6, female 6)");
-    expect(c.summary_text).toContain("The file also has genetic sex, donor demultiplexing, genetic ancestry and doublet scores.");
+    // Research Alpha offers neither the legacy ancestry or sex calls nor doublet scores
+    expect(c.summary_text).toContain("The file also has donor demultiplexing.");
     expect(c.donors).toEqual({ n_labeled: 12, n_samples: 12 });
     expect(c.grounded).toBe(true);
   });
@@ -162,6 +163,8 @@ describe("study card summaries", () => {
     expect(c.summary_text).toMatch(/^Spleen from 6 mouse samples, aged 10 weeks\./);
     expect(c.summary_text).toContain("genotype (wild type 3, Ifnar1-/- 3)");
     expect(c.platforms).toEqual([{ value: "10x 3' v2 scRNA-seq", n: 6 }]);
+    // sex_call.json is in the file but its mouse calls are all "unknown", so it is not listed as a layer.
+    expect(c.layers).toEqual(["donor demultiplexing"]);
   });
 
   it("reports a cell line experiment with treatment and vehicle groups", () => {
@@ -291,7 +294,7 @@ describe("grounding", () => {
     const rows = rowsOf(input);
     const c = buildStudyCard(input, rows);
     const noFiles = { ...input, file_paths: [] };
-    expect(groundingProblems(c, noFiles, rows).join(" ")).toContain('layer "genetic sex" has no file');
+    expect(groundingProblems(c, noFiles, rows).join(" ")).toContain('layer "donor demultiplexing" has no file');
   });
 
   it("has no summary and is not grounded when no sample is approved", () => {

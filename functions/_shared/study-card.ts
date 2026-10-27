@@ -145,11 +145,12 @@ export function cellsLabel(n: number | null): string | null {
 
 const TO_DAYS: Record<string, number> = { years: 365.25, months: 30.44, weeks: 7, days: 1 };
 
+/**
+ * Layers a summary may name. Research Alpha does not offer the legacy ancestry call, the legacy pipeline sex call or doublet scores
+ * (./restricted); genetic sex and ancestry come from the s1 cell labels.
+ */
 const LAYER_FILES: { file: string; label: string; humanOnly?: boolean }[] = [
-  { file: "sex_call.json", label: "genetic sex" },
   { file: "donor_assignments.tsv", label: "donor demultiplexing" },
-  { file: "ancestry_call.json", label: "genetic ancestry", humanOnly: true },
-  { file: "doublet_scores.tsv", label: "doublet scores" },
 ];
 
 const AXIS_ORDER: { attr: Attr; label: string }[] = [

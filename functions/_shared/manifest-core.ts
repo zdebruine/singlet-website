@@ -9,7 +9,8 @@ import { safeList } from "./json";
 import { bundleUrl } from "./study-core";
 import { organismToCommon } from "./vocab";
 import { exportStudyAccessions, type Ctx, type SearchFilters } from "./search-core";
-import { v2Facts } from "./v2-serve";
+import { s1Facts } from "./s1-serve";
+import { studyServedSql } from "./alpha";
 
 export const MAX_MANIFEST_STUDIES = 2000;
 export const MANIFEST_FORMATS = ["tsv", "json", "curl", "wget", "python", "r"] as const;
@@ -30,19 +31,24 @@ export interface ManifestRow {
   n_samples_passing_qc: number | null;
   /** Samples in the file flagged low QC: proceed with caution. */
   n_samples_low_qc: number | null;
+  /** Cells called in the file's samples that passed QC (gse_meta.n_usable_cells); never the catalog's raw barcode count. */
   n_cells: number;
   year: number | null;
   pubmed_ids: string[];
   reference_build: string | null;
   bytes: number | null;
-  /** The legacy single file while it exists; the v2 manifest once the legacy bundle is retired. */
+  /** The legacy single file while it exists; the s1 manifest once the legacy bundle is retired. */
   download_url: string;
   license: "CC0";
-  /** "singlet-v2" when the study is served from the v2 per-sample layout (schema/032), else "singlet-v1". */
-  format: "singlet-v1" | "singlet-v2";
+  /** "singlet-s1" when the study is served from the per-sample layout (schema/032), else "singlet-v1". */
+  format: "singlet-v1" | "singlet-s1";
+  s1_manifest_url: string | null;
+  s1_rev: string | null;
+  /** Total size of the sample objects. */
+  s1_bytes: number | null;
+  /** DUAL: the old names of the three columns above (same values), removed in the cleanup. */
   v2_manifest_url: string | null;
   v2_rev: string | null;
-  /** Total size of the v2 sample objects. */
   v2_bytes: number | null;
 }
 
@@ -53,20 +59,24 @@ export async function manifestRows(db: D1Database, ids: string[]): Promise<Manif
     const inList = chunk.map(() => "?").join(", ");
     const res = await db
       .prepare(
-        `SELECT g.id AS gse_id, g.title, g.pubmed_ids, g.n_cells AS g_cells, g.r2_bundle_bytes, g.r2_bundle_n_gsms,
-                m.organism_primary, m.tissue_groups, m.disease_groups, m.assay_families, m.n_cells AS m_cells, m.year,
+        `SELECT g.id AS gse_id, g.title, g.pubmed_ids, g.r2_bundle_bytes, g.r2_bundle_n_gsms,
+                m.organism_primary, m.tissue_groups, m.disease_groups, m.assay_families, m.n_usable_cells AS file_cells, m.year,
                 m.n_usable_samples, m.n_lowqc_samples,
-                b.reference_build, b.n_gsms_in_bundle, b.bytes AS b_bytes
+                b.reference_build, b.n_gsms_in_bundle, b.bytes AS b_bytes,
+                (SELECT COUNT(*) FROM alpha_exclusions x WHERE x.gse_id = g.id
+                    AND (b.gsm_ids IS NULL OR x.gsm_id IN (SELECT value FROM json_each(b.gsm_ids)))) AS n_excluded
            FROM gse g
            LEFT JOIN gse_meta m ON m.gse_id = g.id
            LEFT JOIN bundle_manifest b ON b.gse_id = g.id
-          WHERE g.id IN (${inList})`
+          WHERE g.id IN (${inList}) AND ${studyServedSql("g.id")}`
       )
       .bind(...chunk)
       .all<Record<string, unknown>>();
     for (const r of res.results) {
-      const nInFile =
+      // Samples that are not part of the atlas are not counted, even while the legacy file still holds them.
+      const rawInFile =
         r.n_gsms_in_bundle != null ? Number(r.n_gsms_in_bundle) : r.r2_bundle_n_gsms != null ? Number(r.r2_bundle_n_gsms) : null;
+      const nInFile = rawInFile != null ? Math.max(0, rawInFile - Number(r.n_excluded ?? 0)) : null;
       out.push({
         gse_id: String(r.gse_id),
         title: (r.title as string | null) ?? null,
@@ -77,7 +87,7 @@ export async function manifestRows(db: D1Database, ids: string[]): Promise<Manif
         n_samples_in_file: nInFile,
         n_samples_passing_qc: r.n_usable_samples != null ? Number(r.n_usable_samples) : null,
         n_samples_low_qc: r.n_lowqc_samples != null ? Number(r.n_lowqc_samples) : null,
-        n_cells: Number(r.m_cells ?? r.g_cells ?? 0),
+        n_cells: Number(r.file_cells ?? 0),
         year: r.year != null ? Number(r.year) : null,
         pubmed_ids: safeList(r.pubmed_ids),
         reference_build: (r.reference_build as string | null) ?? null,
@@ -85,22 +95,28 @@ export async function manifestRows(db: D1Database, ids: string[]): Promise<Manif
         download_url: bundleUrl(String(r.gse_id)),
         license: "CC0",
         format: "singlet-v1",
+        s1_manifest_url: null,
+        s1_rev: null,
+        s1_bytes: null,
         v2_manifest_url: null,
         v2_rev: null,
         v2_bytes: null,
       });
     }
   }
-  // Studies served from v2 say so; once their legacy bundle is retired the manifest URL and v2 size stand in for the old file.
-  const facts = await v2Facts(db, out.map((r) => r.gse_id));
+  // Studies served from s1 say so; once their legacy bundle is retired the manifest URL and s1 size stand in for the old file.
+  const facts = await s1Facts(db, out.map((r) => r.gse_id));
   for (const row of out) {
     const f = facts.get(row.gse_id);
     if (!f) continue;
-    row.format = "singlet-v2";
+    row.format = "singlet-s1";
+    row.s1_manifest_url = f.manifest_url;
+    row.s1_rev = f.rev;
+    row.s1_bytes = f.bytes;
     row.v2_manifest_url = f.manifest_url;
     row.v2_rev = f.rev;
     row.v2_bytes = f.bytes;
-    // where the legacy file's catalog rows say nothing (a study that never had one), the v2 manifest does
+    // where the legacy file's catalog rows say nothing (a study that never had one), the s1 manifest does
     row.n_samples_in_file ??= f.n_samples;
     row.reference_build ??= f.reference_build;
     if (!f.legacy_alive) {
@@ -130,7 +146,9 @@ const TSV_COLUMNS = [
   "download_url",
   "license",
   "format",
-  "v2_manifest_url",
+  "s1_manifest_url",
+  "s1_rev",
+  "v2_manifest_url", // DUAL: old column names, same values
   "v2_rev",
 ] as const;
 
@@ -140,8 +158,13 @@ function tsvCell(v: unknown): string {
   return s.replace(/[\t\r\n]+/g, " ").trim();
 }
 
-function renderTsv(rows: ManifestRow[]): string {
-  const lines = [TSV_COLUMNS.join("\t")];
+/** A TSV that holds fewer studies than matched says so on its first line (a `#` comment; pandas: comment="#", R: comment.char="#"). */
+function renderTsv(rows: ManifestRow[], total: number): string {
+  const lines =
+    total > rows.length
+      ? [`# truncated: ${rows.length} of ${total} matching studies (limit ${MAX_MANIFEST_STUDIES}); narrow the search to list the rest`]
+      : [];
+  lines.push(TSV_COLUMNS.join("\t"));
   for (const r of rows) lines.push(TSV_COLUMNS.map((c) => tsvCell((r as unknown as Record<string, unknown>)[c])).join("\t"));
   return lines.join("\n") + "\n";
 }
@@ -160,7 +183,7 @@ function renderCurl(rows: ManifestRow[], total: number): string {
     ["#!/usr/bin/env bash", "set -euo pipefail", ...header(rows, total), ""]
       .concat(
         rows.map((r) =>
-          r.format === "singlet-v2" && r.download_url === r.v2_manifest_url
+          r.format === "singlet-s1" && r.download_url === r.s1_manifest_url
             ? `curl -fL --retry 3 -C - -o "${r.gse_id}.manifest.json" "${r.download_url}"  # one object per sample, listed in this manifest`
             : `curl -fL --retry 3 -C - -o "${r.gse_id}.singlet" "${r.download_url}"`
         )
@@ -207,6 +230,8 @@ export interface RenderedManifest {
   format: ManifestFormat;
   total: number;
   returned: number;
+  /** Fewer studies than matched (the 2,000 cap). */
+  truncated: boolean;
   total_bytes: number;
   rows: ManifestRow[];
   body: string;
@@ -231,6 +256,7 @@ export function renderManifest(
         {
           total,
           returned: rows.length,
+          truncated: total > rows.length,
           limit: MAX_MANIFEST_STUDIES,
           license: "CC0",
           ...(extra.applied !== undefined ? { applied: extra.applied } : {}),
@@ -264,7 +290,7 @@ export function renderManifest(
       filename = `${base}.R`;
       break;
     default:
-      body = renderTsv(rows);
+      body = renderTsv(rows, total);
       content_type = "text/tab-separated-values; charset=utf-8";
       filename = `${base}.tsv`;
   }
@@ -272,6 +298,7 @@ export function renderManifest(
     format,
     total,
     returned: rows.length,
+    truncated: total > rows.length,
     total_bytes: rows.reduce((n, r) => n + (r.bytes ?? 0), 0),
     rows,
     body,
@@ -301,5 +328,6 @@ export async function buildManifestFromIds(
 ): Promise<RenderedManifest> {
   const capped = ids.slice(0, MAX_MANIFEST_STUDIES);
   const rows = await manifestRows(db, capped);
-  return renderManifest(rows, ids.length, format);
+  // A withheld or unknown accession is simply not in the manifest; the total counts what could be listed.
+  return renderManifest(rows, rows.length + Math.max(0, ids.length - capped.length), format);
 }

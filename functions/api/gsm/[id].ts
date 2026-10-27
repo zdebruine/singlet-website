@@ -2,6 +2,7 @@
  * GET /api/gsm/:id
  * Sample detail: sample row + parent series (summary) + siblings (same GSE, up to 20).
  */
+import { sampleServedSql, studyServedSql } from "../../_shared/alpha";
 import { serverError } from "../../_shared/errors";
 import { corsOk, corsErr, handleOptions } from "../../_shared/cors";
 import { safeJson, safeList } from "../../_shared/json";
@@ -11,6 +12,9 @@ interface Env {
   DB: D1Database;
 }
 
+/** Research Alpha: an excluded sample, or any sample of a withheld study, is not found. */
+const SERVED = `${sampleServedSql("gsm.gsm_id")} AND ${studyServedSql("gsm.gse_id")}`;
+
 export const onRequestGet: PagesFunction<Env> = async ({ env, params }) => {
   try {
     const id = (params.id as string ?? "").toUpperCase();
@@ -18,10 +22,11 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, params }) => {
 
     const sample = await env.DB.prepare(
       `SELECT gsm_id, gse_id, organism, protocol, assay_family, modality, tissue, cell_type, donor_id,
-              disease, sex, n_cells, mapping_rate, median_genes, median_umis, mt_pct,
-              status, qc_flag, failure_category, failure_detail, singlet_version,
+              disease, sex, (SELECT q.n_cells_called FROM sample_qc q WHERE q.gsm_id = gsm.gsm_id) AS n_cells,
+              mapping_rate, median_genes, median_umis,
+              status, qc_flag, failure_category, failure_detail,
               pipeline_date, pz_size_bytes, title, source, srr_ids, characteristics, last_updated
-       FROM gsm WHERE gsm_id = ?`
+       FROM gsm WHERE gsm_id = ? AND ${SERVED}`
     ).bind(id).first<Record<string, unknown>>();
 
     if (!sample) return corsErr(`Sample ${id} not found`, 404);
@@ -30,13 +35,14 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, params }) => {
 
     const [seriesRow, siblingsResult] = await Promise.all([
       env.DB.prepare(
-        `SELECT id, title, organism, n_gsm_total, n_gsm_done, n_gsm_failed, n_cells, submitted_date
+        `SELECT id, title, organism, n_gsm_total, n_gsm_done, n_gsm_failed,
+                (SELECT m.n_usable_cells FROM gse_meta m WHERE m.gse_id = gse.id) AS n_cells, submitted_date
          FROM gse WHERE id = ?`
       ).bind(gseId).first<Record<string, unknown>>(),
 
       env.DB.prepare(
-        `SELECT gsm_id, status, n_cells, title, qc_flag
-         FROM gsm WHERE gse_id = ? AND gsm_id != ?
+        `SELECT gsm_id, status, (SELECT q.n_cells_called FROM sample_qc q WHERE q.gsm_id = gsm.gsm_id) AS n_cells, title, qc_flag
+         FROM gsm WHERE gse_id = ? AND gsm_id != ? AND ${SERVED}
          ORDER BY gsm_id ASC LIMIT 20`
       ).bind(gseId, id).all<Record<string, unknown>>(),
     ]);

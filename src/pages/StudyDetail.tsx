@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, ChevronDown, ChevronRight, ExternalLink } from "lucide-react";
+import { ChevronDown, ChevronRight, ExternalLink } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { DownloadPanel } from "@/components/DownloadPanel";
@@ -14,7 +14,7 @@ import { DataSummary } from "@/components/study/DataSummary";
 import { FileTreePanel } from "@/components/study/FileTreePanel";
 import { ProvenancePanel } from "@/components/study/ProvenancePanel";
 import { RelatedStudies } from "@/components/study/RelatedStudies";
-import { apiClient, bundleUrl } from "@/integrations/api/client";
+import { apiClient, bundleUrl, isApiError } from "@/integrations/api/client";
 import type { GseDetailResponse, GsmRow, PublicationRow } from "@/integrations/api/types";
 import { usePageMeta } from "@/hooks/usePageMeta";
 import { fmtCompact, fmtInt, fmtPct, isProcessed, organismLabel } from "@/lib/catalog-display";
@@ -101,7 +101,8 @@ const StudyDetail = () => {
     queryFn: () => apiClient.gse(gseId),
     enabled: /^GSE\d+$/.test(gseId),
     staleTime: 300_000,
-    retry: 1,
+    // A 404 is an answer, not a failure: do not retry it.
+    retry: (count, err) => !(isApiError(err) && err.status === 404) && count < 1,
   });
   // The site shows approved samples only: processed, not flagged low QC, with count data in the file.
   // Failed and low-QC samples are triaged on the backend and never listed here.
@@ -220,8 +221,8 @@ const StudyDetail = () => {
   }, [data]);
 
   const series = data?.series;
-  // A file to download: the single .singlet file, or, once that is retired, the v2 manifest (series.bundle_url is null then).
-  const hasBundle = !!series?.bundle_url || !!series?.v2;
+  // A file to download: the single .singlet file, or, once that is retired, the s1 manifest (series.bundle_url is null then).
+  const hasBundle = !!series?.bundle_url || !!series?.s1;
   const description = series?.title
     ? `${series.title}. ${derived ? `${organismLabelList(derived.organisms)} · ${fmtInt(derived.processed.length)} processed samples · ${fmtCompact(derived.totalCells)} cells.` : ""} Load it in one line with singlet.`
     : `Reprocessed single-cell data for ${gseId}.`;
@@ -253,7 +254,7 @@ const StudyDetail = () => {
                     {
                       "@type": "DataDownload",
                       encodingFormat: series.bundle_url ? "application/x-singlet" : "application/json",
-                      contentUrl: series.bundle_url ?? series.v2?.manifest_url ?? bundleUrl(gseId),
+                      contentUrl: series.bundle_url ?? series.s1?.manifest_url ?? bundleUrl(gseId),
                       ...(series.bundle_bytes != null ? { contentSize: `${series.bundle_bytes} B` } : {}),
                     },
                   ],
@@ -272,13 +273,16 @@ const StudyDetail = () => {
   }
 
   if (error || !data || !derived || !series) {
+    // A clean 404 (or an id that is not a GSE accession) means the study is not in the atlas;
+    // anything else is a failed request, which says so instead.
+    const unreachable = !!error && !(isApiError(error) && error.status === 404);
     return (
       <Shell>
         <div className="py-12 text-center">
-          <h1 className="text-2xl mb-2">Study not found</h1>
+          <h1 className="text-2xl mb-2">{unreachable ? "Study unavailable" : "No such study"}</h1>
           <p className="text-muted-foreground mb-5">
-            <span className="font-mono">{gseId || "This accession"}</span> is not in the catalog
-            {error && !/404/.test(String((error as Error).message)) ? " right now — the catalog may be unreachable" : ""}.
+            <span className="font-mono">{gseId || "This accession"}</span>
+            {unreachable ? " could not be loaded right now — the catalog may be unreachable. Try again in a minute." : " is not in the singlet.bio atlas."}
           </p>
           <div className="flex justify-center gap-3">
             <Link to="/browse" className="btn-secondary btn-sm">Browse the atlas</Link>
@@ -297,7 +301,6 @@ const StudyDetail = () => {
   const {
     processed,
     totalCells,
-    flagged,
     avgMR,
     medGenes,
     organisms,
@@ -336,40 +339,12 @@ const StudyDetail = () => {
       ),
       title: "Samples that passed QC",
     },
-    ...(fileCells != null
-      ? []
-      : [{
-      label: "Cells (catalog)",
-      value:
-
-        totalCells === 0 && flagged > 0 ? (
-          <span className="inline-flex items-center gap-1 text-warning font-normal text-[13px]" title="The reported cell counts for these plate-based samples are implausible and are under review.">
-            <AlertTriangle size={12} /> under review
-          </span>
-        ) : (
-          <>
-            {totalCells > 0 ? fmtCompact(totalCells) : "—"}
-            {flagged > 0 && (
-              <span className="ml-1.5 inline-flex items-center gap-1 text-warning font-normal text-[12px]" title="Cell counts for some plate-based samples are implausible and are under review; they are excluded from this total.">
-                <AlertTriangle size={11} /> {flagged} flagged
-              </span>
-            )}
-          </>
-        ),
-      title:
-        flagged > 0
-          ? `${flagged} of ${processed.length} processed samples report implausible cell counts (a known plate-based pipeline issue). They are excluded from this total.`
-          : "Cell counts as recorded in the catalog metadata, not the cells called in the published file.",
-    }]),
-    ...(fileCells != null
-      ? [
-          {
-            label: "Cells",
-            value: fmtCompact(fileCells),
-            title: `Cells called in the published .singlet file, from its per-sample QC summaries. The catalog metadata records ${fmtCompact(totalCells)}.`,
-          },
-        ]
-      : []),
+    // One cell count: cells called in the published file. The catalog's raw barcode count is not shown.
+    {
+      label: "Cells",
+      value: (fileCells ?? totalCells) > 0 ? fmtCompact(fileCells ?? totalCells) : "—",
+      title: "Cells called in the published .singlet file, from its per-sample QC summaries.",
+    },
 
     // QC tiles only for metrics that were actually recorded; a study with none
     // gets one sentence instead (below the grid), never an em-dash tile.
@@ -522,7 +497,7 @@ const StudyDetail = () => {
         <aside className="mt-2 lg:mt-0 lg:sticky lg:top-20 space-y-3" aria-labelledby="download-h">
           <h2 id="download-h" className="text-[18px] lg:sr-only">Load or download</h2>
           {processed.length > 0 ? (
-            <DownloadPanel accession={gseId} bundleUrl={series.bundle_url} bundleBytes={series.bundle_bytes} v2={series.v2} stacked />
+            <DownloadPanel accession={gseId} bundleUrl={series.bundle_url} bundleBytes={series.bundle_bytes} s1={series.s1} stacked />
           ) : (
             <div className="surface px-4 py-3 text-sm text-muted-foreground">
               No samples in this study completed processing, so there is no <code className="code-inline">.singlet</code> file.
@@ -562,6 +537,10 @@ const StudyDetail = () => {
             Reprocessed from raw reads. Files were made by more than one pipeline release, so compare the reference build and
             pipeline version before merging this study with another.{" "}
             <Link to="/about#processing" className="text-primary hover:underline">How processing works →</Link>
+          </p>
+          <p className="text-[12px] text-muted-foreground leading-relaxed px-0.5">
+            This is a Research Alpha file: it used at most 30M reads per sample, and some molecules are counted twice.{" "}
+            <Link to="/known-issues" className="text-primary hover:underline">Known issues →</Link>
           </p>
         </aside>
       </div>

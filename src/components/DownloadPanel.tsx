@@ -9,7 +9,7 @@ import { Download } from "lucide-react";
 import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { CodeBlock } from "@/components/CodeBlock";
-import type { StudyV2 } from "@/integrations/api/types";
+import type { StudyS1 } from "@/integrations/api/types";
 
 type Lang = "python" | "r" | "curl";
 const LANGS: { id: Lang; label: string }[] = [
@@ -48,16 +48,16 @@ interface DownloadPanelProps {
   /** Bundle size in bytes */
   bundleBytes: number | null | undefined;
   /** Set when the study is stored as one object per sample plus a manifest. */
-  v2?: StudyV2 | null;
+  s1?: StudyS1 | null;
   /** Single-column layout for a narrow sidebar. */
   stacked?: boolean;
   className?: string;
 }
 
-export function DownloadPanel({ accession, bundleUrl, bundleBytes, v2 = null, stacked = false, className }: DownloadPanelProps) {
+export function DownloadPanel({ accession, bundleUrl, bundleBytes, s1 = null, stacked = false, className }: DownloadPanelProps) {
   const downloadUrl = bundleUrl || null;
   // The old single file is gone once the study is retired from it: then the manifest is what there is to download.
-  const manifestUrl = !downloadUrl && v2 ? v2.manifest_url : null;
+  const manifestUrl = !downloadUrl && s1 ? s1.manifest_url : null;
   const [lang, setLang] = useLanguage();
   // In the narrow sidebar the trailing comments don't fit; drop them there.
   // Install lines live on /docs#install — a pip command never goes in a Python block.
@@ -78,7 +78,7 @@ export function DownloadPanel({ accession, bundleUrl, bundleBytes, v2 = null, st
     <div className={cn("surface overflow-hidden", className)}>
       <div className={cn("px-4 py-3 border-b border-border flex gap-3", stacked ? "flex-col" : "items-center justify-between flex-wrap")}>
         <div className="flex items-center gap-x-3 gap-y-1 flex-wrap text-[13px] text-muted-foreground min-w-0">
-          <span className="font-mono text-foreground truncate">{manifestUrl ? `${accession} · ${v2!.n_samples} sample file${v2!.n_samples === 1 ? "" : "s"}` : `${accession}.singlet`}</span>
+          <span className="font-mono text-foreground truncate">{manifestUrl ? `${accession} · ${s1!.n_samples} sample file${s1!.n_samples === 1 ? "" : "s"}` : `${accession}.singlet`}</span>
           <span aria-hidden="true">·</span>
           <Link to="/data-license" className="hover:text-foreground">CC0</Link>
           {!stacked && (
@@ -100,8 +100,8 @@ export function DownloadPanel({ accession, bundleUrl, bundleBytes, v2 = null, st
           <span className="flag self-start">File pending</span>
         )}
       </div>
-        // min-w-0 lets each block shrink to its column so long lines scroll inside
-        // the block instead of being clipped; the narrow sidebar soft-wraps instead.
+        {/* min-w-0 lets each block shrink to its column so long lines scroll inside
+            the block instead of being clipped; the narrow sidebar soft-wraps instead. */}
         <div className="p-3 space-y-2 [&>*]:min-w-0">
           <div className="inline-flex rounded border border-border overflow-hidden" role="group" aria-label="Language">
             {LANGS.map((l) => (
@@ -130,7 +130,7 @@ export function DownloadPanel({ accession, bundleUrl, bundleBytes, v2 = null, st
         </p>
       ) : downloadUrl ? (
         <p className="px-4 pb-3 text-xs text-muted-foreground leading-relaxed">
-          One file per study; filter by <code className="code-inline">gsm_id</code> after loading.{v2 ? " Also stored as one file per sample (see the manifest)." : ""}{" "}
+          One file per study; filter by <code className="code-inline">gsm_id</code> after loading.{s1 ? " Also stored as one file per sample (see the manifest)." : ""}{" "}
           <Link to="/docs#install" className="text-primary hover:underline">Install</Link> ·{" "}
           <Link to="/docs#singlet-file" className="text-primary hover:underline">What's inside →</Link>
         </p>

@@ -1,6 +1,6 @@
 # singlet.bio
 
-Website, catalog API and MCP server for the **singlet** atlas — public single-cell RNA-seq studies from GEO, reprocessed from raw reads with one pipeline, one `.singlet` file per study. Data and this repository's code are CC0 1.0. Singlet Cloud (cloud.singlet.bio), the paid AI layer, is a separate, closed-source service.
+Website, catalog API and MCP server for the **singlet** atlas — public single-cell RNA-seq studies from GEO, reprocessed from raw reads with one pipeline, one `.singlet` file per study. Data is CC0 1.0 (`LICENSE-DATA`); this repository's code is MIT (`LICENSE`). The Workbench has a free academic allowance for AI search and analyses.
 
 ```bash
 pip install "singlet-bio @ git+https://github.com/Singlet-Bio/singlet"
@@ -106,10 +106,14 @@ Once both bots upload here:
 
 ## MCP server
 
-`https://singlet.bio/mcp` (Streamable HTTP, stateless JSON-RPC 2.0) has 17 tools: `search_datasets`, `get_study`, `get_download_url`, `get_atlas_stats`, `get_sample_qc`, `list_bundle_files`, `get_modalities`, `get_partial_download`, `export_manifest`, `find_matched_controls`, `compare_studies`, `assess_study`, `get_cohort`, `save_cohort`, and for studies stored in the v2 per-sample format `find_cells`, `slice_cells` and `resolve_features`. Results carry their data in `structuredContent` with a short text (`verbose: true` adds the full text), and `get_study`, `get_sample_qc`, `list_bundle_files`, `get_modalities` and `get_partial_download` return a `rev` that can be sent back as `known_rev` to get `{unchanged: true}`.
+`https://singlet.bio/mcp` (Streamable HTTP, stateless JSON-RPC 2.0) has 17 tools: `search_datasets`, `get_study`, `get_download_url`, `get_atlas_stats`, `get_sample_qc`, `list_bundle_files`, `get_modalities`, `get_partial_download`, `export_manifest`, `find_matched_controls`, `compare_studies`, `assess_study`, `get_cohort`, `save_cohort`, and for studies stored in the per-sample format `find_cells`, `slice_cells` and `resolve_features`. Results carry their data in `structuredContent` with a short text (`verbose: true` adds the full text), and `get_study`, `get_sample_qc`, `list_bundle_files`, `get_modalities` and `get_partial_download` return a `rev` that can be sent back as `known_rev` to get `{unchanged: true}`.
 
-Most tools need no key. Only `search_datasets` is metered, and only when a question needs a fresh AI reading (10 a day anonymously, 200 with a key). `save_cohort` needs a personal API key, and so does `get_cohort` except for a link cohort opened with its share token. Keys go in `Authorization: Bearer sk_live_…` or `X-API-Key` and are charged to their owner. Client configs are documented at `/docs/mcp`.
+Every tool call (and `initialize`) needs sign-in (OAuth, when the client connects) or a personal API key; without one the server answers HTTP 401 with `sign_in_required`. `tools/list` and `ping` stay open. Calls are limited to 60 a minute per account. Only `search_datasets` is metered, and only when a question needs a fresh AI reading: 200 a day per account (reset 00:00 UTC) and a monthly AI token allowance, reported in `_meta.quota`. A link cohort opens with its share token in `get_cohort`. Downloads from `data.singlet.bio` never need an account. Keys go in `Authorization: Bearer sk_live_…` or `X-API-Key` and are charged to their owner. Client configs are documented at `/docs/mcp`.
 
 ## Related
 
 - [Singlet-Bio/singlet](https://github.com/Singlet-Bio/singlet) — Python and R client packages
+
+## License
+
+Code: MIT (`LICENSE`), for this repository and the `singlet` clients. Data: CC0 1.0 (`LICENSE-DATA`), for every file served from `data.singlet.bio` and every row the API returns. More on [singlet.bio/data-license](https://singlet.bio/data-license).

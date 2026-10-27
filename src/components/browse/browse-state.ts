@@ -34,7 +34,7 @@ export const SORTS: { value: Sort; label: string }[] = [
 
 /** Sorts the server accepts but the dropdown doesn't offer (the table's column headers use them). */
 export const EXTRA_SORTS: { value: Sort; label: string }[] = [
-  { value: "cells", label: "Most cells (catalog)" },
+  { value: "cells", label: "Most cells" },
   { value: "accession", label: "Accession (newest first)" },
 ];
 

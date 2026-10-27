@@ -4,17 +4,22 @@ import { Menu, X } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { SearchBox } from "@/components/SearchBox";
 import { AccountMenu } from "@/components/auth/AccountMenu";
+import { AlphaBanner, AlphaTag } from "@/components/AlphaBanner";
 import { cn } from "@/lib/utils";
 
 /** Public navigation. "Your data" lives in the account menu, not here. */
 const NAV = [
   { to: "/browse", label: "Browse" },
   { to: "/docs", label: "Docs" },
+  { to: "/benchmarking", label: "Benchmarks", wide: true },
   { to: "/about", label: "About" },
+  { to: "/beta", label: "Beta", title: "See what's coming in Beta", wide: true },
 ];
 
 /**
- * A plain white bar: logo on the left, three links and the account on the right.
+ * A plain white bar: logo on the left, the links, the search, "Join the Beta" (wide screens and the mobile menu) and the
+ * account on the right. Benchmarks and Beta drop out of the bar below lg so the search keeps its room; the banner and
+ * footer link both.
  * Exactly one search input per page: the header search is hidden on pages that render their own
  * (home hero, /browse sticky bar, 404 page).
  */
@@ -23,6 +28,7 @@ const Navbar = ({ search = true }: { search?: boolean }) => {
   const [open, setOpen] = useState(false);
   const isHome = location.pathname === "/";
   const showSearch = search && !isHome && location.pathname !== "/browse";
+  const onBeta = location.pathname === "/beta";
 
   useEffect(() => {
     setOpen(false);
@@ -32,15 +38,22 @@ const Navbar = ({ search = true }: { search?: boolean }) => {
 
   return (
     <header className={cn("site-navbar sticky top-0 z-40 bg-background", !isHome && "border-b border-border")}>
+      <AlphaBanner />
       <nav className="container-site h-14 flex items-center gap-6" aria-label="Main">
-        {!isHome && <Logo variant="lockup" theme="auto" height={24} />}
+        {!isHome && (
+          <span className="inline-flex items-center gap-1.5">
+            <Logo variant="lockup" theme="auto" height={24} />
+            <AlphaTag className="-translate-y-1.5" />
+          </span>
+        )}
 
-        <div className="hidden md:flex items-center gap-6">
+        <div className="hidden md:flex items-center gap-5">
           {NAV.map((l) => (
             <Link
               key={l.to}
               to={l.to}
-              className={cn("text-[14px] transition-colors", isActive(l.to) ? "text-foreground font-medium" : "text-muted-foreground hover:text-foreground")}
+              title={l.title}
+              className={cn("text-[14px] transition-colors", l.wide && "hidden lg:inline", isActive(l.to) ? "text-foreground font-medium" : "text-muted-foreground hover:text-foreground")}
             >
               {l.label}
             </Link>
@@ -50,7 +63,12 @@ const Navbar = ({ search = true }: { search?: boolean }) => {
         <div className="flex-1" />
 
         <div className="hidden md:flex items-center gap-6">
-          {showSearch && <SearchBox variant="compact" className="w-64 lg:w-72" />}
+          {showSearch && <SearchBox variant="compact" className="w-56 lg:w-64 xl:w-72" />}
+          {!onBeta && (
+            <Link to="/beta#join" className="btn-primary btn-sm whitespace-nowrap hidden xl:inline-flex">
+              Join the Beta
+            </Link>
+          )}
           <AccountMenu className="navbar-account" />
         </div>
 
@@ -78,6 +96,11 @@ const Navbar = ({ search = true }: { search?: boolean }) => {
                 {l.label}
               </Link>
             ))}
+            {!onBeta && (
+              <Link to="/beta#join" className="btn-primary btn-sm self-start">
+                Join the Beta
+              </Link>
+            )}
             <div className="border-t border-border pt-3">
               <AccountMenu className="navbar-account text-sm" variant="menu" />
             </div>

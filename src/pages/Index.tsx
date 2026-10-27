@@ -6,6 +6,7 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { Logo } from "@/components/Logo";
 import { SearchBox } from "@/components/SearchBox";
+import { AlphaTag } from "@/components/AlphaBanner";
 import { apiClient } from "@/integrations/api/client";
 import { usePageMeta } from "@/hooks/usePageMeta";
 import { fmtCompact, fmtInt } from "@/lib/catalog-display";
@@ -15,6 +16,8 @@ import { FormatSizeChart, H5AD_RATIO, HBars } from "@/components/landing/charts"
 import { QcFunnel, sampleFunnel } from "@/components/landing/QcFunnel";
 import { GetStarted } from "@/components/landing/GetStarted";
 import { ModalityGrid } from "@/components/landing/Modalities";
+import { S1_FORMAT_LIVE } from "@/lib/release";
+import { ACCESS, AlphaCtas, RIGOR, RigorFooter, SPEED, SpeedMeasured, TodayVsBeta } from "@/components/landing/AlphaBeta";
 
 // One message per browser view. Each screen fills the visible window (below the header) up to a cap, so a large
 // monitor does not stretch it, and stacks naturally on a phone. Plan: docs/LANDING.md.
@@ -49,8 +52,10 @@ function Skeleton({ h = "h-48" }: { h?: string }) {
 const JUMPS = [
   { href: "#demo", label: "See it work" },
   { href: "#coverage", label: "Coverage" },
-  { href: "#layers", label: "Modalities" },
+  { href: "#layers", label: "Layers" },
   { href: "#qc", label: "Quality control" },
+  { href: "#speed", label: "Speed" },
+  { href: "#rigor", label: "Rigor" },
 ];
 
 /** Hero buttons that open the matching tab of the Get started screen. */
@@ -86,7 +91,10 @@ const Index = () => {
         <section aria-label="Search" className="relative flex flex-col items-center justify-center min-h-[min(calc(100svh-3.5rem),960px)] py-16 border-b border-border">
           <div className="container-site w-full flex flex-col items-center text-center">
             <h1 className="sr-only">singlet.bio: AI-ready single-cell data</h1>
-            <Logo variant="lockup" theme="auto" height={52} link={false} />
+            <span className="inline-flex items-start gap-2">
+              <Logo variant="lockup" theme="auto" height={52} link={false} />
+              <AlphaTag className="mt-0.5" />
+            </span>
             <div className="mt-10 w-full max-w-[680px]">
               <SearchBox variant="hero" placeholder={`Try "${EXAMPLE_QUERIES[0]}"`} />
               <p className="mt-3 text-[13px] text-muted-foreground tabular">
@@ -105,6 +113,11 @@ const Index = () => {
                 </a>
               ))}
             </div>
+            <p className="mt-6 text-[13.5px] text-muted-foreground">
+              A research preview. Try it, tell us what you need, and{" "}
+              <Link to="/beta" className="text-primary underline underline-offset-2">see what's coming in Beta</Link>.
+            </p>
+            <AlphaCtas className="mt-3 flex flex-wrap items-center justify-center gap-3" />
             <nav aria-label="On this page" className="mt-8 flex flex-wrap justify-center gap-x-5 gap-y-2 text-[13.5px] text-muted-foreground">
               {JUMPS.map((j) => (
                 <a key={j.href} href={j.href} className="hover:text-foreground">
@@ -155,8 +168,8 @@ const Index = () => {
         </Screen>
 
         {/* 4 · It holds more than counts */}
-        <Screen id="layers" label="Modalities">
-          <Title sub="Beyond gene expression, in every study file.">Every modality, one file.</Title>
+        <Screen id="layers" label="Layers">
+          <Title sub="Spliced and unspliced counts and splice junctions; other layers where the data allow.">Gene expression, plus splicing.</Title>
           <div className="mt-12">
             <ModalityGrid />
           </div>
@@ -164,7 +177,7 @@ const Index = () => {
 
         {/* 5 · It is clean */}
         <Screen id="qc" label="Quality control">
-          <Title sub="Only high-quality samples are included.">Rigorous quality control.</Title>
+          <Title sub="Every sample is measured. Samples below the QC cut-off are flagged and left out of counts and search by default.">Quality control on every sample.</Title>
           <div className="mt-12 max-w-[760px] mx-auto">{stats ? <QcFunnel steps={sampleFunnel(stats.accounting)} /> : <Skeleton />}</div>
         </Screen>
 
@@ -173,11 +186,36 @@ const Index = () => {
           <Title sub="The same count matrix, compared with common formats.">{H5AD_RATIO.toFixed(1)}× smaller than AnnData.</Title>
           <div className="mt-12 max-w-[760px] mx-auto">
             <FormatSizeChart />
-            <p className="mt-4 text-center text-[12px] text-muted-foreground">Medians from the .1pz format benchmark (3,198 datasets).</p>
           </div>
         </Screen>
 
-        {/* 7 · Start */}
+        {/* 7 · It is fast: data structures and the edge */}
+        <Screen id="speed" label="Speed">
+          <Title sub={S1_FORMAT_LIVE ? "One object per sample, an index into its cells, and serving from the edge." : "Small files, an index into each one, and serving from the edge."}>Fast because of how it is stored.</Title>
+          <div className="mt-12">
+            <TodayVsBeta today={SPEED.today} beta={SPEED.beta} />
+            <SpeedMeasured />
+          </div>
+        </Screen>
+
+        {/* 8 · It is open */}
+        <Screen id="access" label="Accessibility">
+          <Title sub="Ask in plain English, from your assistant, or from code. No account to download.">Open to anyone who asks.</Title>
+          <div className="mt-12">
+            <TodayVsBeta today={ACCESS.today} beta={ACCESS.beta} />
+          </div>
+        </Screen>
+
+        {/* 9 · It is honest about rigor: what Alpha is, and what Beta does */}
+        <Screen id="rigor" label="Rigor">
+          <Title sub="Alpha shows what is possible. Beta re-runs every sample with a benchmarked engine.">Measured, and shown as measured.</Title>
+          <div className="mt-12">
+            <TodayVsBeta today={RIGOR.today} beta={RIGOR.beta} footer={<RigorFooter />} />
+            <AlphaCtas className="mt-8 flex flex-wrap items-center justify-center gap-3" />
+          </div>
+        </Screen>
+
+        {/* 10 · Start */}
         <Screen id="get-started" label="Get started">
           <Title sub="Pick your tool.">Load singlet into your workspace.</Title>
           <div className="mt-12">

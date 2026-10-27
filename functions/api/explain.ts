@@ -23,6 +23,7 @@
  * Model calls are metered in tokens against the account's monthly allowance
  * (../_shared/spend); a refused call answers 429 with `allowance`.
  */
+import { studyServedSql } from "../_shared/alpha";
 import type { AppEnv } from "../_shared/env";
 import { CORS_HEADERS, handleOptions } from "../_shared/cors";
 import { sha256Hex } from "../_shared/hash";
@@ -92,9 +93,9 @@ async function loadStudies(db: D1Database, ids: string[]): Promise<StudyIn[]> {
   const rows = await db
     .prepare(
       `SELECT m.gse_id, g.title, g.abstract, m.organism_primary, m.tissue_groups, m.disease_groups,
-              m.cell_types_raw, m.n_cells, m.year
+              m.cell_types_raw, m.n_usable_cells AS n_cells, m.year
          FROM gse_meta m LEFT JOIN gse g ON g.id = m.gse_id
-        WHERE m.gse_id IN (SELECT value FROM json_each(?1))`,
+        WHERE m.gse_id IN (SELECT value FROM json_each(?1)) AND ${studyServedSql("m.gse_id")}`,
     )
     .bind(JSON.stringify(ids))
     .all<StudyRow>();

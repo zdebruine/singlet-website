@@ -15,6 +15,7 @@
  * `meta_cache` (keys `facets:gse:all*` / `facets:gsm:all*`) and refreshed when
  * older than a day, so no request ever runs an unfiltered GROUP BY over `gsm`.
  */
+import { sampleServedSql } from "./alpha";
 import { metaCached } from "./cache";
 import {
   buildSampleWhere,
@@ -28,6 +29,7 @@ import {
   type Level,
   type SearchFilters,
 } from "./search-core";
+import { LABEL_FILTERS, LABEL_FILTER_FIELDS, type LabelFilterField } from "./s1-labels";
 import { ASSAY_FAMILIES, DISEASE_GROUPS, TISSUE_GROUPS, organismToCommon } from "./vocab";
 import { D1_MAX_COMPOUND_TERMS } from "./d1-limits";
 
@@ -47,6 +49,10 @@ export interface FacetsResponse {
   disease_group: FacetOption[];
   assay_family: FacetOption[];
   cell_type: FacetOption[];
+  /** .s1 cell labels (./s1-labels): study counts from study_label, sample counts from the sample facts. */
+  sex_genetic: FacetOption[];
+  ancestry_genetic: FacetOption[];
+  cell_type_label: FacetOption[];
   year: FacetOption[];
   reference_build: FacetOption[];
   protocol: FacetOption[];
@@ -64,10 +70,11 @@ export interface FacetsResponse {
 }
 
 const CELL_TYPE_FACET_LIMIT = 40;
+const LABEL_FACET_LIMIT = 40;
 const YEAR_FACET_LIMIT = 40;
 const DAY_MS = 24 * 3600 * 1000;
 
-type FacetName = ArrayFilterField | "year" | "reference_build" | "protocol" | "file_samples" | "file_cells" | "file_size";
+type FacetName = ArrayFilterField | LabelFilterField | "year" | "reference_build" | "protocol" | "file_samples" | "file_cells" | "file_size";
 
 interface FacetRow {
   facet: string;
@@ -122,7 +129,7 @@ function facetActive(f: SearchFilters, facet: FacetName): boolean {
   if (facet === "file_samples") return f.min_file_samples != null;
   if (facet === "file_cells") return f.min_file_cells != null;
   if (facet === "file_size") return f.max_file_bytes != null;
-  return f[facet].length > 0;
+  return (f[facet]?.length ?? 0) > 0;
 }
 
 // ── Study level ─────────────────────────────────────────────────────────────
@@ -135,7 +142,7 @@ const STUDY_FACETS: { name: FacetName; col: string; lower?: boolean; limit?: num
   { name: "cell_type", col: "cell_types_raw", lower: true, limit: CELL_TYPE_FACET_LIMIT },
 ];
 
-export function studyFacetStatements(f: SearchFilters, gseIds: string[] | null): FacetStatement[] {
+export function studyFacetStatements(f: SearchFilters, gseIds: string[] | null, opts: { labels?: boolean } = {}): FacetStatement[] {
   const bases = new Map<string, Base>();
   const baseFor = (exclude: FacetName | "none"): Base => {
     const active = exclude !== "none" && facetActive(f, exclude);
@@ -148,7 +155,7 @@ export function studyFacetStatements(f: SearchFilters, gseIds: string[] | null):
        cte: `b_${key} AS (SELECT m.gse_id, m.organisms, m.tissue_groups, m.disease_groups, m.assay_families, m.cell_types_raw, m.year,
                           (SELECT reference_build FROM bundle_manifest bm WHERE bm.gse_id=m.gse_id) AS reference_build,
                           (SELECT n_gsms_in_bundle FROM bundle_manifest bm WHERE bm.gse_id=m.gse_id) AS file_samples,
-                          (SELECT SUM(n_cells_called) FROM sample_qc sq WHERE sq.gse_id=m.gse_id) AS file_cells,
+                          COALESCE(m.n_usable_cells, 0) AS file_cells,
                           (SELECT r2_bundle_bytes FROM gse gx WHERE gx.id=m.gse_id) AS file_size
                    FROM gse_meta m${w.clauses.length ? ` WHERE ${w.clauses.join(" AND ")}` : ""})`,
       params: w.params,
@@ -167,6 +174,14 @@ export function studyFacetStatements(f: SearchFilters, gseIds: string[] | null):
                     GROUP BY ${valueExpr}`;
     items.push({ base, select: fc.limit ? `SELECT * FROM (${inner} ORDER BY n DESC LIMIT ${fc.limit})` : inner });
   }
+  for (const k of opts.labels === false ? [] : LABEL_FILTER_FIELDS) {
+    const base = baseFor(k);
+    items.push({
+      base,
+      select: `SELECT * FROM (SELECT '${k}' AS facet, sl.value AS value, COUNT(DISTINCT sl.gse_id) AS n FROM study_label sl
+                 WHERE sl.attr = '${LABEL_FILTERS[k]}' AND sl.gse_id IN (SELECT gse_id FROM ${base.name}) GROUP BY sl.value ORDER BY n DESC LIMIT ${LABEL_FACET_LIMIT})`,
+    });
+  }
   const by = baseFor("year");
   items.push({
     base: by,
@@ -181,7 +196,7 @@ export function studyFacetStatements(f: SearchFilters, gseIds: string[] | null):
   const bsize = baseFor("file_size");
   items.push({ base: bsize, select: `SELECT 'file_size' AS facet, CASE WHEN b.file_size <= 1073741824 THEN '1073741824' WHEN b.file_size <= 5368709120 THEN '5368709120' WHEN b.file_size <= 10737418240 THEN '10737418240' ELSE 'other' END AS value, COUNT(*) AS n FROM ${bsize.name} b WHERE b.file_size IS NOT NULL GROUP BY value` });
   const bprotocol = baseFor("protocol");
-  items.push({ base: bprotocol, select: `SELECT 'protocol' AS facet, CASE WHEN lower(q.protocol) LIKE '%multiome%' OR lower(q.protocol) LIKE '%atac%' THEN 'multiome' WHEN lower(q.protocol) LIKE '%5%prime%' OR lower(q.protocol) LIKE '%5''%' THEN '10x 5''' WHEN lower(q.protocol) LIKE '%v2%' THEN '10xv2' WHEN lower(q.protocol) LIKE '%v3%' THEN '10xv3' ELSE 'other' END AS value, COUNT(DISTINCT q.gse_id) AS n FROM sample_qc q WHERE q.gse_id IN (SELECT gse_id FROM ${bprotocol.name}) GROUP BY value` });
+  items.push({ base: bprotocol, select: `SELECT 'protocol' AS facet, CASE WHEN lower(q.protocol) LIKE '%multiome%' OR lower(q.protocol) LIKE '%atac%' THEN 'multiome' WHEN lower(q.protocol) LIKE '%5%prime%' OR lower(q.protocol) LIKE '%5''%' THEN '10x 5''' WHEN lower(q.protocol) LIKE '%v2%' THEN '10xv2' WHEN lower(q.protocol) LIKE '%v3%' THEN '10xv3' ELSE 'other' END AS value, COUNT(DISTINCT q.gse_id) AS n FROM sample_qc q WHERE q.gse_id IN (SELECT gse_id FROM ${bprotocol.name}) AND ${sampleServedSql("q.gsm_id")} GROUP BY value` });
   const ball = baseFor("none");
   items.push({ base: ball, select: `SELECT '_total' AS facet, NULL AS value, COUNT(*) AS n FROM ${ball.name}` });
 
@@ -198,7 +213,7 @@ const SAMPLE_FACETS: { name: FacetName; expr: string; limit?: number }[] = [
   { name: "cell_type", expr: "lower(trim(b.cell_type))", limit: CELL_TYPE_FACET_LIMIT },
 ];
 
-export function sampleFacetStatements(f: SearchFilters, gsmIds: string[] | null, gseIds: string[] | null): FacetStatement[] {
+export function sampleFacetStatements(f: SearchFilters, gsmIds: string[] | null, gseIds: string[] | null, opts: { labels?: boolean } = {}): FacetStatement[] {
   const bases = new Map<string, Base>();
   const baseFor = (exclude: FacetName | "none"): Base => {
     const active = exclude !== "none" && facetActive(f, exclude);
@@ -229,6 +244,14 @@ export function sampleFacetStatements(f: SearchFilters, gsmIds: string[] | null,
                     WHERE ${fc.expr} IS NOT NULL AND ${fc.expr} != '' GROUP BY ${fc.expr}`;
     items.push({ base, select: fc.limit ? `SELECT * FROM (${inner} ORDER BY n DESC LIMIT ${fc.limit})` : inner });
   }
+  for (const k of opts.labels === false ? [] : LABEL_FILTER_FIELDS) {
+    const base = baseFor(k);
+    items.push({
+      base,
+      select: `SELECT * FROM (SELECT '${k}' AS facet, la.value_norm AS value, COUNT(DISTINCT la.gsm_id) AS n FROM sample_attr la
+                 WHERE la.source = 'pipeline' AND la.attr = '${LABEL_FILTERS[k]}' AND la.gsm_id IN (SELECT gsm_id FROM ${base.name}) GROUP BY la.value_norm ORDER BY n DESC LIMIT ${LABEL_FACET_LIMIT})`,
+    });
+  }
   const by = baseFor("year");
   items.push({
     base: by,
@@ -250,6 +273,9 @@ function emptyFacets(level: Level): FacetsResponse {
     disease_group: [],
     assay_family: [],
     cell_type: [],
+    sex_genetic: [],
+    ancestry_genetic: [],
+    cell_type_label: [],
     year: [],
     reference_build: [],
     protocol: [],
@@ -273,7 +299,7 @@ function assemble(level: Level, rows: FacetRow[]): FacetsResponse {
     if (r.facet === "organism") opt.label = organismToCommon(r.value);
     (out[r.facet as FacetName] as FacetOption[]).push(opt);
   }
-  for (const k of ["organism", "tissue_group", "disease_group", "assay_family", "cell_type", "reference_build", "protocol", "file_samples", "file_cells", "file_size"] as const) {
+  for (const k of ["organism", "tissue_group", "disease_group", "assay_family", "cell_type", ...LABEL_FILTER_FIELDS, "reference_build", "protocol", "file_samples", "file_cells", "file_size"] as const) {
     out[k].sort((a, b) => b.count - a.count || a.value.localeCompare(b.value));
   }
   out.year.sort((a, b) => Number(b.value) - Number(a.value));
@@ -293,7 +319,7 @@ async function textScope(
       const ids = [...acc.gse];
       if (acc.gsm.length) {
         const res = await ctx.db
-          .prepare(`SELECT DISTINCT gse_id FROM gsm WHERE gsm_id IN (SELECT value FROM json_each(?))`)
+          .prepare(`SELECT DISTINCT gse_id FROM gsm WHERE gsm_id IN (SELECT value FROM json_each(?)) AND ${sampleServedSql("gsm.gsm_id")}`)
           .bind(JSON.stringify(acc.gsm))
           .all<{ gse_id: string }>();
         ids.push(...res.results.map((r) => r.gse_id));
@@ -313,7 +339,7 @@ export async function computeFacets(ctx: Ctx, f: SearchFilters, level: Level, sc
   if (scopedGseIds) return computeFacetsLive(ctx, f, level, scopedGseIds);
   const unfiltered = !hasAnyFilter(f) && !f.q;
   if (unfiltered) {
-    const key = `facets:v11:${level}:all:${f.has_bundle === true ? "hb1" : "hb0"}`;
+    const key = `facets:v13:${level}:all:${f.has_bundle === true ? "hb1" : "hb0"}`;
     return metaCached(ctx.db, ctx.waitUntil, key, DAY_MS, () => computeFacetsLive(ctx, f, level));
   }
   return computeFacetsLive(ctx, f, level);
@@ -323,9 +349,16 @@ async function computeFacetsLive(ctx: Ctx, f: SearchFilters, level: Level, scope
   const scope = scopedGseIds ? { gseIds: scopedGseIds, gsmIds: null, empty: scopedGseIds.length === 0 } : await textScope(ctx, f, level);
   if (scope.empty) return emptyFacets(level);
   const gseIds = scopedGseIds ?? scope.gseIds;
-  const statements =
-    level === "gse" ? studyFacetStatements(f, gseIds) : sampleFacetStatements(f, scope.gsmIds, gseIds);
-  const rows = await runFacetStatements(ctx.db, statements);
+  const build = (labels: boolean) =>
+    level === "gse" ? studyFacetStatements(f, gseIds, { labels }) : sampleFacetStatements(f, scope.gsmIds, gseIds, { labels });
+  let rows: FacetRow[];
+  try {
+    rows = await runFacetStatements(ctx.db, build(true));
+  } catch (e) {
+    // Before schema/039 (study_label) or 030 (sample_attr) is applied the label facets are left out, never the whole answer.
+    if (!/no such table: (study_label|sample_attr)/i.test(String(e))) throw e;
+    rows = await runFacetStatements(ctx.db, build(false));
+  }
   return assemble(level, rows);
 }
 
@@ -358,7 +391,7 @@ export async function cellTypeVocab(ctx: Ctx, limit = 200): Promise<string[]> {
         .prepare(
           `SELECT lower(trim(cell_type)) AS value, COUNT(*) AS count
              FROM gsm
-            WHERE cell_type IS NOT NULL AND trim(cell_type) != ''
+            WHERE cell_type IS NOT NULL AND trim(cell_type) != '' AND ${sampleServedSql("gsm.gsm_id")}
             GROUP BY lower(trim(cell_type))
             ORDER BY count DESC
             LIMIT ?`

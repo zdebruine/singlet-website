@@ -42,7 +42,7 @@ import type {
   StudyRow,
   ProductDashboard,
   ShareVisibility,
-  StudyV2,
+  StudyS1,
 } from "./types";
 import { aiQuotaStore, parseQuota } from "@/lib/ai-quota";
 
@@ -277,7 +277,7 @@ export function normalizeStudyRow(raw: unknown): StudyRow | null {
     has_bundle: r.has_bundle === true || r.has_bundle === 1,
     bundle_bytes: numOrNull(r.bundle_bytes),
     bundle_key: strOrNull(r.bundle_key),
-    v2: normalizeStudyV2(r.v2),
+    s1: normalizeStudyS1(r.s1 ?? r.v2),
     bundle_n_samples: numOrNull(r.bundle_n_samples),
     file_cells: numOrNull(r.file_cells),
     usable_samples: numOrNull(r.usable_samples),
@@ -432,11 +432,11 @@ function normalizeSample(raw: unknown): GsmRow | null {
   };
 }
 
-function normalizeStudyV2(raw: unknown): StudyV2 | null {
+function normalizeStudyS1(raw: unknown): StudyS1 | null {
   const v = rec(raw);
-  if (v.format !== "singlet-v2" || typeof v.manifest_url !== "string" || !v.manifest_url) return null;
+  if ((v.format !== "singlet-s1" && v.format !== "singlet-v2") || typeof v.manifest_url !== "string" || !v.manifest_url) return null;
   return {
-    format: "singlet-v2",
+    format: "singlet-s1",
     rev: str(v.rev),
     manifest_url: v.manifest_url,
     n_samples: num(v.n_samples),
@@ -448,7 +448,7 @@ function normalizeStudyV2(raw: unknown): StudyV2 | null {
 export function normalizeGseDetail(raw: unknown): GseDetailResponse {
   const r = rec(raw);
   const s = rec(r.series);
-  const v2 = normalizeStudyV2(s.v2);
+  const s1 = normalizeStudyS1(s.s1 ?? s.v2);
   if (typeof s.id !== "string") throw new ApiError(502, "The catalog returned a study without an accession.");
   const m = r.meta ? rec(r.meta) : null;
   const samples = arr<unknown>(r.samples).map(normalizeSample).filter((x): x is GsmRow => x !== null);
@@ -465,9 +465,9 @@ export function normalizeGseDetail(raw: unknown): GseDetailResponse {
       pubmed_ids: strArr(s.pubmed_ids),
       bundle_key: strOrNull(s.bundle_key) ?? strOrNull(s.r2_bundle_key),
       bundle_bytes: numOrNull(s.bundle_bytes) ?? numOrNull(s.r2_bundle_bytes),
-      // Once the legacy file is retired the API says so (v2.legacy_available) and the old URL must not be rebuilt from the key.
-      bundle_url: v2 && !v2.legacy_available ? null : strOrNull(s.bundle_url) ?? (strOrNull(s.bundle_key) ?? strOrNull(s.r2_bundle_key) ? bundleUrl(s.id) : null),
-      v2,
+      // Once the legacy file is retired the API says so (s1.legacy_available) and the old URL must not be rebuilt from the key.
+      bundle_url: s1 && !s1.legacy_available ? null : strOrNull(s.bundle_url) ?? (strOrNull(s.bundle_key) ?? strOrNull(s.r2_bundle_key) ? bundleUrl(s.id) : null),
+      s1,
       bundle_n_samples: numOrNull(s.bundle_n_samples) ?? numOrNull(s.r2_bundle_n_gsms) ?? null,
       reference_build: typeof s.reference_build === "string" && s.reference_build ? s.reference_build : null,
       singlet_version: strOrNull(s.singlet_version),
@@ -741,6 +741,19 @@ export const apiClient = {
   feedback: {
     async send(input: { message: string; category: string; email?: string; page?: string; website?: string }) {
       await accountPost("/api/feedback", input);
+    },
+  },
+  beta: {
+    async signup(input: {
+      email: string;
+      name?: string;
+      institution?: string;
+      role?: string;
+      interests?: string;
+      updates: boolean;
+      website?: string;
+    }) {
+      await accountPost("/api/beta-signup", input);
     },
   },
   product: {
@@ -1037,7 +1050,7 @@ export function normalizeBundleIndex(raw: unknown): BundleIndexResponse {
         total_bytes: num(s.total_bytes),
       })),
     study_files: arr<unknown>(r.study_files).map(normalizeBundleFile).filter((f): f is NonNullable<typeof f> => f !== null),
-    ...(r.format === "singlet-v2" ? { format: "singlet-v2" as const, manifest_url: strOrNull(r.manifest_url), files_truncated: r.files_truncated === true } : {}),
+    ...(r.format === "singlet-s1" || r.format === "singlet-v2" ? { format: "singlet-s1" as const, manifest_url: strOrNull(r.manifest_url), files_truncated: r.files_truncated === true } : {}),
   };
 }
 
@@ -1095,12 +1108,12 @@ export function bundleUrl(gseId: string): string {
   return `https://data.singlet.bio/data/${gseId}/${gseId}.singlet`;
 }
 
-/** True when the study's single .singlet file is gone and its files are the v2 per-sample objects listed in a manifest. */
-export function isManifestFile(v2: Pick<StudyV2, "legacy_available"> | null | undefined): boolean {
-  return !!v2 && !v2.legacy_available;
+/** True when the study's single .singlet file is gone and its files are the per-sample objects listed in a manifest. */
+export function isManifestFile(s1: Pick<StudyS1, "legacy_available"> | null | undefined): boolean {
+  return !!s1 && !s1.legacy_available;
 }
 
-/** The URL to download a study from: the single .singlet file while it exists, the v2 manifest once that file is retired. */
-export function studyFileUrl(gseId: string, v2?: Pick<StudyV2, "manifest_url" | "legacy_available"> | null): string {
-  return v2 && !v2.legacy_available ? v2.manifest_url : bundleUrl(gseId);
+/** The URL to download a study from: the single .singlet file while it exists, the s1 manifest once that file is retired. */
+export function studyFileUrl(gseId: string, s1?: Pick<StudyS1, "manifest_url" | "legacy_available"> | null): string {
+  return s1 && !s1.legacy_available ? s1.manifest_url : bundleUrl(gseId);
 }

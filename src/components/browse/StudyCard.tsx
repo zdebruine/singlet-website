@@ -95,10 +95,10 @@ export function StudyCard({ row, selected, onToggle, ai, why, aiWhy }: Props) {
                 </span>
                 {row.has_bundle ? (
                   <a
-                    href={studyFileUrl(row.gse_id, row.v2)}
+                    href={studyFileUrl(row.gse_id, row.s1)}
                     className="relative z-10 inline-flex items-center text-primary hover:text-foreground"
                     download
-                    title={isManifestFile(row.v2) ? "Download the manifest of this study's per-sample files" : "Download .singlet"}
+                    title={isManifestFile(row.s1) ? "Download the manifest of this study's per-sample files" : "Download .singlet"}
                     aria-label={`Download ${row.gse_id}`}
                   >
                     <Download size={15} />

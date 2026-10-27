@@ -4,7 +4,7 @@ import Footer from "@/components/Footer";
 import { usePageMeta } from "@/hooks/usePageMeta";
 
 const DataLicense = () => {
-    usePageMeta({ title: "Data and software license", description: "singlet.bio atlas data and site code are CC0; the singlet client is MIT licensed; Singlet Cloud is a separate commercial service.", path: "/data-license" });
+    usePageMeta({ title: "Data and software license", description: "atlas data is CC0; the singlet.bio site code and the singlet client are MIT licensed.", path: "/data-license" });
     return (
     <div className="min-h-screen bg-background">
         <Navbar />
@@ -19,7 +19,7 @@ const DataLicense = () => {
                     </h1>
                     <p className="text-lg text-muted-foreground leading-relaxed">
                         Singlet Bio is open. The data is dedicated to the public domain under CC0 1.0,
-                        and the <span className="font-mono">singlet</span> software is released under the MIT License.
+                        and the code (this website and the <span className="font-mono">singlet</span> software) is released under the MIT License.
                     </p>
                 </div>
 
@@ -44,11 +44,7 @@ const DataLicense = () => {
                                 </tr>
                                 <tr className="border-b border-border/50">
                                     <td className="px-4 py-2.5 font-medium text-foreground">singlet.bio website, catalog API and MCP server</td>
-                                    <td className="px-4 py-2.5 text-muted-foreground text-xs">CC0 1.0</td>
-                                </tr>
-                                <tr className="border-b border-border/50">
-                                    <td className="px-4 py-2.5 font-medium text-foreground">Singlet Cloud (cloud.singlet.bio)</td>
-                                    <td className="px-4 py-2.5 text-muted-foreground text-xs">Commercial service, not open source</td>
+                                    <td className="px-4 py-2.5 text-muted-foreground text-xs">MIT License</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -109,7 +105,9 @@ const DataLicense = () => {
                         </div>
                         <p className="text-sm text-muted-foreground leading-relaxed mb-4">
                             The <span className="font-mono">singlet</span> package — the Python, R, and C++ tooling used to read,
-                            write, and work with the atlas — is released under the{" "}
+                            write, and work with the atlas — and the code of this website, catalog API and MCP server
+                            (<a href="https://github.com/zdebruine/singlet-website" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">singlet-website</a>)
+                            are released under the{" "}
                             <a href="https://opensource.org/license/mit" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
                                 MIT License <ExternalLink size={10} className="inline" />
                             </a>.
@@ -138,7 +136,7 @@ const DataLicense = () => {
                         <p className="text-sm text-muted-foreground leading-relaxed mb-4">
                             Citation is not required, but it helps others find the resource and supports continued work.
                             If you use the atlas or the <span className="font-mono">singlet</span> software in a publication,
-                            please cite Singlet Bio and include the release version (e.g., "Singlet Bio Release 2026-Q3").
+                            please cite Singlet Bio and the release you used: "Singlet Research Alpha (October 2026)".
                         </p>
                         <p className="text-sm text-muted-foreground leading-relaxed">
                             For specific datasets, include the original GEO accession number.

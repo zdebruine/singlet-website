@@ -160,7 +160,7 @@ const About = () => {
                     Human GRCh38 (GENCODE v44), mouse GRCm39 (vM33), rat mRatBN7.2, macaque Mmul_10, zebrafish GRCz11. The build is recorded on
                     every cell.
                   </p>
-                  <p>Spliced and unspliced counts are ready for RNA velocity.</p>
+                  <p>Spliced and unspliced counts are in every file. In Alpha some molecules are counted in both, so they are not yet suited to RNA velocity; Beta counts every molecule once.</p>
                 </>
               }
               link={{ to: "/docs#provenance", label: "References and versions" }}
@@ -170,7 +170,7 @@ const About = () => {
               id="layers"
               n={4}
               title="More than gene expression"
-              claim="Each file stores four modalities, not just a count matrix."
+              claim="Gene expression plus splicing layers; other layers where the data allow."
               visual={
                 <ul className="space-y-4">
                   {MODALITIES.map((m) => (
@@ -184,15 +184,15 @@ const About = () => {
                   ))}
                 </ul>
               }
-              detail={<p>We also compute doublet scores, cell-cycle phase, ambient RNA and sample-level calls from the transcriptome. All of it is free.</p>}
-              link={{ to: "/docs#modalities", label: "Every modality in the docs" }}
+              detail={<p>Research Alpha serves transcriptomics only. Mitochondrial allele data, genotypes, ancestry, ambient-RNA and doublet calls are not offered in Alpha.</p>}
+              link={{ to: "/docs#modalities", label: "Layers in the docs" }}
             />
 
             <Station
               id="qc"
               n={5}
-              title="Rigorous quality control"
-              claim="Every sample is measured. Only high-quality samples are included."
+              title="Quality control on every sample"
+              claim="Every sample is measured. Samples below the cut-off are flagged and left out of counts and search by default; they stay in the study file."
               visual={stats ? (<><Caption>From GEO to approved samples</Caption><QcFunnel steps={sampleFunnel(acc)} /></>) : <Loading />}
               detail={
                 <p>
@@ -226,7 +226,7 @@ const About = () => {
               visual={<QueryParse />}
               detail={
                 <>
-                  <p>A fixed vocabulary reads the question first, free and instant. Only words it cannot place go to a language model, once; the answer is cached and checked against the vocabulary.</p>
+                  <p>A fixed vocabulary reads the question first, with no model call and no cost. Only words it cannot place go to a language model, once; the answer is cached and checked against the vocabulary.</p>
                   <p>Species comes only from words like "mouse" or "patients". A disease never implies a tissue: "melanoma" is cancer, not skin.</p>
                 </>
               }
@@ -240,7 +240,7 @@ const About = () => {
               claim="One line in Python or R, or ask Claude to find, check and load it for you."
               visual={<ToolsVisual />}
               detail={<p>AnnData in Python; SingleCellExperiment or Seurat in R; sample metadata attached.</p>}
-              link={{ to: "/quickstart", label: "Get started" }}
+              link={{ to: "/#get-started", label: "Get started" }}
             />
           </Railway>
 
@@ -253,7 +253,7 @@ const About = () => {
               <CodeBlock
                 label="text"
                 code={`<Original authors>. <Title>. GEO accession ${EXAMPLE_GSE} (<year>).
-Singlet Bio. singlet atlas, release <singlet_version>. https://singlet.bio (accessed ${new Date().getFullYear()}).`}
+Singlet Research Alpha (October 2026). https://singlet.bio (accessed ${new Date().getFullYear()}).`}
               />
             </Fold>
           </div>

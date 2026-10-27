@@ -13,13 +13,14 @@
  * assay_family, protocol, reference_build, year, cell_type, …) require the
  * `gse_meta` join and live on /api/search.
  */
+import { studyServedSql } from "../../_shared/alpha";
 import { serverError } from "../../_shared/errors";
 import { corsOk, corsErr, handleOptions, intParam, clampPageSize } from "../../_shared/cors";
 import { cachedJson, CATALOG_CACHE_TTL } from "../../_shared/cache";
 import { safeList } from "../../_shared/json";
 import { tokenizeQuery } from "../../_shared/search-core";
-import { studyV2Map } from "../../_shared/file-facts";
-import { v2Available } from "../../_shared/v2-catalog";
+import { studyS1Map } from "../../_shared/file-facts";
+import { s1Available } from "../../_shared/s1-catalog";
 
 interface Env {
   DB: D1Database;
@@ -58,6 +59,9 @@ function boolParam(url: URL, key: string): boolean | null | undefined {
 // D1 read quota on 2026-09-03 (see ../../_shared/cache). Only 200s are stored.
 export const onRequestGet: PagesFunction<Env> = async ({ env, request, waitUntil }) =>
   cachedJson(request, waitUntil, () => listSeries(env, request), CATALOG_CACHE_TTL);
+
+/** Cells called in the study's file (gse_meta.n_usable_cells); the catalog's gse.n_cells (raw barcodes) is not served. */
+const FILE_CELLS = "COALESCE((SELECT m.n_usable_cells FROM gse_meta m WHERE m.gse_id = gse.id), 0)";
 
 async function listSeries(env: Env, request: Request): Promise<Response> {
   try {
@@ -117,8 +121,8 @@ async function listSeries(env: Env, request: Request): Promise<Response> {
       ? `${sort} ${dir} NULLS LAST`
       : `(n_gsm_done > 0) DESC, n_cells DESC`;
 
-    // Build WHERE clauses
-    const conditions: string[] = [];
+    // Build WHERE clauses. Research Alpha: a withheld study is never listed.
+    const conditions: string[] = [studyServedSql("gse.id")];
     const params: (string | number)[] = [];
 
     // Never bind raw input into MATCH (`x*`, `foo"`, `a OR` are FTS5 syntax
@@ -134,11 +138,11 @@ async function listSeries(env: Env, request: Request): Promise<Response> {
       params.push(organism);
     }
     if (minCells != null && !isNaN(minCells)) {
-      conditions.push("n_cells >= ?");
+      conditions.push(`${FILE_CELLS} >= ?`);
       params.push(minCells);
     }
     if (maxCells != null && !isNaN(maxCells)) {
-      conditions.push("n_cells <= ?");
+      conditions.push(`${FILE_CELLS} <= ?`);
       params.push(maxCells);
     }
     if (minSamples != null && !isNaN(minSamples)) {
@@ -150,10 +154,10 @@ async function listSeries(env: Env, request: Request): Promise<Response> {
       params.push(minDone);
     }
     if (hasBundle !== undefined) {
-      // A file is the legacy single file (its key stays in the catalog after the file is retired) or, for a study served from v2, its manifest.
+      // A file is the legacy single file (its key stays in the catalog after the file is retired) or, for a study served from s1, its manifest.
       const hasKey = "(r2_bundle_key IS NOT NULL AND r2_bundle_key != '')";
-      const served = (await v2Available(env.DB))
-        ? "id IN (SELECT s.gse_id FROM v2_study s JOIN v2_migration m ON m.gse_id = s.gse_id WHERE m.status IN ('verified', 'retired'))"
+      const served = (await s1Available(env.DB))
+        ? "id IN (SELECT s.gse_id FROM s1_study s JOIN s1_migration m ON m.gse_id = s.gse_id WHERE m.status IN ('verified', 'retired'))"
         : null;
       conditions.push(hasBundle ? `(${hasKey}${served ? ` OR ${served}` : ""})` : `(NOT ${hasKey}${served ? ` AND NOT ${served}` : ""})`);
     }
@@ -175,22 +179,23 @@ async function listSeries(env: Env, request: Request): Promise<Response> {
 
     // Data
     const rows = await env.DB.prepare(
-      `SELECT id, title, organism, n_gsm_total, n_gsm_done, n_gsm_failed, n_cells,
+      `SELECT id, title, organism, n_gsm_total, n_gsm_done, n_gsm_failed, ${FILE_CELLS} AS n_cells,
               pubmed_ids, r2_bundle_key, r2_bundle_bytes, submitted_date, last_updated
        FROM gse ${where}
        ORDER BY ${orderBy}
        LIMIT ? OFFSET ?`
     ).bind(...params, pageSize, offset).all<Record<string, unknown>>();
 
-    // Studies served from v2 say where their files are; a retired study's legacy key and size are replaced (the file is deleted).
-    const facts = await studyV2Map(env.DB, rows.results.map((r) => String(r.id)));
+    // Studies served from s1 say where their files are; a retired study's legacy key and size are replaced (the file is deleted).
+    const facts = await studyS1Map(env.DB, rows.results.map((r) => String(r.id)));
     const data = rows.results.map(r => {
-      const v2 = facts.get(String(r.id)) ?? null;
-      const gone = !!v2 && !v2.legacy_available;
+      const s1 = facts.get(String(r.id)) ?? null;
+      const gone = !!s1 && !s1.legacy_available;
       return {
         ...r,
-        ...(gone ? { r2_bundle_key: null, r2_bundle_bytes: v2!.bytes ?? r.r2_bundle_bytes } : {}),
-        v2,
+        ...(gone ? { r2_bundle_key: null, r2_bundle_bytes: s1!.bytes ?? r.r2_bundle_bytes } : {}),
+        s1,
+        v2: s1, // DUAL: old name of the block
         pubmed_ids: safeList(r.pubmed_ids),
       };
     });
