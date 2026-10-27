@@ -19,8 +19,8 @@ import { corsOk, corsErr, handleOptions, intParam, clampPageSize } from "../../_
 import { cachedJson, CATALOG_CACHE_TTL } from "../../_shared/cache";
 import { safeList } from "../../_shared/json";
 import { tokenizeQuery } from "../../_shared/search-core";
-import { studyV2Map } from "../../_shared/file-facts";
-import { v2Available } from "../../_shared/v2-catalog";
+import { studyS1Map } from "../../_shared/file-facts";
+import { s1Available } from "../../_shared/s1-catalog";
 
 interface Env {
   DB: D1Database;
@@ -154,10 +154,10 @@ async function listSeries(env: Env, request: Request): Promise<Response> {
       params.push(minDone);
     }
     if (hasBundle !== undefined) {
-      // A file is the legacy single file (its key stays in the catalog after the file is retired) or, for a study served from v2, its manifest.
+      // A file is the legacy single file (its key stays in the catalog after the file is retired) or, for a study served from s1, its manifest.
       const hasKey = "(r2_bundle_key IS NOT NULL AND r2_bundle_key != '')";
-      const served = (await v2Available(env.DB))
-        ? "id IN (SELECT s.gse_id FROM v2_study s JOIN v2_migration m ON m.gse_id = s.gse_id WHERE m.status IN ('verified', 'retired'))"
+      const served = (await s1Available(env.DB))
+        ? "id IN (SELECT s.gse_id FROM s1_study s JOIN s1_migration m ON m.gse_id = s.gse_id WHERE m.status IN ('verified', 'retired'))"
         : null;
       conditions.push(hasBundle ? `(${hasKey}${served ? ` OR ${served}` : ""})` : `(NOT ${hasKey}${served ? ` AND NOT ${served}` : ""})`);
     }
@@ -186,15 +186,16 @@ async function listSeries(env: Env, request: Request): Promise<Response> {
        LIMIT ? OFFSET ?`
     ).bind(...params, pageSize, offset).all<Record<string, unknown>>();
 
-    // Studies served from v2 say where their files are; a retired study's legacy key and size are replaced (the file is deleted).
-    const facts = await studyV2Map(env.DB, rows.results.map((r) => String(r.id)));
+    // Studies served from s1 say where their files are; a retired study's legacy key and size are replaced (the file is deleted).
+    const facts = await studyS1Map(env.DB, rows.results.map((r) => String(r.id)));
     const data = rows.results.map(r => {
-      const v2 = facts.get(String(r.id)) ?? null;
-      const gone = !!v2 && !v2.legacy_available;
+      const s1 = facts.get(String(r.id)) ?? null;
+      const gone = !!s1 && !s1.legacy_available;
       return {
         ...r,
-        ...(gone ? { r2_bundle_key: null, r2_bundle_bytes: v2!.bytes ?? r.r2_bundle_bytes } : {}),
-        v2,
+        ...(gone ? { r2_bundle_key: null, r2_bundle_bytes: s1!.bytes ?? r.r2_bundle_bytes } : {}),
+        s1,
+        v2: s1, // DUAL: old name of the block
         pubmed_ids: safeList(r.pubmed_ids),
       };
     });

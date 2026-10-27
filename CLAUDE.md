@@ -37,6 +37,13 @@ either back.
   `DOWNLOADABLE_SQL`, `servedEntries`); a withheld study answers 404. Load lists with `npm run alpha:sql` (from the data-guard
   policy JSON) and apply the files with wrangler; never hand-edit. Cells shown anywhere are cells called in files
   (`sample_qc.n_cells_called`, `gse_meta.n_usable_cells`), never `gsm.n_cells` / `gse.n_cells` (raw barcodes).
+- The data format is `.s1` (Singlet-Bio/singlet docs/format-s1.md): one immutable object per sample under R2 `s1/`, served by
+  `workers/data` on `data.singlet.bio/s1/*`. Catalog tables `s1_study` / `s1_sample` / `s1_migration` (schema/038, written by the
+  campaign's catalog SQL or `POST /api/ingest/s1-study`). Nothing is named "store". `s1_flags.legacy_bundles = 'retired'` makes every
+  verified study read as retired (no legacy URL anywhere; the data-guard Worker answers 410); `'served'` undoes it. Runbook: docs/S1-CUTOVER.md.
+- Cell type, chromosomal sex and genetic ancestry from the .s1 labeller are public, searchable cell metadata (only raw genotype inputs are
+  private): `sample_attr` pipeline facts and `study_label` (schema/039, `npm run s1:labels-sql`), search/facet filters
+  `cell_type_label` / `sex_genetic` / `ancestry_genetic`, and the cells tables' label columns for `find_cells`.
 - The catalog crank (`/api/ingest/refresh-next`, `/api/ingest/index-next`) is idempotent and runs every 3 h
   from `catalog-crank.yml`. Both are public GETs that write production D1.
 - D1 limits: never `json_each` over all of `bundle_index` (chunk by `gse_id`); ≤ 100 bound parameters per

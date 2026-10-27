@@ -7,7 +7,7 @@
  * the MCP server read. The per-cell labels (cell type, chromosomal sex, genetic ancestry) ship with the .s1 objects, so
  * the annotation copy is gated on the same flag.
  */
-export const S1_FORMAT_LIVE = false;
+export const S1_FORMAT_LIVE = true;
 
 /** Per-cell labels are in Alpha only once the .s1 objects are served. */
 export const ANNOTATIONS_LIVE = S1_FORMAT_LIVE;

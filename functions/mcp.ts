@@ -7,7 +7,7 @@
  *   initialize                → capabilities + serverInfo + instructions
  *   notifications/initialized → 202
  *   ping                      → {}
- *   tools/list                → the seventeen tools below (find_cells, slice_cells and resolve_features are v2-only)
+ *   tools/list                → the seventeen tools below (find_cells, slice_cells and resolve_features are s1-only)
  *   tools/call                → needs a free account: an OAuth access token
  *                               (Authorization: Bearer sat_…, from signing in
  *                               when the client connects; _shared/mcp-oauth) or
@@ -50,12 +50,12 @@ import { MANIFEST_FORMATS } from "./_shared/manifest-core";
 import type { StudyRow, SampleRow } from "./_shared/search-core";
 import { getCohort, saveCohort, ProductError, type ProductCtx } from "./_shared/product";
 import { dietEnabled, diet } from "./_shared/mcp-core";
-import { v2ToolsVisible } from "./_shared/v2-gate";
-import { findCells, resolveFeatures, sliceCells, v2DownloadUrl } from "./_shared/mcp-v2";
+import { s1ToolsVisible } from "./_shared/s1-gate";
+import { findCells, resolveFeatures, sliceCells, s1DownloadUrl } from "./_shared/mcp-s1";
 import { combineRev, fileRev, knownRev, unchangedBody } from "./_shared/rev";
-import { getV2State, isLegacyAlive } from "./_shared/v2-catalog";
-import { configureV2, v2ManifestUrl } from "./_shared/v2-urls";
-import { MODALITIES_PROP } from "./_shared/v2-load-modalities";
+import { getS1State, isLegacyAlive } from "./_shared/s1-catalog";
+import { configureS1, s1ManifestUrl } from "./_shared/s1-urls";
+import { MODALITIES_PROP } from "./_shared/s1-load-modalities";
 import {
   ACCOUNT_URL,
   LOADERS,
@@ -77,30 +77,30 @@ import {
 
 type Env = AppEnv;
 
-// 1.1.0: results carry their data in structuredContent and a short text (verbose=true restores the full text); studies migrated to v2 are
-// answered from the v2 catalog; find_cells, slice_cells and resolve_features; rev / known_rev.
+// 1.1.0: results carry their data in structuredContent and a short text (verbose=true restores the full text); studies migrated to s1 are
+// answered from the catalog; find_cells, slice_cells and resolve_features; rev / known_rev.
 const SERVER_INFO = { name: "singlet-bio", title: "singlet.bio atlas", version: "1.1.0" };
 const PROTOCOL_VERSIONS = ["2025-11-25", "2025-06-18", "2025-03-26"] as const;
 const LATEST_PROTOCOL = PROTOCOL_VERSIONS[0];
 const MAX_SAMPLES_IN_STUDY = 60;
 
-const INSTRUCTIONS_BASE = `singlet.bio is an open atlas of public single-cell RNA-seq studies from GEO, reprocessed from raw reads with one pipeline. Coverage is partial: studies whose deposited reads cannot be processed are left out, and get_study reports completeness for each study. One CC0 .singlet file per study (zip64) holding per-sample count matrices and per-sample QC.
+const INSTRUCTIONS_BASE = `singlet.bio is an open atlas of public single-cell RNA-seq studies from GEO, reprocessed from raw reads with one pipeline (Research Alpha). Coverage is partial: studies whose deposited reads cannot be processed are left out, and get_study reports completeness for each study. Data is CC0 in the .s1 format: one immutable object per sample (pz2-coded count matrices, a per-cell table, per-sample QC and provenance) plus a study manifest at data.singlet.bio/s1/m/<GSE>.json.
 
 Recommended order: search_datasets → assess_study or get_study → get_sample_qc → get_modalities (what is in the file beyond gene counts) → get_download_url (whole study) or get_partial_download (one sample's matrix, by HTTP range) → export_manifest for a cohort. compare_studies and find_matched_controls help pick controls.
 
-A .singlet file is not just gene counts: it can also carry splice junctions and exon inclusion (percent spliced in), mitochondrial heteroplasmy and chrM variants, genotype-free donor demultiplexing, non-host (microbial/viral) abundance, V(D)J usage and per-cell doublet/cell-cycle/ambient annotations. Older bundles have fewer of these — call get_modalities before telling a user a modality is available.
+What Alpha serves per sample: gene counts (spliced and unspliced), splice junctions and exon inclusion computed from them, cell calls and per-cell QC, and per-cell labels — Cell Ontology cell type (per-study accuracy: compartment 0.84, lineage 0.75, cell type 0.43, subtype 0.32; the last two are previews), chromosomal sex (98.1% of samples agree with GEO) and genetic ancestry (HANCESTRO; human donors with enough covered sites). The labels are public cell metadata: search_datasets and export_manifest filter studies by cell_type_label, sex_genetic and ancestry_genetic. Genotypes, mitochondrial allele data, ambient-RNA and doublet calls are not offered. Call get_modalities before telling a user a modality is available.
 
 Every number and every "why" string is computed, not generated — quote them, don't paraphrase. Catalog cell counts can differ from the file's own QC; the file is the truth. Every tool call needs a free singlet.bio account: sign in when your client asks, or send a personal API key from ${ACCOUNT_URL}; calls are counted per account. Downloads themselves (the data.singlet.bio links) never need one. Searches the built-in vocabulary can read cost no AI tokens; a question that needs the AI reading uses your AI allowance (200 readings a day and a monthly token allowance; the monthly allowance is shown in \`_meta.quota\`).`;
 
 
-/** Added to the instructions only once some study is served from v2 (see _shared/v2-gate). */
-const V2_INSTRUCTIONS = `Studies are being moved to a per-sample format (format "singlet-v2": one immutable object per sample plus a manifest). For those studies get_download_url returns the manifest, list_bundle_files and get_partial_download give byte ranges inside the sample objects, find_cells searches cells by their per-cell statistics, slice_cells gives the byte ranges of just those cells' matrix chunks, and resolve_features turns row numbers into feature names. Studies not moved yet keep the single .singlet file.`;
+/** Added to the instructions only once some study is served from s1 (see _shared/s1-gate). */
+const S1_INSTRUCTIONS = `For a study in the .s1 format (format "singlet-s1") get_download_url returns its manifest, list_bundle_files and get_partial_download give byte ranges inside the sample objects, find_cells searches cells by their per-cell statistics and labels, slice_cells gives the byte ranges of just those cells' matrix chunks, and resolve_features turns row numbers into feature names. A study not yet in the .s1 format has one legacy .singlet file (zip64).`;
 const REV_INSTRUCTIONS = `Answers about a study carry a \`rev\`; send it back as \`known_rev\` to get {unchanged: true} instead of the same answer again.`;
 const DIET_INSTRUCTIONS = `Results hold their data in structuredContent with a short text; pass verbose=true for the full text too.`;
 
-function instructions(v2: boolean, diet: boolean): string {
-  const extra = [v2 ? V2_INSTRUCTIONS : null, REV_INSTRUCTIONS, diet ? DIET_INSTRUCTIONS : null].filter(Boolean).join(" ");
-  return INSTRUCTIONS_BASE.replace("\n\nA .singlet file is not just gene counts:", `\n\n${extra}\n\nA .singlet file is not just gene counts:`);
+function instructions(s1: boolean, diet: boolean): string {
+  const extra = [s1 ? S1_INSTRUCTIONS : null, REV_INSTRUCTIONS, diet ? DIET_INSTRUCTIONS : null].filter(Boolean).join(" ");
+  return INSTRUCTIONS_BASE.replace("\n\nWhat Alpha serves per sample:", `\n\n${extra}\n\nWhat Alpha serves per sample:`);
 }
 
 // ── JSON-RPC plumbing ───────────────────────────────────────────────────────
@@ -145,6 +145,9 @@ const TOOLS = [
         disease: { type: "array", items: { type: "string", enum: DISEASE_GROUPS as unknown as string[] }, description: "Extra canonical disease groups." },
         assay: { type: "array", items: { type: "string", enum: ASSAY_FAMILIES as unknown as string[] }, description: "Extra canonical assay families." },
         min_cells: { type: "integer", minimum: 0, description: "Only studies/samples with at least this many cells." },
+        sex_genetic: { type: "array", items: { type: "string", enum: ["female", "male"] }, description: "Chromosomal sex the .s1 labeller called from the cells (XIST vs chrY; 98.1% sample agreement with GEO)." },
+        ancestry_genetic: { type: "array", items: { type: "string" }, description: "Genetic ancestry the .s1 labeller called (HANCESTRO id or label: European, African, East Asian, South Asian, Hispanic or Latin American, admixed ancestry). Human donors only." },
+        cell_type_label: { type: "array", items: { type: "string" }, description: "Cell types the .s1 labeller called in the cells (Cell Ontology id or label, e.g. CL:0000084 or \"T cell\"; includes subtypes). Unlike the GEO-text cell type, this comes from the expression." },
         include_unbuilt: { type: "boolean", default: false, description: "Also return studies whose .singlet file is not published yet." },
         include_low_qc: { type: "boolean", default: false, description: "Also count and return samples singlet's QC flagged (few genes detected or few reads mapped). Left out by default; proceed with caution if you include them." },
       },
@@ -269,6 +272,9 @@ const TOOLS = [
             disease: { type: "array", items: { type: "string", enum: DISEASE_GROUPS as unknown as string[] } },
             assay: { type: "array", items: { type: "string", enum: ASSAY_FAMILIES as unknown as string[] } },
             cell_type: { type: "array", items: { type: "string" } },
+            sex_genetic: { type: "array", items: { type: "string", enum: ["female", "male"] } },
+            ancestry_genetic: { type: "array", items: { type: "string" } },
+            cell_type_label: { type: "array", items: { type: "string" } },
             min_cells: { type: "integer", minimum: 0 },
             year_min: { type: "integer" },
             year_max: { type: "integer" },
@@ -348,14 +354,14 @@ const TOOLS = [
   },
 ];
 
-const V2_ONLY = "Only studies already moved to the v2 format are searched or sliced. Not metered.";
+const S1_ONLY = "Only studies already moved to the per-sample format are searched or sliced. Not metered.";
 
 const NEW_TOOLS = [
   {
     name: "find_cells",
     title: "Find cells by their statistics",
     description:
-      "Find cells in v2-format samples by per-cell statistics. Pick samples (gse_ids, gsm_ids, or a sample_filter), then filter their cells (called, UMIs, features, any numeric cells-table column). Returns per sample the matching cells as [start, length] column runs for slice_cells. At most 25 samples and 40 reads of the data host per call; continue with `after`. " + V2_ONLY,
+      "Find cells in samples by per-cell statistics and labels. Pick samples (gse_ids, gsm_ids, or a sample_filter, which also takes the samples' labelled sex, ancestry and cell types), then filter their cells (called, UMIs, features, any numeric or text cells-table column; cell_labels: the cell type, chromosomal sex and genetic ancestry the .s1 labeller gave each cell, answered by the atlas cell index). Returns per sample the matching cells as [start, length] column runs for slice_cells. At most 25 samples and 40 reads of the data host per call; continue with `after`. " + S1_ONLY,
     inputSchema: {
       type: "object",
       properties: {
@@ -374,6 +380,9 @@ const NEW_TOOLS = [
             min_median_umi: { type: "number" },
             min_median_genes: { type: "number" },
             include_low_qc: { type: "boolean", default: false },
+            sex_genetic: { type: "array", items: { type: "string", enum: ["female", "male"] }, description: "Samples whose labelled cells are of this chromosomal sex." },
+            ancestry_genetic: { type: "array", items: { type: "string" }, description: "Samples whose donors the labeller called this genetic ancestry (HANCESTRO id or label)." },
+            cell_type_label: { type: "array", items: { type: "string" }, description: "Samples where at least 5% of typed cells are this cell type (CL id or label, subtypes included)." },
           },
           additionalProperties: false,
         },
@@ -389,14 +398,31 @@ const NEW_TOOLS = [
             where: {
               type: "array",
               maxItems: 6,
-              description: "Conditions on any numeric column of the cells table.",
+              description: "Conditions on any numeric or text column of the cells table.",
               items: {
                 type: "object",
-                properties: { column: { type: "string" }, op: { type: "string", enum: [">=", "<=", ">", "<", "==", "!="] }, value: { type: "number" } },
+                properties: {
+                  column: { type: "string" },
+                  op: { type: "string", enum: [">=", "<=", ">", "<", "==", "!=", "in", "not_in", "contains"] },
+                  value: {
+                    description: "A number for a numeric column; a string or a list of strings (in / not_in / contains) for a text column such as cell_type_label, cell_type_path, sex_chrom or ancestry_hancestro, compared case-insensitively.",
+                    anyOf: [{ type: "number" }, { type: "string" }, { type: "array", items: { type: "string" }, maxItems: 100 }],
+                  },
+                },
                 required: ["column", "op", "value"],
                 additionalProperties: false,
               },
             },
+          },
+          additionalProperties: false,
+        },
+        cell_labels: {
+          type: "object",
+          description: "Per-cell labels from the .s1 labeller (public cell metadata), read from each sample's cells table (the atlas cell index for older objects): ontology ids or labels, subtypes included. Cell type per-study accuracy: compartment 0.84, lineage 0.75, cell type 0.43, subtype 0.32 (deeper levels are previews). ANDed with cell_filter.",
+          properties: {
+            cell_type: { type: "array", items: { type: "string" }, description: "Cell Ontology ids or labels, e.g. CL:0000084 or \"T cell\"." },
+            sex: { type: "array", items: { type: "string", enum: ["female", "male", "ambiguous", "unknown"] } },
+            ancestry: { type: "array", items: { type: "string" }, description: "HANCESTRO ids or labels (human donors with enough covered sites)." },
           },
           additionalProperties: false,
         },
@@ -412,7 +438,7 @@ const NEW_TOOLS = [
     name: "slice_cells",
     title: "Byte ranges for some cells",
     description:
-      "Byte ranges (HTTP Range on the sample object) to read only some cells of one v2 sample's count matrices: a prefix a decoder needs once, and the chunk runs covering the cells. Name cells as `runs` ([start, length] pairs, as find_cells returns), `indices` or `range` [start, end); none means every chunk. " + V2_ONLY,
+      "Byte ranges (HTTP Range on the sample object) to read only some cells of one sample's count matrices: a prefix a decoder needs once, and the chunk runs covering the cells. Name cells as `runs` ([start, length] pairs, as find_cells returns), `indices` or `range` [start, end); none means every chunk. " + S1_ONLY,
     inputSchema: {
       type: "object",
       properties: {
@@ -433,7 +459,7 @@ const NEW_TOOLS = [
     name: "resolve_features",
     title: "Row numbers to feature names",
     description:
-      "Row numbers of a v2 count matrix to feature names (or whitelist column numbers to barcodes). Give a `pack` id (from get_partial_download or slice_cells), or gse_id, gsm_id and file. Up to 500 numbers. Not metered.",
+      "Row numbers of a count matrix to feature names (or whitelist column numbers to barcodes). Give a `pack` id (from get_partial_download or slice_cells), or gse_id, gsm_id and file. Up to 500 numbers. Not metered.",
     inputSchema: {
       type: "object",
       properties: {
@@ -461,25 +487,25 @@ const REV_PROPS: Record<string, Record<string, unknown>> = {
   get_modalities: { known_rev: KNOWN_REV_PROP },
   get_partial_download: { known_rev: KNOWN_REV_PROP },
 };
-/** Inputs that only mean something for a study stored per sample; listed with the v2 tools. */
-const V2_PROPS: Record<string, Record<string, unknown>> = {
+/** Inputs that only mean something for a study stored per sample; listed with the s1 tools. */
+const S1_PROPS: Record<string, Record<string, unknown>> = {
   get_download_url: {
-    include_samples: { type: "boolean", description: "v2 studies: also list the sample objects." },
-    modalities: { ...MODALITIES_PROP, description: `v2 studies: list each sample object with the byte ranges of only these members (25 samples a page). ${MODALITIES_PROP.description}` },
+    include_samples: { type: "boolean", description: "per-sample studies: also list the sample objects." },
+    modalities: { ...MODALITIES_PROP, description: `per-sample studies: list each sample object with the byte ranges of only these members (25 samples a page). ${MODALITIES_PROP.description}` },
     limit: { type: "integer", minimum: 1, maximum: 200 },
     after: { type: "string", description: "next_after of the last page." },
   },
   list_bundle_files: {
-    detail: { type: "boolean", description: "v2 studies: every sample's files, 25 samples a page." },
-    modalities: { ...MODALITIES_PROP, description: `v2 studies: only the files these need, with their bytes. ${MODALITIES_PROP.description}` },
+    detail: { type: "boolean", description: "per-sample studies: every sample's files, 25 samples a page." },
+    modalities: { ...MODALITIES_PROP, description: `per-sample studies: only the files these need, with their bytes. ${MODALITIES_PROP.description}` },
     limit: { type: "integer", minimum: 1, maximum: 500 },
     after: { type: "string", description: "next_after of the last page." },
   },
   get_modalities: {
-    modalities: { ...MODALITIES_PROP, description: `v2 studies: which samples have these, the singlet.load call for them, and with gsm_id that sample's byte ranges. ${MODALITIES_PROP.description}` },
+    modalities: { ...MODALITIES_PROP, description: `per-sample studies: which samples have these, the singlet.load call for them, and with gsm_id that sample's byte ranges. ${MODALITIES_PROP.description}` },
   },
   get_partial_download: {
-    modalities: { ...MODALITIES_PROP, description: `v2 studies: instead of \`file\`, the byte ranges of every member these need. ${MODALITIES_PROP.description}` },
+    modalities: { ...MODALITIES_PROP, description: `per-sample studies: instead of \`file\`, the byte ranges of every member these need. ${MODALITIES_PROP.description}` },
   },
   slice_cells: {
     modalities: { ...MODALITIES_PROP, description: `Instead of \`file\`: the matrices these need. ${MODALITIES_PROP.description}` },
@@ -490,11 +516,11 @@ const ALL_TOOL_NAMES = new Set([...TOOLS, ...NEW_TOOLS].map((t) => t.name));
 
 /**
  * The tools as advertised. The original fourteen always, each with `known_rev` where it applies; `verbose` only when the response diet is on
- * (MCP_DIET=1); the v2 tools and the v2-only inputs only once some study is served from v2 (or V2_TOOLS=1, see _shared/v2-gate).
+ * (MCP_DIET=1); the s1 tools and the s1-only inputs only once some study is served from s1 (or S1_TOOLS=1, see _shared/s1-gate).
  */
-function toolList(opts: { v2: boolean; diet: boolean }) {
-  return (opts.v2 ? [...TOOLS, ...NEW_TOOLS] : TOOLS).map((t) => {
-    const extra = { ...(REV_PROPS[t.name] ?? {}), ...(opts.v2 ? (V2_PROPS[t.name] ?? {}) : {}), ...(opts.diet ? { verbose: VERBOSE_PROP } : {}) };
+function toolList(opts: { s1: boolean; diet: boolean }) {
+  return (opts.s1 ? [...TOOLS, ...NEW_TOOLS] : TOOLS).map((t) => {
+    const extra = { ...(REV_PROPS[t.name] ?? {}), ...(opts.s1 ? (S1_PROPS[t.name] ?? {}) : {}), ...(opts.diet ? { verbose: VERBOSE_PROP } : {}) };
     return Object.keys(extra).length ? { ...t, inputSchema: { ...t.inputSchema, properties: { ...t.inputSchema.properties, ...extra } } } : t;
   });
 }
@@ -692,10 +718,10 @@ function studySummary(r: StudyRow, why: string) {
     n_cells: r.file_cells ?? null,
     year: r.year,
     has_bundle: r.has_bundle,
-    // The legacy file's URL only while that file exists; a study served from v2 also names its manifest.
-    bundle_url: r.has_bundle ? legacyUrl(r.gse_id, r.v2, !!r.bundle_key || !r.v2) : null,
-    format: r.v2 ? r.v2.format : "singlet-v1",
-    manifest_url: r.v2?.manifest_url ?? null,
+    // The legacy file's URL only while that file exists; a study served from s1 also names its manifest.
+    bundle_url: r.has_bundle ? legacyUrl(r.gse_id, r.s1, !!r.bundle_key || !r.s1) : null,
+    format: r.s1 ? r.s1.format : "singlet-v1",
+    manifest_url: r.s1?.manifest_url ?? null,
     bundle_bytes: r.bundle_bytes,
     bundle_n_samples: r.bundle_n_samples,
     file_cells: r.file_cells,
@@ -729,8 +755,8 @@ function sampleSummary(s: SampleRow) {
     status: s.status,
     characteristics: s.characteristics,
     has_bundle: s.has_bundle,
-    bundle_url: s.has_bundle ? legacyUrl(s.gse_id, s.v2) : null,
-    manifest_url: s.v2?.manifest_url ?? null,
+    bundle_url: s.has_bundle ? legacyUrl(s.gse_id, s.s1) : null,
+    manifest_url: s.s1?.manifest_url ?? null,
     study_url: `${SITE}/study/${s.gse_id}`,
   };
 }
@@ -742,6 +768,9 @@ function describeApplied(applied: NlSearchBody["applied"]): string {
   if (applied.disease_group.length) parts.push(`disease: ${applied.disease_group.join(" or ")}`);
   if (applied.assay_family.length) parts.push(`assay: ${applied.assay_family.join(" or ")}`);
   if (applied.cell_type.length) parts.push(`cell type: ${applied.cell_type.join(" or ")}`);
+  if (applied.cell_type_label?.length) parts.push(`labelled cell type: ${applied.cell_type_label.join(" or ")}`);
+  if (applied.sex_genetic?.length) parts.push(`genetic sex: ${applied.sex_genetic.join(" or ")}`);
+  if (applied.ancestry_genetic?.length) parts.push(`genetic ancestry: ${applied.ancestry_genetic.join(" or ")}`);
   if (applied.min_cells != null) parts.push(`at least ${fmt(applied.min_cells)} cells`);
   if (applied.year_min != null || applied.year_max != null) parts.push(`year ${applied.year_min ?? "…"}–${applied.year_max ?? "…"}`);
   if (applied.q) parts.push(`text: "${applied.q}"`);
@@ -772,6 +801,7 @@ async function searchDatasets(
   for (const v of strArray(args.disease)) url.searchParams.append("disease_group", v);
   for (const v of strArray(args.assay)) url.searchParams.append("assay_family", v);
   if (args.min_cells != null && Number.isFinite(Number(args.min_cells))) url.searchParams.set("min_cells", String(Math.max(0, Math.floor(Number(args.min_cells)))));
+  for (const k of ["sex_genetic", "ancestry_genetic", "cell_type_label"] as const) for (const v of strArray(args[k])) url.searchParams.append(k, v);
   if (args.include_unbuilt === true) url.searchParams.set("has_bundle", "0");
   if (args.include_low_qc === true) url.searchParams.set("include_low_qc", "1");
 
@@ -877,11 +907,11 @@ function studyText(d: StudyDetail): string {
   lines.push(
     s.bundle_url
       ? `File: ${s.bundle_url}${s.bundle_bytes ? ` (${fmtBytes(s.bundle_bytes)})` : ""}`
-      : s.v2
-        ? `Files: ${s.v2.manifest_url} (${fmt(s.v2.n_samples)} sample objects${s.v2.bytes ? `, ${fmtBytes(s.v2.bytes)}` : ""})`
+      : s.s1
+        ? `Files: ${s.s1.manifest_url} (${fmt(s.s1.n_samples)} sample objects${s.s1.bytes ? `, ${fmtBytes(s.s1.bytes)}` : ""})`
         : "File: pending (samples processed, file not yet published)"
   );
-  if ((s.bundle_url || s.v2) && s.usable_samples === 0) lines.push("⚠ This file currently contains no usable count data (empty matrices or 0 called cells).");
+  if ((s.bundle_url || s.s1) && s.usable_samples === 0) lines.push("⚠ This file currently contains no usable count data (empty matrices or 0 called cells).");
   else if (s.usable_samples != null && s.assessed_samples != null && s.usable_samples < s.assessed_samples)
     lines.push(`⚠ ${s.assessed_samples - s.usable_samples} of ${s.assessed_samples} samples in the file have no count data: ${s.unusable_gsm_ids.join(", ")}.`);
   for (const n of d.completeness.notes) lines.push(`Completeness: ${n}`);
@@ -902,8 +932,8 @@ async function getStudy(env: Env, args: Record<string, unknown>) {
   const d = await loadStudy(env.DB, id);
   if (!d) return toolError(`${id} is not in the atlas. It may not be single-cell RNA-seq, or it has not been processed yet. Try search_datasets.`);
 
-  const v2 = await getV2State(env.DB, id);
-  const file = await fileRev(env.DB, id, v2?.study.rev ?? null);
+  const s1 = await getS1State(env.DB, id);
+  const file = await fileRev(env.DB, id, s1?.study.rev ?? null);
   const newest = d.samples.reduce((m, x) => (String(x.last_updated ?? "") > m ? String(x.last_updated) : m), "");
   const rev = await combineRev([file?.rev, d.series.last_updated, newest, d.series.n_gsm_done, d.series.n_cells, d.series.usable_samples, d.series.bundle_bytes]);
   if (knownRev(args) === rev) return toolResult(`${id} is unchanged since rev ${rev}.`, unchangedBody(id, rev));
@@ -924,7 +954,7 @@ async function getStudy(env: Env, args: Record<string, unknown>) {
   const structured = {
     gse_id: d.series.id,
     rev,
-    v2: v2 ? { format: "singlet-v2", rev: v2.study.rev, manifest_url: v2ManifestUrl(id), n_samples: v2.study.n_samples, bytes: v2.study.bytes, legacy_available: isLegacyAlive(v2.migration) } : null,
+    s1: s1 ? { format: "singlet-s1", rev: s1.study.rev, manifest_url: s1ManifestUrl(id), n_samples: s1.study.n_samples, bytes: s1.study.bytes, legacy_available: isLegacyAlive(s1.migration) } : null,
     title: d.series.title,
     abstract: d.series.abstract,
     organism: d.series.organism_label,
@@ -941,7 +971,7 @@ async function getStudy(env: Env, args: Record<string, unknown>) {
     n_cells: d.series.n_cells,
     conditions: d.conditions,
     conditions_label: d.conditions_label,
-    has_bundle: !!d.series.bundle_url || !!d.series.v2,
+    has_bundle: !!d.series.bundle_url || !!d.series.s1,
     bundle_url: d.series.bundle_url,
     bundle_bytes: d.series.bundle_bytes,
     usable_samples: d.series.usable_samples,
@@ -984,8 +1014,8 @@ async function getDownloadUrl(env: Env, args: Record<string, unknown>) {
     .bind(id)
     .first<{ id: string; title: string | null; bundle_bytes: number | null; has_bundle: number }>();
   if (!row) return toolError(`${id} is not in the atlas.`);
-  const v2 = await getV2State(env.DB, id);
-  if (v2) return v2DownloadUrl({ db: env.DB, waitUntil: () => undefined }, id, row.title, v2, args);
+  const s1 = await getS1State(env.DB, id);
+  if (s1) return s1DownloadUrl({ db: env.DB, waitUntil: () => undefined }, id, row.title, s1, args);
   const available = Number(row.has_bundle) === 1;
   const url = bundleUrl(id);
   // The size of the object as it is served now (the catalog's byte count can predate a repack); the catalog only as a fallback.
@@ -1158,7 +1188,7 @@ async function handleMessage(ctx: CallContext, msg: JsonRpcRequest): Promise<unk
         protocolVersion,
         capabilities: { tools: { listChanged: false }, prompts: { listChanged: false }, resources: { listChanged: false, subscribe: false } },
         serverInfo: SERVER_INFO,
-        instructions: instructions(await v2ToolsVisible(ctx.env), dietEnabled(ctx.env)),
+        instructions: instructions(await s1ToolsVisible(ctx.env), dietEnabled(ctx.env)),
       });
     }
     case "notifications/initialized":
@@ -1168,7 +1198,7 @@ async function handleMessage(ctx: CallContext, msg: JsonRpcRequest): Promise<unk
     case "ping":
       return rpcResult(id, {});
     case "tools/list":
-      return rpcResult(id, { tools: toolList({ v2: await v2ToolsVisible(ctx.env), diet: dietEnabled(ctx.env) }) });
+      return rpcResult(id, { tools: toolList({ s1: await s1ToolsVisible(ctx.env), diet: dietEnabled(ctx.env) }) });
     case "tools/call": {
       const r = await callTool(ctx, params);
       if ("error" in r && r.error) return { ...r.error, id };
@@ -1224,7 +1254,7 @@ async function authFor(env: Env, request: Request, waitUntil: (p: Promise<unknow
 const NEEDS_ACCOUNT = new Set(["initialize", "tools/call", "resources/read"]);
 
 export const onRequestPost: PagesFunction<Env> = async ({ env, request, waitUntil }) => {
-  configureV2(env);
+  configureS1(env);
   await ensureCatalogColumns(env.DB).catch(() => undefined);
   const version = (request.headers.get("MCP-Protocol-Version") ?? "").trim();
   const versionOk = !version || (PROTOCOL_VERSIONS as readonly string[]).includes(version);
@@ -1289,7 +1319,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env }) =>
       transport: "streamable-http",
       endpoint: `${SITE}/mcp`,
       protocol_versions: PROTOCOL_VERSIONS,
-      tools: toolList({ v2: await v2ToolsVisible(env), diet: false }).map((t) => t.name),
+      tools: toolList({ s1: await s1ToolsVisible(env), diet: false }).map((t) => t.name),
       docs: `${SITE}/docs#mcp`,
       note: "POST JSON-RPC 2.0 messages to this URL. Server-initiated streams are not offered.",
     },

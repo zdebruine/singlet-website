@@ -1,6 +1,6 @@
 # singlet.bio
 
-> An open atlas of public single-cell RNA-seq studies from GEO, reprocessed from raw reads with one pipeline. One .singlet file per study holds per-sample count matrices and per-sample QC.
+> An open atlas of public single-cell RNA-seq studies from GEO, reprocessed from raw reads with one pipeline. Data is in the .s1 format: one immutable object per sample (pz2-coded count matrices, a per-cell table, QC and provenance) plus a study manifest, with per-cell labels for cell type, chromosomal sex and genetic ancestry.
 
 Status: Research Alpha (October 2026), a feedback-oriented research preview. Coverage is partial and some known issues are not fixed yet. Beta, a full re-run, is estimated for Q1 2027. Send feedback from any page of https://singlet.bio.
 
@@ -8,18 +8,26 @@ Status: Research Alpha (October 2026), a feedback-oriented research preview. Cov
 - What's coming in Beta, and the Beta sign-up: https://singlet.bio/beta
 - Benchmarks, with Alpha (today's files) and Beta (the re-run engine) kept separate: https://singlet.bio/benchmarking
 
-What Alpha serves: transcriptomics only (gene expression, spliced and unspliced counts, splice junctions). Mitochondrial allele data, genotypes, ancestry, ambient-RNA and doublet calls are not offered in Alpha. Samples below the QC cut-off are flagged and left out of counts and search by default.
+What Alpha serves: transcriptomics only (gene expression, spliced and unspliced counts, splice junctions and exon inclusion from them, cell calls and per-cell QC) and per-cell labels:
+- cell type (Cell Ontology, every level of the call): per-study accuracy compartment 0.84, lineage 0.75, cell type 0.43, subtype 0.32 (the last two are previews);
+- chromosomal sex (human, mouse; XIST against chrY): 98.1% of samples agree with GEO;
+- genetic ancestry (HANCESTRO continental group, human donors with enough covered sites): validated on 1000 Genomes simulations and 22 self-reported donors.
+The labels are public, searchable cell metadata; raw genotype inputs stay private. Mitochondrial allele data, genotypes, ambient-RNA and doublet calls are not offered. Samples below the QC cut-off are flagged and left out of counts and search by default.
 
 ## Data
 
-- Study files are served from https://data.singlet.bio. Downloads need no account and no key.
-- Python and R clients: https://github.com/Singlet-Bio/singlet (`singlet.load("GSE…")`).
+- Data is served from https://data.singlet.bio. Downloads need no account and no key.
+  - Study manifest: https://data.singlet.bio/s1/m/<GSE accession>.json (every sample object, its members and byte ranges)
+  - Sample objects: https://data.singlet.bio/s1/s/<GSM accession>/<digest>.s1 (immutable; HTTP Range supported)
+  - Per-cell label sidecars: https://data.singlet.bio/s1/a/<GSM accession>/<digest>.parquet (named in the manifest's samples[i].annotations)
+  - Atlas cell index: POST https://data.singlet.bio/s1/cidx/query (count or sample cells by cell type, sex, ancestry, tissue, organism)
+- Python and R clients: https://github.com/Singlet-Bio/singlet (`singlet.load("GSE…")`, `singlet.load("GSM…")` for one sample, `singlet.cells(…)`; R `singlet::load()`, `singlet_cells()`).
 - Each study page: https://singlet.bio/study/<GSE accession>
 
 ## API and MCP
 
 - Docs: https://singlet.bio/docs
-- Catalog API (JSON): https://singlet.bio/api/search, https://singlet.bio/api/nl-search?q=…, https://singlet.bio/api/gse/<GSE accession>, https://singlet.bio/api/stats
+- Catalog API (JSON): https://singlet.bio/api/search, https://singlet.bio/api/nl-search?q=…, https://singlet.bio/api/gse/<GSE accession>, https://singlet.bio/api/stats. Label filters: cell_type_label (CL id or label), sex_genetic (female, male), ancestry_genetic (HANCESTRO id or label); /api/facets counts them.
 - MCP server (Streamable HTTP): https://singlet.bio/mcp. Setup: https://singlet.bio/docs/mcp. initialize and every tools/call need a free singlet.bio account: sign in when the client asks, or send a personal API key from https://singlet.bio/account. Without one the server answers HTTP 401 (sign_in_required).
 
 ## License

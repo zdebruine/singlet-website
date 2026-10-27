@@ -2,13 +2,13 @@
  * Shapes served by /api/bundle/* — the study's own `.singlet` file read over
  * HTTP Range requests, plus the D1 mirror of the per-sample QC summaries.
  */
-import { applyUsable, applyUsableV2, isUsable, matrixBytesByGsm } from "./catalog-refresh";
+import { applyUsable, applyUsableS1, isUsable, matrixBytesByGsm } from "./catalog-refresh";
 import { entryContext, excludedInStudy, sampleServedSql } from "./alpha";
 import { isUnofferedMember, publicEntries } from "./restricted";
-import { getV2Samples, getV2State, listV2Samples, parseJsonObject, type V2State } from "./v2-catalog";
-import { readV2Summaries, v2MatrixBytes } from "./v2-summaries";
-import { describeMembers } from "./v2-serve";
-import { v2ManifestUrl } from "./v2-urls";
+import { getS1Samples, getS1State, listS1Samples, parseJsonObject, type S1State } from "./s1-catalog";
+import { readS1Summaries, s1MatrixBytes } from "./s1-summaries";
+import { describeMembers } from "./s1-serve";
+import { s1ManifestUrl } from "./s1-urls";
 import {
   StaleBundleError,
   readEntryText,
@@ -97,11 +97,11 @@ export async function bundleIndexResponse(
   };
 }
 
-/** Samples whose files are listed in a v2 index; beyond this only the sample and its size are (the listing is edge-cached for a day). */
-const V2_INDEX_FILE_SAMPLES = 100;
+/** Samples whose files are listed in an s1 index; beyond this only the sample and its size are (the listing is edge-cached for a day). */
+const S1_INDEX_FILE_SAMPLES = 100;
 
-export interface V2BundleIndexResponse extends BundleIndexResponse {
-  format: "singlet-v2";
+export interface S1BundleIndexResponse extends BundleIndexResponse {
+  format: "singlet-s1";
   rev: string;
   manifest_url: string;
   /** True when more samples are listed than their files are. */
@@ -109,18 +109,18 @@ export interface V2BundleIndexResponse extends BundleIndexResponse {
 }
 
 /**
- * The same shape as bundleIndexResponse for a study served from v2: `bytes` is the total of the sample objects, a sample's `files` are its
+ * The same shape as bundleIndexResponse for a study served from s1: `bytes` is the total of the sample objects, a sample's `files` are its
  * members (`bytes_compressed` = bytes stored, `bytes_uncompressed` = the file's size once regenerated, for stored and derived members) and
  * `study_files` is the manifest object. Reads one page of light sample rows and at most two member-list reads.
  */
-export async function v2BundleIndexResponse(db: D1Database, gse: string, state: V2State): Promise<V2BundleIndexResponse> {
+export async function s1BundleIndexResponse(db: D1Database, gse: string, state: S1State): Promise<S1BundleIndexResponse> {
   const s = state.study;
   const ctx = await entryContext(db, gse);
-  const rows = (await listV2Samples(db, gse, s.rev, { limit: 500 })).filter((r) => !ctx.excluded.has(r.gsm_id));
-  const withFiles = rows.slice(0, V2_INDEX_FILE_SAMPLES);
+  const rows = (await listS1Samples(db, gse, s.rev, { limit: 500 })).filter((r) => !ctx.excluded.has(r.gsm_id));
+  const withFiles = rows.slice(0, S1_INDEX_FILE_SAMPLES);
   const filesBy = new Map<string, BundleFile[]>();
   for (let i = 0; i < withFiles.length; i += 50) {
-    for (const full of await getV2Samples(db, gse, withFiles.slice(i, i + 50).map((r) => r.gsm_id), s.rev)) {
+    for (const full of await getS1Samples(db, gse, withFiles.slice(i, i + 50).map((r) => r.gsm_id), s.rev)) {
       filesBy.set(
         full.gsm_id,
         describeMembers(full)
@@ -140,11 +140,11 @@ export async function v2BundleIndexResponse(db: D1Database, gse: string, state: 
     indexed_at: s.updated_at,
     n_samples: Math.max(0, s.n_samples - ctx.excluded.size),
     samples: rows.map((r) => ({ gsm_id: r.gsm_id, files: filesBy.get(r.gsm_id) ?? [], total_bytes: r.bytes ?? 0 })),
-    study_files: s.manifest_bytes ? [{ path: `v2/m/${gse}.json`, bytes_compressed: s.manifest_bytes, bytes_uncompressed: s.manifest_bytes }] : [],
-    format: "singlet-v2",
+    study_files: s.manifest_bytes ? [{ path: `s1/m/${gse}.json`, bytes_compressed: s.manifest_bytes, bytes_uncompressed: s.manifest_bytes }] : [],
+    format: "singlet-s1",
     rev: s.rev,
-    manifest_url: v2ManifestUrl(gse),
-    files_truncated: rows.length > V2_INDEX_FILE_SAMPLES || s.n_samples > rows.length,
+    manifest_url: s1ManifestUrl(gse),
+    files_truncated: rows.length > S1_INDEX_FILE_SAMPLES || s.n_samples > rows.length,
   };
 }
 
@@ -310,27 +310,27 @@ export async function loadSampleQc(
     if (rows?.results?.length || excluded.size) return { source: "d1", samples: (rows?.results ?? []).map(normalizeQc) };
   }
 
-  // A study served from v2 is read from its sample objects: the legacy file may be retired (deleted), and the objects hold the same summaries.
-  const v2 = await getV2State(db, gse);
-  if (v2) {
-    const rev = v2.study.rev;
-    const fromV2 = (await readV2Summaries(db, gse, rev)).map((r) => shapeSummary(gse, r.gsm_id, r.summary));
-    const sizes = await v2MatrixBytes(db, gse, rev);
-    for (const s of fromV2) {
+  // A study served from s1 is read from its sample objects: the legacy file may be retired (deleted), and the objects hold the same summaries.
+  const s1 = await getS1State(db, gse);
+  if (s1) {
+    const rev = s1.study.rev;
+    const fromS1 = (await readS1Summaries(db, gse, rev)).map((r) => shapeSummary(gse, r.gsm_id, r.summary));
+    const sizes = await s1MatrixBytes(db, gse, rev);
+    for (const s of fromS1) {
       s.matrix_bytes = sizes.get(s.gsm_id) ?? 0;
       s.usable = isUsable(s.matrix_bytes, s.n_cells_called) ? 1 : 0;
     }
-    if (fromV2.length) {
+    if (fromS1.length) {
       const stamp = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
-      const statements = fromV2.map((s) => upsertSampleQcStatement(db, s as unknown as Record<string, unknown>, stamp));
+      const statements = fromS1.map((s) => upsertSampleQcStatement(db, s as unknown as Record<string, unknown>, stamp));
       const write = (async () => {
         for (let i = 0; i < statements.length; i += 100) await db.batch(statements.slice(i, i + 100));
-        await applyUsableV2(db, gse, rev);
+        await applyUsableS1(db, gse, rev);
       })().catch(() => undefined);
       if (opts.waitUntil) opts.waitUntil(write);
       else await write;
     }
-    return { source: "bundle", samples: served(fromV2) };
+    return { source: "bundle", samples: served(fromS1) };
   }
 
   const { index, samples } = await withIndexRetry(db, gse, { waitUntil: opts.waitUntil }, async (index) => ({

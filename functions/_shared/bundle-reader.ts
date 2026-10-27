@@ -14,7 +14,7 @@
  *
  * The object under a key can be overwritten in place (a repack, the 2026-10 restricted-sidecar
  * migration), which leaves every cached offset pointing into a different file. Three guards keep a
- * stale row from turning into wrong bytes (docs/v2-migration.md D13):
+ * stale row from turning into wrong bytes (docs/s1-migration.md D13):
  *   1. each row stores the object's ETag and Last-Modified next to the offsets (schema/031);
  *   2. every ranged read sends `If-Match: <etag>` (a changed object answers 412) and accepts only
  *      206, never a 200 that would buffer the whole file;
@@ -416,7 +416,7 @@ export const HEAD_TIMEOUT_MS = 5000;
 /** Index reads in flight per study, so a burst of requests for one stale study re-reads its central directory once. */
 const reindexing = new Map<string, Promise<BundleIndex>>();
 
-async function readAndStoreIndex(db: D1Database, gse: string, waitUntil?: (p: Promise<unknown>) => void): Promise<BundleIndex> {
+async function readAndS1Index(db: D1Database, gse: string, waitUntil?: (p: Promise<unknown>) => void): Promise<BundleIndex> {
   const url = bundleUrl(gse);
   let parsed: ParsedZip;
   try {
@@ -518,7 +518,7 @@ export async function getBundleIndex(
 
   const running = reindexing.get(gse);
   if (running) return running;
-  const p = readAndStoreIndex(db, gse, opts.waitUntil).finally(() => reindexing.delete(gse));
+  const p = readAndS1Index(db, gse, opts.waitUntil).finally(() => reindexing.delete(gse));
   reindexing.set(gse, p);
   return p;
 }

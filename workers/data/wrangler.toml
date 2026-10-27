@@ -1,0 +1,64 @@
+# data.singlet.bio/s1/*: read-only front for the per-sample objects in R2 (docs/format-s1.md). See README.md.
+# Pattern: workers/alpha-proxy. Deployed by the owner, never by CI: `npx wrangler deploy` from this directory.
+name = "singlet-data"
+main = "src/index.ts"
+compatibility_date = "2026-09-01"   # newest date the pinned wrangler 4.102 accepts; deployed 2026-10-22
+account_id = "2f8a8cc95b6bc0be84ac611fe2e5c3c2"
+workers_dev = false
+
+# Route in front of the existing R2 custom domain. A route needs the hostname to be a proxied DNS record, which an R2
+# custom domain is. OWNER CHECK before the first deploy (the docs say a route "runs in front of an existing origin"
+# and do not say whether it also wins over an R2 custom-domain binding; test on the real hostname):
+#   deploy, then `curl -sI https://data.singlet.bio/s1/ref/index.json` must show `x-served-by: singlet-data`.
+# If it does not, remove the route and use a Workers Custom Domain on a new hostname instead (the Worker is then the
+# origin and Cloudflare creates the DNS record and certificate):
+#   routes = [{ pattern = "ds1.singlet.bio", custom_domain = true }]
+# and point clients (website Pages variable S1_ORIGIN, Python/R loaders) at https://ds1.singlet.bio/s1/.
+# The /v2/* route stays on the old deployed script `singlet-data-v2` until the cleanup that retires it; this Worker already
+# serves both /s1/* and /v2/* (R2 key = path) so that route can be moved here later.
+routes = [{ pattern = "data.singlet.bio/s1/*", zone_name = "singlet.bio" }]
+
+# Cell index: big gathers are split across invocations of this Worker (each has its own 6 concurrent R2 reads). Needs the secret
+# `npx wrangler secret put CIDX_INTERNAL_SECRET`; without it the binding is unused.
+services = [{ binding = "SELF", service = "singlet-data" }]
+
+# Read-only: the Worker only calls get() and head().
+[[r2_buckets]]
+binding = "DATA"
+bucket_name = "singlet-data"
+
+[observability]
+enabled = true
+
+# ── atlas cell index (POST /s1/cidx/query, /s1/cidx/gather; singlet-bio docs/format-s1-cell-index.md) ──────────────────────────────
+# Every binding below is optional: without one, its layer is off and the per-request caps in src/limits.ts still bound each request.
+
+# API keys are checked read-only (SELECT on api_keys by hash); the Worker never writes to D1.
+[[d1_databases]]
+binding = "DB"
+database_name = "singlet-catalog"
+database_id = "fb42f359-92a0-452c-91e4-f630f627c4c7"
+
+# Requests per minute per subject (per Cloudflare location, approximate). namespace_id must be unique in the account.
+[[ratelimits]]
+name = "CIDX_RL_ANON"
+namespace_id = "7301"
+  [ratelimits.simple]
+  limit = 30
+  period = 60
+
+[[ratelimits]]
+name = "CIDX_RL_KEY"
+namespace_id = "7302"
+  [ratelimits.simple]
+  limit = 300
+  period = 60
+
+# Daily cells/bytes per subject, strictly consistent: one Durable Object per subject.
+[[durable_objects.bindings]]
+name = "CIDX_QUOTA"
+class_name = "CidxQuota"
+
+[[migrations]]
+tag = "cidx-quota-v1"
+new_sqlite_classes = ["CidxQuota"]

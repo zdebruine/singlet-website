@@ -18,17 +18,18 @@ import {
   MAX_MANIFEST_STUDIES,
   type ManifestFormat,
 } from "../_shared/manifest-core";
-import { configureV2 } from "../_shared/v2-urls";
+import { configureS1 } from "../_shared/s1-urls";
 
 interface Env {
   DB: D1Database;
+  S1_ORIGIN?: string;
   V2_ORIGIN?: string;
 }
 
 const TTL = 300;
 
 export const onRequestGet: PagesFunction<Env> = async ({ env, request, waitUntil }) => {
-  configureV2(env);
+  configureS1(env);
   await ensureCatalogColumns(env.DB).catch(() => undefined);
   const id = await resolveIdentity(request, env, waitUntil);
   if (!id.ok) return id.response;

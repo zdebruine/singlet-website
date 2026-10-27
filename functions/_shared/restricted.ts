@@ -9,10 +9,10 @@
  * 2. Hidden (Alpha): layers that are in the legacy files but are not reliable yet (ambient RNA, doublet scores,
  *    per-cell non-host calls, the legacy percent-spliced-in matrix, mitochondrial event summaries, and the legacy
  *    pipeline sex call). The legacy 50-marker ancestry call is private (rule 1).
- *    The validated per-cell labels written by the s1 transcode (ancestry_hancestro / ancestry_prob, sex_chrom, cell-type
- *    CL labels) are public, searchable cell metadata: they are columns of the s1 cells table, not members matched here,
- *    and nothing in this file hides them. They are public bytes inside a whole-file download, but no listing, count, modality
- *    answer or range recipe offers them. docs: the Known Issues page ("present in the file, do not use").
+ *    The validated per-cell labels written by the s1 transcode (ancestry_hancestro / ancestry_prob, sex_chrom / sex_score,
+ *    cell-type CL labels and path) are public, searchable cell metadata: they live in per-sample label sidecars
+ *    (s1/a/<GSM>/<d>.parquet, named in the manifest) and the atlas cell index, not in members matched here, and nothing in
+ *    this file hides them. Search, facets and MCP read them as facts (./s1-labels). Only raw genotype inputs stay private.
  *
  * Rules are written as an allowlist per directory so that a new output added to `donor/` or `mt/` is private
  * until someone decides otherwise. They are matched against the path *inside* `samples/<GSM>/`. The private rules

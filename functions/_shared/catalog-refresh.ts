@@ -16,8 +16,8 @@ import type { BundleIndex } from "./bundle-reader";
 import { getBundleIndex, readEntryText, ensureSampleQcTable } from "./bundle-reader";
 import { loadRules, toGroup, organismToScientific } from "./vocab";
 import { qcTier } from "./qc-rules";
-import { v2Available } from "./v2-catalog";
-import { v2MatrixBytes } from "./v2-summaries";
+import { legacyRetiredSql, s1Available } from "./s1-catalog";
+import { s1MatrixBytes } from "./s1-summaries";
 import { META_DRIFT_SQL, hasFileSql, metaRollupSql } from "./alpha";
 
 /** Minimum compressed exon+intron bytes for a sample to hold a real matrix. */
@@ -82,9 +82,9 @@ export async function applyUsable(db: D1Database, gse: string, index: Pick<Bundl
   return applyUsableBytes(db, gse, matrixBytesByGsm(index));
 }
 
-/** The same for a study served from v2, whose matrix sizes come from the catalog (`v2_sample.members_json`) instead of a zip directory. */
-export async function applyUsableV2(db: D1Database, gse: string, rev: string): Promise<number> {
-  return applyUsableBytes(db, gse, await v2MatrixBytes(db, gse, rev));
+/** The same for a study served from s1, whose matrix sizes come from the catalog (`s1_sample.members_json`) instead of a zip directory. */
+export async function applyUsableS1(db: D1Database, gse: string, rev: string): Promise<number> {
+  return applyUsableBytes(db, gse, await s1MatrixBytes(db, gse, rev));
 }
 
 async function applyUsableBytes(db: D1Database, gse: string, bytes: Map<string, number>): Promise<number> {
@@ -167,7 +167,7 @@ export async function markSummariesIndexed(db: D1Database, gse: string, nSamples
  * be read: its zip structure is broken (bundle-reader parseZipSource). Every
  * other park — a 5xx or timeout from data.singlet.bio, a HEAD 404 while a file
  * is still propagating, the Workers subrequest budget, a D1 error, an index
- * too large to store, no summary.json — says nothing about the matrices, so
+ * too large to s1, no summary.json — says nothing about the matrices, so
  * such a study is never resolved to usable = 0 without a read.
  */
 export const UNREADABLE_FILE_ERRORS = [
@@ -188,42 +188,42 @@ const UNREADABLE_PARK = `(${UNREADABLE_FILE_ERRORS.map((s) => `instr(f.error, '$
 
 // ── refresh-next ───────────────────────────────────────────────────────────
 
-// Studies moved to the v2 layout (schema/032): `served` = a v2_study row whose migration is verified or retired, `retired` = the legacy
+// Studies moved to the per-sample layout (schema/032): `served` = a s1_study row whose migration is verified or retired, `retired` = the legacy
 // file is deleted. The catalog rows of the legacy file (gse.r2_bundle_key, bundle_manifest, bundle_index, sample_qc) are left in place by a
 // retirement, so these clauses keep the cranks off a file that is gone and give a study that never had one the same treatment. Each SQL below
-// has a v2-aware form (used once schema/032 exists) and the original form.
-const retiredSql = (col: string) => `EXISTS (SELECT 1 FROM v2_migration vm WHERE vm.gse_id = ${col} AND vm.status = 'retired')`;
+// has an s1-aware form (used once schema/032 exists) and the original form.
+const retiredSql = (col: string) => `EXISTS (SELECT 1 FROM s1_migration vm WHERE vm.gse_id = ${col} AND ${legacyRetiredSql("vm")})`;
 const servedSql = (col: string) =>
-  `EXISTS (SELECT 1 FROM v2_study vs JOIN v2_migration vm ON vm.gse_id = vs.gse_id WHERE vs.gse_id = ${col} AND vm.status IN ('verified', 'retired'))`;
+  `EXISTS (SELECT 1 FROM s1_study vs JOIN s1_migration vm ON vm.gse_id = vs.gse_id WHERE vs.gse_id = ${col} AND vm.status IN ('verified', 'retired'))`;
 
 const GSM_PENDING = `FROM gsm WHERE organism_primary IS NULL`;
-const manifestPending = (v2: boolean) => `FROM gse g WHERE g.r2_bundle_key IS NOT NULL AND g.r2_bundle_key != ''
+const manifestPending = (s1: boolean) => `FROM gse g WHERE g.r2_bundle_key IS NOT NULL AND g.r2_bundle_key != ''
   AND NOT EXISTS (SELECT 1 FROM bundle_manifest m WHERE m.gse_id = g.id)
-  AND NOT EXISTS (SELECT 1 FROM bundle_index_failure f WHERE f.gse_id = g.id)${v2 ? `\n  AND NOT ${retiredSql("g.id")}` : ""}`;
-const usablePending = (v2: boolean) =>
-  `FROM bundle_index i WHERE EXISTS (SELECT 1 FROM sample_qc q WHERE q.gse_id = i.gse_id AND q.usable IS NULL)${v2 ? ` AND NOT ${retiredSql("i.gse_id")}` : ""}`;
+  AND NOT EXISTS (SELECT 1 FROM bundle_index_failure f WHERE f.gse_id = g.id)${s1 ? `\n  AND NOT ${retiredSql("g.id")}` : ""}`;
+const usablePending = (s1: boolean) =>
+  `FROM bundle_index i WHERE EXISTS (SELECT 1 FROM sample_qc q WHERE q.gse_id = i.gse_id AND q.usable IS NULL)${s1 ? ` AND NOT ${retiredSql("i.gse_id")}` : ""}`;
 // A served study whose matrices are measured from the catalog: sample_qc rows with no usable flag yet, in a study whose legacy file is gone
 // or was never indexed.
-const USABLE_V2_PENDING = `FROM v2_study vs JOIN v2_migration vm ON vm.gse_id = vs.gse_id
+const USABLE_S1_PENDING = `FROM s1_study vs JOIN s1_migration vm ON vm.gse_id = vs.gse_id
   WHERE vm.status IN ('verified', 'retired')
     AND EXISTS (SELECT 1 FROM sample_qc q WHERE q.gse_id = vs.gse_id AND q.usable IS NULL)
-    AND (vm.status = 'retired' OR NOT EXISTS (SELECT 1 FROM bundle_index i WHERE i.gse_id = vs.gse_id))`;
+    AND (${legacyRetiredSql("vm")} OR NOT EXISTS (SELECT 1 FROM bundle_index i WHERE i.gse_id = vs.gse_id))`;
 // Unassessed samples whose study has no bundle_index and never will from this
 // crank: there is no file, or the file is parked because its zip structure is
 // broken (UNREADABLE_PARK). No readable matrix means not usable, so these
 // resolve to usable = 0 without a network read. (A readable file with a
 // manifest is indexed by index-next; one without a manifest by phase (c)
 // below — both then set the flags from the index.) A study parked for any
-// other reason (network, subrequest budget, D1, index too large to store)
+// other reason (network, subrequest budget, D1, index too large to s1)
 // keeps usable IS NULL, and so its current gse_meta, rather than being zeroed
 // and dropped from downloadable search on the strength of a failed read.
-// A study served from v2 has a file (its sample objects) even when the legacy one is missing, so it is never resolved to usable = 0 here;
-// USABLE_V2_PENDING measures it from the catalog instead.
-const usableNoFile = (v2: boolean) => `FROM gse g
+// A study served from s1 has a file (its sample objects) even when the legacy one is missing, so it is never resolved to usable = 0 here;
+// USABLE_S1_PENDING measures it from the catalog instead.
+const usableNoFile = (s1: boolean) => `FROM gse g
   WHERE EXISTS (SELECT 1 FROM sample_qc q WHERE q.gse_id = g.id AND q.usable IS NULL)
     AND NOT EXISTS (SELECT 1 FROM bundle_index i WHERE i.gse_id = g.id)
     AND (g.r2_bundle_key IS NULL OR g.r2_bundle_key = ''
-         OR EXISTS (SELECT 1 FROM bundle_index_failure f WHERE f.gse_id = g.id AND ${UNREADABLE_PARK}))${v2 ? `\n    AND NOT ${servedSql("g.id")}` : ""}`;
+         OR EXISTS (SELECT 1 FROM bundle_index_failure f WHERE f.gse_id = g.id AND ${UNREADABLE_PARK}))${s1 ? `\n    AND NOT ${servedSql("g.id")}` : ""}`;
 // The inner SELECT narrows to missing/stale gse_meta first; its `LIMIT -1`
 // (no limit) stops SQLite flattening it, which otherwise runs the correlated
 // probes below for every gse row (~135k rows read per count instead of ~22k).
@@ -241,12 +241,12 @@ const META_PENDING = `FROM (SELECT g.id FROM gse g LEFT JOIN gse_meta m ON m.gse
              AND NOT EXISTS (SELECT 1 FROM bundle_index_failure f WHERE f.gse_id = g.id))`;
 
 export async function refreshRemaining(db: D1Database): Promise<Record<string, number>> {
-  const v2 = await v2Available(db);
+  const s1 = await s1Available(db);
   const count = (w: string) => db.prepare(`SELECT COUNT(*) AS c ${w}`).first<{ c: number }>().then((r) => Number(r?.c ?? 0)).catch(() => -1);
   const [a, b, e, c, d, f] = await Promise.all(
-    [GSM_PENDING, usablePending(v2), usableNoFile(v2), manifestPending(v2), META_PENDING, ...(v2 ? [USABLE_V2_PENDING] : [])].map(count)
+    [GSM_PENDING, usablePending(s1), usableNoFile(s1), manifestPending(s1), META_PENDING, ...(s1 ? [USABLE_S1_PENDING] : [])].map(count)
   );
-  return { gsm_normalize: a, sample_usable: b, sample_usable_no_file: e, bundle_manifest: c, gse_meta: d, ...(v2 ? { sample_usable_v2: f } : {}) };
+  return { gsm_normalize: a, sample_usable: b, sample_usable_no_file: e, bundle_manifest: c, gse_meta: d, ...(s1 ? { sample_usable_s1: f } : {}) };
 }
 
 const DRIFT_KEY = "crank:meta_drift_checked";
@@ -287,7 +287,7 @@ export const normOrganism = (raw: string | null): string => {
 export async function refreshNext(db: D1Database, n: number): Promise<{ done: Record<string, number>; errors: string[] }> {
   await ensureCatalogColumns(db);
   await ensureCrankTables(db).catch(() => undefined);
-  const v2 = await v2Available(db);
+  const s1 = await s1Available(db);
   const done = { gsm_normalized: 0, samples_usable: 0, manifests_created: 0, meta_recomputed: 0 };
   const errors: string[] = [];
   const stamp = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
@@ -316,7 +316,7 @@ export async function refreshNext(db: D1Database, n: number): Promise<{ done: Re
   done.gsm_normalized = gsms.results?.length ?? 0;
 
   // (d, run first so meta sees it) usable flags from existing bundle_index rows
-  const usableIds = await db.prepare(`SELECT i.gse_id ${usablePending(v2)} LIMIT ?`).bind(n).all<{ gse_id: string }>();
+  const usableIds = await db.prepare(`SELECT i.gse_id ${usablePending(s1)} LIMIT ?`).bind(n).all<{ gse_id: string }>();
   for (const { gse_id } of usableIds.results ?? []) {
     try {
       const idx = await getBundleIndex(db, gse_id);
@@ -326,7 +326,7 @@ export async function refreshNext(db: D1Database, n: number): Promise<{ done: Re
     }
   }
   // …and usable = 0 where there is no readable file to index (D1 only).
-  const noFileIds = await db.prepare(`SELECT g.id AS gse_id ${usableNoFile(v2)} LIMIT ?`).bind(n).all<{ gse_id: string }>();
+  const noFileIds = await db.prepare(`SELECT g.id AS gse_id ${usableNoFile(s1)} LIMIT ?`).bind(n).all<{ gse_id: string }>();
   for (const { gse_id } of noFileIds.results ?? []) {
     try {
       done.samples_usable += await applyUsable(db, gse_id, { entries: [] });
@@ -334,20 +334,20 @@ export async function refreshNext(db: D1Database, n: number): Promise<{ done: Re
       errors.push(`${gse_id} usable: ${String(e).slice(0, 200)}`);
     }
   }
-  // …and, for studies served from v2 whose legacy file is gone or was never indexed, from the matrix sizes in the v2 catalog (D1 only).
-  if (v2) {
-    const v2Ids = await db.prepare(`SELECT vs.gse_id AS gse_id, vs.rev AS rev ${USABLE_V2_PENDING} LIMIT ?`).bind(n).all<{ gse_id: string; rev: string }>();
-    for (const { gse_id, rev } of v2Ids.results ?? []) {
+  // …and, for studies served from s1 whose legacy file is gone or was never indexed, from the matrix sizes in the catalog (D1 only).
+  if (s1) {
+    const s1Ids = await db.prepare(`SELECT vs.gse_id AS gse_id, vs.rev AS rev ${USABLE_S1_PENDING} LIMIT ?`).bind(n).all<{ gse_id: string; rev: string }>();
+    for (const { gse_id, rev } of s1Ids.results ?? []) {
       try {
-        done.samples_usable += await applyUsableV2(db, gse_id, rev);
+        done.samples_usable += await applyUsableS1(db, gse_id, rev);
       } catch (e) {
-        errors.push(`${gse_id} usable (v2): ${String(e).slice(0, 200)}`);
+        errors.push(`${gse_id} usable (s1): ${String(e).slice(0, 200)}`);
       }
     }
   }
 
   // (c) bundle_manifest for files that have none
-  const missing = await db.prepare(`SELECT g.id AS gse_id ${manifestPending(v2)} ORDER BY g.id LIMIT ?`).bind(Math.min(n, 10)).all<{ gse_id: string }>();
+  const missing = await db.prepare(`SELECT g.id AS gse_id ${manifestPending(s1)} ORDER BY g.id LIMIT ?`).bind(Math.min(n, 10)).all<{ gse_id: string }>();
   for (const { gse_id } of missing.results ?? []) {
     try {
       const idx = await getBundleIndex(db, gse_id, { refresh: true });
@@ -398,7 +398,7 @@ export async function refreshNext(db: D1Database, n: number): Promise<{ done: Re
   const metaIds = await db.prepare(`SELECT g.id AS gse_id ${META_PENDING} LIMIT ?`).bind(n).all<{ gse_id: string }>();
   for (const { gse_id } of metaIds.results ?? []) {
     try {
-      await recomputeMeta(db, gse_id, stamp, v2);
+      await recomputeMeta(db, gse_id, stamp, s1);
       done.meta_recomputed++;
     } catch (e) {
       errors.push(`${gse_id} meta: ${String(e).slice(0, 200)}`);
@@ -413,9 +413,9 @@ export async function refreshNext(db: D1Database, n: number): Promise<{ done: Re
  * (alpha_exclusions) are left out of every rollup; the SQL is shared with the Alpha loader (metaRollupSql in ./alpha).
  */
 export async function recomputeMeta(db: D1Database, gse: string, stamp: string, v2?: boolean): Promise<void> {
-  const withV2 = v2 ?? (await v2Available(db));
-  await db.prepare(metaRollupSql("?1", "g.id = ?1", hasFileSql(withV2), stamp)).bind(gse).run();
-  const build = withV2 ? "COALESCE(b.reference_build, (SELECT reference_build FROM v2_study WHERE gse_id = m.gse_id))" : "b.reference_build";
+  const withS1 = v2 ?? (await s1Available(db));
+  await db.prepare(metaRollupSql("?1", "g.id = ?1", hasFileSql(withS1), stamp)).bind(gse).run();
+  const build = withS1 ? "COALESCE(b.reference_build, (SELECT reference_build FROM s1_study WHERE gse_id = m.gse_id))" : "b.reference_build";
   const row = await db
     .prepare(`SELECT m.organism_primary AS org, ${build} AS build FROM gse_meta m LEFT JOIN bundle_manifest b ON b.gse_id = m.gse_id WHERE m.gse_id = ?`)
     .bind(gse)

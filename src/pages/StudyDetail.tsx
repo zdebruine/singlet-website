@@ -221,8 +221,8 @@ const StudyDetail = () => {
   }, [data]);
 
   const series = data?.series;
-  // A file to download: the single .singlet file, or, once that is retired, the v2 manifest (series.bundle_url is null then).
-  const hasBundle = !!series?.bundle_url || !!series?.v2;
+  // A file to download: the single .singlet file, or, once that is retired, the s1 manifest (series.bundle_url is null then).
+  const hasBundle = !!series?.bundle_url || !!series?.s1;
   const description = series?.title
     ? `${series.title}. ${derived ? `${organismLabelList(derived.organisms)} · ${fmtInt(derived.processed.length)} processed samples · ${fmtCompact(derived.totalCells)} cells.` : ""} Load it in one line with singlet.`
     : `Reprocessed single-cell data for ${gseId}.`;
@@ -254,7 +254,7 @@ const StudyDetail = () => {
                     {
                       "@type": "DataDownload",
                       encodingFormat: series.bundle_url ? "application/x-singlet" : "application/json",
-                      contentUrl: series.bundle_url ?? series.v2?.manifest_url ?? bundleUrl(gseId),
+                      contentUrl: series.bundle_url ?? series.s1?.manifest_url ?? bundleUrl(gseId),
                       ...(series.bundle_bytes != null ? { contentSize: `${series.bundle_bytes} B` } : {}),
                     },
                   ],
@@ -497,7 +497,7 @@ const StudyDetail = () => {
         <aside className="mt-2 lg:mt-0 lg:sticky lg:top-20 space-y-3" aria-labelledby="download-h">
           <h2 id="download-h" className="text-[18px] lg:sr-only">Load or download</h2>
           {processed.length > 0 ? (
-            <DownloadPanel accession={gseId} bundleUrl={series.bundle_url} bundleBytes={series.bundle_bytes} v2={series.v2} stacked />
+            <DownloadPanel accession={gseId} bundleUrl={series.bundle_url} bundleBytes={series.bundle_bytes} s1={series.s1} stacked />
           ) : (
             <div className="surface px-4 py-3 text-sm text-muted-foreground">
               No samples in this study completed processing, so there is no <code className="code-inline">.singlet</code> file.

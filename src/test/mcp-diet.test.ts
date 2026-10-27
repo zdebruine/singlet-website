@@ -12,17 +12,17 @@ vi.mock("../../functions/_shared/nl-search-core", async (orig) => ({ ...(await o
 import { onRequestPost } from "../../functions/mcp";
 import { sha256Hex } from "../../functions/_shared/hash";
 import { forgetKeyMemo } from "../../functions/_shared/identity";
-import { resetV2ToolsGate } from "../../functions/_shared/v2-gate";
-import { onRequestPost as ingestPost } from "../../functions/api/ingest/v2-study";
+import { resetS1ToolsGate } from "../../functions/_shared/s1-gate";
+import { onRequestPost as ingestPost } from "../../functions/api/ingest/s1-study";
 import { createTestD1 } from "./helpers/d1-sqlite";
 
 const KEY = "sk_live_" + "a".repeat(32);
 const TOKEN = "t";
-const SAMPLE = JSON.parse(readFileSync("src/test/fixtures/v2/sample/GSM1000001.manifest.json", "utf8"));
+const SAMPLE = JSON.parse(readFileSync("src/test/fixtures/s1/sample/GSM1000001.manifest.json", "utf8"));
 const hex = (c: string, n: number) => c.repeat(n);
 
 const SCHEMA =
-  ["010_accounts.sql", "012_ai_budget.sql", "032_v2_catalog.sql", "033_v2_sample_rev_key.sql"].map((f) => readFileSync(`schema/${f}`, "utf8")).join("\n") +
+  ["010_accounts.sql", "012_ai_budget.sql", "032_v2_catalog.sql", "033_v2_sample_rev_key.sql", "038_s1_catalog.sql"].map((f) => readFileSync(`schema/${f}`, "utf8")).join("\n") +
   readFileSync("schema/001_init_local_nofts.sql", "utf8").replace(/PRAGMA[^;]*;/g, "") +
   `
 ALTER TABLE gse ADD COLUMN r2_bundle_n_gsms INTEGER;
@@ -61,7 +61,7 @@ async function call(env: Env, name: string, args: Record<string, unknown> = {}) 
 
 beforeEach(() => {
   forgetKeyMemo();
-  resetV2ToolsGate();
+  resetS1ToolsGate();
   nlSearch.mockReset();
   vi.spyOn(console, "error").mockImplementation(() => undefined);
 });
@@ -145,7 +145,7 @@ describe("with the diet on, the text of a list-shaped answer still carries the a
     expect(slim).toContain("GSE102\t");
     expect(slim).toMatch(/… \d+ more lines\./);
     expect(slim.length).toBeLessThan(full.length / 2);
-    expect(slim).toContain("v2_rev"); // the header row is whole
+    expect(slim).toContain("s1_rev"); // the header row is whole
     expect(slim.length).toBeLessThan(10_000);
   });
 
@@ -159,10 +159,10 @@ describe("with the diet on, the text of a list-shaped answer still carries the a
       seedStudies(env, 1, 1);
       env.DB.raw.prepare(`UPDATE gse SET abstract = 'An abstract.' WHERE id = 'GSE101'`).run();
       const manifest = {
-        format: "singlet-v2", manifest_version: 1, gse: "GSE101", rev: hex("1", 16), created_at: "2026-10-23T08:00:00Z", reference_build: "GRCh38-2024-A",
-        samples: [{ ...SAMPLE, gsm: "GSM1000", key: `v2/s/GSM1000/${hex("a", 32)}.s2` }], legacy: { bytes: 5000 },
+        format: "singlet-s1", manifest_version: 1, gse: "GSE101", rev: hex("1", 16), created_at: "2026-10-23T08:00:00Z", reference_build: "GRCh38-2024-A",
+        samples: [{ ...SAMPLE, gsm: "GSM1000", key: `s1/s/GSM1000/${hex("a", 32)}.s1` }], legacy: { bytes: 5000 },
       };
-      const request = new Request("https://singlet.bio/api/ingest/v2-study", { method: "POST", headers: { "x-ingest-token": TOKEN }, body: JSON.stringify({ manifest, migration: { status: "verified", verify_ok: true } }) });
+      const request = new Request("https://singlet.bio/api/ingest/s1-study", { method: "POST", headers: { "x-ingest-token": TOKEN }, body: JSON.stringify({ manifest, migration: { status: "verified", verify_ok: true } }) });
       expect((await ingestPost({ request, env, params: {}, waitUntil: () => undefined } as never)).status).toBe(200);
     };
     const { slim, structured } = await both("assess_study", { gse_id: "GSE101", purpose: "RNA velocity in the aging brain" }, prep);
