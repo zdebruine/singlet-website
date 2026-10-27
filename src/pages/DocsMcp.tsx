@@ -38,9 +38,9 @@ const EXAMPLES: { ask: string; tools: string; gets: string }[] = [
     gets: "Every per-sample and study-level file with its size.",
   },
   {
-    ask: "Does GSE296768 have mtDNA variants or donor demultiplexing? How do I read them in R?",
+    ask: "Does GSE296768 have splice junctions or donor demultiplexing? How do I read them in R?",
     tools: "get_modalities",
-    gets: "Every modality in the file — splicing, heteroplasmy, donors, non-host species, V(D)J — with the Python and R line that reads each one.",
+    gets: "Every modality in the file — splicing, donors, non-host species, V(D)J — with the Python and R line that reads each one.",
   },
   {
     ask: "Get me just GSM8976273's counts matrix from GSE296768 — I don't want the whole 1.5 GB study.",

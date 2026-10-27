@@ -310,7 +310,9 @@ export async function s1Modalities(ctx: S1ToolCtx, gse: string, gsm: string, sta
   if (!rows.length) {
     return gsm ? toolError(`${gsm} is not in ${gse}. Samples are listed by list_bundle_files.`) : toolError(`${gse} has no samples in the catalog.`);
   }
-  const perSample = rows.map((r) => ({ gsm_id: r.gsm_id, modalities: parseModalities(r.modalities) }));
+  // only the modalities Alpha offers (./modalities): the catalog column also names layers that are not served, such as mt_variants
+  const offered = new Set(MODALITIES.map((m) => m.name));
+  const perSample = rows.map((r) => ({ gsm_id: r.gsm_id, modalities: parseModalities(r.modalities).filter((n) => offered.has(n)) }));
   const counts = new Map<string, number>();
   for (const p of perSample) for (const m of p.modalities) counts.set(m, (counts.get(m) ?? 0) + 1);
   const present = MODALITIES.filter((m) => counts.has(m.name));
