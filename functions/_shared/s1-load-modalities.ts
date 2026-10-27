@@ -31,7 +31,7 @@ export const LOAD_MODALITIES: LoadModality[] = [
   { name: "unspliced", members: [INTRON], python: 'layers["unspliced"]', r: 'assay "unspliced"', description: "Intron (unspliced) UMIs per gene.", catalog: ["intron_counts"] },
   { name: "splice_junctions", members: [SJ], python: 'obsm["splice_junctions"]', r: 'altExp "splice_junctions"', description: "Reads per splice junction.", catalog: ["junctions"] },
   { name: "psi", members: [SJ], python: 'obsm["psi"]', r: 'altExp "psi"', description: "Percent spliced in per junction, computed from the junction counts.", catalog: ["junctions"] },
-  { name: "mt", members: ["mt_heteroplasmy.1pz"], python: 'obsm["mt"]', r: 'altExp "mt"', description: "Mitochondrial heteroplasmy per chrM variant site.", catalog: ["mt_heteroplasmy"] },
+  { name: "mt", members: ["mt_heteroplasmy.1pz"], python: 'obsm["mt"]', r: 'altExp "mt"', description: "Mitochondrial heteroplasmy per chrM variant site (not offered in Research Alpha: always missing).", catalog: ["mt_heteroplasmy"] },
   { name: "vdj", members: ["vdj_gene_usage.1pz"], python: 'obsm["vdj"]', r: 'altExp "vdj"', description: "V(D)J segment usage counts.", catalog: ["vdj_gene_usage"] },
 ];
 

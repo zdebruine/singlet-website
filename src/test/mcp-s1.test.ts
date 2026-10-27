@@ -391,6 +391,15 @@ describe("list_bundle_files, get_partial_download, get_modalities on an s1 study
     expect((await rpc(env, "get_modalities", { gse_id: "GSE1", gsm_id: "GSM404" })).isError).toBe(true);
     expect((await rpc(env, "get_modalities", { gse_id: "GSE1", known_rev: hex("1", 16) })).structuredContent.unchanged).toBe(true);
   });
+
+  it("get_modalities: per_sample names only the modalities Alpha offers", async () => {
+    const env = await seeded();
+    // the catalog column can name layers that are not served (the transcode lists mt_variants and splice_events)
+    await env.DB.prepare("UPDATE s1_sample SET modalities = ? WHERE gsm_id = ?").bind('["exon_counts","mt_variants","splice_events"]', "GSM1000001").run();
+    const r = (await rpc(env, "get_modalities", { gse_id: "GSE1", gsm_id: "GSM1000001" })).structuredContent;
+    expect(r.per_sample).toEqual([{ gsm_id: "GSM1000001", modalities: ["exon_counts"] }]);
+    expect(JSON.stringify(r)).not.toMatch(/mt_variants|splice_events/);
+  });
 });
 
 describe("legacy studies keep working, and get rev / known_rev", () => {

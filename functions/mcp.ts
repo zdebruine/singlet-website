@@ -225,7 +225,7 @@ const TOOLS = [
     name: "get_modalities",
     title: "What data types the study has",
     description:
-      "What science a study's .singlet file actually supports, beyond gene counts: splice junctions and PSI, mitochondrial heteroplasmy and chrM variant calls, genotype-free donor demultiplexing, non-host (microbial/viral) abundance, V(D)J segment usage, allele-specific expression, doublet/cell-cycle/ambient annotations and per-sample QC. Returns each modality present, how many samples have it, and the exact Python and R one-liners that read it — plus how to build a conventional combined counts matrix with spliced/unspliced layers. Older bundles predate some outputs, so always check here before promising a user a modality. Not metered.",
+      "What a study's file actually supports beyond gene counts: splice junctions and PSI, genotype-free donor demultiplexing, non-host (microbial/viral) abundance, V(D)J segment usage, cell-cycle scores and per-sample QC. Genotypes, mitochondrial allele data, ambient-RNA and doublet calls are not offered in Research Alpha. Returns each modality present, how many samples have it, and the exact Python and R one-liners that read it — plus how to build a conventional combined counts matrix with spliced/unspliced layers. Older bundles predate some outputs, so always check here before promising a user a modality. Not metered.",
     inputSchema: {
       type: "object",
       properties: {
