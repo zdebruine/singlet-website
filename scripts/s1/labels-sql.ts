@@ -13,7 +13,7 @@
  *   1_summary_NNNN.sql   per chunk of studies: their label rows of sample_cell_summary replaced
  *   2_facts_NNNN.sql     per chunk of studies: sample_attr label facts and study_label rebuilt (functions/_shared/s1-labels.ts)
  */
-import { labelFactsSql, studyLabelSql } from "../../functions/_shared/s1-labels";
+import { HANCESTRO_LABELS, labelFactsSql, studyLabelSql } from "../../functions/_shared/s1-labels";
 
 export const LABEL_SUBJECTS = new Set(["cell_type", "sex", "ancestry"]);
 const COLUMNS = ["gsm_id", "gse_id", "subject", "item", "n_cells", "n_hi1", "n_hi2", "q50", "q90", "mean", "version"] as const;
@@ -115,7 +115,9 @@ export function termsFromDirectory(dir: unknown): { terms: { id: string; subject
   for (const subject of ["cell_type", "ancestry"] as const) {
     for (const e of d.dicts?.[subject] ?? []) {
       if (!e.id || !TERM_RE.test(e.id)) continue;
-      terms.push({ id: e.id, subject, label: (e.label || e.id).slice(0, 200) });
+      // the index's ancestry dictionary carries no names (label absent or the id itself): use the labeller's group names
+      const named = e.label && e.label !== e.id ? e.label : subject === "ancestry" ? HANCESTRO_LABELS[e.id] : undefined;
+      terms.push({ id: e.id, subject, label: (named || e.id).slice(0, 200) });
       if (subject !== "cell_type") continue;
       closure.push([e.id, e.id, 0]);
       (e.anc ?? []).forEach((a, k) => {

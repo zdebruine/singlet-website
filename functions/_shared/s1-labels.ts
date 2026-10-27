@@ -74,7 +74,7 @@ WHERE s.subject = 'sex' AND s.gse_id IN (${ids}) AND s.item IN ('PATO:0000383', 
 ${UPSERT};`,
     `${INSERT}
 SELECT s.gsm_id, s.gse_id, 'ancestry_genetic', s.item,
-  COALESCE((SELECT label FROM label_term l WHERE l.term_id = s.item), (SELECT label FROM ontology_term o WHERE o.term_id = s.item), CASE s.item ${hanc} ELSE s.item END), s.item,
+  CASE s.item ${hanc} ELSE COALESCE((SELECT NULLIF(label, term_id) FROM label_term l WHERE l.term_id = s.item), (SELECT label FROM ontology_term o WHERE o.term_id = s.item), s.item) END, s.item,
   ROUND(1.0 * s.n_cells / t.n, 4), 'pipeline', NULL, s.n_cells || ' of ' || t.n || ' cells with an ancestry call', 's1-labels ' || s.version, ${NOW}
 FROM sample_cell_summary s
 JOIN (SELECT gsm_id, SUM(n_cells) AS n FROM sample_cell_summary WHERE subject = 'ancestry' AND gse_id IN (${ids}) GROUP BY gsm_id) t ON t.gsm_id = s.gsm_id
@@ -83,7 +83,7 @@ ${UPSERT};`,
     // cell type: each call counts for its own term and every ancestor that is itself a call somewhere (the labeller's levels)
     `${INSERT}
 SELECT r.gsm_id, r.gse_id, 'cell_type', r.term,
-  COALESCE((SELECT label FROM label_term l WHERE l.term_id = r.term), (SELECT label FROM ontology_term o WHERE o.term_id = r.term), r.term), r.term,
+  COALESCE((SELECT NULLIF(label, term_id) FROM label_term l WHERE l.term_id = r.term), (SELECT label FROM ontology_term o WHERE o.term_id = r.term), r.term), r.term,
   ROUND(1.0 * r.n / t.n, 4), 'pipeline', NULL, r.n || ' of ' || t.n || ' typed cells', 's1-labels ' || r.version, ${NOW}
 FROM (
   SELECT s.gsm_id, s.gse_id, c.ancestor_id AS term, SUM(s.n_cells) AS n, MAX(s.version) AS version
