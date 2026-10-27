@@ -49,6 +49,29 @@ either back.
 - D1 limits: never `json_each` over all of `bundle_index` (chunk by `gse_id`); ≤ 100 bound parameters per
   statement; watch the daily read budget.
 
+## D1 writes cost money: the owner approves every one, in Claude
+D1 bills rows written, not statements: the row, every secondary index it touches and any full-text index rows (`gsm` is about 30 rows
+per write). Workers Paid includes 50M rows a month, then $1.00 per million. The Sep 27 - Oct 26 2026 cycle wrote 419M rows into a
+430 MB database and cost $370 of a $429.74 bill (`docs/CLOUDFLARE_COST_PLAN.md`). Everything else on the account was inside its free allowance.
+- **Before any write to production D1** (INSERT / UPDATE / DELETE / DDL, `wrangler d1 execute|import|migrations apply`, the D1 HTTP API or MCP
+  tool, `POST /api/ingest/*` or its cranks, the Anvil / Clipper publishers and campaign loops, `s1_campaign.py` catalog writes) you must stop
+  and put a plan in front of the owner **in the Claude conversation**: what is written, how many rows per table, how many passes, the
+  estimate from `npm run d1:estimate` (`-- file.sql`, or `-- --rows gsm=118000 --passes 3`) and the dollar figure. Then wait for a
+  yes. A plan the owner has not answered is not approved; an earlier approval does not cover a different write, a bigger one or a repeat.
+- A Claude Code hook (`.claude/settings.json` → `scripts/hooks/d1-write-approval.mjs`) also stops these calls and shows the estimate; approving
+  the prompt is the owner's answer. Never work around it: no `--local` or dry-run flag to dodge the check, no splitting a write into
+  small ones, no moving the write into a script the hook cannot see.
+- **A loop is many writes.** Anything that runs repeatedly (cron, a self-resubmitting Slurm job, a per-study publisher) is estimated as
+  rows per pass x passes, and must write only what changed: compare against D1 first (reads are nearly free: 25 billion included) and use
+  `UPDATE ... WHERE col IS NOT ?` or `ON CONFLICT DO UPDATE ... WHERE <col> IS NOT excluded.<col>`. A publisher must not rewrite the whole
+  catalog for one study.
+- `/api/ingest/*` enforces a daily budget (`D1_DAILY_WRITE_ROWS`, default 1.5M estimated rows; 429 when spent). It is a Pages variable only
+  the owner changes, after approving an estimate. Do not retry a 429 or look for another path to D1.
+- The `gse_au` / `gsm_au` full-text triggers fire only when an indexed text column is in the SET clause (schema/040). Do not add columns
+  to those triggers or write an unscoped `AFTER UPDATE` trigger on `gse` / `gsm`.
+- Reads (`SELECT`, `--local`, `d1 time-travel info`, dashboards) are free to run. The monthly bill is on Cloudflare → Billing → Billable usage;
+  alerts are set at $10 and every $50 up to $500.
+
 ## Auth and AI
 - Sign-in: GitHub/Google OAuth (code + PKCE) in `functions/auth/*` and `functions/_shared/oauth.ts`; sessions
   are the `__Host-singlet_session` cookie hashed in D1 (`functions/_shared/session.ts`). Identity for every
