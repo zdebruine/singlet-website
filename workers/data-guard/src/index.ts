@@ -58,6 +58,7 @@ function parseRange(h: string | null, size: number): [number, number] | null | "
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+    if (url.pathname.startsWith("/store/")) return text(404, "Not found");
     const v2 = V2_MANIFEST_RE.exec(url.pathname);
     if (v2) return isWithheld(v2[1]) ? text(404, "Not found") : fetch(request);
     const v2s = V2_SAMPLE_RE.exec(url.pathname);

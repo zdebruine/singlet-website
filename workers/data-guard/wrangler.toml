@@ -13,6 +13,8 @@ routes = [
   { pattern = "data.singlet.bio/v2/m/GSE145370.json", zone_name = "singlet.bio" },
   # v2 sample objects: excluded samples (all of GSE145370's) are refused; more specific than data-v2's /v2/*
   { pattern = "data.singlet.bio/v2/s/*", zone_name = "singlet.bio" },
+  # the pre-.s1 pilot prefix: not part of Alpha, never served (its manifests name withheld studies and excluded samples)
+  { pattern = "data.singlet.bio/store/*", zone_name = "singlet.bio" },
 ]
 
 # Read-only: the Worker only calls head() and ranged get() to read a bundle's central directory.
