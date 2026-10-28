@@ -1,42 +1,42 @@
 {
  "title": "Atlas census, as of the Alpha release",
- "conclusion": "At the Alpha release, the atlas held 7,040 studies, 47,702 samples and 228.0M cells. The median sample used 10% of its SRA reads: 89% of samples hit the 30M-read cap, and 37% had more than one run, of which only the first was used. These totals will be regenerated after the catalog load.",
- "measured_at": "2026-10-26T15:29:00+00:00",
+ "conclusion": "Research Alpha serves 6,978 studies, 46,649 samples and 221.2M cells that passed QC (92 more studies, 1,021 samples and 5.9M cells are flagged low QC and shown only on request). The median sample used 10% of its SRA reads: 89% of samples hit the 30M-read cap, and 37% had more than one run, of which only the first was used.",
+ "measured_at": "2026-10-28T03:00:00+00:00",
  "headline": [
   {
    "label": "studies",
-   "value": "7,040",
-   "detail": "as of the Alpha release"
+   "value": "6,978",
+   "detail": "served, samples that passed QC"
   },
   {
    "label": "samples",
-   "value": "47,702",
-   "detail": "as of the Alpha release"
+   "value": "46,649",
+   "detail": "plus 1,021 flagged low QC, on request"
   },
   {
    "label": "cells called",
-   "value": "228.0M",
+   "value": "221.2M",
    "detail": "knee filter on the capped reads"
   },
   {
    "label": "of each sample's SRA reads used (median)",
    "value": "10%",
-   "detail": "p10–p90 4%–42%; 40,237 samples with both counts"
+   "detail": "p10–p90 4%–42%; measured on 40,237 samples at the Alpha census (2026-10-26)"
   },
   {
    "label": "cells per sample (median)",
-   "value": "3,493",
-   "detail": "p10–p90 634–9,540"
+   "value": "3,458",
+   "detail": "p10–p90 621–9,482"
   },
   {
    "label": "genes per cell (median of sample medians)",
-   "value": "811",
+   "value": "826",
    "detail": "mapping rate median 83%"
   }
  ],
  "tables": [
   {
-   "title": "By species",
+   "title": "By species (sample organism)",
    "columns": [
     "Species",
     "Studies",
@@ -46,39 +46,39 @@
    "rows": [
     [
      "human",
-     "3,199",
-     "27,222",
-     "120.4M"
+     "3,292",
+     "27,708",
+     "122.4M"
     ],
     [
      "mouse",
-     "3,569",
-     "18,675",
-     "98.6M"
-    ],
-    [
-     "human+mouse (barnyard)",
-     "213",
-     "1,499",
-     "7.6M"
+     "3,616",
+     "18,635",
+     "97.4M"
     ],
     [
      "zebrafish",
-     "36",
-     "115",
+     "35",
+     "109",
+     "0.3M"
+    ],
+    [
+     "rat",
+     "24",
+     "92",
      "0.4M"
     ],
     [
      "macaque",
      "9",
-     "96",
-     "0.6M"
+     "70",
+     "0.5M"
     ],
     [
-     "rat",
-     "25",
-     "95",
-     "0.4M"
+     "other or unrecorded",
+     "11",
+     "35",
+     "0.1M"
     ]
    ]
   },
@@ -93,44 +93,38 @@
    "rows": [
     [
      "10x 3' v3",
-     "4,712",
-     "28,842",
-     "162.7M"
+     "4,708",
+     "28,168",
+     "157.8M"
     ],
     [
      "10x 3' v2",
-     "1,624",
-     "11,740",
-     "45.4M"
-    ],
-    [
-     "10x 5' (GEO-curated; counted with a 3' label)",
-     "310",
-     "2,864",
-     "14.2M"
+     "1,884",
+     "14,260",
+     "57.7M"
     ],
     [
      "Drop-seq",
-     "125",
-     "875",
+     "124",
+     "872",
      "0.2M"
     ],
     [
      "10x Multiome GEX",
-     "178",
-     "743",
-     "3.2M"
+     "176",
+     "729",
+     "3.1M"
     ],
     [
      "10x Visium",
      "79",
-     "507",
+     "503",
      "1.2M"
     ],
     [
      "CEL-seq2",
-     "148",
-     "445",
+     "145",
+     "439",
      "0.2M"
     ],
     [
@@ -141,8 +135,8 @@
     ],
     [
      "MARS-seq2",
-     "130",
-     "270",
+     "128",
+     "268",
      "0.1M"
     ],
     [
@@ -150,14 +144,20 @@
      "17",
      "260",
      "0.0M"
+    ],
+    [
+     "SPLiT-seq",
+     "37",
+     "211",
+     "0.0M"
     ]
-   ],
-   "note": "Chemistry labels are the catalog's; some 10x 5' libraries carry a 3' label."
+   ]
   }
  ],
  "caveats": [
-  "Totals are as of the Alpha release and will be regenerated after the catalog load.",
-  "Mouse samples had not been screened for wrong-strand counting when this census ran.",
+  "Counts are the served Research Alpha set (release policy alpha-2026-10-27e), samples that passed QC; a study is counted once per species or chemistry it has samples of.",
+  "The read-usage figures were measured at the Alpha census (2026-10-26) on 40,237 samples with both counts; the served set is a subset of those samples.",
+  "10x 5' libraries carry the 3' chemistry label they were counted with.",
   "Cell counts are Singlet's knee-filter calls on reads capped at the first 30M of the first SRA run; they undercount against Cell Ranger and EmptyDrops.",
   "Alpha matrices come from three builds of the atlas engine; all predate the molecule-count fix."
  ],
