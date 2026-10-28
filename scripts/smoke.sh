@@ -179,7 +179,7 @@ mcp=$(curl -s -m 30 -X POST "$BASE/mcp" -H 'content-type: application/json' \
   -H 'accept: application/json, text/event-stream' \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}')
 n=$(printf '%s' "$mcp" | grep -o '"name":"[a-z_]*","title"' | wc -l | tr -d ' ')
-if [ "$n" = "14" ] || [ "$n" = "19" ]; then ok "mcp tools/list ($n)"; else bad "mcp tools/list ($n tools, want 14 or 19)"; fi
+if [ "$n" = "14" ] || [ "$n" = "20" ]; then ok "mcp tools/list ($n)"; else bad "mcp tools/list ($n tools, want 14 or 20)"; fi
 
 # MCP tool calls need an account: without a credential a call is HTTP 401 whose WWW-Authenticate points at the
 # OAuth metadata (that 401 is what makes Claude's connectors start sign-in; a 200 tool error never does).

@@ -138,13 +138,15 @@ const Docs = () => {
             {/* ── Install ── */}
             <Section id="install" title="Install">
               <p>
-                Both packages install from GitHub and compile a small C++17 extension against libzstd, so you need a C++
-                compiler and the zstd headers first. (The name <Mono>singlet</Mono> on PyPI belongs to an unrelated
-                package; install from GitHub as shown.)
+                Python 3.9 or newer, from PyPI. The wheels for Linux, macOS and Windows include the compiled codec, so no
+                compiler is needed:
               </p>
-              <p>Python 3.9 or newer:</p>
-              <CodeBlock label="bash" code={`${BUILD_DEPS}\n${PY_INSTALL}`} />
-              <p className="mt-4">R 4.2 or newer (the Bioconductor packages are needed for the default return type):</p>
+              <CodeBlock label="bash" code={PY_INSTALL} />
+              <p className="mt-4">
+                R 4.2 or newer, from GitHub (the Bioconductor packages are needed for the default return type). It compiles
+                a small C++17 extension against libzstd, so you need a C++ compiler and the zstd headers first:
+              </p>
+              <CodeBlock label="bash" code={BUILD_DEPS} />
               <CodeBlock label="r" code={R_INSTALL_STANDALONE} />
               <p className="mt-4">
                 No account, API key or configuration is needed to load data. Files are fetched from{" "}

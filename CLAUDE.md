@@ -89,5 +89,4 @@ per write). Workers Paid includes 50M rows a month, then $1.00 per million. The 
 ## Style
 Match the surrounding code: comment density, naming, idioms. Keep copy short and factual — no superlatives.
 Examples use GSE138867 (flagship) and GSE128639 (modalities). Python install line:
-`pip install "singlet-bio @ git+https://github.com/Singlet-Bio/singlet"` (PyPI `singlet` is an unrelated
-project).
+`pip install singlet` (PyPI, 1.2.0 and later; extras as `pip install "singlet[mcp]"`).

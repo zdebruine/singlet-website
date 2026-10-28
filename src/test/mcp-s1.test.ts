@@ -147,7 +147,7 @@ describe("tools/list and the instructions", () => {
     seedCatalog(env, "GSE1", ["GSM1000001"]);
     await ingest(env, "GSE1", ["GSM1000001"]);
     const tools = await list(env);
-    expect(tools).toHaveLength(19);
+    expect(tools).toHaveLength(20);
     expect(tools.map((t) => t.name)).toEqual(expect.arrayContaining(S1_TOOL_NAMES));
     expect(tools.find((t) => t.name === "list_bundle_files")!.inputSchema.properties.detail).toBeDefined();
     expect(tools.find((t) => t.name === "get_download_url")!.inputSchema.properties.include_samples).toBeDefined();
@@ -166,15 +166,15 @@ describe("tools/list and the instructions", () => {
     expect(await list(env)).toHaveLength(14);
     resetS1ToolsGate();
     await ingest(env, "GSE1", ["GSM1000001"], {}, { status: "verified", verify_ok: true });
-    expect(await list(env)).toHaveLength(19);
+    expect(await list(env)).toHaveLength(20);
     resetS1ToolsGate();
     await ingest(env, "GSE1", ["GSM1000001"], {}, { status: "retired", verify_ok: true });
-    expect(await list(env)).toHaveLength(19);
+    expect(await list(env)).toHaveLength(20);
   });
 
   it("S1_TOOLS=1 lists them before any study is served", async () => {
     const env = { ...(await setup()), S1_TOOLS: "1" };
-    expect(await list(env)).toHaveLength(19);
+    expect(await list(env)).toHaveLength(20);
     // and the catalog is not even asked
     const sql: string[] = [];
     const orig = env.DB.prepare.bind(env.DB);
@@ -229,7 +229,7 @@ describe("tools/list and the instructions", () => {
     expect(((await res.json()) as { tools: string[] }).tools).toHaveLength(14);
     resetS1ToolsGate();
     const on = await onRequestGet({ env: { ...env, S1_TOOLS: "1" }, request: new Request("https://singlet.bio/mcp"), params: {}, waitUntil: () => undefined } as never);
-    expect(((await on.json()) as { tools: string[] }).tools).toHaveLength(19);
+    expect(((await on.json()) as { tools: string[] }).tools).toHaveLength(20);
   });
 });
 
