@@ -339,7 +339,7 @@ export async function computeFacets(ctx: Ctx, f: SearchFilters, level: Level, sc
   if (scopedGseIds) return computeFacetsLive(ctx, f, level, scopedGseIds);
   const unfiltered = !hasAnyFilter(f) && !f.q;
   if (unfiltered) {
-    const key = `facets:v13:${level}:all:${f.has_bundle === true ? "hb1" : "hb0"}`;
+    const key = `facets:v14:${level}:all:${f.has_bundle === true ? "hb1" : "hb0"}`;
     return metaCached(ctx.db, ctx.waitUntil, key, DAY_MS, () => computeFacetsLive(ctx, f, level));
   }
   return computeFacetsLive(ctx, f, level);

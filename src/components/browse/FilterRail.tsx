@@ -401,7 +401,7 @@ export function FilterRail({
           </span>
         </label>
         <p className="mt-1.5 text-[11px] text-muted-foreground leading-snug">
-          Off also shows {level === "gse" ? "studies" : "samples"} that were catalogued but whose <span className="font-mono">.singlet</span> file has not been built yet.
+          Off also shows {level === "gse" ? "studies" : "samples"} that were catalogued but have no published files.
         </p>
       </Section>
       {level === "gse" && (

@@ -158,6 +158,15 @@ describe("study detail and download manifests", () => {
     expect(tsv[2].split("\t").slice(-5)).toEqual(["singlet-v1", "", "", "", ""]);
   });
 
+  it("lists a sample its .s1 files hold although the catalog files it under another series (GEO lists it in two)", async () => {
+    const env = await setup();
+    seed(env, "GSE4", 5000);
+    env.DB.raw.exec(`INSERT INTO gse (id, title) VALUES ('GSE5', 'Study GSE5'); INSERT INTO gsm (gsm_id, gse_id, status) VALUES ('GSM1000004', 'GSE5', 'DONE'), ('GSM1000005', 'GSE4', 'DONE')`);
+    await ingest(env, "GSE4", ["GSM1000004", "GSM1000005"], { status: "verified", verify_ok: true });
+    const s = await loadStudy(env.DB, "GSE4");
+    expect(s!.samples.map((x) => x.gsm_id)).toEqual(["GSM1000004", "GSM1000005"]);
+  });
+
   it("uses the configured origin everywhere a URL is built", async () => {
     const env = await setup();
     seed(env, "GSE1", 5000);

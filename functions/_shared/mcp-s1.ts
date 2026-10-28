@@ -40,7 +40,7 @@ import {
 } from "./s1-serve";
 import { s1ManifestUrl, s1PackIndexUrl, s1PackUrl, s1Url } from "./s1-urls";
 import { HANCESTRO_LABELS, LABEL_FILTERS, LABEL_FILTER_FIELDS, labelMatchSql, normalizeLabelValues } from "./s1-labels";
-import { loadModality, loadSnippets, parseLoadModalities, sampleLoadModalities, selectMembers, type Selection } from "./s1-load-modalities";
+import { loadModality, loadSnippets, OFFERED_LOAD_MODALITY_NAMES, parseLoadModalities, sampleLoadModalities, selectMembers, type Selection } from "./s1-load-modalities";
 import { organismToScientific } from "./vocab";
 
 export interface S1ToolCtx {
@@ -349,7 +349,7 @@ export async function s1Modalities(ctx: S1ToolCtx, gse: string, gsm: string, sta
  * them (from the compact column). With `modalities` only those; with a gsm_id also that sample's byte ranges for the selection.
  */
 async function loadBlock(ctx: S1ToolCtx, gse: string, gsm: string, rev: string, perSample: { modalities: string[] }[], names: string[] | null) {
-  const want = names ?? ["counts", "spliced", "unspliced", "splice_junctions", "psi", "mt", "vdj"];
+  const want = names ?? OFFERED_LOAD_MODALITY_NAMES;
   const load_modalities = want.map((n) => {
     const m = loadModality(n)!;
     const nSamples = perSample.filter((p) => m.catalog.every((c) => p.modalities.includes(c))).length;

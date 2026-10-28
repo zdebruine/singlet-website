@@ -148,7 +148,7 @@ const TOOLS = [
         sex_genetic: { type: "array", items: { type: "string", enum: ["female", "male"] }, description: "Chromosomal sex the .s1 labeller called from the cells (XIST vs chrY; 98.1% sample agreement with GEO)." },
         ancestry_genetic: { type: "array", items: { type: "string" }, description: "Genetic ancestry the .s1 labeller called (HANCESTRO id or label: European, African, East Asian, South Asian, Hispanic or Latin American, admixed ancestry). Human donors only." },
         cell_type_label: { type: "array", items: { type: "string" }, description: "Cell types the .s1 labeller called in the cells (Cell Ontology id or label, e.g. CL:0000084 or \"T cell\"; includes subtypes). Unlike the GEO-text cell type, this comes from the expression." },
-        include_unbuilt: { type: "boolean", default: false, description: "Also return studies whose .singlet file is not published yet." },
+        include_unbuilt: { type: "boolean", default: false, description: "Also return studies whose files are not published yet." },
         include_low_qc: { type: "boolean", default: false, description: "Also count and return samples singlet's QC flagged (few genes detected or few reads mapped). Left out by default; proceed with caution if you include them." },
       },
       required: ["query"],
@@ -173,7 +173,7 @@ const TOOLS = [
     name: "get_download_url",
     title: "Get the download URL",
     description:
-      "The public URL of a study's .singlet bundle (CC0, no account needed), its size, and the one-line Python/R loaders. `available` is false when the file has not been built yet.",
+      "The public URL of a study's data (CC0, no account needed): its .s1 manifest, which lists one object per sample, the total size, and the one-line Python/R loaders. `available` is false when the study has no published files.",
     inputSchema: {
       type: "object",
       properties: { gse_id: { type: "string", pattern: "^GSE\\d+$", description: "GEO series accession." } },
@@ -193,7 +193,7 @@ const TOOLS = [
     name: "get_sample_qc",
     title: "Per-sample QC",
     description:
-      "Per-sample quality control read from the study's own .singlet file: cells called, median UMI and genes per cell, uniquely mapped %, mitochondrial %, reads-in-cells %, input reads, protocol, reference build and pipeline version — plus study-level totals. Samples with fewer than 500 cells or under 60% uniquely mapped are listed in `warnings`. Not metered.",
+      "Per-sample quality control read from the study's own files: cells called, median UMI and genes per cell, uniquely mapped %, mitochondrial %, reads-in-cells %, input reads, protocol, reference build and pipeline version — plus study-level totals. Samples with fewer than 500 cells or under 60% uniquely mapped are listed in `warnings`. Not metered.",
     inputSchema: {
       type: "object",
       properties: {
@@ -209,7 +209,7 @@ const TOOLS = [
     name: "list_bundle_files",
     title: "What is inside the file",
     description:
-      "List everything inside a study's .singlet file: per-sample matrices and QC files with their sizes, plus the study-level files (manifest, metadata). Use it before get_partial_download. Not metered.",
+      "List everything inside a study's files: each sample object's matrices and QC files with their sizes, plus the study-level files (manifest, metadata). Use it before get_partial_download. Not metered.",
     inputSchema: {
       type: "object",
       properties: {
@@ -241,7 +241,7 @@ const TOOLS = [
     name: "get_partial_download",
     title: "Fetch one sample's file",
     description:
-      "Get the HTTP byte range for one file of one sample inside a study's .singlet archive, so a multi-GB study can be used by downloading only the sample you need. Returns the URL, the Range header, the compression method, compressed and uncompressed sizes, and ready-to-run curl and Python snippets (raw-deflate inflate included). Not metered.",
+      "Get the HTTP byte range for one file of one sample inside that sample's object, so a multi-GB study can be used by downloading only the sample you need. Returns the URL, the Range header, the compression method, compressed and uncompressed sizes, and ready-to-run curl and Python snippets (raw-deflate inflate included). Not metered.",
     inputSchema: {
       type: "object",
       properties: {
@@ -1032,7 +1032,7 @@ async function getDownloadUrl(env: Env, args: Record<string, unknown>) {
   };
   const text = available
     ? `${id}: ${url}${bytes ? ` (${fmtBytes(bytes)})` : ""}\nCC0 — no account or key needed to download.\nPython: singlet.load("${id}")   R: load("${id}")`
-    : `${id} is in the catalog but its .singlet file has not been built yet.`;
+    : `${id} is in the catalog but has no published files.`;
   return toolResult(text, structured);
 }
 

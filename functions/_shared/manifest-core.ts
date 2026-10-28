@@ -173,7 +173,7 @@ function header(rows: ManifestRow[], total: number): string[] {
   const bytes = rows.reduce((n, r) => n + (r.bytes ?? 0), 0);
   return [
     `# singlet.bio manifest — ${rows.length} studies (of ${total} matching)`,
-    `# data: CC0 · one .singlet file per GEO series · https://singlet.bio`,
+    `# data: CC0 · per GEO series, an .s1 manifest listing one object per sample · https://singlet.bio`,
     `# total download size: ${(bytes / 1e9).toFixed(1)} GB`,
   ];
 }

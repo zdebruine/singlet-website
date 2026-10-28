@@ -343,7 +343,7 @@ const StudyDetail = () => {
     {
       label: "Cells",
       value: (fileCells ?? totalCells) > 0 ? fmtCompact(fileCells ?? totalCells) : "—",
-      title: "Cells called in the published .singlet file, from its per-sample QC summaries.",
+      title: "Cells called in the study's published files, from their per-sample QC summaries.",
     },
 
     // QC tiles only for metrics that were actually recorded; a study with none
@@ -496,12 +496,11 @@ const StudyDetail = () => {
         {/* Aside: load / download + provenance */}
         <aside className="mt-2 lg:mt-0 lg:sticky lg:top-20 space-y-3" aria-labelledby="download-h">
           <h2 id="download-h" className="text-[18px] lg:sr-only">Load or download</h2>
-          {processed.length > 0 ? (
+          {/* the .s1 files decide: a sample GEO files under two series is catalogued under one of them only */}
+          {processed.length > 0 || series.s1 ? (
             <DownloadPanel accession={gseId} bundleUrl={series.bundle_url} bundleBytes={series.bundle_bytes} s1={series.s1} stacked />
           ) : (
-            <div className="surface px-4 py-3 text-sm text-muted-foreground">
-              No samples in this study completed processing, so there is no <code className="code-inline">.singlet</code> file.
-            </div>
+            <div className="surface px-4 py-3 text-sm text-muted-foreground">No samples in this study completed processing, so it has no published files.</div>
           )}
           <dl className="surface px-4 py-3 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-1.5 text-[12.5px]">
             {[
