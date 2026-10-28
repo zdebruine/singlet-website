@@ -221,6 +221,11 @@ export default function DocsMcp() {
               </TabsContent>
             </Tabs>
 
+            <p className="text-sm text-muted-foreground mt-4">
+              From your own code with the Anthropic API (the MCP connector), with worked examples:{" "}
+              <Link to="/docs/claude-api">Claude API user guide</Link>.
+            </p>
+
             <h3 className="mt-8">Check it is reachable</h3>
             <p className="text-sm text-muted-foreground">Listing the tools needs no sign-in; calling one does.</p>
             <CodeBlock

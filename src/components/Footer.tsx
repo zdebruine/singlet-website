@@ -5,6 +5,7 @@ import { GITHUB_ISSUES, GITHUB_REPO } from "@/lib/install-snippets";
 const LINKS: { label: string; to?: string; href?: string }[] = [
   { label: "Docs", to: "/docs" },
   { label: "MCP", to: "/docs/mcp" },
+  { label: "Claude API", to: "/docs/claude-api" },
   { label: "About", to: "/about" },
   { label: "Benchmarks", to: "/benchmarking" },
   { label: "Known issues", to: "/known-issues" },

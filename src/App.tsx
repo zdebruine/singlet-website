@@ -11,6 +11,7 @@ import Index from "./pages/Index.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import Docs from "./pages/Docs.tsx";
 import DocsMcp from "./pages/DocsMcp.tsx";
+import DocsClaudeApi from "./pages/DocsClaudeApi.tsx";
 import About from "./pages/About.tsx";
 import Browse from "./pages/Browse.tsx";
 import CellSearch from "./pages/CellSearch.tsx";
@@ -97,6 +98,7 @@ const App = () => (
               <Route path="/study/:gse" element={<StudyDetail />} />
               <Route path="/docs" element={<Docs />} />
               <Route path="/docs/mcp" element={<DocsMcp />} />
+              <Route path="/docs/claude-api" element={<DocsClaudeApi />} />
               <Route path="/about" element={<About />} />
               <Route path="/brand" element={<Brand />} />
               <Route path="/known-issues" element={<KnownIssues />} />

@@ -741,7 +741,8 @@ accs <- singlet::find("microglia in the aging mouse brain")`}
               <h3>MCP server</h3>
               <p>
                 Full guide with example prompts, per-editor setup and the tool reference:{" "}
-                <Link to="/docs/mcp">Use singlet from Claude, Cursor or ChatGPT</Link>.
+                <Link to="/docs/mcp">Use singlet from Claude, Cursor or ChatGPT</Link>. Calling it from the Anthropic API, with worked
+                examples: <Link to="/docs/claude-api">Claude API user guide</Link>.
               </p>
               <p>
                 <Mono>{MCP_URL}</Mono> is a hosted Model Context Protocol server (Streamable HTTP, stateless) that lets an
