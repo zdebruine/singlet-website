@@ -232,6 +232,8 @@ const StudyDetail = () => {
     description: description.slice(0, 158),
     path: `/study/${gseId}`,
     noindex: !!error,
+    // Croissant (ML dataset) metadata for studies served in the .s1 format: functions/api/croissant/[id].ts
+    describedBy: series?.s1 ? `/api/croissant/${gseId}` : null,
     jsonLd:
       series && derived
         ? {

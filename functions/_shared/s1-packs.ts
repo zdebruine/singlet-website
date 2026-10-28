@@ -491,6 +491,57 @@ export async function resolveFeatureNames(
   return { names: idx.map((i) => (i < v.info.n ? nameAt(v, i) : null)), pack: v.info };
 }
 
+/** One gene of an exon pack, with the matrix rows that belong to it (exon rows of the exon member, intron rows of the intron member). */
+export interface GeneRow {
+  gene_id: string;
+  /** Empty when the pack records no symbol. */
+  symbol: string;
+  chromosome: string;
+  /** Start of the gene's first exon and end of its last, as written in the feature names. */
+  start: number;
+  end: number;
+  n_exons: number;
+  exon_row_first: number;
+  exon_row_last: number;
+  /** -1 and -1 for a single-exon gene (no intron rows). */
+  intron_row_first: number;
+  intron_row_last: number;
+}
+
+/**
+ * Every gene of a plain (SVP0) exon pack, in pack order. Exon rows are numbered gene by gene, and so are the intron rows of the SVPD
+ * intron pack derived from it, so each gene owns one contiguous run of rows in each member. Composite packs are not expanded here.
+ */
+export async function geneTable(fetchPack: PackFetcher, exonPackId32: string): Promise<{ build: string; genes: GeneRow[] }> {
+  const s = await loadStruct(fetchPack, normalizeId(exonPackId32));
+  const nGenes = s.nums.length;
+  const genes: GeneRow[] = [];
+  let e = 0;
+  let intron = 0;
+  for (let g = 0; g < nGenes; g++) {
+    let last = e;
+    while (last + 1 < s.nExons && s.gidx[last + 1] === g) last++;
+    const n = last - e + 1;
+    const gid = s.prefix + String(s.nums[g]).padStart(s.width, "0");
+    const k = s.kind[g];
+    genes.push({
+      gene_id: gid,
+      symbol: k === 0 ? "" : k === 1 ? gid : s.syms[s.symIndex[g]],
+      chromosome: s.chroms[s.gch[g]],
+      start: s.exStart[e],
+      end: s.exEnd[last],
+      n_exons: n,
+      exon_row_first: e,
+      exon_row_last: last,
+      intron_row_first: n > 1 ? intron : -1,
+      intron_row_last: n > 1 ? intron + n - 2 : -1,
+    });
+    intron += n - 1;
+    e = last + 1;
+  }
+  return { build: s.build, genes };
+}
+
 // ── whitelists ──────────────────────────────────────────────────────────────
 
 interface Whitelist {
