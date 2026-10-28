@@ -45,7 +45,8 @@ import { loadStudy, bundleUrl, GSE_RE, type StudyDetail } from "./_shared/study-
 import { legacyUrl } from "./_shared/file-facts";
 import { computeStats } from "./_shared/stats-core";
 import { alphaToolArgs, studyServedSql } from "./_shared/alpha";
-import { TISSUE_GROUPS, DISEASE_GROUPS, ASSAY_FAMILIES } from "./_shared/vocab";
+import { TISSUE_GROUPS, DISEASE_GROUPS, ASSAY_FAMILIES, loadRules } from "./_shared/vocab";
+import { countUnmappedStudies, unclassifiedStudies, unmappedNote, type UnclassifiedStudy } from "./_shared/coverage-gaps";
 import { MANIFEST_FORMATS } from "./_shared/manifest-core";
 import type { StudyRow, SampleRow } from "./_shared/search-core";
 import { getCohort, saveCohort, ProductError, type ProductCtx } from "./_shared/product";
@@ -151,6 +152,7 @@ const TOOLS = [
         cell_type_label: { type: "array", items: { type: "string" }, description: "Cell types the .s1 labeller called in the cells (Cell Ontology id or label, e.g. CL:0000084 or \"T cell\"; includes subtypes). Unlike the GEO-text cell type, this comes from the expression." },
         include_unbuilt: { type: "boolean", default: false, description: "Also return studies whose files are not published yet." },
         include_low_qc: { type: "boolean", default: false, description: "Also count and return samples singlet's QC flagged (few genes detected or few reads mapped). Left out by default; proceed with caution if you include them." },
+        include_unclassified: { type: "boolean", default: false, description: "With a tissue filter: also list (separately, flagged \"unclassified\") served studies the catalog has no tissue group for whose GEO title, sample source text or abstract names that tissue. Every answer with a tissue or disease filter already says how many studies have no group and could not match it." },
       },
       required: ["query"],
       additionalProperties: false,
@@ -295,13 +297,15 @@ const TOOLS = [
     name: "find_matched_controls",
     title: "Find matched control studies",
     description:
-      "Candidate control studies for a given study: same organism and tissue group, no disease label (or a healthy/control one), preferring the same assay family and reference build, ordered by samples in the file then year. Each candidate carries a deterministic `why` and its loader line, plus honest `caveats` about study-level labels and batch effects. Deterministic (no model call); needs an account like every tool, and uses no AI tokens.",
+      "Candidate control studies for a given study: same organism and tissue group, no disease label (or a healthy/control one), preferring the same assay family and reference build, ordered by samples in the file then year. Each candidate carries a deterministic `why` and its loader line, plus honest `caveats` about study-level labels and batch effects. The answer says how many same-organism studies have no tissue group (and so could not match), and lists those whose GEO text names the tissue as `unclassified_candidates`. Deterministic (no model call); needs an account like every tool, and uses no AI tokens.",
     inputSchema: {
       type: "object",
       properties: {
         gse_id: { type: "string", pattern: "^GSE\\d+$", description: "The study you want controls for." },
         min_samples: { type: "integer", minimum: 1, default: 1, description: "Minimum samples present in the candidate's file." },
         same_assay: { type: "boolean", default: false, description: "Require an overlapping assay family." },
+        tissue: { type: "string", enum: TISSUE_GROUPS as unknown as string[], description: "Tissue group to match. Default: the study's own first tissue group; needed when the catalog has none for it." },
+        include_unclassified: { type: "boolean", default: true, description: "Also list, separately and flagged \"unclassified\", same-organism studies with no tissue group whose GEO title, sample source text or abstract names the tissue. They are text matches to verify, not catalog facts." },
       },
       required: ["gse_id"],
       additionalProperties: false,
@@ -781,6 +785,36 @@ function describeApplied(applied: NlSearchBody["applied"]): string {
 
 // ── Tool implementations ────────────────────────────────────────────────────
 
+/**
+ * What the group filters of a search could not judge: per applied tissue / disease group, the served studies (same organisms) with no
+ * group at all, and, when asked and a tissue is filtered, the ones whose GEO text names it (flagged "unclassified", never mixed into results).
+ */
+async function groupCoverage(env: Env, applied: NlSearchBody["applied"], includeUnclassified: boolean, exclude: string[]) {
+  const organisms = applied.organism ?? [];
+  const notes: string[] = [];
+  const unmapped: Record<string, number | null> = {};
+  for (const [col, values] of [["tissue_groups", applied.tissue_group ?? []], ["disease_groups", applied.disease_group ?? []]] as const) {
+    if (!values.length) continue;
+    const n = await countUnmappedStudies(env.DB, col, organisms);
+    unmapped[col] = n;
+    const note = unmappedNote(n, col, values.join(" or "), organisms);
+    if (note) notes.push(note);
+  }
+  let unclassified: UnclassifiedStudy[] = [];
+  if (includeUnclassified && unmapped.tissue_groups) {
+    const rules = await loadRules(env.DB).catch(() => []);
+    const seen = new Set(exclude);
+    for (const group of (applied.tissue_group ?? []).slice(0, 3)) {
+      for (const u of await unclassifiedStudies(env.DB, rules, { col: "tissue_groups", group, organisms, exclude: [...seen], limit: 10 })) {
+        seen.add(u.gse_id);
+        unclassified.push(u);
+      }
+    }
+    unclassified = unclassified.slice(0, 10);
+  } else if (unmapped.tissue_groups) notes.push("Pass include_unclassified: true to also list those whose GEO text names the tissue.");
+  return { notes, unmapped, unclassified };
+}
+
 async function searchDatasets(
   env: Env,
   identity: Identity,
@@ -816,11 +850,14 @@ async function searchDatasets(
   // assistant relays the sign-in advice rather than pretending the AI reading happened.
   const exhausted = !!b.quota_exceeded;
 
+  const includeUnclassified = args.include_unclassified === true;
   if (b.level === "gse") {
     const rows = (b.data as StudyRow[]).map((row) => studySummary(row, b.why[row.gse_id] ?? row.why));
+    const cov = await groupCoverage(env, b.applied, includeUnclassified, rows.map((r) => r.gse_id));
     const lines: string[] = [];
     lines.push(`${fmt(b.total)} matching stud${b.total === 1 ? "y" : "ies"} for "${query}" (page ${b.page}, showing ${rows.length}).`);
     lines.push(`Read as: ${describeApplied(b.applied)}.`);
+    for (const n of cov.notes) lines.push(n);
     if (b.dropped.length) lines.push(`Not recognised: ${b.dropped.map((d) => `${d.field} "${d.value}"`).join(", ")}.`);
     if (b.note) lines.push(b.note);
     if (b.quota_exceeded) lines.push("This month's AI allowance is used up; the question was read with the built-in vocabulary only.");
@@ -842,6 +879,11 @@ async function searchDatasets(
         lines.push(`- ${what} → ${fmt(s.total)} studies`);
       }
     }
+    if (cov.unclassified.length) {
+      lines.push("");
+      lines.push(`Unclassified (no tissue group in the catalog; their GEO text names ${(b.applied.tissue_group ?? []).join(" or ")}; verify with get_study before use):`);
+      for (const u of cov.unclassified) lines.push(`- ${u.gse_id} — ${u.title ?? "(untitled)"} · matched in ${u.matched_in}: "${u.evidence}"`);
+    }
     const result = toolResult(
       lines.join("\n"),
       {
@@ -858,6 +900,9 @@ async function searchDatasets(
          groups: b.groups ?? { full: b.total, partial: 0 },
          hard_applied: b.hard_applied ?? b.applied,
         suggestions: b.suggestions,
+        unmapped_studies: cov.unmapped,
+        unmapped_notes: cov.notes,
+        unclassified: cov.unclassified,
         note: b.note ?? null,
         quota_exceeded: exhausted,
         model: b.model ?? null,
@@ -868,9 +913,11 @@ async function searchDatasets(
   }
 
   const rows = (b.data as SampleRow[]).map(sampleSummary);
+  const cov = await groupCoverage(env, b.applied, false, []);
   const lines: string[] = [];
   lines.push(`${fmt(b.total)} matching sample${b.total === 1 ? "" : "s"} for "${query}" (page ${b.page}, showing ${rows.length}).`);
   lines.push(`Read as: ${describeApplied(b.applied)}.`);
+  for (const n of cov.notes.filter((n) => !n.startsWith("Pass include_unclassified"))) lines.push(n);
   if (b.note) lines.push(b.note);
   lines.push("");
   for (const s of rows) {
@@ -881,7 +928,7 @@ async function searchDatasets(
   lines.push("Note: files are per study — load the parent GSE and subset to these samples.");
   const result = toolResult(
     lines.join("\n"),
-    { query, level: "sample", interpreted: b.interpreted, applied: b.applied, not_recognised: b.dropped, total: b.total, totals: b.totals, page: b.page, limit: b.limit, results: rows, note: b.note ?? null, quota_exceeded: exhausted },
+    { query, level: "sample", interpreted: b.interpreted, applied: b.applied, not_recognised: b.dropped, total: b.total, totals: b.totals, page: b.page, limit: b.limit, results: rows, unmapped_studies: cov.unmapped, unmapped_notes: cov.notes, note: b.note ?? null, quota_exceeded: exhausted },
     meta
   );
   return exhausted ? { ...result, isError: true } : result;
