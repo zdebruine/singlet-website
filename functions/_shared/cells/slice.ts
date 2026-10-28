@@ -229,7 +229,7 @@ export async function slicePage(q: CellQuery, result: CellSearchResult, idx: Cel
 export function slicePython(base: string, params: string): string {
   return [
     "import requests",
-    "from singlet.s1 import atlas  # pip install \"singlet-bio @ git+https://github.com/Singlet-Bio/singlet\"",
+    "from singlet.s1 import atlas  # pip install git+https://github.com/Singlet-Bio/singlet",
     "",
     `url = "${base}/api/cells/slice"`,
     `params = ${params}`,

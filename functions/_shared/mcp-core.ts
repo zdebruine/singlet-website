@@ -10,10 +10,49 @@ export interface ToolResult {
   structuredContent?: unknown;
   isError?: boolean;
   _meta?: Record<string, unknown>;
+  /** Internal: the text already carries all of structuredContent (withDataText reads and strips it; never sent). */
+  textHasData?: true;
 }
 
-export function toolResult(text: string, structured: unknown, meta?: Record<string, unknown>): ToolResult {
-  return { content: [{ type: "text", text }], structuredContent: structured, ...(meta ? { _meta: meta } : {}) };
+export function toolResult(text: string, structured: unknown, meta?: Record<string, unknown>, opts?: { textHasData?: boolean }): ToolResult {
+  return { content: [{ type: "text", text }], structuredContent: structured, ...(meta ? { _meta: meta } : {}), ...(opts?.textHasData ? { textHasData: true as const } : {}) };
+}
+
+/** Longest JSON copy of structuredContent added to the text content. */
+export const DATA_TEXT_MAX_CHARS = 16000;
+
+/**
+ * JSON of `v` within `max` characters: arrays are cut to fewer items (each cut array ends with a "... N more" string) until it fits, so
+ * the shape and the first rows survive. The full value stays in structuredContent.
+ */
+export function compactJson(v: unknown, max = DATA_TEXT_MAX_CHARS): string {
+  const full = JSON.stringify(v);
+  if (full.length <= max) return full;
+  const cut = (x: unknown, k: number): unknown => {
+    if (Array.isArray(x)) {
+      const head = x.slice(0, k).map((y) => cut(y, k));
+      return x.length > k ? [...head, `... ${x.length - k} more`] : head;
+    }
+    if (x && typeof x === "object") return Object.fromEntries(Object.entries(x).map(([a, b]) => [a, cut(b, k)]));
+    return typeof x === "string" && x.length > 2000 ? x.slice(0, 2000) + "..." : x;
+  };
+  for (const k of [50, 25, 12, 6, 3, 1]) {
+    const s = JSON.stringify(cut(v, k));
+    if (s.length <= max) return s;
+  }
+  return full.slice(0, max) + "...";
+}
+
+/**
+ * The MCP specification asks a tool that returns structured content to return it serialized in a text block too, for clients that pass
+ * only text to the model (the Anthropic API's MCP connector among them). Without it, data such as find_cells' column runs, slice_cells'
+ * byte ranges and get_cells_page's cursor never reach the model. Results whose text already carries the data are left as they are.
+ */
+export function withDataText(result: ToolResult): ToolResult {
+  const { textHasData, ...r } = result;
+  if (r.isError || r.structuredContent === undefined || textHasData) return r;
+  return { ...r, content: [...r.content, { type: "text", text: `Data (JSON; the same as structuredContent${JSON.stringify(r.structuredContent).length > DATA_TEXT_MAX_CHARS ? ", long lists shortened" : ""}):
+${compactJson(r.structuredContent)}` }] };
 }
 
 export function toolError(text: string, extra?: Record<string, unknown>): ToolResult {
