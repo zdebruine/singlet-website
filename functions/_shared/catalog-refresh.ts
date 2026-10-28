@@ -196,7 +196,13 @@ const retiredSql = (col: string) => `EXISTS (SELECT 1 FROM s1_migration vm WHERE
 const servedSql = (col: string) =>
   `EXISTS (SELECT 1 FROM s1_study vs JOIN s1_migration vm ON vm.gse_id = vs.gse_id WHERE vs.gse_id = ${col} AND vm.status IN ('verified', 'retired'))`;
 
-const GSM_PENDING = `FROM gsm WHERE organism_primary IS NULL`;
+// Rows loaded with organism_primary already set never reached the group step (36,561 gsm rows had tissue_group NULL on 2026-10-28,
+// among them every sample of the ENCODE liver series GSE286615/728/734/744/853), so a NULL group is pending too.
+const GSM_PENDING = `FROM gsm WHERE organism_primary IS NULL OR tissue_group IS NULL OR disease_group IS NULL`;
+// gsm.tissue / gsm.disease are empty for every sample loaded since the move to D1; the GEO text extractor (attr-extract.ts) writes what
+// the characteristics say into sample_attr, so the group rules read that when the column is empty.
+const attrValueSql = (attr: string, withAttrs: boolean) =>
+  !withAttrs ? "NULL" : `(SELECT a.value_norm FROM sample_attr a WHERE a.gsm_id = gsm.gsm_id AND a.attr = '${attr}' AND a.source = 'geo' ORDER BY a.confidence DESC LIMIT 1)`;
 const manifestPending = (s1: boolean) => `FROM gse g WHERE g.r2_bundle_key IS NOT NULL AND g.r2_bundle_key != ''
   AND NOT EXISTS (SELECT 1 FROM bundle_manifest m WHERE m.gse_id = g.id)
   AND NOT EXISTS (SELECT 1 FROM bundle_index_failure f WHERE f.gse_id = g.id)${s1 ? `\n  AND NOT ${retiredSql("g.id")}` : ""}`;
@@ -294,15 +300,20 @@ export async function refreshNext(db: D1Database, n: number): Promise<{ done: Re
 
   // (a) normalized gsm columns
   const rules = await loadRules(db).catch(() => []);
+  const withAttrs = !!(await db.prepare(`SELECT 1 AS x FROM sqlite_master WHERE type = 'table' AND name = 'sample_attr'`).first().catch(() => null));
   const gsms = await db
-    .prepare(`SELECT gsm_id, gse_id, organism, tissue, disease, protocol ${GSM_PENDING} LIMIT ?`)
+    .prepare(`SELECT gsm_id, gse_id, organism, COALESCE(NULLIF(tissue, ''), ${attrValueSql("tissue", withAttrs)}) AS tissue, COALESCE(NULLIF(disease, ''), ${attrValueSql("disease", withAttrs)}) AS disease, protocol ${GSM_PENDING} LIMIT ?`)
     .bind(n * 20)
     .all<{ gsm_id: string; gse_id: string; organism: string | null; tissue: string | null; disease: string | null; protocol: string | null }>();
   const touched = new Set<string>();
   const gsmStmts = (gsms.results ?? []).map((r) => {
     touched.add(r.gse_id);
     return db
-      .prepare(`UPDATE gsm SET organism_primary = ?, tissue_group = ?, disease_group = ?, assay_family = ? WHERE gsm_id = ?`)
+      // COALESCE: a row pending only for a NULL group keeps the organism and assay it already has.
+      .prepare(
+        `UPDATE gsm SET organism_primary = COALESCE(organism_primary, ?), tissue_group = COALESCE(tissue_group, ?),
+           disease_group = COALESCE(disease_group, ?), assay_family = COALESCE(assay_family, ?) WHERE gsm_id = ?`
+      )
       .bind(
         normOrganism(r.organism),
         toGroup(rules, "tissue", r.tissue) ?? "Other",
