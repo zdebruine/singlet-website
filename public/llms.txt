@@ -21,6 +21,7 @@ The labels are public, searchable cell metadata; raw genotype inputs stay privat
   - Sample objects: https://data.singlet.bio/s1/s/<GSM accession>/<digest>.s1 (immutable; HTTP Range supported)
   - Per-cell label sidecars: https://data.singlet.bio/s1/a/<GSM accession>/<digest>.parquet (named in the manifest's samples[i].annotations)
   - Atlas cell index: POST https://data.singlet.bio/s1/cidx/query (count or sample cells by cell type, sex, ancestry, tissue, organism)
+- Croissant metadata (MLCommons Croissant 1.1, with the Responsible AI fields), JSON-LD: the atlas at https://singlet.bio/croissant.json, one study at https://singlet.bio/api/croissant/<GSE accession>, one sample at https://singlet.bio/api/croissant/<GSE accession>/<GSM accession>. Record sets: samples, cells, cell_qc, spliced_counts, unspliced_counts, features. `mlcroissant load` reads samples, features and (per-sample document) cells.
 - Python and R clients: https://github.com/Singlet-Bio/singlet (`singlet.load("GSE…")`, `singlet.load("GSM…")` for one sample, `singlet.cells(…)`; R `singlet::load()`, `singlet_cells()`).
 - Each study page: https://singlet.bio/study/<GSE accession>
 

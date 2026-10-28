@@ -1,0 +1,452 @@
+{
+ "@context": {
+  "@language": "en",
+  "@vocab": "https://schema.org/",
+  "arrayShape": "cr:arrayShape",
+  "citeAs": "cr:citeAs",
+  "column": "cr:column",
+  "conformsTo": "dct:conformsTo",
+  "containedIn": "cr:containedIn",
+  "cr": "http://mlcommons.org/croissant/",
+  "rai": "http://mlcommons.org/croissant/RAI/",
+  "data": {
+   "@id": "cr:data",
+   "@type": "@json"
+  },
+  "dataType": {
+   "@id": "cr:dataType",
+   "@type": "@vocab"
+  },
+  "dct": "http://purl.org/dc/terms/",
+  "description": {
+   "@container": "@language"
+  },
+  "equivalentProperty": "cr:equivalentProperty",
+  "examples": {
+   "@id": "cr:examples",
+   "@type": "@json"
+  },
+  "extract": "cr:extract",
+  "field": "cr:field",
+  "fileProperty": "cr:fileProperty",
+  "fileObject": "cr:fileObject",
+  "fileSet": "cr:fileSet",
+  "format": "cr:format",
+  "includes": "cr:includes",
+  "isArray": "cr:isArray",
+  "isLiveDataset": "cr:isLiveDataset",
+  "jsonPath": "cr:jsonPath",
+  "key": "cr:key",
+  "md5": "cr:md5",
+  "name": {
+   "@container": "@language"
+  },
+  "parentField": "cr:parentField",
+  "path": "cr:path",
+  "recordSet": "cr:recordSet",
+  "references": "cr:references",
+  "regex": "cr:regex",
+  "repeated": "cr:repeated",
+  "replace": "cr:replace",
+  "samplingRate": "cr:samplingRate",
+  "sc": "https://schema.org/",
+  "separator": "cr:separator",
+  "source": "cr:source",
+  "subField": "cr:subField",
+  "transform": "cr:transform",
+  "prov": "http://www.w3.org/ns/prov#",
+  "obo": "http://purl.obolibrary.org/obo/"
+ },
+ "@type": "sc:Dataset",
+ "@id": "https://singlet.bio/croissant.json",
+ "conformsTo": "http://mlcommons.org/croissant/1.1",
+ "name": "Singlet Research Alpha",
+ "alternateName": "Singlet Research Alpha (October 2026)",
+ "description": "An open atlas of public single-cell RNA-seq studies from GEO, reprocessed from raw reads with one pipeline: 6,978 studies, 46,649 samples that passed QC and 221,161,455 called cells (the /api/stats basis). One immutable .s1 object per sample (pz2-coded spliced and unspliced count matrices, splice junctions, a per-cell table with cell calls and QC) plus a study manifest, and per-cell labels for Cell Ontology cell type, chromosomal sex and genetic ancestry. Research Alpha is a feedback-oriented research preview; coverage is partial. Data CC0 1.0; code MIT.",
+ "url": "https://singlet.bio",
+ "version": "alpha-2026-10-27e",
+ "license": "https://creativecommons.org/publicdomain/zero/1.0/",
+ "isAccessibleForFree": true,
+ "inLanguage": "en",
+ "creator": [
+  {
+   "@type": "sc:Organization",
+   "name": "Singlet",
+   "url": "https://singlet.bio"
+  },
+  {
+   "@type": "sc:Person",
+   "name": "Zachary DeBruine"
+  }
+ ],
+ "publisher": {
+  "@type": "sc:Organization",
+  "name": "Singlet",
+  "url": "https://singlet.bio"
+ },
+ "datePublished": "2026-10-26T23:32:59Z",
+ "dateModified": "2026-10-28T02:19:40Z",
+ "keywords": [
+  "single-cell RNA-seq",
+  "scRNA-seq",
+  "transcriptomics",
+  "atlas",
+  "GEO",
+  "SRA",
+  "Cell Ontology",
+  "HANCESTRO",
+  "Singlet Research Alpha (October 2026)"
+ ],
+ "citeAs": "Singlet Research Alpha (October 2026). https://singlet.bio. Cite the original GEO study of every dataset you use as well (studies.geo_url).",
+ "citation": [
+  "Singlet Research Alpha (October 2026)"
+ ],
+ "isLiveDataset": true,
+ "prov:wasDerivedFrom": [
+  {
+   "@id": "https://www.ncbi.nlm.nih.gov/geo/",
+   "prov:label": "NCBI Gene Expression Omnibus (series and sample metadata)"
+  },
+  {
+   "@id": "https://www.ncbi.nlm.nih.gov/sra",
+   "prov:label": "NCBI Sequence Read Archive (raw reads)"
+  }
+ ],
+ "prov:wasGeneratedBy": {
+  "@type": "prov:Activity",
+  "prov:label": "Reprocessing of every study with the singlet pipeline; references GRCm39-2024-A, GRCh38-2024-A, GRCh38-GRCm39-barnyard, GRCz11, mRatBN7.2, Mmul_10",
+  "prov:wasAssociatedWith": {
+   "@type": [
+    "prov:SoftwareAgent",
+    "sc:SoftwareSourceCode"
+   ],
+   "name": "singlet",
+   "codeRepository": "https://github.com/Singlet-Bio/singlet",
+   "license": "https://opensource.org/licenses/MIT"
+  }
+ },
+ "rai:dataCollection": "Raw sequencing reads of public single-cell RNA-seq studies deposited in GEO, downloaded from SRA, and GEO's series and sample metadata. No new samples were collected.",
+ "rai:dataCollectionType": [
+  "Secondary Data Analysis"
+ ],
+ "rai:dataCollectionRawData": "NCBI GEO series and their SRA runs (each study's document names the run used per sample).",
+ "rai:dataPreprocessingProtocol": [
+  "One pipeline (singlet) for every sample: raw reads from SRA (the first sequencing run of each sample, at most its first 30 million reads); barcode and UMI layout detected from the reads; alignment and counting with STARsolo against one reference per species (human GRCh38, GENCODE v44; mouse GRCm39, vM33; rat mRatBN7.2; macaque Mmul_10; zebrafish GRCz11).",
+  "Exonic (spliced) and intronic (unspliced) molecules are counted separately for every cell, with splice junctions. In Alpha a molecule touching both an exon and an intron, a molecule in nested genes, or a multi-mapping read split across workers can be counted twice (2% to 19% per cell).",
+  "Cells were called with the STARsolo CellRanger2.2 knee filter; every barcode with at least 100 reads is stored, so cells can be called again. The cells table also carries an EmptyDrops call (called_ed) that is not the default.",
+  "Sample QC (functions/_shared/qc-rules.ts): a sample is described here only when its count matrix is not empty, at least one cell was called, at least 20% of reads mapped and the median cell has at least 30 genes. Samples below that are flagged low QC (kept in the study's files, left out of these documents and of every count); samples with under 5% of reads mapped and a median under 10 genes are removed.",
+  "Files were transcoded to the .s1 format (one immutable object per sample, pz2-coded matrices) and verified member by member against the files they replace.",
+  "Research Alpha release policy alpha-2026-10-27e: samples whose reads do not match the expected strand, libraries that are not gene expression (antibody, hashtag, guide, V(D)J or chromatin), samples with no called cell, and studies aligned to a genome other than the species GEO records are left out; a study left with no sample is withheld."
+ ],
+ "rai:dataAnnotationProtocol": [
+  "Per-cell labels are computed by the pipeline, with no human annotator: Cell Ontology cell type by a hierarchical, marker-guided labeller (levels: 1 compartment, 2 lineage, 3 cell type, 4 and deeper subtype; levels 1 and 2 are the default, 3 and deeper are previews); chromosomal sex from XIST against chrY expression (human and mouse); continental genetic ancestry (HANCESTRO) by supervised admixture against 1000 Genomes reference panels, for human donors with enough covered sites.",
+  "Sample metadata are GEO's text, mapped to UBERON (tissue), MONDO (disease; healthy is PATO:0000461), HsapDv / MmusDv (developmental stage), PATO (sex), HANCESTRO (self-reported ancestry) and Cell Ontology (sorted cell type), by rules or by a model; each *_mapping column of the samples record set says which.",
+  "Ontology releases of the term labels: CL cl/releases/2026-06-08/cl-basic.owl; HANCESTRO releases/2025-10-14; MONDO releases/2026-10-06; PATO releases/2026-10-01/pato.obo; UBERON uberon/releases/2026-10-01/uberon-basic.owl.",
+  "Ontology releases of the term labels: CL cl/releases/2026-06-08/cl-basic.owl; HANCESTRO releases/2025-10-14; MONDO releases/2026-10-06; PATO releases/2026-10-01/pato.obo; UBERON uberon/releases/2026-10-01/uberon-basic.owl.",
+  "Ontology releases of the term labels: CL cl/releases/2026-06-08/cl-basic.owl; HANCESTRO releases/2025-10-14; MONDO releases/2026-10-06; PATO releases/2026-10-01/pato.obo; UBERON uberon/releases/2026-10-01/uberon-basic.owl.",
+  "Ontology releases of the term labels: CL cl/releases/2026-06-08/cl-basic.owl; HANCESTRO releases/2025-10-14; MONDO releases/2026-10-06; PATO releases/2026-10-01/pato.obo; UBERON uberon/releases/2026-10-01/uberon-basic.owl.",
+  "Ontology releases of the term labels: CL cl/releases/2026-06-08/cl-basic.owl; HANCESTRO releases/2025-10-14; MONDO releases/2026-10-06; PATO releases/2026-10-01/pato.obo; UBERON uberon/releases/2026-10-01/uberon-basic.owl.",
+  "Ontology releases of the term labels: CL cl/releases/2026-06-08/cl-basic.owl; HANCESTRO releases/2025-10-14; MONDO releases/2026-10-06; PATO releases/2026-10-01/pato.obo; UBERON uberon/releases/2026-10-01/uberon-basic.owl.",
+  "Ontology releases of the term labels: CL cl/releases/2026-06-08/cl-basic.owl; HANCESTRO releases/2025-10-14; MONDO releases/2026-10-06; PATO releases/2026-10-01/pato.obo; UBERON uberon/releases/2026-10-01/uberon-basic.owl.",
+  "Ontology releases of the term labels: CL cl/releases/2026-06-08/cl-basic.owl; HANCESTRO releases/2025-10-14; MONDO releases/2026-10-06; PATO releases/2026-10-01/pato.obo; UBERON uberon/releases/2026-10-01/uberon-basic.owl.",
+  "Ontology releases of the term labels: CL cl/releases/2026-06-08/cl-basic.owl; HANCESTRO releases/2025-10-14; MONDO releases/2026-10-06; PATO releases/2026-10-01/pato.obo; UBERON uberon/releases/2026-10-01/uberon-basic.owl.",
+  "Ontology releases of the term labels: CL cl/releases/2026-06-08/cl-basic.owl; HANCESTRO releases/2025-10-14; MONDO releases/2026-10-06; PATO releases/2026-10-01/pato.obo; UBERON uberon/releases/2026-10-01/uberon-basic.owl.",
+  "Ontology releases of the term labels: CL cl/releases/2026-06-08/cl-basic.owl; HANCESTRO releases/2025-10-14; MONDO releases/2026-10-06; PATO releases/2026-10-01/pato.obo; UBERON uberon/releases/2026-10-01/uberon-basic.owl.",
+  "Ontology releases of the term labels: CL cl/releases/2026-06-08/cl-basic.owl; HANCESTRO releases/2025-10-14; MONDO releases/2026-10-06; PATO releases/2026-10-01/pato.obo; UBERON uberon/releases/2026-10-01/uberon-basic.owl."
+ ],
+ "rai:dataAnnotationPlatform": "Automated, in the pipeline (singlet-annotate); no human annotators. Model versions are in each label sidecar (model_version).",
+ "rai:annotationsPerItem": "Per cell: one cell-type path (with a confidence per level), one chromosomal sex call, at most one ancestry call. Per sample: one value per ontology field, several where GEO lists several.",
+ "rai:dataAnnotationAnalysis": [
+  "Cell type, per-study accuracy against CELLxGENE author labels: compartment 0.84, lineage 0.75, cell type 0.43, subtype 0.32. The score ranks calls; it is not a calibrated probability.",
+  "Chromosomal sex: 153 of 156 called samples (98.1%) agree with the sex in GEO; the 3 disagreements were GEO errors. About 13% of human cells stay ambiguous.",
+  "Genetic ancestry: validated on donors simulated from 1000 Genomes and on 22 donors with self-reported ancestry.",
+  "Measurements: https://singlet.bio/benchmarking#alpha-annotations"
+ ],
+ "rai:dataBiases": [
+  "Organism (share of 46,649 samples / 221,161,455 cells): Homo sapiens 59.3% / 55.1%; Mus musculus 39.0% / 42.8%; organism not recorded 1.1% / 1.4%; Danio rerio 0.2% / 0.2%.",
+  "Tissue groups, by number of the 6,978 studies that include them: Other 850; Brain / CNS 462; Blood / PBMC 421; Lung / airway 313; Gut / intestine 225; Lymphoid organs 217.",
+  "Assay families, by studies: 10x 3' 4,982; 10x (version unconfirmed) 1,028; Unknown 594; 10x 5' 313; 10x Multiome / ATAC 101.",
+  "Coverage is partial: 46,649 samples passed QC, of 168,508 that GEO lists for the studies the catalog tracks. Studies whose raw reads are not in SRA, or could not be processed, are absent.",
+  "Genetic ancestry, samples with a call (a pooled sample can carry several): European 533; East Asian 118; admixed ancestry 75; African 67; Hispanic or Latin American 34; South Asian 4. Most samples have no call (about 1% of cells are covered).",
+  "GEO metadata (sex, tissue, disease) is uncurated and may be wrong."
+ ],
+ "rai:dataLimitations": [
+  "Alpha used only the first sequencing run of each sample and at most 30 million reads (the median sample used 10% of its deposited reads). Against the authors' own Cell Ranger results on 135 samples, Alpha finds a median of 65% of their cells, with a quarter of their UMIs per cell.",
+  "Some molecules are counted twice (2% to 19% per cell); counts depend slightly on the thread count; the spliced and unspliced layers are not suited to RNA velocity.",
+  "Cell type labels: per-study accuracy compartment 0.84, lineage 0.75, cell type 0.43, subtype 0.32; levels 3 and deeper are previews.",
+  "Chromosomal sex agrees with GEO for 98.1% of samples; about 13% of human cells stay ambiguous, mostly in pools of both sexes or samples with few reads per cell.",
+  "Genetic ancestry is computed only for human donors with enough genotype coverage (under 1,000 samples, about 1% of cells); elsewhere it is missing. Mixed ancestry is reported as admixed.",
+  "Transcriptomics only: antibody tags (ADT), hashtags (HTO), ATAC, spatial coordinates, CRISPR guides and V(D)J clonotypes are not served. Doublet, ambient-RNA and mitochondrial allele layers are not in Alpha.",
+  "GEO metadata (sex, tissue, disease) is not curated and may be wrong. A cell or sample count in the catalog can differ from the QC inside a file; the file is the truth. A sample GEO lists under two series is in both studies, so atlas-wide totals count it twice.",
+  "Known issues and what Beta changes: https://singlet.bio/known-issues"
+ ],
+ "rai:personalSensitiveInformation": [
+  "All studies are public GEO deposits whose raw reads are public in SRA; no new human data was collected.",
+  "Genotypes, mitochondrial allele data and the raw genotype inputs of the labeller are never stored in the released files or served. Per cell, only chromosomal sex (female / male / ambiguous) and continental genetic ancestry (HANCESTRO group) are released.",
+  "GEO sample characteristics (which may include age, sex, ancestry, disease and donor ids chosen by the depositors) are kept as GEO publishes them."
+ ],
+ "rai:dataUseCases": [
+  "Training and evaluating models of single-cell gene expression (cell-type classifiers, representation and foundation models) on uniformly processed counts.",
+  "Cross-study meta-analysis and cohort building by organism, tissue, disease, cell type, sex or ancestry.",
+  "Benchmarking analysis methods on many studies processed the same way; re-calling cells from the stored barcodes.",
+  "Not validated for clinical use or for identifying individuals."
+ ],
+ "rai:dataSocialImpact": "Uniform reprocessing makes public single-cell studies comparable and reusable without running a pipeline per study. Models trained on it inherit its skew toward human and mouse, toward the tissues and assays most often deposited, and toward the donors with ancestry calls; the dataBiases field gives the numbers.",
+ "rai:dataReleaseMaintenancePlan": "Per-sample .s1 objects and label sidecars are immutable and content-addressed (the key contains the digest); a change writes a new object, and the study manifest (mutable) gets a new rev. Which samples and studies are served is set by the Research Alpha release policy; this document's version is the policy id in force (alpha-2026-10-27e). Research Alpha (October 2026) is a feedback-oriented research preview. Beta, a full re-run with a new engine, is estimated for Q1 2027 and will be released separately. Feedback from any page of https://singlet.bio; known issues at https://singlet.bio/known-issues.",
+ "distribution": [
+  {
+   "@type": "cr:FileObject",
+   "@id": "studies-csv",
+   "name": "studies.csv",
+   "description": "The studies record set as CSV, generated from the catalog by singlet.bio.",
+   "contentUrl": "https://singlet.bio/api/croissant/studies.csv",
+   "encodingFormat": "text/csv"
+  },
+  {
+   "@type": "cr:FileSet",
+   "@id": "study-manifests",
+   "name": "study-manifests",
+   "description": "Every study manifest, https://data.singlet.bio/s1/m/<GSE>.json (6,978 files; studies.manifest_url lists them). Each study's own Croissant document (studies.croissant_url) describes its sample objects, label sidecars and record sets.",
+   "encodingFormat": "application/json",
+   "includes": "s1/m/GSE*.json"
+  }
+ ],
+ "recordSet": [
+  {
+   "@type": "cr:RecordSet",
+   "@id": "studies",
+   "name": "studies",
+   "description": "One record per downloadable study.",
+   "key": {
+    "@id": "studies/gse_id"
+   },
+   "field": [
+    {
+     "@type": "cr:Field",
+     "@id": "studies/gse_id",
+     "name": "gse_id",
+     "description": "GEO series accession (the record key).",
+     "dataType": "sc:Text",
+     "source": {
+      "fileObject": {
+       "@id": "studies-csv"
+      },
+      "extract": {
+       "column": "gse_id"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "studies/title",
+     "name": "title",
+     "description": "Series title in GEO.",
+     "dataType": "sc:Text",
+     "source": {
+      "fileObject": {
+       "@id": "studies-csv"
+      },
+      "extract": {
+       "column": "title"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "studies/organism",
+     "name": "organism",
+     "description": "Primary organism of the served samples.",
+     "dataType": "sc:Text",
+     "source": {
+      "fileObject": {
+       "@id": "studies-csv"
+      },
+      "extract": {
+       "column": "organism"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "studies/organism_ontology_term_id",
+     "name": "organism_ontology_term_id",
+     "description": "NCBI Taxonomy id of the organism.",
+     "dataType": "sc:Text",
+     "source": {
+      "fileObject": {
+       "@id": "studies-csv"
+      },
+      "extract": {
+       "column": "organism_ontology_term_id"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "studies/n_samples",
+     "name": "n_samples",
+     "description": "Samples that passed QC.",
+     "dataType": "sc:Integer",
+     "source": {
+      "fileObject": {
+       "@id": "studies-csv"
+      },
+      "extract": {
+       "column": "n_samples"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "studies/n_cells",
+     "name": "n_cells",
+     "description": "Cells called in those samples.",
+     "dataType": "sc:Integer",
+     "source": {
+      "fileObject": {
+       "@id": "studies-csv"
+      },
+      "extract": {
+       "column": "n_cells"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "studies/reference_build",
+     "name": "reference_build",
+     "description": "Genome build the reads were aligned to.",
+     "dataType": "sc:Text",
+     "source": {
+      "fileObject": {
+       "@id": "studies-csv"
+      },
+      "extract": {
+       "column": "reference_build"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "studies/year",
+     "name": "year",
+     "description": "Year GEO received the series.",
+     "dataType": "sc:Integer",
+     "source": {
+      "fileObject": {
+       "@id": "studies-csv"
+      },
+      "extract": {
+       "column": "year"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "studies/s1_bytes",
+     "name": "s1_bytes",
+     "description": "Size of the study's sample objects.",
+     "dataType": "sc:Integer",
+     "source": {
+      "fileObject": {
+       "@id": "studies-csv"
+      },
+      "extract": {
+       "column": "s1_bytes"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "studies/rev",
+     "name": "rev",
+     "description": "Manifest revision (changes whenever a sample object or study file does).",
+     "dataType": "sc:Text",
+     "source": {
+      "fileObject": {
+       "@id": "studies-csv"
+      },
+      "extract": {
+       "column": "rev"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "studies/created_at",
+     "name": "created_at",
+     "description": "When the study's objects were written (ISO 8601).",
+     "dataType": "sc:Text",
+     "source": {
+      "fileObject": {
+       "@id": "studies-csv"
+      },
+      "extract": {
+       "column": "created_at"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "studies/manifest_url",
+     "name": "manifest_url",
+     "description": "Study manifest.",
+     "dataType": "sc:URL",
+     "source": {
+      "fileObject": {
+       "@id": "studies-csv"
+      },
+      "extract": {
+       "column": "manifest_url"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "studies/croissant_url",
+     "name": "croissant_url",
+     "description": "Croissant metadata of the study.",
+     "dataType": "sc:URL",
+     "source": {
+      "fileObject": {
+       "@id": "studies-csv"
+      },
+      "extract": {
+       "column": "croissant_url"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "studies/study_url",
+     "name": "study_url",
+     "description": "Study page on singlet.bio.",
+     "dataType": "sc:URL",
+     "source": {
+      "fileObject": {
+       "@id": "studies-csv"
+      },
+      "extract": {
+       "column": "study_url"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "studies/geo_url",
+     "name": "geo_url",
+     "description": "GEO record of the series.",
+     "dataType": "sc:URL",
+     "source": {
+      "fileObject": {
+       "@id": "studies-csv"
+      },
+      "extract": {
+       "column": "geo_url"
+      }
+     }
+    }
+   ]
+  }
+ ]
+}

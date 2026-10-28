@@ -34,7 +34,7 @@ const GSE_2 = "GSE146974";
 type SectionId = (typeof SECTIONS)[number]["id"];
 
 /** Anchors inside a section, mapped to the section that holds them. */
-const SUB_ANCHORS: Record<string, SectionId> = { modalities: "singlet-file" };
+const SUB_ANCHORS: Record<string, SectionId> = { modalities: "singlet-file", croissant: "bulk-manifests" };
 
 /**
  * One section at a time: the URL hash picks it (default: Install). A hash that names an anchor inside a
@@ -478,6 +478,46 @@ python load_studies.py`}
               <p className="text-sm text-muted-foreground">
                 Manifests are capped at 2,000 studies per request; the JSON response's <Mono>total</Mono> field tells
                 you if a search matched more than that, so you can narrow the filters. All rows are CC0.
+              </p>
+              <h3 id="croissant" className="scroll-mt-24">Croissant metadata</h3>
+              <p>
+                The atlas, every study and every sample are described in{" "}
+                <a href="https://docs.mlcommons.org/croissant/" className="text-primary underline underline-offset-2">MLCommons Croissant 1.1</a>{" "}
+                JSON-LD, with the Responsible AI fields (collection, preprocessing, annotation, biases, limitations, sensitive
+                information, maintenance). The document's <Mono>version</Mono> is the Research Alpha release policy in force.
+              </p>
+              <table>
+                <thead>
+                  <tr>
+                    <th>URL</th>
+                    <th>What it describes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><Mono>/croissant.json</Mono></td>
+                    <td>The atlas: counts, release policy, and a <Mono>studies</Mono> record set (<Mono>/api/croissant/studies.csv</Mono>).</td>
+                  </tr>
+                  <tr>
+                    <td><Mono>/api/croissant/&lt;GSE&gt;</Mono></td>
+                    <td>One study: its sample objects and label sidecars, and the record sets <Mono>samples</Mono>, <Mono>cells</Mono>, <Mono>cell_qc</Mono>, <Mono>spliced_counts</Mono>, <Mono>unspliced_counts</Mono>, <Mono>features</Mono>.</td>
+                  </tr>
+                  <tr>
+                    <td><Mono>/api/croissant/&lt;GSE&gt;/&lt;GSM&gt;</Mono></td>
+                    <td>One sample, so the <Mono>cells</Mono> record set reads that sample's label sidecar alone.</td>
+                  </tr>
+                </tbody>
+              </table>
+              <CodeBlock
+                label="python — read a study's samples and one sample's cells with mlcroissant"
+                code={`# pip install "mlcroissant[parquet]"
+import mlcroissant as mlc
+samples = mlc.Dataset("https://singlet.bio/api/croissant/${GSE}").records("samples")
+cells = mlc.Dataset("https://singlet.bio/api/croissant/${GSE}/${GSM}").records("cells")`}
+              />
+              <p className="text-sm text-muted-foreground">
+                mlcroissant reads <Mono>samples</Mono>, <Mono>features</Mono> and a sample's <Mono>cells</Mono>; the count matrices and{" "}
+                <Mono>cell_qc</Mono> are inside the <Mono>.s1</Mono> objects, so read those with <Mono>singlet.load()</Mono>.
               </p>
             </Section>
 
