@@ -32,6 +32,10 @@ const arg = (k: string, d: string) => {
 };
 const IN = arg("in", "");
 const OUT = arg("out", "scripts/metadata-gaps/out");
+// --upgrade-fallback: a gsm group the crank set to its fallback ("Other", "Other / unspecified") because the sample had no text is
+// replaced by the named group the text now gives (used after the GEO re-fetch, scripts/metadata-gaps/geo_refetch.py).
+const UPGRADE_FALLBACK = argv.includes("--upgrade-fallback");
+const FALLBACK: Record<string, string> = { tissue_group: "Other", disease_group: "Other / unspecified" };
 if (!IN) throw new Error("--in <dir with the wrangler JSON exports> is required");
 
 type Row = Record<string, any>;
@@ -142,12 +146,14 @@ function emitGroups(file: "geo" | "title", s: Row, tissue: string | null, diseas
   const sets: string[] = [];
   const set = (col: "tissue_group" | "disease_group", g: string | null, from: string | null) => {
     if (!g) return bump(`${file}:group_left_to_crank:${col}`);
-    sets.push(`${col} = COALESCE(${col}, ${q(g)})`);
+    if (UPGRADE_FALLBACK && g === FALLBACK[col]) return bump(`${file}:group_is_fallback:${col}`);
+    sets.push(UPGRADE_FALLBACK ? `${col} = CASE WHEN ${col} IS NULL OR ${col} = ${q(FALLBACK[col])} THEN ${q(g)} ELSE ${col} END` : `${col} = COALESCE(${col}, ${q(g)})`);
     csv.push(["set_group", file, s.gsm_id, s.gse_id, s.organism_primary, col, "", g, "", "", "vocab_rules", "", from ?? ""].map(csvCell).join(","));
     bump(`${file}:set_group:${col}`);
   };
-  if (s.tissue_group == null && !skipTissue) set("tissue_group", toGroup(rules, "tissue", tissue), tissue);
-  if (s.disease_group == null && file === "geo") set("disease_group", toGroup(rules, "disease", disease), disease);
+  const open = (col: "tissue_group" | "disease_group") => s[col] == null || (UPGRADE_FALLBACK && s[col] === FALLBACK[col]);
+  if (open("tissue_group") && !skipTissue) set("tissue_group", toGroup(rules, "tissue", tissue), tissue);
+  if (open("disease_group") && file === "geo") set("disease_group", toGroup(rules, "disease", disease), disease);
   if (!sets.length) return;
   sql[file].push(`UPDATE gsm SET ${sets.join(", ")} WHERE gsm_id = ${q(s.gsm_id)};`);
   touchedGse[file].add(s.gse_id);
