@@ -1,6 +1,6 @@
 # Cell search: every cell of the atlas, by any metadata
 
-Status 2026-10-28: built and measured on live data; not deployed (see "Deploy" at the end). Numbers below come from
+Status 2026-10-28: live on singlet.bio (zdebruine/singlet-website#88), measured on production. Numbers below come from
 `docs/cell-search-measurements.json` (`npm run cells:bench`), which the grant figure reads.
 
 ## What it answers
@@ -116,54 +116,55 @@ Every `/api/cells` answer carries this snippet for its own filter (`slice.python
 
 ## Measurements
 
-Live data: cell index `20261027T2236Z-3bdf42bc` (1,476,601 summary rows), sample-facts snapshot of 2026-10-28T11:38Z (47,670 samples, release policy `alpha-2026-10-27e`). Edge: the PR preview (`https://claude-cell-search.singlet-4gc.pages.dev`, same code as production, production D1 read-only), timed from a residential connection, so every number includes the network round trip. CPU: the evaluator in V8 (node v24.14.1) on a laptop, 25 runs per query; Workers time is not observable from inside a Worker (timers stop during CPU work).
+Live data: cell index `20261027T2236Z-3bdf42bc` (1,476,601 summary rows), sample-facts snapshot of 2026-10-28T11:38Z (47,670 samples, release policy `alpha-2026-10-27e`). Edge: production (`https://singlet.bio`) after the merge, timed from a residential connection, so every number includes the network round trip. CPU: the evaluator in V8 (node v24.14.1) on a laptop, 25 runs per query; Workers time is not observable from inside a Worker (timers stop during CPU work).
 
 ### Latency per query
 
 | Query | Kind / ontology depth | Cells | Edge, cache miss p50 / p95 (ms) | Edge, cache hit p50 / p95 (ms) | CPU p50 / p95 (ms) |
 |---|---|---:|---:|---:|---:|
-| (no filter) | none | 221,164,736 | 127.7 / 1694.7 | 121.6 / 330.9 | 148.3 / 251.3 |
-| {"cell_type": "CL:0000988"} | CL compartment (hematopoietic cell) | 92,743,222 | 143.1 / 295.5 | 146.9 / 231.8 | 116.2 / 161.2 |
-| {"cell_type": "CL:0000738"} | CL closure only (leukocyte) | 27,677,032 | 138 / 191.3 | 131.9 / 238.5 | 98.2 / 126.5 |
-| {"cell_type": "CL:0000542"} | CL lineage (lymphocyte) | 48,871,610 | 112.5 / 298.5 | 133.3 / 535.5 | 79.5 / 103.5 |
-| {"cell_type": "CL:0000084"} | CL cell type (T cell) | 33,312,852 | 115.4 / 381 | 125 / 198.5 | 64.1 / 103.6 |
-| {"cell_type": "CL:0000625"} | CL type (CD8 alpha-beta T cell) | 12,450,443 | 91.9 / 139.1 | 104 / 130.8 | 58.4 / 77.6 |
-| {"cell_type": "CL:0000913"} | CL subtype (effector memory CD8) | 2,197,120 | 91.8 / 105 | 103.9 / 113.2 | 46.9 / 91.3 |
-| {"sex": "female"} | PATO | 82,122,774 | 118.4 / 437.4 | 110.1 / 241.9 | 130.1 / 270.6 |
-| {"ancestry": "HANCESTRO:0010"} | HANCESTRO | 188,804 | 59.8 / 79.5 | 62.9 / 95.6 | 33.6 / 97.2 |
-| {"tissue": "UBERON:0001004"} | UBERON system (respiratory system) | 7,737,697 | 91.9 / 128.8 | 98.8 / 139.8 | 40.2 / 99.7 |
-| {"tissue": "UBERON:0002048"} | UBERON organ (lung) | 6,837,872 | 83.2 / 116.5 | 86.1 / 115.7 | 30.7 / 81.4 |
-| {"disease": "MONDO:0004992"} | MONDO root-level (cancer) | 3,004,380 | 93.7 / 207.8 | 91.3 / 234.8 | 28.3 / 83.3 |
-| {"disease": "MONDO:0008903"} | MONDO organ (lung cancer) | 648,540 | 69.3 / 86.5 | 70.4 / 100.3 | 29.5 / 74.9 |
-| {"disease": "MONDO:0005233"} | MONDO leaf (NSCLC) | 630,944 | 68.2 / 344.4 | 72.5 / 184.3 | 37.3 / 90.5 |
-| {"development_stage": "adult"} | HsapDv/MmusDv (adult) | 21,030,872 | 106.9 / 131.4 | 166.8 / 322.1 | 96.2 / 177 |
-| {"year": [2023, 2026]} | study | 156,797,004 | 96 / 169.8 | 118.1 / 181.6 | 266.8 / 421.6 |
-| {"cell_type": "CL:0000625", "sex": "female", "disease": "MONDO:0008903 | combined | 129,143 | 56.2 / 80.8 | 54.5 / 331.5 | 32 / 63 |
-| {"cell_type": "CL:0000625", "sex": "female", "development_stage": "adu | combined | 0 | 49 / 334.6 | 49.5 / 58.3 | 65.6 / 139.1 |
-| {"or": [{"tissue": "lung"}, {"cell_type": "hepatocyte"}], "not": {"sex | combined | 3,958,475 | 97.6 / 183.6 | 99.6 / 122.4 | 163 / 262 |
-| {"or": [{"and": [{"tissue": "blood"}, {"cell_type": "B cell"}]}, {"and | combined | 2,670,283 | 89.8 / 156.6 | 92.2 / 99.2 | 186.4 / 340.2 |
-| {"organism": "Homo sapiens", "disease": "MONDO:0004992", "not_cell_typ | combined | 2,057,506 | 83.2 / 209.2 | 81.7 / 89.9 | 74.9 / 135.4 |
-| "female CD8 T cells from adult lung tumours of African ancestry" | question | 0 | 50.9 / 250.8 | 45.4 / 52.7 | 37.1 / 97.6 |
-| "female CD8 T cells from lung cancer" | question | 129,143 | 52.7 / 81 | 50.7 / 60.9 | 25.9 / 73.4 |
-| "microglia from aged mouse brain" | question | 10,094 | 50.9 / 99.4 | 46.2 / 54.7 | 44.5 / 109.2 |
-| "B cells or plasma cells in human bone marrow, not leukemia" | question | 501,741 | 82.3 / 96.8 | 78.4 / 85.7 | 85 / 153.5 |
+| (no filter) | none | 221,164,736 | 147.4 / 1760.4 | 137.3 / 223.7 | 148.3 / 251.3 |
+| {"cell_type": "CL:0000988"} | CL compartment (hematopoietic cell) | 92,743,222 | 123.9 / 193 | 132.1 / 164.7 | 116.2 / 161.2 |
+| {"cell_type": "CL:0000738"} | CL closure only (leukocyte) | 27,677,032 | 114.9 / 185.2 | 115.5 / 186.6 | 98.2 / 126.5 |
+| {"cell_type": "CL:0000542"} | CL lineage (lymphocyte) | 48,871,610 | 116.5 / 238 | 118.6 / 154.1 | 79.5 / 103.5 |
+| {"cell_type": "CL:0000084"} | CL cell type (T cell) | 33,312,852 | 105.7 / 235.9 | 104.5 / 165.3 | 64.1 / 103.6 |
+| {"cell_type": "CL:0000625"} | CL type (CD8 alpha-beta T cell) | 12,450,443 | 109.7 / 236.2 | 108.3 / 117.5 | 58.4 / 77.6 |
+| {"cell_type": "CL:0000913"} | CL subtype (effector memory CD8) | 2,197,120 | 96.2 / 134.6 | 95.2 / 122.4 | 46.9 / 91.3 |
+| {"sex": "female"} | PATO | 82,122,774 | 99.4 / 171.4 | 107.7 / 128.3 | 130.1 / 270.6 |
+| {"ancestry": "HANCESTRO:0010"} | HANCESTRO | 188,804 | 73.2 / 93.1 | 68.7 / 113.7 | 33.6 / 97.2 |
+| {"tissue": "UBERON:0001004"} | UBERON system (respiratory system) | 7,737,697 | 115.6 / 182.3 | 89.6 / 128.4 | 40.2 / 99.7 |
+| {"tissue": "UBERON:0002048"} | UBERON organ (lung) | 6,837,872 | 116.8 / 203.5 | 103.4 / 212.9 | 30.7 / 81.4 |
+| {"disease": "MONDO:0004992"} | MONDO root-level (cancer) | 3,004,380 | 104.6 / 140.7 | 95.2 / 115.3 | 28.3 / 83.3 |
+| {"disease": "MONDO:0008903"} | MONDO organ (lung cancer) | 648,540 | 96.9 / 222.9 | 142.5 / 433.4 | 29.5 / 74.9 |
+| {"disease": "MONDO:0005233"} | MONDO leaf (NSCLC) | 630,944 | 83.1 / 142.8 | 165.1 / 310.2 | 37.3 / 90.5 |
+| {"development_stage": "adult"} | HsapDv/MmusDv (adult) | 21,030,872 | 116.7 / 261.7 | 265.4 / 480.9 | 96.2 / 177 |
+| {"year": [2023, 2026]} | study | 156,797,004 | 113.4 / 148.6 | 143.3 / 547.5 | 266.8 / 421.6 |
+| {"cell_type": "CL:0000625", "sex": "female", "disease": "MONDO:0008903 | combined | 129,143 | 64.5 / 118.2 | 67.4 / 100.4 | 32 / 63 |
+| {"cell_type": "CL:0000625", "sex": "female", "development_stage": "adu | combined | 0 | 64.4 / 310.6 | 59.1 / 94 | 65.6 / 139.1 |
+| {"or": [{"tissue": "lung"}, {"cell_type": "hepatocyte"}], "not": {"sex | combined | 3,958,475 | 101.1 / 161.1 | 130.5 / 165 | 163 / 262 |
+| {"or": [{"and": [{"tissue": "blood"}, {"cell_type": "B cell"}]}, {"and | combined | 2,670,283 | 101.5 / 183.8 | 109.5 / 149 | 186.4 / 340.2 |
+| {"organism": "Homo sapiens", "disease": "MONDO:0004992", "not_cell_typ | combined | 2,057,506 | 91.6 / 134.8 | 100.4 / 135.4 | 74.9 / 135.4 |
+| "female CD8 T cells from adult lung tumours of African ancestry" | question | 0 | 65.5 / 531.8 | 57.4 / 179.7 | 37.1 / 97.6 |
+| "female CD8 T cells from lung cancer" | question | 129,143 | 62.9 / 107.5 | 142.6 / 261.2 | 25.9 / 73.4 |
+| "microglia from aged mouse brain" | question | 10,094 | 57.5 / 89.5 | 99.4 / 121.3 | 44.5 / 109.2 |
+| "B cells or plasma cells in human bone marrow, not leukemia" | question | 501,741 | 86.7 / 127.5 | 146.6 / 250.1 | 85 / 153.5 |
 
-Cache misses run the whole query in an isolate that already holds its inputs; every repeated request was an edge-cache hit (12 of 12 per query). Hits and misses take about the same time from here: network and the 10–40 kB answer dominate, not the evaluation. A cold isolate pays for its inputs once:
+Cache misses run the whole query in an isolate that already holds its inputs; every repeated request was an edge-cache hit (12 of 12 per query). Hits and misses take about the same time from here: network and the 10-40 kB answer dominate, not the evaluation. A cold isolate pays for its inputs once:
 
-- cold isolate, snapshot built from D1 (first request after a deploy): 4,101 ms in the Function.
-- cold isolate, snapshot built from D1 (after a redeploy): 2,343 ms in the Function.
-- cold isolate, snapshot from the colo's Cache API: 257 ms in the Function.
+- cold isolate, snapshot built from D1 (first request on the PR preview): 4,101 ms in the Function.
+- cold isolate, snapshot built from D1 (after a preview redeploy): 2,343 ms in the Function.
+- cold isolate, snapshot from the colo's Cache API (preview): 257 ms in the Function.
+- first production request after the deploy (cold isolate, snapshot from the Cache API): 72 ms in the Function.
 - Index summary + sample table: 7.8 MB in 4 reads of immutable objects (edge-cached); sample facts: 5.1 MB JSON, built from 467,824 D1 rows.
 
 ### Slicing (first page of each query, `page_cells=5000`, counts = spliced + unspliced)
 
 | Query | Cells | Samples | Bytes | Ranged reads | Bytes / cell | Filtered by | Page answer (ms) | Streamed by the data Worker |
 |---|---:|---:|---:|---:|---:|---|---:|---|
-| `{"cell_type": "CL:0000625", "sex": "female", "disease": "MON` | 3,886 | 3 | 10.3 MB | 6 | 2,662 | index | 997 | 10.3 MB in 5.4 s |
-| `{"cell_type": "CL:0000913"}` | 2 | 1 | 0.2 MB | 4 | 90,368 | index | 2106 | 0.2 MB in 1.1 s |
-| `{"or": [{"tissue": "lung"}, {"cell_type": "hepatocyte"}], "n` (all cells of the page asked for, filtered here) | 1,745 | 4 | 6.0 MB | 8 | 3,447 | here | 5852 | 5.9 MB in 3.4 s |
+| `{"cell_type": "CL:0000625", "sex": "female", "disease": "MON` | 3,886 | 3 | 10.3 MB | 6 | 2,662 | index | 578 | 10.3 MB in 6.4 s |
+| `{"cell_type": "CL:0000913"}` | 2 | 1 | 0.2 MB | 4 | 90,368 | index | 1399 | 0.2 MB in 0.3 s |
+| `{"or": [{"tissue": "lung"}, {"cell_type": "hepatocyte"}], "n` | 1,745 | 4 | 6.0 MB | 8 | 3,447 | here | 1286 | 5.9 MB in 3.5 s |
 
-Matrices are stored in chunks of up to 4,096 columns, so a cell costs its chunk's share: 2.7–3.4 kB per cell when the matching cells are dense in their sample, up to 90 kB for a lone cell. The stream rate is this connection's (about 2 MB/s), not the data Worker's. Egress is free (R2 has no egress fees).
+Matrices are stored in chunks of up to 4,096 columns, so a cell costs its chunk's share: 2.7-3.4 kB per cell when the matching cells are dense in their sample, up to 90 kB for a lone cell. `filtered: here` pages ask the index for every cell of their samples and filter them in the Function (OR / NOT across cell fields). The stream rate is this connection's (about 2 MB/s), not the data Worker's. Egress is free.
 
 ### Cost per million queries (Cloudflare list prices, Workers Paid, beyond the included allowances)
 
@@ -215,7 +216,7 @@ Matrices are stored in chunks of up to 4,096 columns, so a cell costs its chunk'
 | year | study |  | 46,163 (99.0%) | 219,670,877 (99.3%) |
 | has_publication | study |  | 6,415 (13.8%) | 30,453,658 (13.8%) |
 
-Per-cell fields count cells with a call (cell type: any CL term; sex: female or male; ancestry: any group). The rarest filters matter most for questions like "of African ancestry": genetic ancestry is called for 1.6% of cells, so the brief's example "female CD8 T cells from adult lung tumours of African ancestry" matches **0 cells** today, and its relaxations say why (`ancestry=African` alone: 188,804 cells in 87 samples of 19 studies; `development_stage` and `disease` together cover few samples). "Female CD8 T cells from lung cancer" matches 129,143 cells in 69 samples of 7 studies.
+Per-cell fields count cells with a call (cell type: any CL term; sex: female or male; ancestry: any group). The rarest filters matter most for questions like "of African ancestry": genetic ancestry is called for 1.6% of cells, so the example "female CD8 T cells from adult lung tumours of African ancestry" matches **0 cells** today, and its relaxations say why (`ancestry=African` alone: 188,804 cells in 87 samples of 19 studies; `development_stage` and `disease` together cover few samples). "Female CD8 T cells from lung cancer" matches 129,143 cells in 69 samples of 7 studies.
 
 ## Label quality (read before quoting a count)
 
