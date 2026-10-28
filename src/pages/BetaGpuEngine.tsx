@@ -4,13 +4,16 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { usePageMeta } from "@/hooks/usePageMeta";
 
-// The Beta GPU engine (workstream W11), from Singlet-Bio/singlet docs/gpu-engine/exploration.md §12 and the M5 runs on
-// Clipper (jobs 789609, 789646, 789658). Every number here is measured on real reads unless the row says "model".
-// Update the rows as stages land; never state a speed or equivalence that was not measured.
+// The Beta GPU engine (workstream W11), from Singlet-Bio/singlet docs/gpu-engine/exploration.md §12 (branch
+// gpu/w11-prototypes, PR #61) and docs/engine-gpu-results.md (branch gpu/engine-gpu, PR #66). Every number here is measured
+// on real reads. Update the rows as stages land; never state a speed or equivalence that was not measured.
 
 const REPO = "https://github.com/Singlet-Bio/singlet";
 const PR = `${REPO}/pull/61`;
+const PR_ENGINE = `${REPO}/pull/66`;
 const DESIGN = `${REPO}/blob/gpu/w11-prototypes/docs/gpu-engine/exploration.md`;
+const STITCH = `${REPO}/blob/gpu/engine-gpu/src/engine_gpu/stitch.cuh`;
+const ENGINE_DOC = `${REPO}/blob/gpu/engine-gpu/docs/engine-gpu.md`;
 
 type State = "exact" | "slow" | "open";
 
@@ -31,8 +34,14 @@ const STAGES: Stage[] = [
   {
     stage: "Windows, stitching, extension and multimapper selection",
     check: "1,991,926 of 1,991,926 distinct reads (4,118,999 reads) identical to STAR, mapped and unmapped, on PBMC 1k v3",
-    speed: "0.6–0.7 M distinct reads/s per GPU today; target ≥ 10 M",
+    speed: "2.40 M distinct reads/s per GPU; target ≥ 10 M",
     state: "slow",
+  },
+  {
+    stage: "Gene annotation and pileup (research branch)",
+    check: "9 of 9 outputs (gene counts, junctions, SNP depths, mtDNA) identical to the CPU engine on 3 samples",
+    speed: "1.1–1.5 G records/s",
+    state: "exact",
   },
   {
     stage: "Duplicate collapse, count sort, UMI collapse",
@@ -47,10 +56,10 @@ const STAGES: Stage[] = [
     state: "exact",
   },
   {
-    stage: "Whole sample, end to end",
-    check: "Stages are not yet linked into one run",
-    speed: "model: 27–36 M read pairs/s per 2-GPU node, bound by the CPU-side callers",
-    state: "open",
+    stage: "Whole sample, in singlet --engine gpu",
+    check: "64,775,880 reads took the GPU's mapping, each re-mapped by STAR: 0 mismatches (PBMC 1k v3, 66.6 M read pairs). Every count matrix, cell table and pileup identical to --engine cpu on 3 samples",
+    speed: "39–44% less CPU per read pair than the CPU engine; not yet faster per sample",
+    state: "slow",
   },
 ];
 
@@ -78,7 +87,8 @@ const BetaGpuEngine = () => {
           <p className="mt-3 text-[15px] text-muted-foreground">
             Beta re-aligns about 70,000 samples from all of their reads, about 21.7 trillion read pairs. On CPUs that is 250–330
             thousand core-hours. The GPU engine is a port of STAR's alignment to NVIDIA H100 GPUs, written to give the same
-            alignments as STAR, read for read, so that Beta's counts do not depend on which engine produced them.
+            alignments as STAR, read for read, so that Beta's counts do not depend on which engine produced them. It is in the{" "}
+            <span className="font-mono">singlet</span> engine as <span className="font-mono">singlet --engine gpu</span>, under review.
           </p>
         </div>
 
@@ -129,8 +139,9 @@ const BetaGpuEngine = () => {
         <section className="mt-10 max-w-3xl" aria-labelledby="next-h">
           <h2 id="next-h" className="text-[22px] font-semibold text-foreground">What is left</h2>
           <ul className="mt-3 space-y-2 text-[14.5px] leading-relaxed text-foreground">
-            <li>Make the stitching stage about 15× faster while keeping it identical. Most of its time is spent building alignment windows.</li>
-            <li>Link the stages into one run and check whole samples against the CPU engine, on 3′, 5′ and single-nucleus libraries.</li>
+            <li>Make the stitching stage about 4× faster while keeping it identical. Most of its time goes to reads that hit more than 16 alignment windows.</li>
+            <li>Move the GPU annotation, pileup and non-host stages into <span className="font-mono">singlet --engine gpu</span>. Today the binary maps on the GPU and runs every other stage on the CPU, so it uses less CPU per sample but is not yet cheaper per sample.</li>
+            <li>Check whole samples against the CPU engine on 5′ and single-nucleus libraries, not only 3′.</li>
             <li>Pass the same equivalence and <Link to="/benchmarking#beta" className="text-primary underline underline-offset-2">Beta benchmarks</Link> as the CPU engine. Until it does, Beta runs on the CPU engine.</li>
           </ul>
         </section>
@@ -142,10 +153,28 @@ const BetaGpuEngine = () => {
           </p>
           <ul className="mt-3 space-y-1.5 text-[14px]">
             <li>
+              <a href={PR_ENGINE} target="_blank" rel="noopener noreferrer" className="text-primary underline underline-offset-2">
+                Singlet-Bio/singlet#66 <ExternalLink size={11} className="inline" />
+              </a>{" "}
+              <span className="text-muted-foreground">: <span className="font-mono">singlet --engine gpu</span>, with an identity test anyone with a recent NVIDIA GPU can run</span>
+            </li>
+            <li>
+              <a href={STITCH} target="_blank" rel="noopener noreferrer" className="text-primary underline underline-offset-2">
+                src/engine_gpu/stitch.cuh <ExternalLink size={11} className="inline" />
+              </a>{" "}
+              <span className="text-muted-foreground">: the port of STAR's mapping</span>
+            </li>
+            <li>
+              <a href={ENGINE_DOC} target="_blank" rel="noopener noreferrer" className="text-primary underline underline-offset-2">
+                docs/engine-gpu.md <ExternalLink size={11} className="inline" />
+              </a>{" "}
+              <span className="text-muted-foreground">: build, use and design</span>
+            </li>
+            <li>
               <a href={PR} target="_blank" rel="noopener noreferrer" className="text-primary underline underline-offset-2">
                 Singlet-Bio/singlet#61 <ExternalLink size={11} className="inline" />
               </a>{" "}
-              <span className="text-muted-foreground">: the GPU prototypes and the STAR state-dump tool used as ground truth</span>
+              <span className="text-muted-foreground">: the research branch: GPU prototypes and the STAR state-dump tool used as ground truth</span>
             </li>
             <li>
               <a href={DESIGN} target="_blank" rel="noopener noreferrer" className="text-primary underline underline-offset-2">
