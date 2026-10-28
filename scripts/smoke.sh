@@ -173,12 +173,13 @@ fi
 xfo=$(curl -s -m 30 -o /dev/null -D - "$BASE/" | tr -d '\r' | grep -i '^x-frame-options:' | head -n 1)
 if printf '%s' "$xfo" | grep -q -i -E '^x-frame-options: *DENY$'; then ok "x-frame-options on /"; else bad "x-frame-options on / (got '${xfo:-none}')"; fi
 
-# MCP: tools/list returns the original 14 tools, or 17 once a study is served from s1 (find_cells, slice_cells, resolve_features are listed only then).
+# MCP: tools/list returns the original 14 tools, or 19 once a study is served from s1 (find_cells, slice_cells, resolve_features,
+# search_cells and get_cells_page are listed only then).
 mcp=$(curl -s -m 30 -X POST "$BASE/mcp" -H 'content-type: application/json' \
   -H 'accept: application/json, text/event-stream' \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}')
 n=$(printf '%s' "$mcp" | grep -o '"name":"[a-z_]*","title"' | wc -l | tr -d ' ')
-if [ "$n" = "14" ] || [ "$n" = "17" ]; then ok "mcp tools/list ($n)"; else bad "mcp tools/list ($n tools, want 14 or 17)"; fi
+if [ "$n" = "14" ] || [ "$n" = "19" ]; then ok "mcp tools/list ($n)"; else bad "mcp tools/list ($n tools, want 14 or 19)"; fi
 
 # MCP tool calls need an account: without a credential a call is HTTP 401 whose WWW-Authenticate points at the
 # OAuth metadata (that 401 is what makes Claude's connectors start sign-in; a 200 tool error never does).
