@@ -255,9 +255,13 @@ export interface Resolved {
   subject?: "ct" | "sex" | "anc";
 }
 
-function cellCodes(entries: IndexDictEntry[], ids: Set<string>, exact: boolean): Uint8Array {
+/** Codes of the dictionary entries that are a wanted term or descend from one (the index's ancestor list, and the D1 closure). */
+function cellCodes(entries: IndexDictEntry[], ids: Set<string>, exact: boolean, closure: Record<string, string[]> = {}): Uint8Array {
   const m = new Uint8Array(entries.length + 1);
-  for (const e of entries) if (e.id && (ids.has(e.id) || (!exact && (e.anc ?? []).some((a) => ids.has(a))))) m[e.code] = 1;
+  for (const e of entries) {
+    if (!e.id) continue;
+    if (ids.has(e.id) || (!exact && ((e.anc ?? []).some((a) => ids.has(a)) || (closure[e.id] ?? []).some((a) => ids.has(a))))) m[e.code] = 1;
+  }
   return m;
 }
 
@@ -322,7 +326,7 @@ export function resolveLeaf(leaf: Leaf, idx: CellIndex, facts: SampleFacts): Res
         got.forEach((x) => ids.add(x));
         r.values.push({ value: v, ids: got });
       }
-      r.codeMask = cellCodes(idx.cellTypes, ids, !!leaf.exact);
+      r.codeMask = cellCodes(idx.cellTypes, ids, !!leaf.exact, facts.ancestors);
       if (unknownLabel) r.codeMask[0] = 1;
       r.subject = "ct";
       for (const e of idx.cellTypes) if (r.codeMask[e.code] && e.id) r.covered.add(e.id);
@@ -500,6 +504,9 @@ interface Join {
   rowsPass: Int32Array;
   /** cells of each served sample in the index (all labels) */
   siCells: Float64Array;
+  /** facts sample -> study code, and the study accessions */
+  gseCode: Int32Array;
+  gseNames: string[];
 }
 let joinMemo: Join | null = null;
 
@@ -525,39 +532,61 @@ export function joinOf(idx: CellIndex, facts: SampleFacts): Join {
     all.push(r);
     if (facts.qc_tier[si] === 0) pass.push(r);
   }
-  joinMemo = { key, rowSi, rowsAll: Int32Array.from(all), rowsPass: Int32Array.from(pass), siCells };
+  const gseNames: string[] = [];
+  const codeOf = new Map<string, number>();
+  const gseCode = new Int32Array(facts.n);
+  for (let i = 0; i < facts.n; i++) {
+    let c = codeOf.get(facts.gse[i]);
+    if (c === undefined) codeOf.set(facts.gse[i], (c = gseNames.push(facts.gse[i]) - 1));
+    gseCode[i] = c;
+  }
+  joinMemo = { key, rowSi, rowsAll: Int32Array.from(all), rowsPass: Int32Array.from(pass), siCells, gseCode, gseNames };
   return joinMemo;
 }
 
 // ── evaluation ──────────────────────────────────────────────────────────────
 
+// Each loop reads one typed-array type, so V8 keeps it monomorphic.
+function filterBySample(dom: Int32Array, m: Uint8Array, rowSi: Int32Array): Int32Array {
+  const out = new Int32Array(dom.length);
+  let k = 0;
+  for (let i = 0; i < dom.length; i++) if (m[rowSi[dom[i]]]) out[k++] = dom[i];
+  return out.subarray(0, k);
+}
+function filterBy16(dom: Int32Array, m: Uint8Array, col: Uint16Array): Int32Array {
+  const out = new Int32Array(dom.length);
+  let k = 0;
+  for (let i = 0; i < dom.length; i++) if (m[col[dom[i]]]) out[k++] = dom[i];
+  return out.subarray(0, k);
+}
+function filterBy8(dom: Int32Array, m: Uint8Array, col: Uint8Array): Int32Array {
+  const out = new Int32Array(dom.length);
+  let k = 0;
+  for (let i = 0; i < dom.length; i++) if (m[col[dom[i]]]) out[k++] = dom[i];
+  return out.subarray(0, k);
+}
+/** The rows of `dom` whose mark is `want` (marks are indexed by row). */
+function filterByMark(dom: Int32Array, marks: Uint8Array, want: number): Int32Array {
+  const out = new Int32Array(dom.length);
+  let k = 0;
+  for (let i = 0; i < dom.length; i++) if (marks[dom[i]] === want) out[k++] = dom[i];
+  return out.subarray(0, k);
+}
+
+/** The rows of `dom` (ascending) that satisfy `e`, ascending. */
 function evalExpr(e: Expr, dom: Int32Array, res: Map<Leaf, Resolved>, idx: CellIndex, rowSi: Int32Array): Int32Array {
   if (isLeaf(e)) {
     const r = res.get(e)!;
     if (r.def.rowScan) return dom; // applied by the row scan
-    const out = new Int32Array(dom.length);
-    let k = 0;
-    if (r.sampleMask) {
-      const m = r.sampleMask;
-      for (let i = 0; i < dom.length; i++) if (m[rowSi[dom[i]]]) out[k++] = dom[i];
-    } else {
-      const m = r.codeMask!;
-      const col = r.subject === "ct" ? idx.ct : r.subject === "sex" ? idx.sex : idx.anc;
-      for (let i = 0; i < dom.length; i++) if (m[col[dom[i]]]) out[k++] = dom[i];
-    }
-    return out.subarray(0, k);
+    if (r.sampleMask) return filterBySample(dom, r.sampleMask, rowSi);
+    if (r.subject === "ct") return filterBy16(dom, r.codeMask!, idx.ct);
+    return filterBy8(dom, r.codeMask!, r.subject === "sex" ? idx.sex : idx.anc);
   }
   if ("not" in e) {
     const m = evalExpr(e.not, dom, res, idx, rowSi);
-    const out = new Int32Array(dom.length);
-    let k = 0;
-    let j = 0;
-    for (let i = 0; i < dom.length; i++) {
-      while (j < m.length && m[j] < dom[i]) j++;
-      if (j < m.length && m[j] === dom[i]) continue;
-      out[k++] = dom[i];
-    }
-    return out.subarray(0, k);
+    const marks = new Uint8Array(idx.n);
+    for (let i = 0; i < m.length; i++) marks[m[i]] = 1;
+    return filterByMark(dom, marks, 0);
   }
   if ("and" in e) {
     // sample filters first: they usually cut the most rows for the least work
@@ -570,27 +599,15 @@ function evalExpr(e: Expr, dom: Int32Array, res: Map<Leaf, Resolved>, idx: CellI
     return d;
   }
   // or: each member only looks at the rows no earlier member took
-  const hit = new Uint8Array(dom.length);
-  let rest = Int32Array.from(dom.keys());
-  for (const c of e.or) {
-    if (!rest.length) break;
-    const sub = new Int32Array(rest.length);
-    for (let i = 0; i < rest.length; i++) sub[i] = dom[rest[i]];
-    const m = evalExpr(c, sub, res, idx, rowSi);
-    const next = new Int32Array(rest.length);
-    let k = 0;
-    let j = 0;
-    for (let i = 0; i < rest.length; i++) {
-      while (j < m.length && m[j] < sub[i]) j++;
-      if (j < m.length && m[j] === sub[i]) hit[rest[i]] = 1;
-      else next[k++] = rest[i];
-    }
-    rest = next.subarray(0, k);
-  }
-  const out = new Int32Array(dom.length);
-  let k = 0;
-  for (let i = 0; i < dom.length; i++) if (hit[i]) out[k++] = dom[i];
-  return out.subarray(0, k);
+  const marks = new Uint8Array(idx.n);
+  let rest = dom;
+  e.or.forEach((c, j) => {
+    if (!rest.length) return;
+    const m = evalExpr(c, rest, res, idx, rowSi);
+    for (let i = 0; i < m.length; i++) marks[m[i]] = 1;
+    if (j < e.or.length - 1) rest = filterByMark(rest, marks, 0);
+  });
+  return filterByMark(dom, marks, 1);
 }
 
 function rank(e: Expr, res: Map<Leaf, Resolved>): number {
@@ -657,20 +674,25 @@ export function runCellQuery(q: CellQuery, idx: CellIndex, facts: SampleFacts): 
     perSex[idx.sex[r]] += c;
     perAnc[idx.anc[r]] += c;
   }
-  // studies and samples
-  const studyCells = new Map<string, { cells: number; samples: number }>();
-  const sampleList: { gsm_id: string; gse_id: string; cells: number }[] = [];
+  // studies and samples: numeric study codes and index sorts (no per-sample objects but the page asked for)
+  const join2 = join;
+  const nStudy = join2.gseNames.length;
+  const stCells = new Float64Array(nStudy);
+  const stSamples = new Uint32Array(nStudy);
+  const hitSi: number[] = [];
   for (let i = 0; i < facts.n; i++) {
     if (!perSi[i]) continue;
-    const g = facts.gse[i];
-    const s = studyCells.get(g) ?? { cells: 0, samples: 0 };
-    s.cells += perSi[i];
-    s.samples++;
-    studyCells.set(g, s);
-    sampleList.push({ gsm_id: facts.gsm[i], gse_id: g, cells: perSi[i] });
+    const g = join2.gseCode[i];
+    stCells[g] += perSi[i];
+    stSamples[g]++;
+    hitSi.push(i);
   }
-  const studies = [...studyCells].map(([gse_id, s]) => ({ gse_id, ...s })).sort((a, b) => b.cells - a.cells || (a.gse_id < b.gse_id ? -1 : 1));
-  sampleList.sort((a, b) => b.cells - a.cells || (a.gsm_id < b.gsm_id ? -1 : 1));
+  const hitSt: number[] = [];
+  for (let g = 0; g < nStudy; g++) if (stCells[g]) hitSt.push(g);
+  hitSt.sort((a, b) => stCells[b] - stCells[a] || (join2.gseNames[a] < join2.gseNames[b] ? -1 : 1));
+  hitSi.sort((a, b) => perSi[b] - perSi[a] || (facts.gsm[a] < facts.gsm[b] ? -1 : 1));
+  const studies = hitSt.slice(q.offset, q.offset + q.limit).map((g) => ({ gse_id: join2.gseNames[g], cells: stCells[g], samples: stSamples[g] }));
+  const samplePage = hitSi.slice(q.offset, q.offset + q.limit).map((i) => ({ gsm_id: facts.gsm[i], gse_id: facts.gse[i], cells: perSi[i] }));
 
   const label = (id: string) => idx.terms[id] ?? facts.labels[id] ?? HANCESTRO_LABELS[id] ?? id;
   const facets: Record<string, FacetValue[]> = {};
@@ -814,9 +836,9 @@ export function runCellQuery(q: CellQuery, idx: CellIndex, facts: SampleFacts): 
   });
 
   return {
-    totals: { cells: total, samples: sampleList.length, studies: studies.length, rows: rows.length },
-    studies: studies.slice(q.offset, q.offset + q.limit),
-    samples: sampleList.slice(q.offset, q.offset + q.limit),
+    totals: { cells: total, samples: hitSi.length, studies: hitSt.length, rows: rows.length },
+    studies,
+    samples: samplePage,
     facets,
     cell_type_lineage: lineage,
     filters,
@@ -911,7 +933,7 @@ export function filterCellRows(
   for (const e of idx.ancestries) if (e.id) ancCode.set(e.id, e.code);
   const sexCode = new Map<string, number>();
   for (const e of idx.sexes) sexCode.set(e.label, e.code);
-  const mini = { ct: new Uint16Array(n), sex: new Uint8Array(n), anc: new Uint8Array(n) } as unknown as CellIndex;
+  const mini = { n, ct: new Uint16Array(n), sex: new Uint8Array(n), anc: new Uint8Array(n) } as unknown as CellIndex;
   const rowSi = new Int32Array(n);
   for (let i = 0; i < n; i++) {
     mini.ct[i] = ctCode.get(cells.cell_type[i] ?? "") ?? 0;

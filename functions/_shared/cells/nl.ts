@@ -90,8 +90,8 @@ function dictionary(idx: CellIndex, facts: SampleFacts): { dict: Map<string, Ent
   };
   // cell types the index can match (a term or an ancestor of a call)
   const cl = new Set<string>();
-  for (const e of idx.cellTypes) if (e.id) [e.id, ...(e.anc ?? [])].forEach((x) => cl.add(x));
-  for (const id of cl) if (idx.terms[id]) add(idx.terms[id], "cell_type", id);
+  for (const e of idx.cellTypes) if (e.id) [e.id, ...(e.anc ?? []), ...(facts.ancestors[e.id] ?? [])].forEach((x) => cl.add(x));
+  for (const id of cl) if (idx.terms[id] ?? facts.labels[id]) add(idx.terms[id] ?? facts.labels[id], "cell_type", id);
   for (const e of idx.cellTypes) if (e.id) add(e.label, "cell_type", e.id);
   for (const [p, ids] of Object.entries(CELL_TYPE_ALIASES)) ids.forEach((id) => add(p, "cell_type", id));
   // sample ontology terms in use (and their ancestors)

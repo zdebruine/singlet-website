@@ -24,7 +24,8 @@ const OUT = "docs/cell-search-measurements.json";
 /** The query set: single filters at several ontology depths, then combinations (AND / OR / NOT, cell x sample x study). */
 export const QUERIES: { id: string; kind: string; depth?: string; where?: unknown; q?: string }[] = [
   { id: "all", kind: "none", where: {} },
-  { id: "ct-leukocyte", kind: "single", depth: "CL compartment (leukocyte)", where: { cell_type: "CL:0000738" } },
+  { id: "ct-hematopoietic", kind: "single", depth: "CL compartment (hematopoietic cell)", where: { cell_type: "CL:0000988" } },
+  { id: "ct-leukocyte", kind: "single", depth: "CL closure only (leukocyte)", where: { cell_type: "CL:0000738" } },
   { id: "ct-lymphocyte", kind: "single", depth: "CL lineage (lymphocyte)", where: { cell_type: "CL:0000542" } },
   { id: "ct-tcell", kind: "single", depth: "CL cell type (T cell)", where: { cell_type: "CL:0000084" } },
   { id: "ct-cd8", kind: "single", depth: "CL type (CD8 alpha-beta T cell)", where: { cell_type: "CL:0000625" } },

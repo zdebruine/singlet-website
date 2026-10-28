@@ -11,7 +11,8 @@
  *               author ancestry HANCESTRO, author-sorted cell type CL)
  *   sample_property  donor_status, perturbation, sample_kind
  *   sample_attr age (geo), converted to years
- *   ontology_closure / ontology_term / ontology_label  descendants, labels and synonyms of the terms the samples use
+ *   ontology_closure / ontology_term / ontology_label  descendants, labels and synonyms of the terms the samples use, and the
+ *               whole CL closure in D1 (cell-type filters match a call by its CL ancestors, not only the labeller's levels)
  * About 400k D1 rows per build ($0.0004 at the D1 list price), a few MB of JSON.
  */
 import { sampleServedSql } from "../alpha";
@@ -210,7 +211,8 @@ export async function buildFacts(db: D1Database): Promise<FactsWire> {
   ]);
   for (const r of closure.results ?? []) {
     const t = String(r.term_id);
-    if (!used.has(t)) continue;
+    // every CL term too: the cell index lists only the labeller's own levels as ancestors; the closure adds the rest of CL
+    if (!used.has(t) && !t.startsWith("CL:")) continue;
     (wire.ancestors[t] ??= []).push(String(r.ancestor_id));
   }
   const known = new Set<string>(used);

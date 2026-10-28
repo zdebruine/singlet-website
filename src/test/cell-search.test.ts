@@ -102,6 +102,8 @@ function makeFacts() {
       "PATO:0000461": [],
       "HsapDv:0000267": ["HsapDv:0000258"],
       "HsapDv:0000266": ["HsapDv:0000258"],
+      // CL closure from D1: an ancestor the labeller's own levels do not list
+      "CL:0000236": ["CL:0000945"],
     },
     labels: {
       "UBERON:0002048": "lung",
@@ -114,6 +116,7 @@ function makeFacts() {
       "HsapDv:0000258": "adult stage",
       "HsapDv:0000267": "middle aged stage",
       "HsapDv:0000266": "young adult stage",
+      "CL:0000945": "lymphocyte of B lineage",
     },
     synonyms: { lung: ["UBERON:0002048"], liver: ["UBERON:0002107"], "lung cancer": ["MONDO:0008903"], cancer: ["MONDO:0004992"], tumor: ["MONDO:0005070"], "t cell": ["CL:0000084"] },
   };
@@ -141,6 +144,8 @@ describe("cell search: evaluation", () => {
     ]);
     expect(run({ and: [{ field: "cell_type", any: ["CL:0000084"], exact: true }] }).totals.cells).toBe(30);
     expect(run({ cell_type: "lymphocyte" }).totals.cells).toBe(220);
+    // an ancestor known only from the D1 closure
+    expect(run({ cell_type: "lymphocyte of B lineage" }).totals.cells).toBe(50);
   });
 
   it("expands sample ontology terms through the closure (cancer finds lung cancer; adult finds its stages)", () => {
