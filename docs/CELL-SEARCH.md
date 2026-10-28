@@ -97,7 +97,7 @@ allowance (2 M cells / day) applies instead of the anonymous one.
 ```python
 import requests
 import anndata as ad
-from singlet.s1 import atlas  # pip install "singlet-bio @ git+https://github.com/Singlet-Bio/singlet"
+from singlet.s1 import atlas  # pip install singlet
 
 url = "https://singlet.bio/api/cells/slice"
 params = {"where": '{"cell_type": "CD8 T cell", "sex": "female", "disease": "lung cancer"}', "page_cells": "5000"}
