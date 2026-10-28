@@ -73,15 +73,17 @@ const ISSUES: Issue[] = [
             <ul className="list-disc pl-5 space-y-1.5">
               <li>
                 <span className="font-medium">Chromosomal sex</span>, human and mouse: 98.1% of samples agree with the sex in their
-                GEO metadata (153 of 156; the 3 disagreements were GEO errors). Some cells stay "ambiguous".
+                GEO metadata (153 of 156; the 3 disagreements were GEO errors). About 13% of human cells stay "ambiguous",
+                mostly in samples that pool donors of both sexes or have few reads per cell; a pooled sample can carry both sexes.
               </li>
               <li>
                 <span className="font-medium">Cell type</span>, as Cell Ontology labels. Accuracy per study against curated labels:
-                compartment 0.84, lineage 0.75, cell type 0.43, subtype 0.32. The deeper levels are a preview.
+                compartment 0.84, lineage 0.75, cell type 0.43, subtype 0.32. The deeper levels are a preview. Study and sample search
+                filter on the first three levels; every level, subtypes included, can be queried per cell through the cell index.
               </li>
               <li>
                 <span className="font-medium">Genetic ancestry</span>, as continental HANCESTRO groups. Computed only for human donors
-                with enough genotype coverage, which is a minority of studies. Validated on donors simulated from 1000 Genomes and on a
+                with enough genotype coverage, which is under 1,000 samples. Validated on donors simulated from 1000 Genomes and on a
                 small set of donors with self-reported ancestry. Mixed ancestry is reported as "admixed". No genotypes are published.
               </li>
             </ul>
@@ -149,12 +151,18 @@ const ISSUES: Issue[] = [
           Some studies and samples are not in Alpha yet, while the criteria for identifying samples and library types are refined.
         </p>
         <p>
-          Alpha includes RNA libraries that passed three checks: the reads match the expected strand orientation, the library is
-          gene expression (not antibody, hashtag, guide, V(D)J or chromatin), and at least one cell was called from the count matrix.
+          Alpha includes RNA libraries that passed five checks: the reads match the expected strand orientation, the library is
+          gene expression (not antibody, hashtag, guide, V(D)J or chromatin), at least one cell was called from the count matrix,
+          the sample passed QC (at least 5% of reads mapped or a median of at least 10 genes per cell), and the reads were aligned
+          to the genome of the species GEO records for the study.
+        </p>
+        <p>
+          The species check uses GEO's metadata, which is sometimes wrong, so a few correctly processed studies may be missing. Samples
+          flagged low QC are kept but left out of counts and search unless you ask for them.
         </p>
       </>
     ),
-    beta: <p>Beta goal: test strand and chemistry on every sample, and add more samples and species.</p>,
+    beta: <p>Beta goal: test strand, chemistry and species from the reads of every sample, and add more samples and species.</p>,
   },
   {
     id: "metadata",
@@ -166,10 +174,13 @@ const ISSUES: Issue[] = [
     id: "two-numbers",
     title: "Two numbers for the same thing",
     alpha: (
-      <p>
-        A cell or sample count on the website catalog can differ from the QC inside the file. When they differ, the file is the
-        truth.
-      </p>
+      <>
+        <p>
+          A cell or sample count on the website catalog can differ from the QC inside the file. When they differ, the file is the
+          truth.
+        </p>
+        <p>A sample GEO lists under two series is in both studies' files, so atlas-wide totals count it twice.</p>
+      </>
     ),
     beta: <p>Beta goal: rebuild the catalog from the files, so both give the same number.</p>,
   },
