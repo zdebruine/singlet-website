@@ -255,6 +255,8 @@ export function hydrateFacts(w: FactsWire, bytes: number, source: SampleFacts["s
 }
 
 const SNAPSHOT_TTL_S = 3600;
+/** Bump when buildFacts changes what the snapshot holds: the Cache API copy is keyed by it, so a deploy never reads an older layout. */
+export const FACTS_LAYOUT = 2;
 const SNAPSHOT_URL = "https://singlet.bio/__internal/cell-search/sample-facts";
 let memo: { at: number; facts: Promise<SampleFacts> } | null = null;
 
@@ -268,7 +270,7 @@ export async function sampleFacts(db: D1Database, waitUntil?: (p: Promise<unknow
   if (memo && now - memo.at < SNAPSHOT_TTL_S * 1000) return memo.facts;
   const p = (async (): Promise<SampleFacts> => {
     const hour = Math.floor(now / (SNAPSHOT_TTL_S * 1000));
-    const key = new Request(`${SNAPSHOT_URL}?h=${hour}&v=1`);
+    const key = new Request(`${SNAPSHOT_URL}?h=${hour}&v=${FACTS_LAYOUT}`);
     let cache: Cache | null = null;
     try {
       cache = (caches as unknown as { default?: Cache }).default ?? null;
