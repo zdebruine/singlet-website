@@ -18,6 +18,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "alpha:sql": "esbuild scripts/alpha/load-exclusions.ts --bundle --platform=node --format=esm --outfile=scripts/alpha/.run-load.mjs --log-level=error && node scripts/alpha/.run-load.mjs",
+    "cells:bench": "esbuild scripts/cells/bench.ts --bundle --platform=node --format=esm --outfile=scripts/cells/.run-bench.mjs --log-level=error && node scripts/cells/.run-bench.mjs",
     "s1:labels-sql": "esbuild scripts/s1/load-labels.ts --bundle --platform=node --format=esm --outfile=scripts/s1/.run-load.mjs --log-level=error && node scripts/s1/.run-load.mjs"
   },
   "dependencies": {

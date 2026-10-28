@@ -7,7 +7,7 @@
  *   initialize                → capabilities + serverInfo + instructions
  *   notifications/initialized → 202
  *   ping                      → {}
- *   tools/list                → the seventeen tools below (find_cells, slice_cells and resolve_features are s1-only)
+ *   tools/list                → the nineteen tools below (find_cells, slice_cells, resolve_features, search_cells and get_cells_page are s1-only)
  *   tools/call                → needs a free account: an OAuth access token
  *                               (Authorization: Bearer sat_…, from signing in
  *                               when the client connects; _shared/mcp-oauth) or
@@ -52,6 +52,7 @@ import { getCohort, saveCohort, ProductError, type ProductCtx } from "./_shared/
 import { dietEnabled, diet } from "./_shared/mcp-core";
 import { s1ToolsVisible } from "./_shared/s1-gate";
 import { findCells, resolveFeatures, sliceCells, s1DownloadUrl } from "./_shared/mcp-s1";
+import { CELL_TOOLS, cellsPageTool, searchCellsTool } from "./_shared/cells/mcp";
 import { combineRev, fileRev, knownRev, unchangedBody } from "./_shared/rev";
 import { getS1State, isLegacyAlive } from "./_shared/s1-catalog";
 import { configureS1, s1ManifestUrl } from "./_shared/s1-urls";
@@ -475,6 +476,7 @@ const NEW_TOOLS = [
     },
     annotations: { title: "Row numbers to feature names", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   },
+  ...CELL_TOOLS,
 ];
 
 const VERBOSE_PROP = { type: "boolean", description: "Also return the full text (the data is always in structuredContent)." };
@@ -1153,6 +1155,10 @@ async function callToolInner(ctx: CallContext, params: Record<string, unknown>) 
         return { result: withQuota(await sliceCells(db, args), meta) };
       case "resolve_features":
         return { result: withQuota(await resolveFeatures(db, args), meta) };
+      case "search_cells":
+        return { result: withQuota(await searchCellsTool(ctx.env, ctx.identity, ctx.waitUntil, args), meta) };
+      case "get_cells_page":
+        return { result: withQuota(await cellsPageTool(ctx.env, ctx.request, ctx.identity, ctx.waitUntil, args), meta) };
       case "get_cohort": {
         // Every tool here already needs a key; a link cohort additionally opens with its share token.
         return { result: await productTool(ctx, meta, (p) => getCohort(p, uid, { id: args.id, token: args.token })) };
