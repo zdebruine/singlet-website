@@ -3,7 +3,7 @@
 Website, catalog API and MCP server for the **singlet** atlas — public single-cell RNA-seq studies from GEO, reprocessed from raw reads with one pipeline, one `.singlet` file per study. Data is CC0 1.0 (`LICENSE-DATA`); this repository's code is MIT (`LICENSE`). The Workbench has a free academic allowance for AI search and analyses.
 
 ```bash
-pip install "singlet-bio @ git+https://github.com/Singlet-Bio/singlet"
+pip install singlet
 ```
 
 ```r
@@ -16,7 +16,7 @@ import singlet
 adata = singlet.load("GSE138867")
 ```
 
-The install commands shown on the site come from one file, `src/lib/install-snippets.ts`; when the PyPI / CRAN releases land, change the two constants there.
+The install commands shown on the site come from one file, `src/lib/install-snippets.ts`; when the CRAN release lands, change `R_INSTALL` there.
 
 Questions and bugs: [GitHub Issues](https://github.com/Singlet-Bio/singlet/issues).
 
