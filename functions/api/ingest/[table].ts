@@ -71,6 +71,7 @@ import {
 import { acquireCrankLock, releaseCrankLock } from "../../_shared/crank-lock";
 import { serverError } from "../../_shared/errors";
 import { checkIngestToken } from "../../_shared/ingest-auth";
+import { estimateIngest, reserveWrites } from "../../_shared/write-budget";
 import { getS1State, isLegacyAlive, legacyRetiredSql, s1Available } from "../../_shared/s1-catalog";
 import { readS1Summaries } from "../../_shared/s1-summaries";
 
@@ -90,6 +91,8 @@ const ALLOWED_ORIGIN_RE = /^https:\/\/(singlet\.bio|[a-z0-9-]+\.singlet-4gc\.pag
 interface Env {
   DB: D1Database;
   INGEST_TOKEN_SHA256?: string;
+  /** Daily cap on estimated D1 rows written through this endpoint (default 1.5M); the owner raises it after approving an estimate. */
+  D1_DAILY_WRITE_ROWS?: string;
 }
 
 type ColKind = "text" | "int" | "real";
@@ -292,6 +295,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, params }
     if (wanted.length > MAX_INDEX_PER_CALL) {
       return json({ error: `Too many studies (max ${MAX_INDEX_PER_CALL} per call)` }, 400, origin);
     }
+    // D1 writes cost money: about 10 sample_qc rows a study, counted against the daily budget before anything is written.
+    const reserved = await reserveWrites(env.DB, env, estimateIngest("sample_qc", wanted.length * 10));
+    if (!reserved.ok) return json({ error: reserved.message, used: reserved.used, budget: reserved.budget, estimate: reserved.estimate }, 429, origin);
     await ensureSampleQcTable(env.DB).catch(() => undefined);
     await ensureCrankTables(env.DB).catch(() => undefined);
     const results: Record<string, unknown>[] = [];
@@ -419,6 +425,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, params }
   const stamp = nowIso();
   const pk = spec.pk ?? "gse_id";
   const target = spec.target ?? table;
+  // D1 writes cost money (rows written: the row, its indexes, FTS shadow rows). Count the estimate against the daily budget first.
+  const reserved = await reserveWrites(env.DB, env, estimateIngest(target, clean.length));
+  if (!reserved.ok) return json({ error: reserved.message, used: reserved.used, budget: reserved.budget, estimate: reserved.estimate }, 429, origin);
   if (spec.ensure) await spec.ensure(env.DB).catch(() => undefined);
   const statements: D1PreparedStatement[] = [];
   for (const row of clean) {
@@ -426,19 +435,23 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, params }
     if (spec.updateOnly) {
       const setCols = cols.filter((c) => c !== pk);
       if (!setCols.length) continue;
+      // Only when a value differs: re-posting an unchanged verdict writes nothing (the stamp alone is not a change).
       const sql =
         `UPDATE ${target} SET ${[...setCols, spec.stamp].map((c) => `${c} = ?`).join(", ")} ` +
-        `WHERE ${pk} = ?`;
-      statements.push(env.DB.prepare(sql).bind(...setCols.map((c) => row[c]), stamp, row[pk]));
+        `WHERE ${pk} = ? AND (${setCols.map((c) => `${c} IS NOT ?`).join(" OR ")})`;
+      statements.push(env.DB.prepare(sql).bind(...setCols.map((c) => row[c]), stamp, row[pk], ...setCols.map((c) => row[c])));
       continue;
     }
     const allCols = [...cols, spec.stamp];
     const placeholders = allCols.map(() => "?").join(", ");
     const keyCols = spec.conflict ?? [pk];
-    const updates = [...cols.filter((c) => !keyCols.includes(c)), spec.stamp].map((c) => `${c} = excluded.${c}`).join(", ");
+    const dataCols = cols.filter((c) => !keyCols.includes(c));
+    const updates = [...dataCols, spec.stamp].map((c) => `${c} = excluded.${c}`).join(", ");
+    // Re-sending an unchanged row writes nothing: the update applies only when a data column differs (the stamp alone is not a change).
+    const changed = dataCols.length ? ` WHERE ${dataCols.map((c) => `${target}.${c} IS NOT excluded.${c}`).join(" OR ")}` : "";
     const sql =
       `INSERT INTO ${target} (${allCols.join(", ")}) VALUES (${placeholders}) ` +
-      `ON CONFLICT(${keyCols.join(", ")}) DO UPDATE SET ${updates}`;
+      `ON CONFLICT(${keyCols.join(", ")}) DO UPDATE SET ${updates}${changed}`;
     statements.push(env.DB.prepare(sql).bind(...cols.map((c) => row[c]), stamp));
   }
 
