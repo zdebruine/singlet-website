@@ -1094,10 +1094,18 @@ export interface InterpretOutcome {
  * Interpret a natural-language query for `identity`. Never throws for model
  * or cache trouble — the vocabulary reading is always available.
  */
-export async function interpretQuery(env: InterpretEnv, ctx: Ctx, identity: Identity, query: string): Promise<InterpretOutcome> {
+export async function interpretQuery(
+  env: InterpretEnv,
+  ctx: Ctx,
+  identity: Identity,
+  query: string,
+  opts: { model?: boolean } = {}
+): Promise<InterpretOutcome> {
   const cellTypes = await cellTypeVocab(ctx, CELL_TYPE_VOCAB_LIMIT).catch(() => [] as string[]);
   const parsed = parseQuery(query, { rules: ctx.rules, cellTypes });
   if (!parsed.ambiguous) return { interpreted: parsed.interpreted, source: "vocabulary" };
+  // vocabulary only: the caller (an AI client paying for its own model) reads the rest itself and sends structured filters
+  if (opts.model === false) return { interpreted: parsed.interpreted, source: "vocabulary" };
 
   const qn = normalizeQuery(query);
   const cached = await readCache(env.DB, ctx.waitUntil, qn);

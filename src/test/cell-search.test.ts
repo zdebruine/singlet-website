@@ -6,7 +6,7 @@ import type { CellIndex } from "../../functions/_shared/cells/atlas-index";
 import { hydrateFacts, ageYears, type FactsWire } from "../../functions/_shared/cells/sample-facts";
 import { canonicalWhere, cellPushdown, filterCellRows, parseWhere, QueryError, relaxations, rowScanWhere, runCellQuery } from "../../functions/_shared/cells/query";
 import { parseCellQuestion } from "../../functions/_shared/cells/nl";
-import { cacheKey, fieldsBody, parseCellRequest } from "../../functions/_shared/cells/http";
+import { cacheKey, fieldsBody, parseCellRequest, unmappedFor } from "../../functions/_shared/cells/http";
 
 const cellTypes = [
   { code: 0, id: null, label: "unknown", anc: [] },
@@ -265,5 +265,23 @@ describe("cell search: vocabulary", () => {
     expect(cov.disease).toMatchObject({ samples: 2, cells: 230 });
     expect(cov.ancestry).toMatchObject({ cells: 150 });
     expect(b.fields.map((f) => f.name)).toEqual(expect.arrayContaining(["cell_type", "sex", "ancestry", "tissue", "disease", "development_stage", "study", "year"]));
+  });
+});
+
+describe("cell search: coverage gaps of the filters", () => {
+  it("counts the served samples and cells a sample-level filter cannot see", () => {
+    const u = unmappedFor(parseWhere({ cell_type: "T cell", disease: "cancer", tissue: "lung" }), false, idx, facts);
+    // GSM3 (200 hepatocytes) has no disease term; every served sample has a tissue; cell_type is per cell (not listed)
+    expect(u.map((x) => x.field).sort()).toEqual(["disease", "tissue"]);
+    expect(u.find((x) => x.field === "disease")).toMatchObject({ samples: 1, cells: 200 });
+    expect(u.find((x) => x.field === "tissue")).toMatchObject({ samples: 0, cells: 0 });
+  });
+  it("counts low-QC samples only when asked", () => {
+    const u = unmappedFor(parseWhere({ disease: "cancer" }), true, idx, facts);
+    expect(u[0]).toMatchObject({ field: "disease", samples: 2 });
+  });
+  it("is empty without sample-level filters", () => {
+    expect(unmappedFor(parseWhere({ cell_type: "T cell", sex: "female" }), false, idx, facts)).toEqual([]);
+    expect(unmappedFor(null, false, idx, facts)).toEqual([]);
   });
 });

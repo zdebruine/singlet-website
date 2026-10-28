@@ -19,7 +19,7 @@ import { configureS1, s1Url } from "../s1-urls";
 import { cellIndex, type CellIndex } from "./atlas-index";
 import { FIELDS, fieldDef, UNAVAILABLE } from "./fields";
 import { parseCellQuestion, toWhere, type Reading } from "./nl";
-import { canonicalWhere, cellPushdown, labelIdsFor, leavesOf, parseWhere, QueryError, relaxations, rowScanWhere, runCellQuery, type CellQuery, type Expr } from "./query";
+import { canonicalWhere, cellPushdown, joinOf, labelIdsFor, leavesOf, parseWhere, QueryError, relaxations, rowScanWhere, runCellQuery, type CellQuery, type Expr } from "./query";
 import { sampleFacts, type SampleFacts } from "./sample-facts";
 import { PAGE_CELLS_MAX, slicePage, slicePython } from "./slice";
 
@@ -207,6 +207,7 @@ export async function cellSearchResponse(env: AppEnv, identity: Identity, waitUn
     facets: r.facets,
     cell_type_lineage: r.cell_type_lineage,
     ...(rx.length ? { relaxations: rx } : {}),
+    unmapped: unmappedFor(where, query.include_low_qc, inputs.idx, inputs.facts),
     slice: {
       url: `https://singlet.bio/api/cells/slice?${params}`,
       filtered: cellPushdown(where, inputs.idx, inputs.facts) ? "by the cell index" : "by the site (OR / NOT across cell fields)",
@@ -255,6 +256,55 @@ export async function sliceResponse(env: AppEnv, request: Request, waitUntil: Wa
   return json(200, { ...page, python: slicePython("https://singlet.bio", JSON.stringify(paramsObject(params))) }, { "Cache-Control": "no-store" });
 }
 
+/** Sample-level fields a served sample can lack (the facts have no value for it). */
+export const UNMAPPABLE = [
+  "tissue", "disease", "development_stage", "donor_sex", "donor_ancestry", "sorted_cell_type", "age_years", "organism", "assay", "chemistry",
+  "tissue_group", "disease_group", "donor_status", "perturbation", "sample_kind",
+] as const;
+const TERM_ATTR: Record<string, string> = { tissue: "tissue", disease: "disease", development_stage: "development_stage", donor_sex: "sex", donor_ancestry: "ancestry", sorted_cell_type: "cell_type" };
+
+/** Whether served sample i carries any value for a sample-level field; null for fields every sample has and for cell-level fields. */
+export function sampleFieldHas(name: string, facts: SampleFacts): ((i: number) => boolean) | null {
+  const attr = TERM_ATTR[name];
+  if (attr) {
+    const has = new Uint8Array(facts.n);
+    for (const list of facts.termSamples.get(attr)?.values() ?? []) for (const i of list) has[i] = 1;
+    return (i) => has[i] === 1;
+  }
+  switch (name) {
+    case "age_years": return (i) => facts.age[i] !== null;
+    case "organism": return (i) => facts.organism[i] >= 0;
+    case "assay": return (i) => facts.assay[i] >= 0 && facts.vocab.assay[facts.assay[i]] !== "Unknown";
+    case "chemistry": return (i) => facts.chemistry[i] >= 0 && !/^(unknown|other)$/.test(facts.vocab.chemistry[facts.chemistry[i]]);
+    case "tissue_group": return (i) => facts.tissue_group[i] >= 0;
+    case "disease_group": return (i) => facts.disease_group[i] >= 0;
+    case "donor_status": return (i) => facts.donor_status[i] > 0;
+    case "perturbation": return (i) => facts.perturbation[i] > 0;
+    case "sample_kind": return (i) => facts.sample_kind[i] > 0;
+    default: return null;
+  }
+}
+
+/**
+ * The gap behind each sample-level filter of a query: served samples (and their cells) with no value for the field. Such samples can never
+ * match the filter (and always pass a NOT on it), so an agent should know how much of the atlas a filter cannot see.
+ */
+export function unmappedFor(where: Expr | null, includeLowQc: boolean, idx: CellIndex, facts: SampleFacts) {
+  const fields = [...new Set(leavesOf(where).map((l) => l.field))].filter((f) => (UNMAPPABLE as readonly string[]).includes(f));
+  if (!fields.length) return [];
+  const { siCells } = joinOf(idx, facts);
+  const served: number[] = [];
+  for (let i = 0; i < facts.n; i++) if (facts.qc_tier[i] === 0 || (includeLowQc && facts.qc_tier[i] === 1)) served.push(i);
+  const totalCells = served.reduce((s, i) => s + siCells[i], 0);
+  return fields.map((field) => {
+    const has = sampleFieldHas(field, facts)!;
+    let samples = 0;
+    let cells = 0;
+    for (const i of served) if (!has(i)) (samples++, (cells += siCells[i]));
+    return { field, samples, cells, samples_share: round(samples / Math.max(served.length, 1)), cells_share: round(cells / Math.max(totalCells, 1)) };
+  });
+}
+
 /** The vocabulary with live coverage: per field, how many served samples and cells carry a value. */
 export function fieldsBody(inputs: Inputs): Record<string, unknown> {
   const { idx, facts } = inputs;
@@ -269,34 +319,16 @@ export function fieldsBody(inputs: Inputs): Record<string, unknown> {
     for (let i = 0; i < n; i++) if (facts.qc_tier[i] === 0 && has(i)) (s++, (c += per[i]));
     return { samples: s, samples_share: round(s / passSamples), cells: c, cells_share: round(c / totalCells) };
   };
-  const termHas = (attr: string) => {
-    const has = new Uint8Array(n);
-    for (const list of facts.termSamples.get(attr)?.values() ?? []) for (const i of list) has[i] = 1;
-    return (i: number) => has[i] === 1;
-  };
   const cellCov = (facet: { value: string; cells: number }[]) => {
     const known = facet.filter((x) => x.value !== "unknown" && x.value !== "ambiguous").reduce((s, x) => s + x.cells, 0);
     return { cells: known, cells_share: round(known / totalCells) };
   };
+  const has = (name: string) => sampleFieldHas(name, facts) ?? (() => true);
   const cov: Record<string, unknown> = {
     cell_type: cellCov(r.facets.cell_type),
     sex: cellCov(r.facets.sex),
     ancestry: cellCov(r.facets.ancestry),
-    tissue: sampleCov(termHas("tissue")),
-    disease: sampleCov(termHas("disease")),
-    development_stage: sampleCov(termHas("development_stage")),
-    donor_sex: sampleCov(termHas("sex")),
-    donor_ancestry: sampleCov(termHas("ancestry")),
-    sorted_cell_type: sampleCov(termHas("cell_type")),
-    age_years: sampleCov((i) => facts.age[i] !== null),
-    organism: sampleCov((i) => facts.organism[i] >= 0),
-    assay: sampleCov((i) => facts.assay[i] >= 0 && facts.vocab.assay[facts.assay[i]] !== "Unknown"),
-    chemistry: sampleCov((i) => facts.chemistry[i] >= 0 && !/^(unknown|other)$/.test(facts.vocab.chemistry[facts.chemistry[i]])),
-    tissue_group: sampleCov((i) => facts.tissue_group[i] >= 0),
-    disease_group: sampleCov((i) => facts.disease_group[i] >= 0),
-    donor_status: sampleCov((i) => facts.donor_status[i] > 0),
-    perturbation: sampleCov((i) => facts.perturbation[i] > 0),
-    sample_kind: sampleCov((i) => facts.sample_kind[i] > 0),
+    ...Object.fromEntries(UNMAPPABLE.map((f) => [f, sampleCov(has(f))])),
     median_umi: sampleCov((i) => facts.umi[i] !== null),
     median_genes: sampleCov((i) => facts.genes[i] !== null),
     mito_fraction: sampleCov((i) => facts.mito[i] !== null),
