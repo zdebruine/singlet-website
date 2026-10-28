@@ -66,7 +66,7 @@ Forms:
 
 - **No cell data and no D1 per query.** The cell index summary and sample table (7.8 MB, immutable, content-addressed) are read once
   per isolate through the edge cache and decoded into typed arrays; only `s1/cidx/current.json` is re-read (once a minute). The
-  sample facts are one snapshot built from D1 once per colo and hour (about 400k rows read), kept in the Cache API and the isolate.
+  sample facts are one snapshot built from D1 once per colo and six hours (about 400k rows read), kept in the Cache API and the isolate.
 - **Exact boolean evaluation.** Every leaf becomes a mask over cell-type / sex / ancestry codes or over samples; AND narrows a sorted
   row list (sample filters first), OR evaluates each member on the rows not yet taken, NOT is a sorted difference.
 - **Served basis = the site's headline basis.** Studies on `DOWNLOADABLE_SQL`, `sample_qc.usable` with `qc_tier = 0` (tier 1 with
@@ -116,7 +116,106 @@ Every `/api/cells` answer carries this snippet for its own filter (`slice.python
 
 ## Measurements
 
-MEASUREMENTS
+Live data: cell index `20261027T2236Z-3bdf42bc` (1,476,601 summary rows), sample-facts snapshot of 2026-10-28T11:38Z (47,670 samples, release policy `alpha-2026-10-27e`). Edge: the PR preview (`https://claude-cell-search.singlet-4gc.pages.dev`, same code as production, production D1 read-only), timed from a residential connection, so every number includes the network round trip. CPU: the evaluator in V8 (node v24.14.1) on a laptop, 25 runs per query; Workers time is not observable from inside a Worker (timers stop during CPU work).
+
+### Latency per query
+
+| Query | Kind / ontology depth | Cells | Edge, cache miss p50 / p95 (ms) | Edge, cache hit p50 / p95 (ms) | CPU p50 / p95 (ms) |
+|---|---|---:|---:|---:|---:|
+| (no filter) | none | 221,164,736 | 127.7 / 1694.7 | 121.6 / 330.9 | 148.3 / 251.3 |
+| {"cell_type": "CL:0000988"} | CL compartment (hematopoietic cell) | 92,743,222 | 143.1 / 295.5 | 146.9 / 231.8 | 116.2 / 161.2 |
+| {"cell_type": "CL:0000738"} | CL closure only (leukocyte) | 27,677,032 | 138 / 191.3 | 131.9 / 238.5 | 98.2 / 126.5 |
+| {"cell_type": "CL:0000542"} | CL lineage (lymphocyte) | 48,871,610 | 112.5 / 298.5 | 133.3 / 535.5 | 79.5 / 103.5 |
+| {"cell_type": "CL:0000084"} | CL cell type (T cell) | 33,312,852 | 115.4 / 381 | 125 / 198.5 | 64.1 / 103.6 |
+| {"cell_type": "CL:0000625"} | CL type (CD8 alpha-beta T cell) | 12,450,443 | 91.9 / 139.1 | 104 / 130.8 | 58.4 / 77.6 |
+| {"cell_type": "CL:0000913"} | CL subtype (effector memory CD8) | 2,197,120 | 91.8 / 105 | 103.9 / 113.2 | 46.9 / 91.3 |
+| {"sex": "female"} | PATO | 82,122,774 | 118.4 / 437.4 | 110.1 / 241.9 | 130.1 / 270.6 |
+| {"ancestry": "HANCESTRO:0010"} | HANCESTRO | 188,804 | 59.8 / 79.5 | 62.9 / 95.6 | 33.6 / 97.2 |
+| {"tissue": "UBERON:0001004"} | UBERON system (respiratory system) | 7,737,697 | 91.9 / 128.8 | 98.8 / 139.8 | 40.2 / 99.7 |
+| {"tissue": "UBERON:0002048"} | UBERON organ (lung) | 6,837,872 | 83.2 / 116.5 | 86.1 / 115.7 | 30.7 / 81.4 |
+| {"disease": "MONDO:0004992"} | MONDO root-level (cancer) | 3,004,380 | 93.7 / 207.8 | 91.3 / 234.8 | 28.3 / 83.3 |
+| {"disease": "MONDO:0008903"} | MONDO organ (lung cancer) | 648,540 | 69.3 / 86.5 | 70.4 / 100.3 | 29.5 / 74.9 |
+| {"disease": "MONDO:0005233"} | MONDO leaf (NSCLC) | 630,944 | 68.2 / 344.4 | 72.5 / 184.3 | 37.3 / 90.5 |
+| {"development_stage": "adult"} | HsapDv/MmusDv (adult) | 21,030,872 | 106.9 / 131.4 | 166.8 / 322.1 | 96.2 / 177 |
+| {"year": [2023, 2026]} | study | 156,797,004 | 96 / 169.8 | 118.1 / 181.6 | 266.8 / 421.6 |
+| {"cell_type": "CL:0000625", "sex": "female", "disease": "MONDO:0008903 | combined | 129,143 | 56.2 / 80.8 | 54.5 / 331.5 | 32 / 63 |
+| {"cell_type": "CL:0000625", "sex": "female", "development_stage": "adu | combined | 0 | 49 / 334.6 | 49.5 / 58.3 | 65.6 / 139.1 |
+| {"or": [{"tissue": "lung"}, {"cell_type": "hepatocyte"}], "not": {"sex | combined | 3,958,475 | 97.6 / 183.6 | 99.6 / 122.4 | 163 / 262 |
+| {"or": [{"and": [{"tissue": "blood"}, {"cell_type": "B cell"}]}, {"and | combined | 2,670,283 | 89.8 / 156.6 | 92.2 / 99.2 | 186.4 / 340.2 |
+| {"organism": "Homo sapiens", "disease": "MONDO:0004992", "not_cell_typ | combined | 2,057,506 | 83.2 / 209.2 | 81.7 / 89.9 | 74.9 / 135.4 |
+| "female CD8 T cells from adult lung tumours of African ancestry" | question | 0 | 50.9 / 250.8 | 45.4 / 52.7 | 37.1 / 97.6 |
+| "female CD8 T cells from lung cancer" | question | 129,143 | 52.7 / 81 | 50.7 / 60.9 | 25.9 / 73.4 |
+| "microglia from aged mouse brain" | question | 10,094 | 50.9 / 99.4 | 46.2 / 54.7 | 44.5 / 109.2 |
+| "B cells or plasma cells in human bone marrow, not leukemia" | question | 501,741 | 82.3 / 96.8 | 78.4 / 85.7 | 85 / 153.5 |
+
+Cache misses run the whole query in an isolate that already holds its inputs; every repeated request was an edge-cache hit (12 of 12 per query). Hits and misses take about the same time from here: network and the 10–40 kB answer dominate, not the evaluation. A cold isolate pays for its inputs once:
+
+- cold isolate, snapshot built from D1 (first request after a deploy): 4,101 ms in the Function.
+- cold isolate, snapshot built from D1 (after a redeploy): 2,343 ms in the Function.
+- cold isolate, snapshot from the colo's Cache API: 257 ms in the Function.
+- Index summary + sample table: 7.8 MB in 4 reads of immutable objects (edge-cached); sample facts: 5.1 MB JSON, built from 467,824 D1 rows.
+
+### Slicing (first page of each query, `page_cells=5000`, counts = spliced + unspliced)
+
+| Query | Cells | Samples | Bytes | Ranged reads | Bytes / cell | Filtered by | Page answer (ms) | Streamed by the data Worker |
+|---|---:|---:|---:|---:|---:|---|---:|---|
+| `{"cell_type": "CL:0000625", "sex": "female", "disease": "MON` | 3,886 | 3 | 10.3 MB | 6 | 2,662 | index | 997 | 10.3 MB in 5.4 s |
+| `{"cell_type": "CL:0000913"}` | 2 | 1 | 0.2 MB | 4 | 90,368 | index | 2106 | 0.2 MB in 1.1 s |
+| `{"or": [{"tissue": "lung"}, {"cell_type": "hepatocyte"}], "n` (all cells of the page asked for, filtered here) | 1,745 | 4 | 6.0 MB | 8 | 3,447 | here | 5852 | 5.9 MB in 3.4 s |
+
+Matrices are stored in chunks of up to 4,096 columns, so a cell costs its chunk's share: 2.7–3.4 kB per cell when the matching cells are dense in their sample, up to 90 kB for a lone cell. The stream rate is this connection's (about 2 MB/s), not the data Worker's. Egress is free (R2 has no egress fees).
+
+### Cost per million queries (Cloudflare list prices, Workers Paid, beyond the included allowances)
+
+| Unit | Price | Source |
+|---|---:|---|
+| Workers / Pages Functions request | 0.3 $ / M requests | https://developers.cloudflare.com/workers/platform/pricing/ |
+| Workers CPU time | 0.02 $ / M CPU-ms | https://developers.cloudflare.com/workers/platform/pricing/ |
+| R2 Class B (read) operation | 0.36 $ / M reads | https://developers.cloudflare.com/r2/pricing/ |
+| R2 egress | 0 $ / GB | https://developers.cloudflare.com/r2/pricing/ |
+| D1 rows read | 0.001 $ / M rows | https://developers.cloudflare.com/d1/platform/pricing/ |
+
+- **Uncached query:** 1 request + CPU (median query 64.1 ms, p95 340.2 ms) + 0 D1 rows + 0 R2 reads = **$1.58 per million queries** at the median, $7.1 at the p95 CPU.
+- **Repeated query (edge-cache hit):** **$0.32 per million** (the request; no CPU billed on a hit).
+- **Inputs:** the sample-facts snapshot costs 467,824 D1 rows ($0.00047) per colo every 6 hours; the worst case, all 330 colos all month, is 18.5 B rows ($18.53 beyond the included 25 B). The index objects are immutable and edge-cached: R2 Class B reads only on a cache miss.
+- **A slice page** (one Function request, one cell-index query, one gather, its ranged reads counted as R2 misses): **$4.78 per million pages** worst case, plus $0 egress.
+
+### Coverage per field (QC-passed samples)
+
+| Field | Level | Ontology | Samples (share) | Cells (share) |
+|---|---|---|---:|---:|
+| cell_type | cell | CL | per cell | 159,085,553 (71.9%) |
+| sex | cell | PATO | per cell | 196,310,887 (88.8%) |
+| ancestry | cell | HANCESTRO | per cell | 3,457,431 (1.6%) |
+| n_umi | cell |  | per-cell range (row scan) | |
+| n_genes | cell |  | per-cell range (row scan) | |
+| tissue | sample | UBERON | 21,082 (45.2%) | 96,105,057 (43.5%) |
+| disease | sample | MONDO, PATO | 3,401 (7.3%) | 15,209,166 (6.9%) |
+| development_stage | sample | HsapDv, MmusDv | 5,903 (12.7%) | 26,147,072 (11.8%) |
+| age_years | sample |  | 5,707 (12.2%) | 24,920,002 (11.3%) |
+| donor_sex | sample | PATO | 6,410 (13.7%) | 30,315,371 (13.7%) |
+| donor_ancestry | sample | HANCESTRO | 1,155 (2.5%) | 4,639,808 (2.1%) |
+| sorted_cell_type | sample | CL | 8,561 (18.4%) | 41,511,080 (18.8%) |
+| organism | sample |  | 46,617 (99.9%) | 221,046,502 (100.0%) |
+| assay | sample |  | 44,135 (94.6%) | 210,638,935 (95.2%) |
+| chemistry | sample |  | 46,579 (99.9%) | 221,158,729 (100.0%) |
+| tissue_group | sample |  | 27,705 (59.4%) | 128,195,339 (58.0%) |
+| disease_group | sample |  | 7,868 (16.9%) | 39,030,554 (17.6%) |
+| donor_status | sample |  | 3,401 (7.3%) | 15,209,166 (6.9%) |
+| perturbation | sample |  | 11,711 (25.1%) | 58,017,905 (26.2%) |
+| sample_kind | sample |  | 2,885 (6.2%) | 15,317,651 (6.9%) |
+| median_umi | sample |  | 46,649 (100.0%) | 221,164,736 (100.0%) |
+| median_genes | sample |  | 46,649 (100.0%) | 221,164,736 (100.0%) |
+| mito_fraction | sample |  | 43,627 (93.5%) | 203,493,300 (92.0%) |
+| cells_called | sample |  | 46,649 (100.0%) | 221,164,736 (100.0%) |
+| mapping_rate | sample |  | 46,649 (100.0%) | 221,164,736 (100.0%) |
+| qc | sample |  | 46,649 (100.0%) | 221,164,736 (100.0%) |
+| sample | sample |  | 46,649 (100.0%) | 221,164,736 (100.0%) |
+| study | study |  | 46,649 (100.0%) | 221,164,736 (100.0%) |
+| year | study |  | 46,163 (99.0%) | 219,670,877 (99.3%) |
+| has_publication | study |  | 6,415 (13.8%) | 30,453,658 (13.8%) |
+
+Per-cell fields count cells with a call (cell type: any CL term; sex: female or male; ancestry: any group). The rarest filters matter most for questions like "of African ancestry": genetic ancestry is called for 1.6% of cells, so the brief's example "female CD8 T cells from adult lung tumours of African ancestry" matches **0 cells** today, and its relaxations say why (`ancestry=African` alone: 188,804 cells in 87 samples of 19 studies; `development_stage` and `disease` together cover few samples). "Female CD8 T cells from lung cancer" matches 129,143 cells in 69 samples of 7 studies.
 
 ## Label quality (read before quoting a count)
 

@@ -1,7 +1,7 @@
 /**
  * Every served sample's catalog facts in one snapshot, for cell search (./query.ts).
  *
- * Read from D1 once per colo and hour (then kept in the Cache API and in the isolate), so a cell query touches no D1 rows at all:
+ * Read from D1 once per colo and six hours (then kept in the Cache API and in the isolate), so a cell query touches no D1 rows at all:
  *   samples     s1_sample (current rev) of studies on DOWNLOADABLE_SQL, sample_qc usable with qc_tier <= 1, Alpha exclusions applied
  *               (the same basis as the site's headline numbers; tier 1 is only counted when a query asks for low-QC samples)
  *   gsm         organism_primary, assay_family, tissue_group, disease_group
@@ -254,7 +254,8 @@ export function hydrateFacts(w: FactsWire, bytes: number, source: SampleFacts["s
   return { ...w, n: w.gsm.length, index, termSamples, descendants, idCase, bytes, source };
 }
 
-const SNAPSHOT_TTL_S = 3600;
+/** Six hours: the facts change with catalog loads and Alpha policy updates, a few times a week. */
+const SNAPSHOT_TTL_S = 6 * 3600;
 /** Bump when buildFacts changes what the snapshot holds: the Cache API copy is keyed by it, so a deploy never reads an older layout. */
 export const FACTS_LAYOUT = 2;
 const SNAPSHOT_URL = "https://singlet.bio/__internal/cell-search/sample-facts";
@@ -265,7 +266,7 @@ export function clearFactsMemo(): void {
   memo = null;
 }
 
-/** The snapshot: this isolate's copy (an hour), else the colo's Cache API copy (an hour), else a fresh build from D1. */
+/** The snapshot: this isolate's copy, else the colo's Cache API copy (both six hours), else a fresh build from D1. */
 export async function sampleFacts(db: D1Database, waitUntil?: (p: Promise<unknown>) => void, now = Date.now()): Promise<SampleFacts> {
   if (memo && now - memo.at < SNAPSHOT_TTL_S * 1000) return memo.facts;
   const p = (async (): Promise<SampleFacts> => {

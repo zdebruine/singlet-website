@@ -240,11 +240,11 @@ function cost() {
       "Paid plan, beyond the included monthly allowances (10 M requests, 30 M CPU-ms, 10 M Class B reads, 25 B D1 rows): the marginal price.",
       "CPU per query = the evaluator's V8 time on this machine (Workers bill CPU time, not wall time; Workers hardware differs).",
       "A cache hit (same canonical query within 5 minutes in a colo) is billed as a request with no CPU (Workers Cache pricing); the Pages Function still runs its cache lookup, about 1 ms.",
-      "Inputs (the 7.8 MB index summary, the sample-facts snapshot) are read once per isolate from the edge cache, and the snapshot is built from D1 once per colo and hour; their cost is spread over the queries of that hour.",
+      "Inputs (the 7.8 MB index summary, the sample-facts snapshot) are read once per isolate from the edge cache, and the snapshot is built from D1 once per colo and six hours; their cost is spread over the queries of that hour.",
     ],
     query_uncached_usd_per_m: { cpu_ms_p50: r1(cpu50), at_p50: Math.round(per(cpu50) * 100) / 100, cpu_ms_p95: r1(cpu95), at_p95: Math.round(per(cpu95) * 100) / 100 },
     query_cached_usd_per_m: Math.round(per(1) * 100) / 100,
-    snapshot_build: { d1_rows_read: rowsPerBuild, usd: rowsPerBuild / 1e6 * P.d1_rows_read_per_m.usd, per_colo_hour: true, usd_per_month_330_colos: Math.round(rowsPerBuild / 1e6 * P.d1_rows_read_per_m.usd * 330 * 24 * 30 * 100) / 100 },
+    snapshot_build: { d1_rows_read: rowsPerBuild, usd: rowsPerBuild / 1e6 * P.d1_rows_read_per_m.usd, every_hours: 6, worst_case_month: { colos: 330, d1_rows_read: rowsPerBuild * 330 * 4 * 30, usd_marginal: Math.round((rowsPerBuild * 330 * 4 * 30) / 1e6 * P.d1_rows_read_per_m.usd * 100) / 100, note: "every colo rebuilding every 6 h all month; within the 25 B rows included on Workers Paid" } },
     slice_page: reads !== null ? { cells: pageCells, ranged_reads: reads, usd_per_m_pages_worst_case: Math.round((3 * P.workers_request_per_m.usd + reads * P.r2_class_b_per_m.usd + 50 * P.workers_cpu_ms_per_m.usd) * 100) / 100, egress_usd: 0 } : null,
   };
   merge({ cost: out });
