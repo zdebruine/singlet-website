@@ -263,7 +263,7 @@ const SNAPSHOT_URL = "https://singlet.bio/__internal/cell-search/sample-facts";
  * A metadata backfill bumps `meta_cache.facts_epoch` (any new value), and every isolate and colo moves to a fresh snapshot within
  * EPOCH_CHECK_S instead of serving its own copy for up to six hours: before this, two calls could see snapshots from either side of
  * a backfill. Bump it with:
- *   INSERT OR REPLACE INTO meta_cache (key, value, updated_at) VALUES ('facts_epoch', strftime('%Y-%m-%dT%H:%M:%SZ','now'), strftime('%s','now'));
+ *   INSERT OR REPLACE INTO meta_cache (key, value, updated_at) VALUES ('facts_epoch', strftime('%Y-%m-%dT%H:%M:%SZ','now'), strftime('%Y-%m-%dT%H:%M:%SZ','now'));
  * The check is one D1 row read per isolate every five minutes.
  */
 export const FACTS_EPOCH_KEY = "facts_epoch";
