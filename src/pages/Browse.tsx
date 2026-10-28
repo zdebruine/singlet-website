@@ -400,6 +400,9 @@ const Browse = () => {
             <h1 className="mb-3 text-[20px] font-semibold tracking-tight text-foreground">
               {state.q ? "Search results" : state.level === "gsm" ? "Browse samples" : "Browse studies"}
             </h1>
+            <p className="-mt-2 mb-3 type-small text-muted-foreground">
+              Looking for cells rather than studies? <a href="/cells" className="text-primary underline underline-offset-2">Search cells across the atlas</a> by cell type, sex, ancestry, tissue, disease and stage.
+            </p>
             {mine && (
               <section className="mb-5" aria-label="Private project results">
                 <div className="flex items-center justify-between mb-2"><h2 className="text-[13px] inline-flex items-center gap-1.5"><LockKeyhole size={13}/>Your private studies ({fmtInt(privateStudies.length)})</h2><a href="/my-data" className="type-small text-primary">Manage data</a></div>
