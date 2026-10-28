@@ -17,6 +17,7 @@
  * Every statement takes an explicit list of studies (literal, validated accessions) so a load is chunked by study.
  */
 import { sampleServedSql } from "./alpha";
+import { HANCESTRO_LABELS } from "./hancestro";
 
 export const LABEL_ATTRS = ["sex_genetic", "ancestry_genetic", "cell_type"] as const;
 export type LabelAttr = (typeof LABEL_ATTRS)[number];
@@ -27,15 +28,7 @@ export const ANCESTRY_MIN_SHARE = 0.2;
 export const CELL_TYPE_MIN_SHARE = 0.05;
 export const CELL_TYPE_MIN_CELLS = 10;
 
-/** docs/cell_annotation.md section 2: the genetic-ancestry children of HANCESTRO:0004 the labeller calls. */
-export const HANCESTRO_LABELS: Record<string, string> = {
-  "HANCESTRO:0010": "African",
-  "HANCESTRO:0014": "Hispanic or Latin American",
-  "HANCESTRO:0009": "East Asian",
-  "HANCESTRO:0005": "European",
-  "HANCESTRO:0006": "South Asian",
-  "HANCESTRO:0306": "admixed ancestry",
-};
+export { HANCESTRO_LABELS };
 
 const GSE_RE = /^GSE\d{1,12}$/;
 

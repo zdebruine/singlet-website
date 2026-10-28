@@ -36,6 +36,8 @@ export const LOAD_MODALITIES: LoadModality[] = [
 ];
 
 export const LOAD_MODALITY_NAMES = LOAD_MODALITIES.map((m) => m.name);
+/** The names Research Alpha offers (mt stays in the vocabulary because the clients take it, but no sample has it). */
+export const OFFERED_LOAD_MODALITY_NAMES = LOAD_MODALITY_NAMES.filter((n) => n !== "mt");
 const BY_NAME = new Map(LOAD_MODALITIES.map((m) => [m.name, m]));
 const ALIASES: Record<string, string> = {
   x: "counts",
@@ -56,7 +58,7 @@ export const MODALITIES_PROP = {
   items: { type: "string" },
   minItems: 1,
   maxItems: 7,
-  description: `Only these data types (the names singlet.load(modalities=...) takes): ${LOAD_MODALITY_NAMES.join(", ")}. counts needs the exon and intron matrices, spliced only exon, unspliced only intron, splice_junctions and psi only the junction matrix. The per-cell cells table is always included.`,
+  description: `Only these data types (the names singlet.load(modalities=...) takes): ${OFFERED_LOAD_MODALITY_NAMES.join(", ")}. counts needs the exon and intron matrices, spliced only exon, unspliced only intron, splice_junctions and psi only the junction matrix. The per-cell cells table is always included.`,
 };
 
 /** `modalities` from tool arguments: null when absent, the canonical names (vocabulary order), or an error naming the vocabulary. */

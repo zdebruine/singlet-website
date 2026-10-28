@@ -138,7 +138,7 @@ const FORMAT_COMPRESSION: [string, number][] = [
   ["scipy npz", 3.2],
   ["RDS dgCMatrix", 3.3],
   ["BPCells", 3.8],
-  [".singlet (.1pz)", 9.5],
+  [".s1 (.1pz matrices)", 9.5],
 ];
 
 export function FormatSizeChart() {
@@ -146,7 +146,7 @@ export function FormatSizeChart() {
     label,
     value: 100 / ratio,
     display: `${(100 / ratio).toFixed(0)}%`,
-    highlight: label.startsWith(".singlet"),
+    highlight: label.startsWith(".s1"),
   }));
   return <HBars data={data} max={40} labelWidth="w-[150px] sm:w-[170px]" />;
 }

@@ -10,7 +10,7 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { classify, type R2BucketLike, type R2ObjectBodyLike } from "../../workers/data/src/handler";
-import { clearMemos, estimateCost, hash32, openDirectory, OverBudget, planSamples, readGroup, runQuery, shardHeader, type QueryLimits } from "../../workers/data/src/cidx";
+import { clearMemos, estimateCost, hash32, nameAncestry, openDirectory, OverBudget, planSamples, readGroup, runQuery, shardHeader, type QueryLimits } from "../../workers/data/src/cidx";
 import { FR_END, FR_ERROR, FR_PREFIX, FR_RUN, FRAME_BYTES, membersFor, planGather, runGather, runPart, type GatherLimits } from "../../workers/data/src/gather";
 import { CidxQuota, DEFAULT_LIMITS, charge, identify, limitsFor } from "../../workers/data/src/limits";
 import { handleCidx, type CidxDeps } from "../../workers/data/src/routes";
@@ -494,5 +494,24 @@ describe("limits and routes", () => {
     expect(classify(`https://data.singlet.bio/s1/cidx/current.json`)?.cacheControl).toBe("public, max-age=60");
     expect(classify(`https://data.singlet.bio/s1/a/GSM123/${"b".repeat(32)}.parquet`)).not.toBeNull();
     expect(classify(`https://data.singlet.bio/s1/cidx/obj/../current.json`)).toBeNull();
+  });
+});
+
+describe("ancestry names", () => {
+  it("names the index's unnamed ancestry entries with the labeller's groups (production layout), and keeps real names", () => {
+    const d = {
+      dicts: {
+        ancestry: [
+          { code: 0, id: null, label: "unknown", anc: [] },
+          { code: 1, id: "HANCESTRO:0005", label: "HANCESTRO:0005", anc: [] },
+          { code: 2, id: "HANCESTRO:0010", anc: [] },
+          { code: 3, id: "HANCESTRO:0306", label: "admixed", anc: [] },
+        ],
+      },
+      terms: { "HANCESTRO:0005": "HANCESTRO:0005" },
+    } as unknown as Parameters<typeof nameAncestry>[0];
+    nameAncestry(d);
+    expect(d.dicts.ancestry.map((e) => e.label)).toEqual(["unknown", "European", "African", "admixed"]);
+    expect(d.terms!["HANCESTRO:0005"]).toBe("European");
   });
 });

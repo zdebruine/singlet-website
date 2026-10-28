@@ -11,6 +11,7 @@
  */
 import { handle, type Deps } from "./handler";
 import { decodeChunk, parseScxHeader, scxHeaderLen, type ScxHeader } from "./scx";
+import { HANCESTRO_LABELS } from "../../../functions/_shared/hancestro";
 
 export const ORIGIN = "https://data.singlet.bio";
 export const SCALE8 = 254;
@@ -189,6 +190,13 @@ export function clearMemos(): void {
 
 const VERSION_RE = /^\d{8}T\d{4}Z-[0-9a-f]{8}$/;
 
+/** The index directory's ancestry entries carry no names (label absent or the id): give them the labeller's group names, so a query by
+ * name matches and grouped counts are labelled. */
+export function nameAncestry(d: Directory): void {
+  for (const e of d.dicts.ancestry ?? []) if (e.id && (!e.label || e.label === e.id) && HANCESTRO_LABELS[e.id]) e.label = HANCESTRO_LABELS[e.id];
+  if (d.terms) for (const [id, name] of Object.entries(HANCESTRO_LABELS)) if (!d.terms[id] || d.terms[id] === id) d.terms[id] = name;
+}
+
 export async function openDirectory(deps: Deps, version: string | undefined, stats?: ReadStats, now = Date.now()): Promise<Directory> {
   let v = version && version !== "current" ? version : null;
   if (v && !VERSION_RE.test(v)) throw new CidxError(400, "bad_request", "`version` must be 'current' or an index version like 20261101T0000Z-ab12cd34.");
@@ -211,6 +219,7 @@ export async function openDirectory(deps: Deps, version: string | undefined, sta
     throw e;
   });
   if (d.format !== "singlet-cidx" || d.format_version > 1) throw new CidxError(502, "bad_index", "unsupported index format");
+  nameAncestry(d);
   memoDir.set(v, d);
   return d;
 }

@@ -131,6 +131,13 @@ export interface StudyDetail {
 
 export const GSE_RE = /^GSE\d+$/;
 
+const SAMPLE_COLS = `gsm_id, gse_id, organism, organism_primary, protocol, assay_family, modality,
+                tissue, tissue_group, cell_type, donor_id, disease, disease_group, sex,
+                (SELECT q.n_cells_called FROM sample_qc q WHERE q.gsm_id = gsm.gsm_id) AS n_cells,
+                mapping_rate, median_genes, median_umis, status, qc_flag, failure_category,
+                failure_detail, pipeline_date, pz_size_bytes, title, source,
+                srr_ids, characteristics, last_updated`;
+
 export async function loadStudy(db: D1Database, rawId: string): Promise<StudyDetail | null> {
   const id = rawId.trim().toUpperCase();
   if (!GSE_RE.test(id)) return null;
@@ -157,6 +164,13 @@ export async function loadStudy(db: D1Database, rawId: string): Promise<StudyDet
     .bind(id)
     .all<{ gsm_id: string; qc_tier: number; median_genes: number | null; mapping_rate: number | null }>()
     .catch(() => ({ results: [] as { gsm_id: string; qc_tier: number; median_genes: number | null; mapping_rate: number | null }[] }));
+  // Samples the study's .s1 files hold that the catalog files under another series (GEO lists some samples in two series; gsm keeps
+  // one gse_id). Without the .s1 tables there are none.
+  const crossPromise = db
+    .prepare(`SELECT ${SAMPLE_COLS} FROM gsm WHERE gsm_id IN (SELECT gsm_id FROM s1_sample WHERE gse_id = ?) AND gse_id != ? AND ${sampleServedSql("gsm.gsm_id")}`)
+    .bind(id, id)
+    .all<Record<string, unknown>>()
+    .catch(() => ({ results: [] as Record<string, unknown>[] }));
   const [seriesRow, metaRow, samplesResult, pubsResult, manifestRow] = await Promise.all([
     db
       .prepare(
@@ -180,13 +194,7 @@ export async function loadStudy(db: D1Database, rawId: string): Promise<StudyDet
 
     db
       .prepare(
-        `SELECT gsm_id, gse_id, organism, organism_primary, protocol, assay_family, modality,
-                tissue, tissue_group, cell_type, donor_id, disease, disease_group, sex,
-                (SELECT q.n_cells_called FROM sample_qc q WHERE q.gsm_id = gsm.gsm_id) AS n_cells,
-                mapping_rate, median_genes, median_umis, status, qc_flag, failure_category,
-                failure_detail, pipeline_date, pz_size_bytes, title, source,
-                srr_ids, characteristics, last_updated
-           FROM gsm WHERE gse_id = ? AND ${sampleServedSql("gsm.gsm_id")} ORDER BY gsm_id ASC`
+        `SELECT ${SAMPLE_COLS} FROM gsm WHERE gse_id = ? AND ${sampleServedSql("gsm.gsm_id")} ORDER BY gsm_id ASC`
       )
       .bind(id)
       .all<Record<string, unknown>>(),
@@ -219,6 +227,11 @@ export async function loadStudy(db: D1Database, rawId: string): Promise<StudyDet
     return ids.length ? ids.filter((g) => excluded.has(g)).length : excluded.size;
   })();
 
+  const cross = (await crossPromise).results ?? [];
+  if (cross.length) {
+    samplesResult.results.push(...cross);
+    samplesResult.results.sort((a, b) => String(a.gsm_id).localeCompare(String(b.gsm_id)));
+  }
   const tiers = (await tiersPromise).results ?? [];
   const lowById = new Map(tiers.filter((t) => Number(t.qc_tier) === 1).map((t) => [t.gsm_id, t]));
   const removedIds = new Set(tiers.filter((t) => Number(t.qc_tier) === 2).map((t) => t.gsm_id));

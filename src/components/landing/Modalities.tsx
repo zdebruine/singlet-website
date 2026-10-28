@@ -52,8 +52,8 @@ export function ModalityGrid() {
         ))}
       </ul>
       <p className="mt-12 text-center text-[14.5px] text-muted-foreground max-w-[640px] mx-auto">
-        Research Alpha serves transcriptomics only. Mitochondrial allele data, genotypes, ancestry, ambient-RNA and doublet calls are not
-        offered in Alpha; more layers come with Beta.{" "}
+        Research Alpha serves transcriptomics only, with per-cell cell type, sex and genetic ancestry labels. Mitochondrial allele data,
+        genotypes, ambient-RNA and doublet calls are not offered in Alpha; more layers come with Beta.{" "}
         <Link to="/docs#modalities" className="text-primary hover:underline">
           Layers in the docs →
         </Link>

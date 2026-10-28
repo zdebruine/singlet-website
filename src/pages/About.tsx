@@ -184,7 +184,7 @@ const About = () => {
                   ))}
                 </ul>
               }
-              detail={<p>Research Alpha serves transcriptomics only. Mitochondrial allele data, genotypes, ancestry, ambient-RNA and doublet calls are not offered in Alpha.</p>}
+              detail={<p>Research Alpha serves transcriptomics only, with per-cell cell type, sex and genetic ancestry labels. Mitochondrial allele data, genotypes, ambient-RNA and doublet calls are not offered in Alpha.</p>}
               link={{ to: "/docs#modalities", label: "Layers in the docs" }}
             />
 
@@ -206,8 +206,8 @@ const About = () => {
             <Station
               id="file"
               n={6}
-              title="One small file per study"
-              claim={<>All samples of a study in one <Mono>.singlet</Mono> file: raw counts, {H5AD_RATIO.toFixed(1)}× smaller than H5AD. Free, no account.</>}
+              title="One small file per sample"
+              claim={<>Each sample in one <Mono>.s1</Mono> object, its matrices in <Mono>.1pz</Mono>: raw counts, {H5AD_RATIO.toFixed(1)}× smaller than H5AD. A study's manifest lists its samples. Free, no account.</>}
               visual={<><Caption>Size of the same count matrix (uncompressed = 100%)</Caption><FormatSizeChart /></>}
               detail={
                 <>

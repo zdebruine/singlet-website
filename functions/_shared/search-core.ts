@@ -969,6 +969,8 @@ export function planStudyQuery(p: SearchParams, matchOverride?: string | null, c
   const where = buildStudyWhere(p, { gseIds: candidateIds });
   const clauses = [...where.clauses];
   const params: (string | number)[] = [];
+  // bound after the rail filters' params: the lookup clause is appended after their clauses
+  const lookupParams: (string | number)[] = [];
   let cte = "";
   let scoreExpr = "NULL";
   let join = "";
@@ -977,10 +979,10 @@ export function planStudyQuery(p: SearchParams, matchOverride?: string | null, c
     // Direct lookup remains exact, while explicit rail filters stay hard.
     const gseIds = [...acc.gse];
     const lookup = [`m.gse_id IN (SELECT value FROM json_each(?))`];
-    params.push(jsonArray(gseIds));
+    lookupParams.push(jsonArray(gseIds));
     if (acc.gsm.length) {
       lookup.push(`m.gse_id IN (SELECT gse_id FROM gsm WHERE gsm_id IN (SELECT value FROM json_each(?)) AND ${sampleServedSql("gsm.gsm_id")})`);
-      params.push(jsonArray(acc.gsm));
+      lookupParams.push(jsonArray(acc.gsm));
     }
     clauses.push(`(${lookup.join(" OR ")})`);
   } else if (match) {
@@ -992,7 +994,7 @@ export function planStudyQuery(p: SearchParams, matchOverride?: string | null, c
     // Query was only stopwords/punctuation: nothing can match by text.
     clauses.push("0");
   }
-  params.push(...where.params);
+  params.push(...where.params, ...lookupParams);
 
   const whereSql = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
   const hitCols = match ? "h.s_gse, h.s_gsm, h.n_match," : "NULL AS s_gse, NULL AS s_gsm, NULL AS n_match,";
@@ -1517,7 +1519,8 @@ async function attachStudyMatches(ctx: Ctx, rows: StudyRow[], p: SearchParams, p
   await Promise.all(queries);
 }
 
-// ── Conditions (memoised in meta_cache) ─────────────────────────────────────
+// ── Conditions (memoised per isolate) ─────────────────────────────────────
+// Never written to D1: public GETs must not write rows (each written row is billed), and recomputing is a capped read.
 
 interface StoredConditions {
   conditions: ConditionSummary["conditions"];
@@ -1525,33 +1528,17 @@ interface StoredConditions {
   n_with_characteristics: number;
 }
 
+const conditionsMemo = new Map<string, { value: StoredConditions; at: number }>();
+const CONDITIONS_MEMO_MAX = 20_000;
+
 export async function conditionsFor(ctx: Ctx, gseIds: string[]): Promise<Map<string, StoredConditions>> {
   const out = new Map<string, StoredConditions>();
   if (!gseIds.length) return out;
   const { db } = ctx;
-
-  let cached: { key: string; value: string; updated_at: string }[] = [];
-  try {
-    const res = await db
-      .prepare(
-        `SELECT key, value, updated_at FROM meta_cache
-          WHERE key IN (SELECT 'conditions:' || value FROM json_each(?))`
-      )
-      .bind(jsonArray(gseIds))
-      .all<{ key: string; value: string; updated_at: string }>();
-    cached = res.results;
-  } catch {
-    cached = [];
-  }
   const now = Date.now();
-  for (const row of cached) {
-    const age = now - Date.parse(row.updated_at ?? "");
-    if (!Number.isFinite(age) || age > CONDITIONS_TTL_MS) continue;
-    try {
-      out.set(row.key.slice("conditions:".length), JSON.parse(row.value) as StoredConditions);
-    } catch {
-      /* recompute below */
-    }
+  for (const id of gseIds) {
+    const hit = conditionsMemo.get(id);
+    if (hit && now - hit.at < CONDITIONS_TTL_MS) out.set(id, hit.value);
   }
 
   const misses = gseIds.filter((id) => !out.has(id));
@@ -1576,22 +1563,12 @@ export async function conditionsFor(ctx: Ctx, gseIds: string[]): Promise<Map<str
     arr.push({ characteristics: r.characteristics });
   }
 
-  const writes: D1PreparedStatement[] = [];
-  const nowIso = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
   for (const id of misses) {
     const s = summarizeConditions(grouped.get(id) ?? []);
     const stored: StoredConditions = { conditions: s.conditions, label: s.label, n_with_characteristics: s.n_with_characteristics };
     out.set(id, stored);
-    writes.push(
-      db
-        .prepare(`INSERT OR REPLACE INTO meta_cache (key, value, updated_at) VALUES (?, ?, ?)`)
-        .bind(`conditions:${id}`, JSON.stringify(stored), nowIso)
-    );
-  }
-  if (writes.length) {
-    const chunks: D1PreparedStatement[][] = [];
-    for (let i = 0; i < writes.length; i += 40) chunks.push(writes.slice(i, i + 40));
-    ctx.waitUntil(Promise.all(chunks.map((c) => db.batch(c))).catch(() => undefined));
+    if (conditionsMemo.size >= CONDITIONS_MEMO_MAX) conditionsMemo.delete(conditionsMemo.keys().next().value as string);
+    conditionsMemo.set(id, { value: stored, at: now });
   }
   return out;
 }
@@ -1718,7 +1695,7 @@ function sampleOrder(sort: Sort, hasQ: boolean): string {
   }
 }
 
-function planSampleQuery(p: SearchParams, matchOverride?: string | null) {
+export function planSampleQuery(p: SearchParams, matchOverride?: string | null) {
   const acc = p.q ? extractAccessions(p.q) : { gse: [], gsm: [] };
   const fts = p.q ? tokenizeQuery(p.q) : { terms: [], and: null, or: null };
   const isAccession = acc.gse.length > 0 || acc.gsm.length > 0;
@@ -1727,6 +1704,8 @@ function planSampleQuery(p: SearchParams, matchOverride?: string | null) {
   const where = buildSampleWhere(p);
   const clauses = [...where.clauses];
   const params: (string | number)[] = [];
+  // bound after the rail filters' params: the lookup clauses are appended after theirs (filters stay hard, as for studies)
+  const lookupParams: (string | number)[] = [];
   let cte = "";
   let join = "";
   let scoreExpr = "NULL";
@@ -1735,13 +1714,12 @@ function planSampleQuery(p: SearchParams, matchOverride?: string | null) {
     const parts: string[] = [];
     if (acc.gsm.length) {
       parts.push("s.gsm_id IN (SELECT value FROM json_each(?))");
-      params.push(jsonArray(acc.gsm));
+      lookupParams.push(jsonArray(acc.gsm));
     }
     if (acc.gse.length) {
       parts.push("s.gse_id IN (SELECT value FROM json_each(?))");
-      params.push(jsonArray(acc.gse));
+      lookupParams.push(jsonArray(acc.gse));
     }
-    clauses.length = 0;
     clauses.push(`(${parts.join(" OR ")})`, sampleServedSql("s.gsm_id"), studyServedSql("s.gse_id"));
   } else if (match) {
     cte = `WITH
@@ -1760,7 +1738,7 @@ function planSampleQuery(p: SearchParams, matchOverride?: string | null) {
   } else if (p.q && !fts.terms.length) {
     clauses.push("0");
   }
-  params.push(...where.params);
+  params.push(...where.params, ...lookupParams);
 
   const whereSql = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
   const sql = `${cte}
