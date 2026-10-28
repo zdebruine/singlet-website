@@ -103,7 +103,8 @@ const Beta = () => {
         <p className="mt-6 max-w-3xl text-[14px] text-muted-foreground">
           These are Beta goals. The engine is being measured against the standard tools now, and results are published as they come
           in, including where it does not yet match them:{" "}
-          <Link to="/benchmarking#beta" className="text-primary underline underline-offset-2">Beta benchmarks</Link>. What is wrong in
+          <Link to="/benchmarking#beta" className="text-primary underline underline-offset-2">Beta benchmarks</Link>. A GPU port of the
+          aligner is in development: <Link to="/beta/gpu-engine" className="text-primary underline underline-offset-2">GPU engine</Link>. What is wrong in
           Alpha today is on <Link to="/known-issues" className="text-primary underline underline-offset-2">Known issues</Link>.
         </p>
 
