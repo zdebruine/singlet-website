@@ -179,7 +179,8 @@ idx = [i for i in range(r.n_rows) if called[i] and lab[i] == 'endothelial cell o
     after: (
       <>
         The Python answer was correct ($0.10); the agent noted that 'endothelial cell of artery' is a cell-type-level label (per-study accuracy about
-        0.43), so a preview. To read only those 24 cells' counts, GET the prefix once and the chunk ranges with a Range header on the object URL; the
+        0.43), so a preview. Through the API connector Claude sees only the summary line of the slice_cells result (<a href="#pitfalls">pitfall 1</a>); the
+        ranges shown are from its structured content. To read only those 24 cells' counts, GET the prefix once and the chunk ranges with a Range header on the object URL; the
         chunks decode independently, and <code className="code-inline">singlet.load(gse, samples=[gsm])</code> does it for you. For gene names, pass
         the <code className="code-inline">pack</code> id from the result to <code className="code-inline">resolve_features</code>.
       </>
@@ -524,11 +525,17 @@ export default function DocsClaudeApi() {
             <ol>
               <li>
                 <strong>
-                  search_cells' lists are in <code className="code-inline">structuredContent</code>; Claude through the API connector sees only the text.
+                  The cell tools' details are in <code className="code-inline">structuredContent</code>; Claude through the API connector sees only the
+                  text.
                 </strong>{" "}
-                The text is one summary line ("14,435 cells in 15 samples of 3 studies. Most: …"). The per-sample list, the facet breakdowns and the
-                matched descendant terms are in <code className="code-inline">structuredContent</code>, which the connector does not pass on. In example 5
-                the agent called <code className="code-inline">search_cells</code> three times looking for the sample list. Workarounds: give the agent a
+                Today (2026-10-28) a text-only client sees one summary line from <code className="code-inline">search_cells</code>,{" "}
+                <code className="code-inline">find_cells</code>, <code className="code-inline">slice_cells</code> and{" "}
+                <code className="code-inline">get_cells_page</code>, such as "14,435 cells in 15 samples of 3 studies. Most: …". The per-sample lists, facet
+                breakdowns, matched descendant terms, column runs and byte ranges are in <code className="code-inline">structuredContent</code>, which the
+                connector does not pass on. In example 5 the agent called <code className="code-inline">search_cells</code> three times looking for the
+                sample list. A server fix is pending (not deployed): every tool will also send its structured result as compact JSON text, and{" "}
+                <code className="code-inline">search_cells</code> / <code className="code-inline">get_cells_page</code> will render full readable text.
+                Until then: give the agent a
                 Python tool and <code className="code-inline">GET|POST https://singlet.bio/api/cells</code> (same <code className="code-inline">where</code>,{" "}
                 <code className="code-inline">limit</code>, <code className="code-inline">offset</code>; full JSON, no key needed), or use{" "}
                 <code className="code-inline">find_cells</code> per study, or <code className="code-inline">get_cells_page</code>.
