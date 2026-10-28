@@ -1,0 +1,1745 @@
+{
+ "@context": {
+  "@language": "en",
+  "@vocab": "https://schema.org/",
+  "arrayShape": "cr:arrayShape",
+  "citeAs": "cr:citeAs",
+  "column": "cr:column",
+  "conformsTo": "dct:conformsTo",
+  "containedIn": "cr:containedIn",
+  "cr": "http://mlcommons.org/croissant/",
+  "rai": "http://mlcommons.org/croissant/RAI/",
+  "data": {
+   "@id": "cr:data",
+   "@type": "@json"
+  },
+  "dataType": {
+   "@id": "cr:dataType",
+   "@type": "@vocab"
+  },
+  "dct": "http://purl.org/dc/terms/",
+  "description": {
+   "@container": "@language"
+  },
+  "equivalentProperty": "cr:equivalentProperty",
+  "examples": {
+   "@id": "cr:examples",
+   "@type": "@json"
+  },
+  "extract": "cr:extract",
+  "field": "cr:field",
+  "fileProperty": "cr:fileProperty",
+  "fileObject": "cr:fileObject",
+  "fileSet": "cr:fileSet",
+  "format": "cr:format",
+  "includes": "cr:includes",
+  "isArray": "cr:isArray",
+  "isLiveDataset": "cr:isLiveDataset",
+  "jsonPath": "cr:jsonPath",
+  "key": "cr:key",
+  "md5": "cr:md5",
+  "name": {
+   "@container": "@language"
+  },
+  "parentField": "cr:parentField",
+  "path": "cr:path",
+  "recordSet": "cr:recordSet",
+  "references": "cr:references",
+  "regex": "cr:regex",
+  "repeated": "cr:repeated",
+  "replace": "cr:replace",
+  "samplingRate": "cr:samplingRate",
+  "sc": "https://schema.org/",
+  "separator": "cr:separator",
+  "source": "cr:source",
+  "subField": "cr:subField",
+  "transform": "cr:transform",
+  "prov": "http://www.w3.org/ns/prov#",
+  "obo": "http://purl.obolibrary.org/obo/"
+ },
+ "@type": "sc:Dataset",
+ "@id": "https://singlet.bio/api/croissant/GSE133773",
+ "conformsTo": "http://mlcommons.org/croissant/1.1",
+ "name": "GSE133773, Singlet Research Alpha",
+ "description": "single-cell RNA-seq profile of adult microglia under acute Csf1r inhibition and early repopulation (GSE133773), reprocessed from raw reads in Singlet Research Alpha (October 2026): 3 samples that passed QC, 2,160 called cells, Mus musculus, reference GRCm39-2024-A. Gene counts (spliced and unspliced), splice junctions, cell calls and per-cell QC in one .s1 object per sample, with per-cell Cell Ontology cell type, chromosomal sex and genetic ancestry labels. Data CC0 1.0; code MIT.",
+ "url": "https://singlet.bio/study/GSE133773",
+ "sameAs": [
+  "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE133773"
+ ],
+ "version": "alpha-2026-10-27e",
+ "license": "https://creativecommons.org/publicdomain/zero/1.0/",
+ "isAccessibleForFree": true,
+ "inLanguage": "en",
+ "creator": [
+  {
+   "@type": "sc:Organization",
+   "name": "Singlet",
+   "url": "https://singlet.bio"
+  },
+  {
+   "@type": "sc:Person",
+   "name": "Zachary DeBruine"
+  }
+ ],
+ "publisher": {
+  "@type": "sc:Organization",
+  "name": "Singlet",
+  "url": "https://singlet.bio"
+ },
+ "datePublished": "2026-10-27T00:50:02Z",
+ "dateModified": "2026-10-28T05:46:43Z",
+ "keywords": [
+  "single-cell RNA-seq",
+  "scRNA-seq",
+  "transcriptomics",
+  "GEO",
+  "GSE133773",
+  "Mus musculus",
+  "10xv2",
+  "Cell Ontology",
+  "Singlet Research Alpha (October 2026)"
+ ],
+ "citeAs": "single-cell RNA-seq profile of adult microglia under acute Csf1r inhibition and early repopulation. GEO accession GSE133773, https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE133773. Reprocessed in Singlet Research Alpha (October 2026), https://singlet.bio/study/GSE133773.",
+ "citation": [
+  "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE133773",
+  "Singlet Research Alpha (October 2026)"
+ ],
+ "isPartOf": {
+  "@id": "https://singlet.bio/croissant.json"
+ },
+ "hasPart": [
+  {
+   "@id": "https://singlet.bio/api/croissant/GSE133773/GSM3927202"
+  },
+  {
+   "@id": "https://singlet.bio/api/croissant/GSE133773/GSM3927203"
+  },
+  {
+   "@id": "https://singlet.bio/api/croissant/GSE133773/GSM3927204"
+  }
+ ],
+ "isLiveDataset": true,
+ "prov:wasDerivedFrom": [
+  {
+   "@id": "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE133773",
+   "prov:label": "GEO series GSE133773"
+  },
+  {
+   "@id": "https://www.ncbi.nlm.nih.gov/sra/SRR9640930",
+   "prov:label": "SRA run SRR9640930 (GSM3927202)"
+  },
+  {
+   "@id": "https://www.ncbi.nlm.nih.gov/sra/SRR9640934",
+   "prov:label": "SRA run SRR9640934 (GSM3927203)"
+  },
+  {
+   "@id": "https://www.ncbi.nlm.nih.gov/sra/SRR9640938",
+   "prov:label": "SRA run SRR9640938 (GSM3927204)"
+  }
+ ],
+ "prov:wasGeneratedBy": [
+  {
+   "@type": "prov:Activity",
+   "prov:label": "Alignment and counting (singlet pipeline 0.3.0, reference GRCm39-2024-A)",
+   "prov:wasAssociatedWith": {
+    "@type": [
+     "prov:SoftwareAgent",
+     "sc:SoftwareSourceCode"
+    ],
+    "name": "singlet",
+    "codeRepository": "https://github.com/Singlet-Bio/singlet",
+    "license": "https://opensource.org/licenses/MIT",
+    "version": "0.3.0"
+   }
+  },
+  {
+   "@type": "prov:Activity",
+   "prov:label": "Transcode to .s1 and per-cell labels (singlet 0.3.0)",
+   "prov:endedAtTime": "2026-10-28T05:46:43Z",
+   "prov:wasAssociatedWith": {
+    "@type": [
+     "prov:SoftwareAgent",
+     "sc:SoftwareSourceCode"
+    ],
+    "name": "singlet",
+    "codeRepository": "https://github.com/Singlet-Bio/singlet",
+    "license": "https://opensource.org/licenses/MIT",
+    "version": "0.3.0",
+    "prov:label": "git 37e7cbdfbc13238c634e051a785adb30388349e8"
+   }
+  }
+ ],
+ "rai:dataCollection": "Raw sequencing reads of GEO series GSE133773 (submitted ?), downloaded from SRA, and GEO's sample metadata. No new samples were collected.",
+ "rai:dataCollectionType": [
+  "Secondary Data Analysis"
+ ],
+ "rai:dataCollectionRawData": "GEO series GSE133773 and its SRA runs (prov:wasDerivedFrom lists the run used per sample).",
+ "rai:dataPreprocessingProtocol": [
+  "One pipeline (singlet) for every sample: raw reads from SRA (the first sequencing run of each sample, at most its first 30 million reads); barcode and UMI layout detected from the reads; alignment and counting with STARsolo against one reference per species (human GRCh38, GENCODE v44; mouse GRCm39, vM33; rat mRatBN7.2; macaque Mmul_10; zebrafish GRCz11).",
+  "Exonic (spliced) and intronic (unspliced) molecules are counted separately for every cell, with splice junctions. In Alpha a molecule touching both an exon and an intron, a molecule in nested genes, or a multi-mapping read split across workers can be counted twice (2% to 19% per cell).",
+  "Cells were called with the STARsolo CellRanger2.2 knee filter; every barcode with at least 100 reads is stored, so cells can be called again. The cells table also carries an EmptyDrops call (called_ed) that is not the default.",
+  "Sample QC (functions/_shared/qc-rules.ts): a sample is described here only when its count matrix is not empty, at least one cell was called, at least 20% of reads mapped and the median cell has at least 30 genes. Samples below that are flagged low QC (kept in the study's files, left out of these documents and of every count); samples with under 5% of reads mapped and a median under 10 genes are removed.",
+  "Files were transcoded to the .s1 format (one immutable object per sample, pz2-coded matrices) and verified member by member against the files they replace.",
+  "Research Alpha release policy alpha-2026-10-27e: samples whose reads do not match the expected strand, libraries that are not gene expression (antibody, hashtag, guide, V(D)J or chromatin), samples with no called cell, and studies aligned to a genome other than the species GEO records are left out; a study left with no sample is withheld."
+ ],
+ "rai:dataAnnotationProtocol": [
+  "Per-cell labels are computed by the pipeline, with no human annotator: Cell Ontology cell type by a hierarchical, marker-guided labeller (levels: 1 compartment, 2 lineage, 3 cell type, 4 and deeper subtype; levels 1 and 2 are the default, 3 and deeper are previews); chromosomal sex from XIST against chrY expression (human and mouse); continental genetic ancestry (HANCESTRO) by supervised admixture against 1000 Genomes reference panels, for human donors with enough covered sites.",
+  "Sample metadata are GEO's text, mapped to UBERON (tissue), MONDO (disease; healthy is PATO:0000461), HsapDv / MmusDv (developmental stage), PATO (sex), HANCESTRO (self-reported ancestry) and Cell Ontology (sorted cell type), by rules or by a model; each *_mapping column of the samples record set says which.",
+  "Ontology releases of the term labels: CL cl/releases/2026-06-08/cl-basic.owl; HANCESTRO releases/2025-10-14; MONDO releases/2026-10-06; PATO releases/2026-10-01/pato.obo; UBERON uberon/releases/2026-10-01/uberon-basic.owl.",
+  "Ontology releases of the term labels: CL cl/releases/2026-06-08/cl-basic.owl; HANCESTRO releases/2025-10-14; MONDO releases/2026-10-06; PATO releases/2026-10-01/pato.obo; UBERON uberon/releases/2026-10-01/uberon-basic.owl.",
+  "Ontology releases of the term labels: CL cl/releases/2026-06-08/cl-basic.owl; HANCESTRO releases/2025-10-14; MONDO releases/2026-10-06; PATO releases/2026-10-01/pato.obo; UBERON uberon/releases/2026-10-01/uberon-basic.owl.",
+  "Ontology releases of the term labels: CL cl/releases/2026-06-08/cl-basic.owl; HANCESTRO releases/2025-10-14; MONDO releases/2026-10-06; PATO releases/2026-10-01/pato.obo; UBERON uberon/releases/2026-10-01/uberon-basic.owl.",
+  "Ontology releases of the term labels: CL cl/releases/2026-06-08/cl-basic.owl; HANCESTRO releases/2025-10-14; MONDO releases/2026-10-06; PATO releases/2026-10-01/pato.obo; UBERON uberon/releases/2026-10-01/uberon-basic.owl."
+ ],
+ "rai:dataAnnotationPlatform": "Automated, in the pipeline: singlet-annotate 0.2.0; no human annotators.",
+ "rai:machineAnnotationTools": [
+  "singlet-annotate=0.2.0",
+  "celltype=guide/cellguide-v2/2026-06-08",
+  "sex=xist-chrY-split/2",
+  "ancestry=1kgp-supervised-admixture/1/2025-10-14"
+ ],
+ "rai:annotationsPerItem": "Per cell: one cell-type path (with a confidence per level), one chromosomal sex call, at most one ancestry call. Per sample: one value per ontology field, several where GEO lists several.",
+ "rai:dataAnnotationAnalysis": [
+  "Cell type, per-study accuracy against CELLxGENE author labels: compartment 0.84, lineage 0.75, cell type 0.43, subtype 0.32. The score ranks calls; it is not a calibrated probability.",
+  "Chromosomal sex: 153 of 156 called samples (98.1%) agree with the sex in GEO; the 3 disagreements were GEO errors. About 13% of human cells stay ambiguous.",
+  "Genetic ancestry: validated on donors simulated from 1000 Genomes and on 22 donors with self-reported ancestry.",
+  "Measurements: https://singlet.bio/benchmarking#alpha-annotations"
+ ],
+ "rai:dataBiases": [
+  "All 3 samples GEO lists for GSE133773 are in this document.",
+  "Organism: Mus musculus; assay: 10xv2. A study is one lab's design: its tissues, donors and conditions are what the depositors chose.",
+  "Genetic ancestry is called for 0 of 3 samples here; across the atlas it covers about 1% of cells.",
+  "Only studies whose raw reads are in SRA and could be processed are included; GEO metadata is uncurated."
+ ],
+ "rai:dataLimitations": [
+  "Labeller accuracy recorded in this study's files (manifest annotations.cell_type.per_study_accuracy): level 1 (compartment) 0.842, level 2 (lineage) 0.747, level 3 (cell type) 0.428, level 4 (subtype) 0.32; levels from 3 are previews.",
+  "Alpha used only the first sequencing run of each sample and at most 30 million reads (the median sample used 10% of its deposited reads). Against the authors' own Cell Ranger results on 135 samples, Alpha finds a median of 65% of their cells, with a quarter of their UMIs per cell.",
+  "Some molecules are counted twice (2% to 19% per cell); counts depend slightly on the thread count; the spliced and unspliced layers are not suited to RNA velocity.",
+  "Cell type labels: per-study accuracy compartment 0.84, lineage 0.75, cell type 0.43, subtype 0.32; levels 3 and deeper are previews.",
+  "Chromosomal sex agrees with GEO for 98.1% of samples; about 13% of human cells stay ambiguous, mostly in pools of both sexes or samples with few reads per cell.",
+  "Genetic ancestry is computed only for human donors with enough genotype coverage (under 1,000 samples, about 1% of cells); elsewhere it is missing. Mixed ancestry is reported as admixed.",
+  "Transcriptomics only: antibody tags (ADT), hashtags (HTO), ATAC, spatial coordinates, CRISPR guides and V(D)J clonotypes are not served. Doublet, ambient-RNA and mitochondrial allele layers are not in Alpha.",
+  "GEO metadata (sex, tissue, disease) is not curated and may be wrong. A cell or sample count in the catalog can differ from the QC inside a file; the file is the truth. A sample GEO lists under two series is in both studies, so atlas-wide totals count it twice.",
+  "Known issues and what Beta changes: https://singlet.bio/known-issues"
+ ],
+ "rai:personalSensitiveInformation": [
+  "All studies are public GEO deposits whose raw reads are public in SRA; no new human data was collected.",
+  "Genotypes, mitochondrial allele data and the raw genotype inputs of the labeller are never stored in the released files or served. Per cell, only chromosomal sex (female / male / ambiguous) and continental genetic ancestry (HANCESTRO group) are released.",
+  "GEO sample characteristics (which may include age, sex, ancestry, disease and donor ids chosen by the depositors) are kept as GEO publishes them."
+ ],
+ "rai:dataUseCases": [
+  "Training and evaluating models of single-cell gene expression (cell-type classifiers, representation and foundation models) on uniformly processed counts.",
+  "Cross-study meta-analysis and cohort building by organism, tissue, disease, cell type, sex or ancestry.",
+  "Benchmarking analysis methods on many studies processed the same way; re-calling cells from the stored barcodes.",
+  "Not validated for clinical use or for identifying individuals."
+ ],
+ "rai:dataSocialImpact": "Uniform reprocessing makes public single-cell studies comparable and reusable without running a pipeline per study. Models trained on it inherit its skew toward human and mouse, toward the tissues and assays most often deposited, and toward the donors with ancestry calls; the dataBiases field gives the numbers.",
+ "rai:dataReleaseMaintenancePlan": "Per-sample .s1 objects and label sidecars are immutable and content-addressed (the key contains the digest); a change writes a new object, and the study manifest (mutable) gets a new rev. Which samples and studies are served is set by the Research Alpha release policy; this document's version is the policy id in force (alpha-2026-10-27e). Research Alpha (October 2026) is a feedback-oriented research preview. Beta, a full re-run with a new engine, is estimated for Q1 2027 and will be released separately. Feedback from any page of https://singlet.bio; known issues at https://singlet.bio/known-issues.",
+ "distribution": [
+  {
+   "@type": "cr:FileObject",
+   "@id": "manifest",
+   "name": "manifest",
+   "description": "Study manifest (docs/format-s1.md section 7): every sample object, its members and their byte ranges, the reference packs. Mutable; rev ceefb1668583fa6b when this document was made.",
+   "contentUrl": "https://data.singlet.bio/s1/m/GSE133773.json",
+   "encodingFormat": "application/json"
+  },
+  {
+   "@type": "cr:FileObject",
+   "@id": "samples-csv",
+   "name": "samples.csv",
+   "description": "The samples record set as CSV, generated from the catalog by singlet.bio.",
+   "contentUrl": "https://singlet.bio/api/croissant/GSE133773/samples.csv",
+   "encodingFormat": "text/csv"
+  },
+  {
+   "@type": "cr:FileObject",
+   "@id": "features-csv",
+   "name": "features-cef1acaf465ebfc4ff7404f308966e92.csv",
+   "description": "Genes of the reference GRCm39-2024-A (exon pack cef1acaf465ebfc4ff7404f308966e92) and the matrix rows each one owns, generated from the pack by singlet.bio. Feature names per row: s1/ref/cef1acaf465ebfc4ff7404f308966e92.pack (exon), s1/ref/15854e80854ce93702dc4c716e6a35c5.pack (intron).",
+   "contentUrl": "https://singlet.bio/api/croissant/features/cef1acaf465ebfc4ff7404f308966e92.csv",
+   "encodingFormat": "text/csv"
+  },
+  {
+   "@type": "cr:FileObject",
+   "@id": "s1/GSM3927202",
+   "name": "GSM3927202.s1",
+   "description": ".s1 sample object of GSM3927202: 1271 called cells of 31296 stored barcodes. Immutable; HTTP Range supported; member byte ranges in the manifest.",
+   "contentUrl": "https://data.singlet.bio/s1/s/GSM3927202/8e1a4292d0b41c6063ebd972f56bdeb2.s1",
+   "encodingFormat": "https://github.com/Singlet-Bio/singlet/blob/main/docs/format-s1.md",
+   "contentSize": "5180435 B",
+   "sha256": "8e1a4292d0b41c6063ebd972f56bdeb26d2bdece852929e9a76c99ba0d2c6653"
+  },
+  {
+   "@type": "cr:FileObject",
+   "@id": "s1/GSM3927203",
+   "name": "GSM3927203.s1",
+   "description": ".s1 sample object of GSM3927203: 602 called cells of 24010 stored barcodes. Immutable; HTTP Range supported; member byte ranges in the manifest.",
+   "contentUrl": "https://data.singlet.bio/s1/s/GSM3927203/b5b60c24f727e810df79f896b052217c.s1",
+   "encodingFormat": "https://github.com/Singlet-Bio/singlet/blob/main/docs/format-s1.md",
+   "contentSize": "3549397 B",
+   "sha256": "b5b60c24f727e810df79f896b052217c83525758464f9032e5ae10ed2008ab51"
+  },
+  {
+   "@type": "cr:FileObject",
+   "@id": "s1/GSM3927204",
+   "name": "GSM3927204.s1",
+   "description": ".s1 sample object of GSM3927204: 287 called cells of 36661 stored barcodes. Immutable; HTTP Range supported; member byte ranges in the manifest.",
+   "contentUrl": "https://data.singlet.bio/s1/s/GSM3927204/a927494e1855ba399aecc44b99010154.s1",
+   "encodingFormat": "https://github.com/Singlet-Bio/singlet/blob/main/docs/format-s1.md",
+   "contentSize": "3134891 B",
+   "sha256": "a927494e1855ba399aecc44b9901015494cc805b28df3d313064ea9d935c24ad"
+  },
+  {
+   "@type": "cr:FileObject",
+   "@id": "labels/GSM3927202",
+   "name": "GSM3927202.labels.parquet",
+   "description": "Per-cell label sidecar of GSM3927202: one row per called cell (1271 rows). Immutable.",
+   "contentUrl": "https://data.singlet.bio/s1/a/GSM3927202/073286d748438b75abc76e08c7d3a69a.parquet",
+   "encodingFormat": "application/x-parquet",
+   "contentSize": "35621 B",
+   "sha256": "073286d748438b75abc76e08c7d3a69a137380f76493c320c2083c89528ff86c"
+  },
+  {
+   "@type": "cr:FileObject",
+   "@id": "labels/GSM3927203",
+   "name": "GSM3927203.labels.parquet",
+   "description": "Per-cell label sidecar of GSM3927203: one row per called cell (602 rows). Immutable.",
+   "contentUrl": "https://data.singlet.bio/s1/a/GSM3927203/48854e8b2a7c20a88d80b95e539ff208.parquet",
+   "encodingFormat": "application/x-parquet",
+   "contentSize": "23752 B",
+   "sha256": "48854e8b2a7c20a88d80b95e539ff208364f3076b6f20b8463292aed378c044a"
+  },
+  {
+   "@type": "cr:FileObject",
+   "@id": "labels/GSM3927204",
+   "name": "GSM3927204.labels.parquet",
+   "description": "Per-cell label sidecar of GSM3927204: one row per called cell (287 rows). Immutable.",
+   "contentUrl": "https://data.singlet.bio/s1/a/GSM3927204/8b47e88bb480dbe1cd6f708100d62e7b.parquet",
+   "encodingFormat": "application/x-parquet",
+   "contentSize": "14764 B",
+   "sha256": "8b47e88bb480dbe1cd6f708100d62e7ba7dffdaa104a467a1358bf9d3905a837"
+  },
+  {
+   "@type": "cr:FileSet",
+   "@id": "sample-objects",
+   "name": "sample-objects",
+   "description": "Every .s1 sample object of this document.",
+   "containedIn": [
+    {
+     "@id": "s1/GSM3927202"
+    },
+    {
+     "@id": "s1/GSM3927203"
+    },
+    {
+     "@id": "s1/GSM3927204"
+    }
+   ],
+   "encodingFormat": "https://github.com/Singlet-Bio/singlet/blob/main/docs/format-s1.md",
+   "includes": "*"
+  },
+  {
+   "@type": "cr:FileSet",
+   "@id": "label-sidecars",
+   "name": "label-sidecars",
+   "description": "Every per-cell label sidecar of this document (one Parquet file per sample).",
+   "containedIn": [
+    {
+     "@id": "labels/GSM3927202"
+    },
+    {
+     "@id": "labels/GSM3927203"
+    },
+    {
+     "@id": "labels/GSM3927204"
+    }
+   ],
+   "encodingFormat": "application/x-parquet",
+   "includes": "*"
+  }
+ ],
+ "recordSet": [
+  {
+   "@type": "cr:RecordSet",
+   "@id": "samples",
+   "name": "samples",
+   "description": "One record per sample: GEO metadata mapped to ontologies, the labeller's sample-level calls, QC and provenance, and the sample's files.",
+   "key": {
+    "@id": "samples/gsm_id"
+   },
+   "field": [
+    {
+     "@type": "cr:Field",
+     "@id": "samples/gsm_id",
+     "name": "gsm_id",
+     "description": "GEO sample accession (the record key).",
+     "dataType": "sc:Text",
+     "source": {
+      "fileObject": {
+       "@id": "samples-csv"
+      },
+      "extract": {
+       "column": "gsm_id"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "samples/gse_id",
+     "name": "gse_id",
+     "description": "GEO series accession.",
+     "dataType": "sc:Text",
+     "source": {
+      "fileObject": {
+       "@id": "samples-csv"
+      },
+      "extract": {
+       "column": "gse_id"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "samples/title",
+     "name": "title",
+     "description": "Sample title in GEO.",
+     "dataType": "sc:Text",
+     "source": {
+      "fileObject": {
+       "@id": "samples-csv"
+      },
+      "extract": {
+       "column": "title"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "samples/geo_url",
+     "name": "geo_url",
+     "description": "The sample's GEO record.",
+     "dataType": "sc:URL",
+     "source": {
+      "fileObject": {
+       "@id": "samples-csv"
+      },
+      "extract": {
+       "column": "geo_url"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "samples/organism",
+     "name": "organism",
+     "description": "Organism (normalised from GEO).",
+     "dataType": "sc:Text",
+     "source": {
+      "fileObject": {
+       "@id": "samples-csv"
+      },
+      "extract": {
+       "column": "organism"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "samples/organism_ontology_term_id",
+     "name": "organism_ontology_term_id",
+     "description": "NCBI Taxonomy id of the organism.",
+     "dataType": "sc:Text",
+     "source": {
+      "fileObject": {
+       "@id": "samples-csv"
+      },
+      "extract": {
+       "column": "organism_ontology_term_id"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "samples/assay",
+     "name": "assay",
+     "description": "Library protocol detected from the reads (e.g. 10xv2, 10xv3).",
+     "dataType": "sc:Text",
+     "source": {
+      "fileObject": {
+       "@id": "samples-csv"
+      },
+      "extract": {
+       "column": "assay"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "samples/assay_family",
+     "name": "assay_family",
+     "description": "Assay family in the catalog.",
+     "dataType": "sc:Text",
+     "source": {
+      "fileObject": {
+       "@id": "samples-csv"
+      },
+      "extract": {
+       "column": "assay_family"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "samples/reference_build",
+     "name": "reference_build",
+     "description": "Genome build and annotation the reads were aligned to.",
+     "dataType": "sc:Text",
+     "source": {
+      "fileObject": {
+       "@id": "samples-csv"
+      },
+      "extract": {
+       "column": "reference_build"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "samples/pipeline_version",
+     "name": "pipeline_version",
+     "description": "singlet pipeline version that produced the counts (sample_qc).",
+     "dataType": "sc:Text",
+     "source": {
+      "fileObject": {
+       "@id": "samples-csv"
+      },
+      "extract": {
+       "column": "pipeline_version"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "samples/sra_runs",
+     "name": "sra_runs",
+     "description": "SRA runs of the sample, \"|\"-separated (Alpha used the first run).",
+     "dataType": "sc:Text",
+     "source": {
+      "fileObject": {
+       "@id": "samples-csv"
+      },
+      "extract": {
+       "column": "sra_runs"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "samples/n_input_reads",
+     "name": "n_input_reads",
+     "description": "Reads the pipeline used (at most 30 million).",
+     "dataType": "sc:Integer",
+     "source": {
+      "fileObject": {
+       "@id": "samples-csv"
+      },
+      "extract": {
+       "column": "n_input_reads"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "samples/mapping_rate",
+     "name": "mapping_rate",
+     "description": "Fraction of reads mapped.",
+     "dataType": "sc:Float",
+     "source": {
+      "fileObject": {
+       "@id": "samples-csv"
+      },
+      "extract": {
+       "column": "mapping_rate"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "samples/median_umi",
+     "name": "median_umi",
+     "description": "Median UMIs per called cell (the file's own statistic).",
+     "dataType": "sc:Float",
+     "source": {
+      "fileObject": {
+       "@id": "samples-csv"
+      },
+      "extract": {
+       "column": "median_umi"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "samples/median_genes",
+     "name": "median_genes",
+     "description": "Median genes per called cell (the file's own statistic).",
+     "dataType": "sc:Float",
+     "source": {
+      "fileObject": {
+       "@id": "samples-csv"
+      },
+      "extract": {
+       "column": "median_genes"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "samples/n_cells_called",
+     "name": "n_cells_called",
+     "description": "Cells called in the file (sample_qc.n_cells_called, the basis of every cell count on singlet.bio).",
+     "dataType": "sc:Integer",
+     "source": {
+      "fileObject": {
+       "@id": "samples-csv"
+      },
+      "extract": {
+       "column": "n_cells_called"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "samples/tissue_ontology_term_id",
+     "name": "tissue_ontology_term_id",
+     "description": "Tissue (UBERON): term ids, \"|\"-separated when GEO lists several.",
+     "dataType": [
+      "sc:Text",
+      "obo:UBERON_0001062"
+     ],
+     "source": {
+      "fileObject": {
+       "@id": "samples-csv"
+      },
+      "extract": {
+       "column": "tissue_ontology_term_id"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "samples/tissue",
+     "name": "tissue",
+     "description": "Labels of tissue_ontology_term_id, in the same order.",
+     "dataType": "sc:Text",
+     "source": {
+      "fileObject": {
+       "@id": "samples-csv"
+      },
+      "extract": {
+       "column": "tissue"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "samples/tissue_mapping",
+     "name": "tissue_mapping",
+     "description": "How each tissue term was mapped from GEO's text: \"geo\" by rules, \"model\" by a model.",
+     "dataType": "sc:Text",
+     "source": {
+      "fileObject": {
+       "@id": "samples-csv"
+      },
+      "extract": {
+       "column": "tissue_mapping"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "samples/disease_ontology_term_id",
+     "name": "disease_ontology_term_id",
+     "description": "Disease (MONDO; healthy / normal is PATO:0000461): term ids, \"|\"-separated when GEO lists several.",
+     "dataType": [
+      "sc:Text",
+      "obo:MONDO_0000001"
+     ],
+     "source": {
+      "fileObject": {
+       "@id": "samples-csv"
+      },
+      "extract": {
+       "column": "disease_ontology_term_id"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "samples/disease",
+     "name": "disease",
+     "description": "Labels of disease_ontology_term_id, in the same order.",
+     "dataType": "sc:Text",
+     "source": {
+      "fileObject": {
+       "@id": "samples-csv"
+      },
+      "extract": {
+       "column": "disease"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "samples/disease_mapping",
+     "name": "disease_mapping",
+     "description": "How each disease term was mapped from GEO's text: \"geo\" by rules, \"model\" by a model.",
+     "dataType": "sc:Text",
+     "source": {
+      "fileObject": {
+       "@id": "samples-csv"
+      },
+      "extract": {
+       "column": "disease_mapping"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "samples/development_stage_ontology_term_id",
+     "name": "development_stage_ontology_term_id",
+     "description": "Developmental stage (HsapDv for human, MmusDv for mouse): term ids, \"|\"-separated when GEO lists several.",
+     "dataType": [
+      "sc:Text",
+      "obo:HsapDv_0000000",
+      "obo:MmusDv_0000000"
+     ],
+     "source": {
+      "fileObject": {
+       "@id": "samples-csv"
+      },
+      "extract": {
+       "column": "development_stage_ontology_term_id"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "samples/development_stage",
+     "name": "development_stage",
+     "description": "Labels of development_stage_ontology_term_id, in the same order.",
+     "dataType": "sc:Text",
+     "source": {
+      "fileObject": {
+       "@id": "samples-csv"
+      },
+      "extract": {
+       "column": "development_stage"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "samples/development_stage_mapping",
+     "name": "development_stage_mapping",
+     "description": "How each development_stage term was mapped from GEO's text: \"geo\" by rules, \"model\" by a model.",
+     "dataType": "sc:Text",
+     "source": {
+      "fileObject": {
+       "@id": "samples-csv"
+      },
+      "extract": {
+       "column": "development_stage_mapping"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "samples/sex_ontology_term_id",
+     "name": "sex_ontology_term_id",
+     "description": "Sex as recorded in GEO (PATO): term ids, \"|\"-separated when GEO lists several.",
+     "dataType": [
+      "sc:Text",
+      "obo:PATO_0001894"
+     ],
+     "source": {
+      "fileObject": {
+       "@id": "samples-csv"
+      },
+      "extract": {
+       "column": "sex_ontology_term_id"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "samples/sex",
+     "name": "sex",
+     "description": "Labels of sex_ontology_term_id, in the same order.",
+     "dataType": "sc:Text",
+     "source": {
+      "fileObject": {
+       "@id": "samples-csv"
+      },
+      "extract": {
+       "column": "sex"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "samples/sex_mapping",
+     "name": "sex_mapping",
+     "description": "How each sex term was mapped from GEO's text: \"geo\" by rules, \"model\" by a model.",
+     "dataType": "sc:Text",
+     "source": {
+      "fileObject": {
+       "@id": "samples-csv"
+      },
+      "extract": {
+       "column": "sex_mapping"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "samples/self_reported_ancestry_ontology_term_id",
+     "name": "self_reported_ancestry_ontology_term_id",
+     "description": "Ancestry as recorded in GEO (HANCESTRO): term ids, \"|\"-separated when GEO lists several.",
+     "dataType": [
+      "sc:Text",
+      "obo:HANCESTRO_0004"
+     ],
+     "source": {
+      "fileObject": {
+       "@id": "samples-csv"
+      },
+      "extract": {
+       "column": "self_reported_ancestry_ontology_term_id"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "samples/self_reported_ancestry",
+     "name": "self_reported_ancestry",
+     "description": "Labels of self_reported_ancestry_ontology_term_id, in the same order.",
+     "dataType": "sc:Text",
+     "source": {
+      "fileObject": {
+       "@id": "samples-csv"
+      },
+      "extract": {
+       "column": "self_reported_ancestry"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "samples/self_reported_ancestry_mapping",
+     "name": "self_reported_ancestry_mapping",
+     "description": "How each self_reported_ancestry term was mapped from GEO's text: \"geo\" by rules, \"model\" by a model.",
+     "dataType": "sc:Text",
+     "source": {
+      "fileObject": {
+       "@id": "samples-csv"
+      },
+      "extract": {
+       "column": "self_reported_ancestry_mapping"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "samples/sorted_cell_type_ontology_term_id",
+     "name": "sorted_cell_type_ontology_term_id",
+     "description": "Cell type the sample was sorted or enriched for, as recorded in GEO (Cell Ontology): term ids, \"|\"-separated when GEO lists several.",
+     "dataType": [
+      "sc:Text",
+      "obo:CL_0000000"
+     ],
+     "source": {
+      "fileObject": {
+       "@id": "samples-csv"
+      },
+      "extract": {
+       "column": "sorted_cell_type_ontology_term_id"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "samples/sorted_cell_type",
+     "name": "sorted_cell_type",
+     "description": "Labels of sorted_cell_type_ontology_term_id, in the same order.",
+     "dataType": "sc:Text",
+     "source": {
+      "fileObject": {
+       "@id": "samples-csv"
+      },
+      "extract": {
+       "column": "sorted_cell_type"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "samples/sorted_cell_type_mapping",
+     "name": "sorted_cell_type_mapping",
+     "description": "How each sorted_cell_type term was mapped from GEO's text: \"geo\" by rules, \"model\" by a model.",
+     "dataType": "sc:Text",
+     "source": {
+      "fileObject": {
+       "@id": "samples-csv"
+      },
+      "extract": {
+       "column": "sorted_cell_type_mapping"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "samples/sex_genetic_ontology_term_id",
+     "name": "sex_genetic_ontology_term_id",
+     "description": "Chromosomal sex held by at least 20% of the sample's sexed cells (at least 20 sexed): PATO:0000383 female, PATO:0000384 male; \"|\"-separated for a pool of both.",
+     "dataType": [
+      "sc:Text",
+      "obo:PATO_0001894"
+     ],
+     "source": {
+      "fileObject": {
+       "@id": "samples-csv"
+      },
+      "extract": {
+       "column": "sex_genetic_ontology_term_id"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "samples/sex_genetic",
+     "name": "sex_genetic",
+     "description": "Labels of sex_genetic_ontology_term_id.",
+     "dataType": "sc:Text",
+     "source": {
+      "fileObject": {
+       "@id": "samples-csv"
+      },
+      "extract": {
+       "column": "sex_genetic"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "samples/ancestry_genetic_ontology_term_id",
+     "name": "ancestry_genetic_ontology_term_id",
+     "description": "Continental genetic ancestry (HANCESTRO) held by at least 20% of the sample's cells with an ancestry call; human donors with enough covered sites only.",
+     "dataType": [
+      "sc:Text",
+      "obo:HANCESTRO_0004"
+     ],
+     "source": {
+      "fileObject": {
+       "@id": "samples-csv"
+      },
+      "extract": {
+       "column": "ancestry_genetic_ontology_term_id"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "samples/ancestry_genetic",
+     "name": "ancestry_genetic",
+     "description": "Labels of ancestry_genetic_ontology_term_id.",
+     "dataType": "sc:Text",
+     "source": {
+      "fileObject": {
+       "@id": "samples-csv"
+      },
+      "extract": {
+       "column": "ancestry_genetic"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "samples/cell_types_ontology_term_ids",
+     "name": "cell_types_ontology_term_ids",
+     "description": "Cell Ontology types (with their ancestors in the labeller's vocabulary) held by at least 5% and 10 of the sample's typed cells, \"|\"-separated.",
+     "dataType": [
+      "sc:Text",
+      "obo:CL_0000000"
+     ],
+     "source": {
+      "fileObject": {
+       "@id": "samples-csv"
+      },
+      "extract": {
+       "column": "cell_types_ontology_term_ids"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "samples/s1_url",
+     "name": "s1_url",
+     "description": "The sample's .s1 object (immutable; HTTP Range supported).",
+     "dataType": "sc:URL",
+     "source": {
+      "fileObject": {
+       "@id": "samples-csv"
+      },
+      "extract": {
+       "column": "s1_url"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "samples/s1_bytes",
+     "name": "s1_bytes",
+     "description": "Size of the .s1 object.",
+     "dataType": "sc:Integer",
+     "source": {
+      "fileObject": {
+       "@id": "samples-csv"
+      },
+      "extract": {
+       "column": "s1_bytes"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "samples/s1_sha256",
+     "name": "s1_sha256",
+     "description": "SHA-256 of the .s1 object.",
+     "dataType": "sc:Text",
+     "source": {
+      "fileObject": {
+       "@id": "samples-csv"
+      },
+      "extract": {
+       "column": "s1_sha256"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "samples/labels_url",
+     "name": "labels_url",
+     "description": "The sample's per-cell label sidecar (Parquet).",
+     "dataType": "sc:URL",
+     "source": {
+      "fileObject": {
+       "@id": "samples-csv"
+      },
+      "extract": {
+       "column": "labels_url"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "samples/labels_sha256",
+     "name": "labels_sha256",
+     "description": "SHA-256 of the label sidecar.",
+     "dataType": "sc:Text",
+     "source": {
+      "fileObject": {
+       "@id": "samples-csv"
+      },
+      "extract": {
+       "column": "labels_sha256"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "samples/croissant_url",
+     "name": "croissant_url",
+     "description": "Croissant metadata for this sample alone.",
+     "dataType": "sc:URL",
+     "source": {
+      "fileObject": {
+       "@id": "samples-csv"
+      },
+      "extract": {
+       "column": "croissant_url"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "@type": "cr:RecordSet",
+   "@id": "cells",
+   "name": "cells",
+   "description": "One record per called cell, from the label sidecars (Parquet, label schema 2). col is the cell's column in its sample's matrices and cells table. Each sidecar holds one sample (its GSM is in the file's path and Parquet metadata); for records tied to a known sample, use the per-sample document (samples.croissant_url). Cell type levels: 1 compartment, 2 lineage, 3 cell type, 4 subtype; the level of a call is the number of ids in cell_type_path.",
+   "field": [
+    {
+     "@type": "cr:Field",
+     "@id": "cells/col",
+     "name": "col",
+     "description": "Column of the cell in its sample's exon_counts / intron_counts matrices and cells table (0-based).",
+     "dataType": "sc:Integer",
+     "source": {
+      "fileSet": {
+       "@id": "label-sidecars"
+      },
+      "extract": {
+       "column": "col"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "cells/cell_type_ontology_term_id",
+     "name": "cell_type_ontology_term_id",
+     "description": "Deepest Cell Ontology call (levels 3 and deeper are previews).",
+     "dataType": [
+      "sc:Text",
+      "obo:CL_0000000"
+     ],
+     "source": {
+      "fileSet": {
+       "@id": "label-sidecars"
+      },
+      "extract": {
+       "column": "cell_type_cl"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "cells/cell_type",
+     "name": "cell_type",
+     "description": "Label of cell_type_ontology_term_id.",
+     "dataType": "sc:Text",
+     "source": {
+      "fileSet": {
+       "@id": "label-sidecars"
+      },
+      "extract": {
+       "column": "cell_type_label"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "cells/cell_type_score",
+     "name": "cell_type_score",
+     "description": "Product of the gating confidences down to the deepest level; ranks calls, not a calibrated probability.",
+     "dataType": "sc:Float",
+     "source": {
+      "fileSet": {
+       "@id": "label-sidecars"
+      },
+      "extract": {
+       "column": "cell_type_score"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "cells/cell_type_path",
+     "name": "cell_type_path",
+     "description": "Cell Ontology path of the call, compartment first, ids joined by \">\".",
+     "dataType": "sc:Text",
+     "source": {
+      "fileSet": {
+       "@id": "label-sidecars"
+      },
+      "extract": {
+       "column": "cell_type_path"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "cells/cell_type_p1",
+     "name": "cell_type_p1",
+     "description": "Gating confidence at level 1 (compartment) of cell_type_path; empty below the deepest level.",
+     "dataType": "sc:Float",
+     "source": {
+      "fileSet": {
+       "@id": "label-sidecars"
+      },
+      "extract": {
+       "column": "cell_type_p1"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "cells/cell_type_p2",
+     "name": "cell_type_p2",
+     "description": "Gating confidence at level 2 (lineage) of cell_type_path; empty below the deepest level.",
+     "dataType": "sc:Float",
+     "source": {
+      "fileSet": {
+       "@id": "label-sidecars"
+      },
+      "extract": {
+       "column": "cell_type_p2"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "cells/cell_type_p3",
+     "name": "cell_type_p3",
+     "description": "Gating confidence at level 3 (cell type) of cell_type_path; empty below the deepest level.",
+     "dataType": "sc:Float",
+     "source": {
+      "fileSet": {
+       "@id": "label-sidecars"
+      },
+      "extract": {
+       "column": "cell_type_p3"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "cells/cell_type_p4",
+     "name": "cell_type_p4",
+     "description": "Gating confidence at level 4 (subtype) of cell_type_path; empty below the deepest level.",
+     "dataType": "sc:Float",
+     "source": {
+      "fileSet": {
+       "@id": "label-sidecars"
+      },
+      "extract": {
+       "column": "cell_type_p4"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "cells/cell_type_p5",
+     "name": "cell_type_p5",
+     "description": "Gating confidence at level 5 of cell_type_path; empty below the deepest level.",
+     "dataType": "sc:Float",
+     "source": {
+      "fileSet": {
+       "@id": "label-sidecars"
+      },
+      "extract": {
+       "column": "cell_type_p5"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "cells/cell_type_p6",
+     "name": "cell_type_p6",
+     "description": "Gating confidence at level 6 of cell_type_path; empty below the deepest level.",
+     "dataType": "sc:Float",
+     "source": {
+      "fileSet": {
+       "@id": "label-sidecars"
+      },
+      "extract": {
+       "column": "cell_type_p6"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "cells/sex_chrom",
+     "name": "sex_chrom",
+     "description": "Chromosomal sex: female (PATO:0000383), male (PATO:0000384) or ambiguous.",
+     "dataType": [
+      "sc:Text",
+      "obo:PATO_0001894"
+     ],
+     "source": {
+      "fileSet": {
+       "@id": "label-sidecars"
+      },
+      "extract": {
+       "column": "sex_chrom"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "cells/sex_score",
+     "name": "sex_score",
+     "description": "Posterior of sex_chrom.",
+     "dataType": "sc:Float",
+     "source": {
+      "fileSet": {
+       "@id": "label-sidecars"
+      },
+      "extract": {
+       "column": "sex_score"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "cells/ancestry_ontology_term_id",
+     "name": "ancestry_ontology_term_id",
+     "description": "Continental genetic ancestry of the cell's donor (HANCESTRO); empty when not computed.",
+     "dataType": [
+      "sc:Text",
+      "obo:HANCESTRO_0004"
+     ],
+     "source": {
+      "fileSet": {
+       "@id": "label-sidecars"
+      },
+      "extract": {
+       "column": "ancestry_hancestro"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "cells/ancestry_prob",
+     "name": "ancestry_prob",
+     "description": "Proportion of the ancestry call.",
+     "dataType": "sc:Float",
+     "source": {
+      "fileSet": {
+       "@id": "label-sidecars"
+      },
+      "extract": {
+       "column": "ancestry_prob"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "cells/model_version",
+     "name": "model_version",
+     "description": "Labeller and model versions.",
+     "dataType": "sc:Text",
+     "source": {
+      "fileSet": {
+       "@id": "label-sidecars"
+      },
+      "extract": {
+       "column": "model_version"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "@type": "cr:RecordSet",
+   "@id": "cell_qc",
+   "name": "cell_qc",
+   "description": "One record per stored barcode (called or not): the 'cells' member (CEL2 columnar table, docs/format-s1.md section 5.3) of each .s1 object, at the byte range the manifest gives. Row i is column i of the sample's matrices. Read it with the singlet Python or R package (singlet.load); mlcroissant cannot decode the .s1 container. Other columns in this study's cells tables: qc_n_reads, don_donor_id, don_prob_max, don_best_singlet, don_best_doublet, don_cell_status.",
+   "field": [
+    {
+     "@type": "cr:Field",
+     "@id": "cell_qc/barcode",
+     "name": "barcode",
+     "description": "Cell barcode (stored as whitelist indices when the protocol has a whitelist).",
+     "dataType": "sc:Text",
+     "source": {
+      "fileSet": {
+       "@id": "sample-objects"
+      },
+      "extract": {
+       "column": "barcode"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "cell_qc/called",
+     "name": "called",
+     "description": "The default cell call (STARsolo knee filter). Matrix columns with called = false are uncalled barcodes.",
+     "dataType": "sc:Boolean",
+     "source": {
+      "fileSet": {
+       "@id": "sample-objects"
+      },
+      "extract": {
+       "column": "called"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "cell_qc/n_umi_exon",
+     "name": "n_umi_exon",
+     "description": "Spliced (exonic) UMIs of the barcode.",
+     "dataType": "sc:Integer",
+     "source": {
+      "fileSet": {
+       "@id": "sample-objects"
+      },
+      "extract": {
+       "column": "n_umi_exon"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "cell_qc/n_umi_intron",
+     "name": "n_umi_intron",
+     "description": "Unspliced (intronic) UMIs of the barcode.",
+     "dataType": "sc:Integer",
+     "source": {
+      "fileSet": {
+       "@id": "sample-objects"
+      },
+      "extract": {
+       "column": "n_umi_intron"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "cell_qc/n_feat_exon",
+     "name": "n_feat_exon",
+     "description": "Exon features with at least one UMI.",
+     "dataType": "sc:Integer",
+     "source": {
+      "fileSet": {
+       "@id": "sample-objects"
+      },
+      "extract": {
+       "column": "n_feat_exon"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "cell_qc/n_feat_intron",
+     "name": "n_feat_intron",
+     "description": "Intron features with at least one UMI.",
+     "dataType": "sc:Integer",
+     "source": {
+      "fileSet": {
+       "@id": "sample-objects"
+      },
+      "extract": {
+       "column": "n_feat_intron"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "cell_qc/called_ed",
+     "name": "called_ed",
+     "description": "EmptyDrops call (additional, not the default).",
+     "dataType": "sc:Boolean",
+     "source": {
+      "fileSet": {
+       "@id": "sample-objects"
+      },
+      "extract": {
+       "column": "called_ed"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "cell_qc/called_ed_fdr",
+     "name": "called_ed_fdr",
+     "description": "EmptyDrops FDR (NaN = not tested).",
+     "dataType": "sc:Float",
+     "source": {
+      "fileSet": {
+       "@id": "sample-objects"
+      },
+      "extract": {
+       "column": "called_ed_fdr"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "@type": "cr:RecordSet",
+   "@id": "spliced_counts",
+   "name": "spliced_counts",
+   "description": "Spliced (exonic) counts, cells x features, as non-zero (col, row, count) entries: member 'exon_counts.1pz' of each .s1 object, a pz2 matrix (docs/format-s1.md section 4) stored column- (cell-) chunked with a chunk index, so any range of cells is one HTTP range request. Rows are merged exons of the reference genes (pack cef1acaf465ebfc4ff7404f308966e92, 386,028 rows); the features record set gives each gene's rows, and summing a gene's rows gives gene-level counts. Read with the singlet package (modalities \"spliced\"; \"counts\" is spliced + unspliced).",
+   "field": [
+    {
+     "@type": "cr:Field",
+     "@id": "spliced_counts/col",
+     "name": "col",
+     "description": "Matrix column: the cell's row in cell_qc and its col in cells.",
+     "dataType": "sc:Integer",
+     "source": {
+      "fileSet": {
+       "@id": "sample-objects"
+      },
+      "extract": {
+       "column": "exon_counts.1pz:col"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "spliced_counts/row",
+     "name": "row",
+     "description": "Matrix row: a feature of the reference (see features).",
+     "dataType": "sc:Integer",
+     "source": {
+      "fileSet": {
+       "@id": "sample-objects"
+      },
+      "extract": {
+       "column": "exon_counts.1pz:row"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "spliced_counts/count",
+     "name": "count",
+     "description": "UMI count.",
+     "dataType": "sc:Integer",
+     "source": {
+      "fileSet": {
+       "@id": "sample-objects"
+      },
+      "extract": {
+       "column": "exon_counts.1pz:value"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "@type": "cr:RecordSet",
+   "@id": "unspliced_counts",
+   "name": "unspliced_counts",
+   "description": "Unspliced (intronic) counts, cells x features, as non-zero (col, row, count) entries: member 'intron_counts.1pz' of each .s1 object, a pz2 matrix (docs/format-s1.md section 4) stored column- (cell-) chunked with a chunk index, so any range of cells is one HTTP range request. Rows are introns of the reference genes (pack 15854e80854ce93702dc4c716e6a35c5, 307,730 rows); the features record set gives each gene's rows, and summing a gene's rows gives gene-level counts. Read with the singlet package (modalities \"unspliced\"; \"counts\" is spliced + unspliced).",
+   "field": [
+    {
+     "@type": "cr:Field",
+     "@id": "unspliced_counts/col",
+     "name": "col",
+     "description": "Matrix column: the cell's row in cell_qc and its col in cells.",
+     "dataType": "sc:Integer",
+     "source": {
+      "fileSet": {
+       "@id": "sample-objects"
+      },
+      "extract": {
+       "column": "intron_counts.1pz:col"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "unspliced_counts/row",
+     "name": "row",
+     "description": "Matrix row: a feature of the reference (see features).",
+     "dataType": "sc:Integer",
+     "source": {
+      "fileSet": {
+       "@id": "sample-objects"
+      },
+      "extract": {
+       "column": "intron_counts.1pz:row"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "unspliced_counts/count",
+     "name": "count",
+     "description": "UMI count.",
+     "dataType": "sc:Integer",
+     "source": {
+      "fileSet": {
+       "@id": "sample-objects"
+      },
+      "extract": {
+       "column": "intron_counts.1pz:value"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "@type": "cr:RecordSet",
+   "@id": "features",
+   "name": "features",
+   "description": "One record per gene of GRCm39-2024-A: Ensembl id, symbol, position, and the rows of the spliced and unspliced matrices that belong to it.",
+   "key": {
+    "@id": "features/gene_id"
+   },
+   "field": [
+    {
+     "@type": "cr:Field",
+     "@id": "features/gene_id",
+     "name": "gene_id",
+     "description": "Ensembl gene id (the record key).",
+     "dataType": "sc:Text",
+     "source": {
+      "fileObject": {
+       "@id": "features-csv"
+      },
+      "extract": {
+       "column": "gene_id"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "features/gene_symbol",
+     "name": "gene_symbol",
+     "description": "Gene symbol (empty when the annotation has none).",
+     "dataType": "sc:Text",
+     "source": {
+      "fileObject": {
+       "@id": "features-csv"
+      },
+      "extract": {
+       "column": "gene_symbol"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "features/reference_build",
+     "name": "reference_build",
+     "description": "Genome build and annotation.",
+     "dataType": "sc:Text",
+     "source": {
+      "fileObject": {
+       "@id": "features-csv"
+      },
+      "extract": {
+       "column": "reference_build"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "features/chromosome",
+     "name": "chromosome",
+     "description": "Chromosome.",
+     "dataType": "sc:Text",
+     "source": {
+      "fileObject": {
+       "@id": "features-csv"
+      },
+      "extract": {
+       "column": "chromosome"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "features/start",
+     "name": "start",
+     "description": "Start of the gene's first exon, as in the feature names.",
+     "dataType": "sc:Integer",
+     "source": {
+      "fileObject": {
+       "@id": "features-csv"
+      },
+      "extract": {
+       "column": "start"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "features/end",
+     "name": "end",
+     "description": "End of the gene's last exon, as in the feature names.",
+     "dataType": "sc:Integer",
+     "source": {
+      "fileObject": {
+       "@id": "features-csv"
+      },
+      "extract": {
+       "column": "end"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "features/n_exons",
+     "name": "n_exons",
+     "description": "Merged exons of the gene (rows of the spliced matrix).",
+     "dataType": "sc:Integer",
+     "source": {
+      "fileObject": {
+       "@id": "features-csv"
+      },
+      "extract": {
+       "column": "n_exons"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "features/exon_row_first",
+     "name": "exon_row_first",
+     "description": "First row of the gene in exon_counts.1pz (spliced).",
+     "dataType": "sc:Integer",
+     "source": {
+      "fileObject": {
+       "@id": "features-csv"
+      },
+      "extract": {
+       "column": "exon_row_first"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "features/exon_row_last",
+     "name": "exon_row_last",
+     "description": "Last row of the gene in exon_counts.1pz (inclusive).",
+     "dataType": "sc:Integer",
+     "source": {
+      "fileObject": {
+       "@id": "features-csv"
+      },
+      "extract": {
+       "column": "exon_row_last"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "features/intron_row_first",
+     "name": "intron_row_first",
+     "description": "First row of the gene in intron_counts.1pz (unspliced); -1 for a single-exon gene.",
+     "dataType": "sc:Integer",
+     "source": {
+      "fileObject": {
+       "@id": "features-csv"
+      },
+      "extract": {
+       "column": "intron_row_first"
+      }
+     }
+    },
+    {
+     "@type": "cr:Field",
+     "@id": "features/intron_row_last",
+     "name": "intron_row_last",
+     "description": "Last row of the gene in intron_counts.1pz (inclusive); -1 for a single-exon gene.",
+     "dataType": "sc:Integer",
+     "source": {
+      "fileObject": {
+       "@id": "features-csv"
+      },
+      "extract": {
+       "column": "intron_row_last"
+      }
+     }
+    }
+   ]
+  }
+ ]
+}
