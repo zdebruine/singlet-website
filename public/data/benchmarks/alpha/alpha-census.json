@@ -1,6 +1,6 @@
 {
  "title": "Atlas census, as of the Alpha release",
- "conclusion": "Research Alpha serves 6,978 studies, 46,649 samples and 221.2M cells that passed QC (92 more studies, 1,021 samples and 5.9M cells are flagged low QC and shown only on request). The median sample used 10% of its SRA reads: 89% of samples hit the 30M-read cap, and 37% had more than one run, of which only the first was used.",
+ "conclusion": "Research Alpha serves 6,978 studies, 46,649 samples and 221.2M cells that passed QC (92 more studies, 1,021 samples and 5.9M cells are flagged low QC and shown only on request).",
  "measured_at": "2026-10-28T03:00:00+00:00",
  "headline": [
   {
@@ -156,10 +156,8 @@
  ],
  "caveats": [
   "Counts are the served Research Alpha set (release policy alpha-2026-10-27e), samples that passed QC; a study is counted once per species or chemistry it has samples of.",
-  "The read-usage figures were measured at the Alpha census (2026-10-26) on 40,237 samples with both counts; the served set is a subset of those samples.",
   "10x 5' libraries carry the 3' chemistry label they were counted with.",
-  "Cell counts are Singlet's knee-filter calls on reads capped at the first 30M of the first SRA run; they undercount against Cell Ranger and EmptyDrops.",
-  "Alpha matrices come from three builds of the atlas engine; all predate the molecule-count fix."
+  "Cell counts are Singlet's knee-filter calls on reads capped at the first 30M of the first SRA run; they undercount against Cell Ranger and EmptyDrops."
  ],
  "source": {
   "repo": "https://github.com/Singlet-Bio/singlet",
