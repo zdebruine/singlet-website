@@ -49,8 +49,8 @@ const Privacy = () => {
               We use this only in aggregate to understand traffic, keep the site reliable, and protect against abuse.
             </p>
             <p className="text-sm leading-relaxed mt-3">
-              We also use product analytics on this website (section 10) to see how it is used: which pages are visited
-              and for how long, how far they are scrolled, what is clicked, which site or campaign link brought a visit,
+              We also keep our own analytics of this website (section 10) to see how it is used: which pages are visited
+              and for how long, how far they are scrolled, which site or campaign link brought a visit,
               and whether a visitor comes back.
             </p>
             <p className="text-sm leading-relaxed mt-3 mb-2">
@@ -180,8 +180,7 @@ const Privacy = () => {
             <p className="text-sm leading-relaxed">
               Standard technical logs are retained for a limited period for security and operational purposes, then
               discarded or aggregated. Expired sessions and unfinished sign-ins are deleted. Account data is kept while
-              the account exists. Analytics events (section 10) are kept by PostHog under its plan's retention limit and
-              are deleted on request.
+              the account exists. Website analytics (section 10) are kept for 90 days, then deleted.
             </p>
           </section>
 
@@ -189,10 +188,9 @@ const Privacy = () => {
             <h2 className="font-display text-lg font-bold text-foreground mb-3">9. Third-Party Services</h2>
             <p className="text-sm leading-relaxed">
               The website, its database, file storage, downloads and the default language model all run on Cloudflare
-              (Pages, D1, R2, Workers AI and AI Gateway). GitHub or Google handle sign-in if you choose them,
-              Anthropic receives AI search text only if we enable it (section 5), and PostHog (United States) receives
-              website analytics (section 10). These providers process requests under
-              their own privacy policies. We do not sell or share your data with advertisers.
+              (Pages, D1, R2, Workers AI, AI Gateway and Workers Analytics Engine). GitHub or Google handle sign-in if
+              you choose them, and Anthropic receives AI search text only if we enable it (section 5). These providers
+              process requests under their own privacy policies. We do not sell or share your data with advertisers.
             </p>
           </section>
 
@@ -203,14 +201,15 @@ const Privacy = () => {
               cookie that keeps you signed in (and a short-lived one while the sign-in completes).
             </p>
             <p className="text-sm leading-relaxed mt-2">
-              For analytics we use PostHog. Its script stores a random visitor id in a first-party cookie and your
-              browser's local storage, so a return visit is recognised. It records page views, time on page, scroll
-              depth, clicks, the referring site and any campaign tags in the link, browser and device type, and the
-              country and region derived from your network address (the address itself is not kept). If you are signed
-              in, these events are linked to your singlet.bio account id, never your email. We do not record your
-              screen or what you type, and the API, MCP server and data downloads are not tracked this way. Analytics
-              is sent through singlet.bio and is off when your browser sends Do Not Track. To have your analytics data
-              deleted, ask through the contact in section 12.
+              Website analytics are our own, stored in our Cloudflare account; no analytics company receives them. The
+              site keeps a random visitor id and session id in your browser's local storage (not a cookie), so a return
+              visit is recognised. For each page it records the path, how long the page was visible and how far it was
+              scrolled; for the first page of a visit, the referring site and any campaign tags in the link; and with
+              each event the browser, operating system, device type and screen width, whether you were signed in (not
+              who you are), and the country and region Cloudflare derives from your network address (the address itself
+              is not stored). It does not record clicks, what you type or your screen, and the API, MCP server and data
+              downloads are not tracked this way. Nothing is sent when your browser asks not to be tracked (Do Not Track
+              or Global Privacy Control). Clearing this site's storage gives you a new visitor id.
             </p>
           </section>
 

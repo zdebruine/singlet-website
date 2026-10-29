@@ -53,9 +53,18 @@ GITHUB_CLIENT_ID = "Ov23liHa1tQnWNBZjrSZ"
 AI_MODEL = "@cf/meta/llama-4-scout-17b-16e-instruct"
 # AI Gateway id for logs, caching and rate limits ("default" is auto-created).
 AI_GATEWAY_ID = "default"
+# Website analytics (functions/_shared/web-analytics.ts): who may open /admin/analytics, and the account the
+# Analytics Engine SQL API reads from. The CF_ANALYTICS_TOKEN secret (Account Analytics: Read) does the reading.
+ANALYTICS_ADMINS = "e9d8c1c2-81f9-4017-8e14-cdd67be31459"
+CF_ACCOUNT_ID = "2f8a8cc95b6bc0be84ac611fe2e5c3c2"
 
 # ── Workers AI ────────────────────────────────────────────────────────────────
 # Binding "AI" is consumed by functions/_shared/ai.ts as `env.AI`. No API key:
 # usage is billed to this Cloudflare account.
 [ai]
 binding = "AI"
+
+# Website analytics beacons (POST /api/v). Analytics Engine keeps 90 days; no D1 writes.
+[[analytics_engine_datasets]]
+binding = "WEB_ANALYTICS"
+dataset = "singlet_web"
