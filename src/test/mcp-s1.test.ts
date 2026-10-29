@@ -231,6 +231,17 @@ describe("tools/list and the instructions", () => {
     const on = await onRequestGet({ env: { ...env, S1_TOOLS: "1" }, request: new Request("https://singlet.bio/mcp"), params: {}, waitUntil: () => undefined } as never);
     expect(((await on.json()) as { tools: string[] }).tools).toHaveLength(21);
   });
+
+  it("the tools that return byte ranges, and the instructions, say to fetch them concurrently", async () => {
+    resetS1ToolsGate();
+    const env = { ...(await setup()), S1_TOOLS: "1" };
+    const tools = await list(env);
+    for (const n of ["list_bundle_files", "get_partial_download", "slice_cells"]) {
+      expect((tools.find((t) => t.name === n) as unknown as { description: string }).description, n).toMatch(/concurrently \(about 8 requests in flight\)/);
+    }
+    const init = await rpcRaw(env, "initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "t", version: "1" } });
+    expect(init.instructions).toMatch(/send them concurrently/);
+  });
 });
 
 describe("response diet (MCP_DIET=1)", () => {
@@ -341,6 +352,7 @@ describe("list_bundle_files, get_partial_download, get_modalities on an s1 study
     const exon = one.files.find((f: { name: string }) => f.name === "exon_counts.1pz");
     expect(exon).toMatchObject({ kind: 1, kind_name: "pz2 matrix", range: `bytes=${SAMPLE.members["exon_counts.1pz"].off}-${SAMPLE.members["exon_counts.1pz"].off + SAMPLE.members["exon_counts.1pz"].len - 1}`, chunk_cols: 64, n_chunks: 5 });
     expect(one.files.find((f: { name: string }) => f.name === "cell_qc_metrics.tsv")).toMatchObject({ kind: 4, range: null, recipe: "cellqc-v1" });
+    expect(one.fetch).toMatchObject({ concurrent: true, in_flight: 8 });
 
     const detail = (await rpc(env, "list_bundle_files", { gse_id: "GSE1", detail: true, limit: 1 })).structuredContent;
     expect(detail.samples).toHaveLength(1);
@@ -365,6 +377,7 @@ describe("list_bundle_files, get_partial_download, get_modalities on an s1 study
     });
     expect(mat.curl).toContain(`-r ${m["exon_counts.1pz"].off}-`);
     expect(mat.curl).not.toMatch(/If-Match/); // objects are immutable
+    expect(mat.fetch).toMatchObject({ concurrent: true, in_flight: 8 });
     const stored = (await rpc(env, "get_partial_download", { gse_id: "GSE1", gsm_id: "GSM1000001", file: "summary.json" })).structuredContent;
     expect(stored.member).toMatchObject({ kind: 3, legacy_bytes: 237 });
     const derived = (await rpc(env, "get_partial_download", { gse_id: "GSE1", gsm_id: "GSM1000001", file: "cell_qc_metrics.tsv" })).structuredContent;
@@ -622,6 +635,8 @@ describe("slice_cells", () => {
     const r = (await rpc(env, "slice_cells", { gse_id: "GSE1", gsm_id: "GSM1000001", runs: [[70, 10], [250, 5]] })).structuredContent;
     expect(r).toMatchObject({ format: "singlet-s1", rev: hex("1", 16), url: `https://data.singlet.bio/${sampleKey("GSM1000001")}`, immutable: true, n_columns: 300, skipped: [] });
     expect(r.files.map((f: { file: string }) => f.file)).toEqual(["exon_counts.1pz", "intron_counts.1pz"]);
+    expect(r.fetch).toMatchObject({ concurrent: true, in_flight: 8 });
+    expect(r.how).toMatch(/all of them concurrently/);
     const exon = r.files[0];
     const hdr = EXPECTED.matrices["exon_counts.1pz"];
     const base = hdr.member_off + hdr.header.sections.chunks[0];

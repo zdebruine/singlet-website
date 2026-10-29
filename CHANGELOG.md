@@ -2,6 +2,14 @@
 
 Changes to what singlet.bio publishes. Newest first.
 
+## 2026-10-29 — The MCP tools say to fetch byte ranges concurrently
+
+Every range that `list_bundle_files`, `get_partial_download` and `slice_cells` return can be fetched on its own. Each request mostly waits
+one round trip (20-100 ms to the first byte), so a client that sends them one after another pays that wait once per range. The tool
+descriptions and the server instructions now say to send them concurrently, about 8 requests in flight. Their answers carry a `fetch` block
+(`concurrent: true`, `in_flight: 8`, and why). `get_partial_download` with `modalities` also gives `curl_together`, its curl commands run
+together. The singlet Python package does the same (`io_threads`, 8 over HTTP by default).
+
 ## 2026-10-24 — Genetic sex is counted for human studies only
 
 Every mouse sample's `sex_call.json` reads "unknown": the pipeline matches the chrY and XIST gene names in upper case, so mouse

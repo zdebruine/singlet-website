@@ -127,6 +127,8 @@ describe("get_partial_download", () => {
     expect(sp.files.map((f: { range: string }) => f.range)).toEqual([range("cells"), range("exon_counts.1pz")]);
     expect(sp).toMatchObject({ bytes: M.cells.len + M["exon_counts.1pz"].len, object_bytes: SAMPLE.bytes, url: url("GSM1000001"), missing: [] });
     expect(sp.curl).toHaveLength(2);
+    expect(sp.curl_together).toBe(`${sp.curl[0]} & ${sp.curl[1]} & wait`); // the ranges together, not one after another
+    expect(sp.fetch).toMatchObject({ concurrent: true, in_flight: 8 });
     expect(sp.load.python).toBe('singlet.load("GSE1", samples=["GSM1000001"], modalities=["spliced"])');
     const sj = (await rpc(env, "get_partial_download", { gse_id: "GSE1", gsm_id: "GSM1000001", modalities: ["splice_junctions"] })).structuredContent;
     expect(files(sj)).toEqual(["cells", "sj_counts.1pz"]);
