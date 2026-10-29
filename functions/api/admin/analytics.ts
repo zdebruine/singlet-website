@@ -45,6 +45,9 @@ export const onRequest: PagesFunction<AppEnv> = async ({ request, env, waitUntil
     );
     return json({ days, host, generated_at: new Date().toISOString(), reports: Object.fromEntries(entries) });
   } catch (err) {
-    return json({ error: "analytics_unavailable", message: err instanceof Error ? err.message : "Analytics query failed." }, 502);
+    // 503, not 502: Cloudflare replaces a Function's 502 with its own error page, hiding this message.
+    const message = err instanceof Error ? err.message : "Analytics query failed.";
+    console.error("admin/analytics:", message);
+    return json({ error: "analytics_unavailable", message }, 503);
   }
 };
