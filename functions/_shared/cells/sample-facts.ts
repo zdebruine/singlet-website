@@ -268,19 +268,43 @@ const SNAPSHOT_TTL_S = 6 * 3600;
 /** Bump when buildFacts changes what the snapshot holds: the Cache API copy is keyed by it, so a deploy never reads an older layout. */
 export const FACTS_LAYOUT = 3;
 const SNAPSHOT_URL = "https://singlet.bio/__internal/cell-search/sample-facts";
-let memo: { at: number; facts: Promise<SampleFacts> } | null = null;
+/**
+ * A metadata backfill bumps `meta_cache.facts_epoch` (any new value), and every isolate and colo moves to a fresh snapshot within
+ * EPOCH_CHECK_S instead of serving its own copy for up to six hours: before this, two calls could see snapshots from either side of
+ * a backfill. Bump it with:
+ *   INSERT OR REPLACE INTO meta_cache (key, value, updated_at) VALUES ('facts_epoch', strftime('%Y-%m-%dT%H:%M:%SZ','now'), strftime('%Y-%m-%dT%H:%M:%SZ','now'));
+ * The check is one D1 row read per isolate every five minutes.
+ */
+export const FACTS_EPOCH_KEY = "facts_epoch";
+const EPOCH_CHECK_S = 300;
+let memo: { at: number; epoch: string; facts: Promise<SampleFacts> } | null = null;
+let epochMemo: { at: number; epoch: Promise<string> } | null = null;
 
 /** Test hook. */
 export function clearFactsMemo(): void {
   memo = null;
+  epochMemo = null;
 }
 
-/** The snapshot: this isolate's copy, else the colo's Cache API copy (both six hours), else a fresh build from D1. */
+async function factsEpoch(db: D1Database, now: number): Promise<string> {
+  if (epochMemo && now - epochMemo.at < EPOCH_CHECK_S * 1000) return epochMemo.epoch;
+  const p = db
+    .prepare(`SELECT value FROM meta_cache WHERE key = ?`)
+    .bind(FACTS_EPOCH_KEY)
+    .first<{ value: string }>()
+    .then((r) => String(r?.value ?? "0"))
+    .catch(() => epochMemo?.epoch ?? Promise.resolve("0"));
+  epochMemo = { at: now, epoch: p };
+  return p;
+}
+
+/** The snapshot: this isolate's copy, else the colo's Cache API copy (both six hours, and both dropped when facts_epoch changes), else a fresh build from D1. */
 export async function sampleFacts(db: D1Database, waitUntil?: (p: Promise<unknown>) => void, now = Date.now()): Promise<SampleFacts> {
-  if (memo && now - memo.at < SNAPSHOT_TTL_S * 1000) return memo.facts;
+  const epoch = await factsEpoch(db, now);
+  if (memo && memo.epoch === epoch && now - memo.at < SNAPSHOT_TTL_S * 1000) return memo.facts;
   const p = (async (): Promise<SampleFacts> => {
     const hour = Math.floor(now / (SNAPSHOT_TTL_S * 1000));
-    const key = new Request(`${SNAPSHOT_URL}?h=${hour}&v=${FACTS_LAYOUT}`);
+    const key = new Request(`${SNAPSHOT_URL}?h=${hour}&v=${FACTS_LAYOUT}&e=${encodeURIComponent(epoch)}`);
     let cache: Cache | null = null;
     try {
       cache = (caches as unknown as { default?: Cache }).default ?? null;
@@ -302,7 +326,7 @@ export async function sampleFacts(db: D1Database, waitUntil?: (p: Promise<unknow
     }
     return hydrateFacts(wire, text.length, "d1");
   })();
-  memo = { at: now, facts: p };
+  memo = { at: now, epoch, facts: p };
   p.catch(() => {
     if (memo?.facts === p) memo = null;
   });
