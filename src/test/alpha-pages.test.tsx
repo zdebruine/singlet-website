@@ -118,7 +118,7 @@ describe("/known-issues", () => {
   it("covers each issue with what Beta changes, and states inclusion criteria only", () => {
     const { container } = renderPage(<KnownIssues />);
     const text = container.textContent ?? "";
-    for (const s of [/first sequencing run/, /30 million reads/, /65%/, /2% to 19%/, /RNA velocity/, /CellRanger2\.2/, /at least 100 reads/, /not clonotypes/, /spots without coordinates/, /the file is the\s+truth/, /transit amplifying cell/, /not the expression values/]) {
+    for (const s of [/first sequencing run/, /30 million reads/, /65%/, /2% to 19%/, /RNA velocity/, /CellRanger2\.2/, /at least 100 reads/, /not clonotypes/, /spots without coordinates/, /the file is the\s+truth/, /transit amplifying cell/, /one page of cells per link/]) {
       expect(text).toMatch(s);
     }
     expect(screen.getAllByText("What Beta changes").length).toBeGreaterThanOrEqual(8);

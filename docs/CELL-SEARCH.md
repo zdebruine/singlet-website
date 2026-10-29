@@ -14,7 +14,8 @@ contributed, and the byte ranges of exactly those cells in the per-sample `.s1` 
 | Query API | `GET|POST /api/cells` (`where=` JSON, flat field parameters, or `q=` plain English) |
 | Vocabulary | `GET /api/cells/fields`: every filter, its level, ontology, source table, coverage and top values |
 | Cells, paged | `GET|POST /api/cells/slice` (`page_cells` <= 10,000, `cursor`) |
-| MCP | `search_cells`, `get_cells_page` (next to `find_cells`, `slice_cells`) |
+| Cells, decoded | `GET|POST /api/cells/export` (`genes`, `max_cells` <= 10,000, `modality`, `cursor`, `format=mtx|summary`): a zip of 10x-style files, no account |
+| MCP | `search_cells`, `get_cells_page`, `export_cells` (next to `find_cells`, `slice_cells`) |
 | Website | `/cells` (linked from Browse) |
 
 ## Filters
@@ -243,3 +244,18 @@ and the live cell index on data.singlet.bio; nothing is written to D1 or R2, and
 3. `bash scripts/smoke.sh https://singlet.bio`.
 4. Re-run the edge measurements against production: `npm run cells:bench -- edge --base https://singlet.bio` then
    `npm run cells:bench -- cost`.
+
+## Export: the cells as files
+
+`/api/cells/export` takes the filter of `/api/cells` and the page of `/api/cells/slice` (`max_cells` plays `page_cells`), and returns that
+page decoded: `POST data.singlet.bio/s1/cidx/export` (workers/data/README.md) reads the planned ranges, decodes the pz2 matrices, sums exon
+and intron rows into genes and streams a zip of `matrix.mtx.gz` (genes x cells), `features.tsv.gz`, `barcodes.tsv.gz` (`<GSM>_<column>`),
+`obs.tsv.gz` (cell type, ontology id, sex, ancestry, UMIs, and the sample's organism, assay, tissue, disease, stage, tissue_type,
+tumor_sample_type, donor_status, age) and `manifest.json` (query, source objects, index version). The `X-Export-Next` header (and
+`Link: rel="next"`) is the next page. `format=summary` returns, per cell type, the mean count, mean counts per 10k and fraction expressing of
+up to 50 `genes`. The MCP tool `export_cells` returns the link, the page's samples and, for up to 20 genes, that summary as text, so an
+assistant without code execution can hand over the cells and answer expression questions.
+
+Checked on 2026-10-29 against `singlet.s1.atlas.gather` (singlet 1.3.0) for female CD8 T cells from lung adenocarcinoma (1,106 cells, 10
+samples, 3 studies): identical matrix (693,717 non-zeros, 0 differing), and the cell-type breakdown equals search_cells'. The TS decoder gave
+the same arrays as `singlet._pz2` on 20 real members of 5 samples.

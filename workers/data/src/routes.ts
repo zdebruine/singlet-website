@@ -1,13 +1,15 @@
 /**
- * The POST endpoints of the cell index: `/s1/cidx/query`, `/s1/cidx/gather` and the internal `/s1/cidx/_part` (fan-out); each is also answered under `/v2/` (transition).
+ * The POST endpoints of the cell index: `/s1/cidx/query`, `/s1/cidx/gather`, `/s1/cidx/export` (decoded cells: src/export.ts) and the internal
+ * `/s1/cidx/_part` (fan-out); each is also answered under `/v2/` (transition).
  * Runtime-neutral like handler.ts: index.ts passes the bindings, the tests pass fakes.
  */
 import type { Deps } from "./handler";
 import { CidxError, OverBudget, runQuery, type QueryBody } from "./cidx";
+import { runExport, type ExportBody } from "./export";
 import { runGather, runPart, type GatherBody, type Read } from "./gather";
 import { addUsage, charge, identify, limitsFor, rateLimit, type D1Like, type QuotaNamespaceLike, type RateLimiterLike } from "./limits";
 
-const CIDX_ENDPOINTS = ["query", "gather", "_part"];
+const CIDX_ENDPOINTS = ["query", "gather", "export", "_part"];
 export const CIDX_PATHS = new Set(CIDX_ENDPOINTS.flatMap((e) => [`/s1/cidx/${e}`, `/v2/cidx/${e}`]));
 export const MAX_BODY_BYTES = 4 * 1024 * 1024;
 
@@ -24,7 +26,7 @@ export interface CidxDeps extends Deps {
 
 function cors(h: Headers): Headers {
   h.set("Access-Control-Allow-Origin", "*");
-  h.set("Access-Control-Expose-Headers", "X-Gather-Bytes, X-Gather-Reads, X-Gather-Cells, Retry-After");
+  h.set("Access-Control-Expose-Headers", "X-Gather-Bytes, X-Gather-Reads, X-Gather-Cells, X-Export-Cells, X-Export-Genes, X-Export-Nnz, X-Export-Ms, Content-Disposition, Retry-After");
   h.set("X-Served-By", "singlet-data");
   h.set("X-Content-Type-Options", "nosniff");
   return h;
@@ -64,7 +66,8 @@ export async function handleCidx(request: Request, deps: CidxDeps): Promise<Resp
       const b = await readBody<{ reads: Read[] }>(request);
       return await runPart(deps, b.reads);
     }
-    const subject = await identify(request, deps.db ?? null);
+    const trusted = !!deps.internalSecret && request.headers.get("x-cidx-internal") === deps.internalSecret;
+    const subject = await identify(request, deps.db ?? null, Date.now(), trusted);
     const lim = limitsFor(subject.tier, deps.limitsOverride);
     await rateLimit(deps.rateLimiter, subject);
     if (path.endsWith("/cidx/query")) {
@@ -80,21 +83,28 @@ export async function handleCidx(request: Request, deps: CidxDeps): Promise<Resp
       );
       return json(200, r);
     }
+    const gatherLimits = {
+      maxCells: lim.maxCellsPerRequest,
+      maxStudies: lim.maxStudiesPerRequest,
+      maxSamples: lim.maxSamplesPerGather,
+      maxBytes: lim.maxBytesPerGather,
+      maxReads: lim.maxReadsPerRequest,
+      maxCostUsd: lim.maxCostUsd,
+      maxRowsScanned: lim.maxRowsScanned,
+    };
+    if (path.endsWith("/cidx/export")) {
+      const b = await readBody<ExportBody>(request);
+      const r = await runExport({ deps, limits: gatherLimits, charge: (cells, bytes, usd) => charge(deps.quota, subject, lim, cells, bytes, 0, usd), waitUntil: deps.waitUntil }, b);
+      cors(r.headers);
+      return r;
+    }
     const b = await readBody<GatherBody>(request);
     const secret = deps.internalSecret;
     const self = deps.self;
     return await runGather(
       {
         deps,
-        limits: {
-          maxCells: lim.maxCellsPerRequest,
-          maxStudies: lim.maxStudiesPerRequest,
-          maxSamples: lim.maxSamplesPerGather,
-          maxBytes: lim.maxBytesPerGather,
-          maxReads: lim.maxReadsPerRequest,
-          maxCostUsd: lim.maxCostUsd,
-          maxRowsScanned: lim.maxRowsScanned,
-        },
+        limits: gatherLimits,
         charge: (cells, bytes, usd) => charge(deps.quota, subject, lim, cells, bytes, 0, usd),
         fanout:
           self && secret

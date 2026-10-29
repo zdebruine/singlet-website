@@ -68,6 +68,11 @@ const EXAMPLES: { ask: string; tools: string; gets: string }[] = [
     gets: "A side-by-side table and an explicit list of the fields where they disagree.",
   },
   {
+    ask: "Give me female CD8 T cells from lung adenocarcinoma, and how much GZMB and PDCD1 they express.",
+    tools: "search_cells, export_cells",
+    gets: "The count, the studies and samples, a download link to a zip of those cells' gene counts with their labels, and per cell type the mean and fraction expressing of each gene.",
+  },
+  {
     ask: "Give me a curl script that downloads every human PBMC study in the atlas.",
     tools: "export_manifest",
     gets: "A ready-to-run script (or TSV/JSON/Python/R), the study count and the total download size.",
@@ -94,6 +99,7 @@ const TOOLS: { name: string; input: string; returns: string; note?: string }[] =
   { name: "resolve_features", input: "indices, pack? / gse_id, gsm_id, file?", returns: "Feature names for matrix row numbers (or barcodes for whitelist column numbers)" },
   { name: "search_cells", input: "where? / question?, include_low_qc?, limit?, offset?", returns: "Counts and locates cells across the whole atlas by cell type, sex, ancestry, tissue, disease, stage, assay and more; ontology terms match their descendants", note: "A plain-English question uses the built-in vocabulary only" },
   { name: "get_cells_page", input: "where? / question?, include_low_qc?, page_cells?, cursor?, modalities?", returns: "One page (up to 10,000 cells) of the cells a search_cells filter matches, with the byte ranges of their matrix chunks; singlet.s1.atlas.gather(page[\"cells\"]) turns it into AnnData" },
+  { name: "export_cells", input: "where? / question?, include_low_qc?, genes?, max_cells?, modality?, cursor?", returns: "A plain download link (no account needed) to the matching cells, decoded by the server: a zip of matrix.mtx.gz, features.tsv.gz, barcodes.tsv.gz and obs.tsv.gz (10x layout; scanpy.read_10x_mtx, Seurat::Read10X) with each cell's type, sex, ancestry and sample facts. Up to 10,000 cells from 10 studies a link, with a link to the next page. With up to 20 genes, also each gene's mean count and fraction of cells expressing it per cell type", note: "Gene counts only (spliced + unspliced, or either)" },
   { name: "list_cell_fields", input: "fields?", returns: "Every field search_cells accepts, with its ontology, coverage and most common values" },
 ];
 

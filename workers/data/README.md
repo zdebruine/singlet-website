@@ -98,6 +98,30 @@ Bindings (all optional; without one its layer is off and the per-request caps in
 | `SELF` (service binding to this Worker) + secret `CIDX_INTERNAL_SECRET` | big gathers split across sub-invocations (`POST /s1/cidx/_part`, refused without the secret) |
 | `CIDX_LIMITS` (var, JSON) | overrides of the tier limits, e.g. `{"anon": {"maxCellsPerRequest": 5000, "usdPerDay": 0.02}}` |
 
+### Cell export (`POST /s1/cidx/export`)
+
+The cells of a gather, decoded in the Worker into files any tool reads: `src/export.ts`, with `src/pz2.ts` (a TypeScript port of the pz2
+read side: the scalar codec-1 lane-rANS decoder of `include/singlet/pz2/detail/rans1_dec.h` and codec 2) and `src/zipstream.ts`. The body is a
+gather body (`cells` or `query`, `version`) plus `genes`, `modality` (`counts` = spliced + unspliced, `spliced`, `unspliced`; no other
+member is ever exported), `format` (`mtx`: a streamed zip of `matrix.mtx.gz`, `features.tsv.gz`, `barcodes.tsv.gz`, `obs.tsv.gz`,
+`manifest.json`, `README.txt` in the 10x layout; `summary`: per cell type, the mean, mean per 10k and fraction expressing of up to 50
+genes) and `samples` (per-sample columns for `obs.tsv.gz`). Exon and intron rows are summed into genes through the feature packs, as
+`singlet.s1.atlas.gather` does; `dry_run: true` returns the plan. Caps: the gather caps, at most 10,000 cells, 64 MiB of planned sample
+bytes and 30 million gene-level values (`EXPORT_LIMITS`). The website's `GET /api/cells/export` and the MCP tool `export_cells` call it.
+
+Checks against the reference (`pip install singlet`):
+
+```
+python workers/data/scripts/pz2_truth.py <dir> GSE138867:2 GSE202371:1     # decode with singlet._pz2, write truth.json
+node workers/data/scripts/pz2-check.ts <dir>                                # the TS decoder must give identical arrays
+npx esbuild workers/data/scripts/export-live.ts --bundle --platform=node --format=esm --outfile=<tmp>/export-live.mjs
+node <tmp>/export-live.mjs '{"cell_type":"T cell","tissue":"lung"}' out.zip 2000   # the route in Node, on the live objects
+```
+
+With the Worker's `CIDX_INTERNAL_SECRET` also set as a Pages secret, the website forwards who asked (`x-cidx-subject: acct:<id>` for an
+MCP call, `x-cidx-client-ip` for someone opening a link), so the daily allowance is the downloader's, not the site's. `[limits] cpu_ms`
+in wrangler.toml is raised to 120 s for the decode.
+
 ### Deploy the cell index (owner)
 
 1. `npx wrangler secret put CIDX_INTERNAL_SECRET` (any random 32+ character string).

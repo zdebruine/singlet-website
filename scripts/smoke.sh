@@ -173,13 +173,20 @@ fi
 xfo=$(curl -s -m 30 -o /dev/null -D - "$BASE/" | tr -d '\r' | grep -i '^x-frame-options:' | head -n 1)
 if printf '%s' "$xfo" | grep -q -i -E '^x-frame-options: *DENY$'; then ok "x-frame-options on /"; else bad "x-frame-options on / (got '${xfo:-none}')"; fi
 
-# MCP: tools/list returns the original 14 tools, or 19 once a study is served from s1 (find_cells, slice_cells, resolve_features,
-# search_cells and get_cells_page are listed only then).
+# MCP: tools/list returns the original 14 tools, or 21 once a study is served from s1 (find_cells, slice_cells, resolve_features,
+# search_cells, get_cells_page, export_cells and list_cell_fields are listed only then).
 mcp=$(curl -s -m 30 -X POST "$BASE/mcp" -H 'content-type: application/json' \
   -H 'accept: application/json, text/event-stream' \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}')
 n=$(printf '%s' "$mcp" | grep -o '"name":"[a-z_]*","title"' | wc -l | tr -d ' ')
-if [ "$n" = "14" ] || [ "$n" = "20" ]; then ok "mcp tools/list ($n)"; else bad "mcp tools/list ($n tools, want 14 or 20)"; fi
+if [ "$n" = "14" ] || [ "$n" = "21" ]; then ok "mcp tools/list ($n)"; else bad "mcp tools/list ($n tools, want 14 or 21)"; fi
+
+# Cell export (functions/_shared/cells/export.ts -> data Worker POST /s1/cidx/export): a small page of a cell search as a zip, no
+# account. Needs the data Worker with the export route deployed (workers/data/README.md).
+exp=$(mktemp)
+code=$(curl -s -m 120 -o "$exp" -w '%{http_code}' "$BASE/api/cells/export?cell_type=T%20cell&tissue=lung&max_cells=20&genes=CD3E,CD8A")
+if [ "$code" = 200 ] && [ "$(head -c 2 "$exp")" = "PK" ]; then ok "cell export zip"; else bad "cell export ($code: $(head -c 200 "$exp"))"; fi
+rm -f "$exp"
 
 # MCP tool calls need an account: without a credential a call is HTTP 401 whose WWW-Authenticate points at the
 # OAuth metadata (that 401 is what makes Claude's connectors start sign-in; a 200 tool error never does).

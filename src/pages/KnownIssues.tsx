@@ -163,23 +163,23 @@ const ISSUES: Issue[] = [
   },
   {
     id: "ai-assistants",
-    title: "AI assistants: cells are located, not delivered",
+    title: "AI assistants: one page of cells per link",
     effect:
-      "Through the MCP tools, Claude and other assistants can find and count cells by cell type, sex, ancestry, tissue, disease and more, but they get back where the cells are in the files, not the expression values.",
+      "Claude and other assistants can hand over the cells they find with export_cells: a download link to a zip of gene counts with per-cell labels, up to 10,000 cells from 10 studies per link, with a link to the next page.",
     action: (
       <>
-        Load the cells with the Python or R package: get_cells_page returns code that does it in one call. See{" "}
-        <L to="/docs/mcp">the MCP docs</L>.
+        Open the link in scanpy (read_10x_mtx) or Seurat (Read10X). For more cells or other layers, load them with the Python or R
+        package. See <L to="/docs/mcp">the MCP docs</L>.
       </>
     ),
     details: (
       <p>
-        search_cells, get_cells_page, find_cells and slice_cells answer with sample objects, cell columns and HTTP byte ranges. Decoding
-        them needs the singlet package, so an assistant without code execution can describe the cells but cannot hand over their
-        matrix. Whole studies and single samples can be downloaded directly.
+        export_cells decodes the matching cells on the server and returns gene counts (spliced plus unspliced, or either alone) with
+        each cell's type, sex, ancestry and its sample's facts. Splice junctions and other modalities are not exported this way. With up
+        to 20 genes it also answers with each gene's mean and the fraction of cells expressing it, per cell type.
       </p>
     ),
-    beta: "A tool that returns the matching cells as a file you can open directly is being added.",
+    beta: "Larger exports and an .h5ad download.",
   },
   {
     id: "two-numbers",
