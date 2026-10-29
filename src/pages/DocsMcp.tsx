@@ -18,7 +18,7 @@ const KEY = "sk_live_…";
 
 const EXAMPLES: { ask: string; tools: string; gets: string }[] = [
   {
-    ask: "Find mouse brain studies with at least 20,000 cells that are already packed.",
+    ask: "Find mouse brain studies with at least 20,000 cells.",
     tools: "search_datasets",
     gets: "A ranked list of studies with a one-line reason each and the loader command.",
   },
@@ -38,9 +38,9 @@ const EXAMPLES: { ask: string; tools: string; gets: string }[] = [
     gets: "Every per-sample and study-level file with its size.",
   },
   {
-    ask: "Does GSE296768 have splice junctions or donor demultiplexing? How do I read them in R?",
+    ask: "Does GSE296768 have splice junctions? How do I read them in R?",
     tools: "get_modalities",
-    gets: "Every modality in the file — splicing, donors, non-host species, V(D)J — with the Python and R line that reads each one.",
+    gets: "Every layer in the file, such as splicing and immune receptor genes, with the Python and R line that reads each one.",
   },
   {
     ask: "Get me just GSM8976273's counts matrix from GSE296768 — I don't want the whole 1.5 GB study.",
@@ -75,23 +75,26 @@ const EXAMPLES: { ask: string; tools: string; gets: string }[] = [
 ];
 
 const TOOLS: { name: string; input: string; returns: string; note?: string }[] = [
-  { name: "search_datasets", input: "query, level?, limit?, page?, organism?, tissue?, disease?, assay?, min_cells?, include_unbuilt?", returns: "Matching studies or samples with a reason for each match. The only tool that can call a language model, and only when the built-in vocabulary cannot read the question; only those fresh AI readings are metered", note: "Fresh AI readings are metered (see Limits)" },
+  { name: "search_datasets", input: "query, interpret?, level?, limit?, page?, organism?, tissue?, disease?, assay?, min_cells?, cell_type_label?, sex_genetic?, ancestry_genetic?, include_unbuilt?, include_low_qc?, include_unclassified?", returns: "Matching studies or samples with a reason for each match. The only tool that can call a language model, and only when the built-in vocabulary cannot read the question", note: "Fresh AI readings are metered (see Limits)" },
   { name: "get_study", input: "gse_id, known_rev?", returns: "Title, abstract, groups, conditions, samples (first 60), file URL, and a rev" },
-  { name: "get_download_url", input: "gse_id, include_samples?, limit?, after?", returns: "The .singlet URL, size and loader lines; for a study stored per sample, its manifest and optionally its sample objects" },
+  { name: "get_download_url", input: "gse_id, include_samples?, limit?, after?, modalities?", returns: "The study's .s1 manifest URL, size and loader lines, and optionally its sample objects" },
   { name: "get_atlas_stats", input: "—", returns: "Studies, usable samples and cells in published files (the site's headline numbers), plus catalog metadata: samples processed, cells recorded, species, failure reasons" },
   { name: "get_sample_qc", input: "gse_id, gsm_ids?, known_rev?", returns: "Per-sample QC from the file itself, totals and warnings" },
-  { name: "list_bundle_files", input: "gse_id, gsm_id?, detail?, limit?, after?, known_rev?", returns: "Everything inside the file, with sizes; for a study stored per sample, a grouped summary and one sample's files with their byte ranges" },
-  { name: "get_modalities", input: "gse_id, gsm_id?, known_rev?", returns: "Which modalities the file carries, with Python and R readers for each" },
-  { name: "get_partial_download", input: "gse_id, gsm_id, file, known_rev?", returns: "Byte range, curl and Python for one file; for a study stored per sample, the member's range inside the sample's immutable object" },
-  { name: "export_manifest", input: "query? / filters? / gse_ids?, format", returns: "TSV, JSON, curl, wget, Python or R manifest" },
-  { name: "find_matched_controls", input: "gse_id, min_samples?, same_assay?", returns: "Candidate control studies with reasons and caveats" },
+  { name: "list_bundle_files", input: "gse_id, gsm_id?, detail?, limit?, after?, modalities?, known_rev?", returns: "Everything inside the file, with sizes; for a study stored per sample, a grouped summary and one sample's files with their byte ranges" },
+  { name: "get_modalities", input: "gse_id, gsm_id?, modalities?, known_rev?", returns: "Which modalities the file carries, with Python and R readers for each" },
+  { name: "get_partial_download", input: "gse_id, gsm_id, file, modalities?, known_rev?", returns: "Byte range, curl and Python for one file; for a study stored per sample, the member's range inside the sample's immutable object" },
+  { name: "export_manifest", input: "query? / filters? / gse_ids?, include_low_qc?, format", returns: "TSV, JSON, curl, wget, Python or R manifest" },
+  { name: "find_matched_controls", input: "gse_id, min_samples?, same_assay?, tissue?, include_unclassified?", returns: "Candidate control studies with reasons and caveats" },
   { name: "compare_studies", input: "gse_ids (2–8)", returns: "Side-by-side fields and their differences" },
   { name: "assess_study", input: "gse_id, purpose?", returns: "Deterministic usability report and fit checks" },
   { name: "get_cohort", input: "id, token?", returns: "A saved, version-pinned cohort and its studies", note: "Private and workspace cohorts need access from your account; a share-link token (sco_…) opens a link cohort" },
   { name: "save_cohort", input: "name, gse_ids, notes?, visibility?, workspace_id?", returns: "Saves up to 2,000 studies as a cohort pinned to the current catalogue", note: "Saved to your account" },
-  { name: "find_cells", input: "gse_ids? / gsm_ids? / sample_filter?, cell_filter?, limit_samples?, after?", returns: "Per sample, the cells matching a filter on called status, UMIs, features or any numeric cells-table column, as column runs. Studies stored per sample only; reads at most 25 samples a call" },
-  { name: "slice_cells", input: "gse_id, gsm_id, file?, runs? / indices? / range?", returns: "The byte ranges that cover just those cells in a sample's count matrices (a prefix once, then chunk runs). Studies stored per sample only" },
-  { name: "resolve_features", input: "indices, pack? / gse_id, gsm_id, file?", returns: "Feature names for matrix row numbers (or barcodes for whitelist column numbers). Studies stored per sample only" },
+  { name: "find_cells", input: "gse_ids? / gsm_ids? / sample_filter?, cell_filter?, cell_labels?, limit_samples?, max_runs_per_sample?, after?", returns: "Per sample, the cells matching a filter on called status, UMIs, features, labels or any numeric cells-table column, as column runs. Reads at most 25 samples a call" },
+  { name: "slice_cells", input: "gse_id, gsm_id, file?, runs? / indices? / range?, max_ranges?, modalities?", returns: "The byte ranges that cover just those cells in a sample's count matrices (a prefix once, then chunk runs)" },
+  { name: "resolve_features", input: "indices, pack? / gse_id, gsm_id, file?", returns: "Feature names for matrix row numbers (or barcodes for whitelist column numbers)" },
+  { name: "search_cells", input: "where? / question?, include_low_qc?, limit?, offset?", returns: "Counts and locates cells across the whole atlas by cell type, sex, ancestry, tissue, disease, stage, assay and more; ontology terms match their descendants", note: "A plain-English question uses the built-in vocabulary only" },
+  { name: "get_cells_page", input: "where? / question?, include_low_qc?, page_cells?, cursor?, modalities?", returns: "One page (up to 10,000 cells) of the cells a search_cells filter matches, with the byte ranges of their matrix chunks; singlet.s1.atlas.gather(page[\"cells\"]) turns it into AnnData" },
+  { name: "list_cell_fields", input: "fields?", returns: "Every field search_cells accepts, with its ontology, coverage and most common values" },
 ];
 
 function Section({ id, title, children, collapsible }: { id: string; title: string; children: React.ReactNode; collapsible?: boolean }) {

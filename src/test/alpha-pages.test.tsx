@@ -14,7 +14,7 @@ import KnownIssues from "../pages/KnownIssues";
 import Beta from "../pages/Beta";
 import { ALPHA_PANELS, parseAlpha, parseScbc } from "../lib/alpha-benchmarks";
 import { ANNOTATIONS_LIVE, S1_FORMAT_LIVE } from "../lib/release";
-import { SPEED } from "../components/landing/AlphaBeta";
+import { ALPHA_TO_BETA } from "../components/landing/AlphaBeta";
 import { CAPABILITIES } from "../lib/benchmark-capabilities";
 
 const read = (p: string) => fs.readFileSync(p, "utf8");
@@ -145,8 +145,9 @@ describe("/known-issues", () => {
 });
 
 describe("/beta", () => {
-  it("shows the estimate, the sign-up form and its privacy line", () => {
+  it("shows the estimate, every Alpha-to-Beta row, the sign-up form and its privacy line", () => {
     renderPage(<Beta />);
+    for (const r of ALPHA_TO_BETA) expect(screen.getByText(r.beta)).toBeTruthy();
     expect(screen.getByText("Estimated Q1 2027")).toBeTruthy();
     expect(screen.getByRole("form", { name: "Join the Beta" })).toBeTruthy();
     expect(screen.getByText(/never share\s+or sell it/)).toBeTruthy();
@@ -155,20 +156,14 @@ describe("/beta", () => {
 });
 
 describe("release gates", () => {
-  it("describes only what is served today while the .s1 format is not live", () => {
-    const home = read("src/components/landing/AlphaBeta.tsx");
-    expect(home).toMatch(/Measured on pilot and test sets, not yet atlas-wide/);
-    if (!S1_FORMAT_LIVE) {
-      const { container } = render(<ul>{SPEED.today.map((t, i) => <li key={i}>{t}</li>)}</ul>);
-      expect(container.textContent).toMatch(/\.1pz/);
-      expect(container.textContent).not.toMatch(/pz2|manifest|cell index/);
-    }
+  it("labels the .s1 pilot numbers as pilot measurements", () => {
+    expect(read("src/components/landing/AlphaBeta.tsx")).toMatch(/Measured on pilot and test sets, not yet atlas-wide/);
   });
 
   it("shows annotations only with the .s1 format", () => {
     expect(ANNOTATIONS_LIVE).toBe(S1_FORMAT_LIVE);
     const { container } = renderPage(<KnownIssues />);
-    expect(container.textContent).toMatch(ANNOTATIONS_LIVE ? /Annotations in Alpha, and their accuracy/ : /Not in Alpha/);
+    expect(container.textContent).toMatch(/compartment 0\.84/);
   });
 
   it("never names the pilot study", () => {

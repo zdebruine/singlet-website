@@ -51,9 +51,19 @@ export function ModalityGrid() {
           </li>
         ))}
       </ul>
-      <p className="mt-12 text-center text-[14.5px] text-muted-foreground max-w-[640px] mx-auto">
-        Research Alpha serves transcriptomics only, with per-cell cell type, sex and genetic ancestry labels. Mitochondrial allele data,
-        genotypes, ambient-RNA and doublet calls are not offered in Alpha; more layers come with Beta.{" "}
+      <dl className="mt-12 max-w-[760px] mx-auto space-y-3 text-[13.5px]">
+        {LABEL_ROWS.map((r) => (
+          <div key={r.title} className="flex flex-wrap items-center justify-center gap-2">
+            <dt className="mr-1 text-[11.5px] font-semibold uppercase tracking-wider text-muted-foreground">{r.title}</dt>
+            {r.items.map((it) => (
+              <dd key={it} className={r.muted ? "rounded-full border border-dashed border-border px-3 py-0.5 text-muted-foreground" : "rounded-full bg-[var(--teal-50)] px-3 py-0.5 text-foreground"}>
+                {it}
+              </dd>
+            ))}
+          </div>
+        ))}
+      </dl>
+      <p className="mt-6 text-center text-[13.5px]">
         <Link to="/docs#modalities" className="text-primary hover:underline">
           Layers in the docs →
         </Link>
@@ -61,3 +71,9 @@ export function ModalityGrid() {
     </div>
   );
 }
+
+/** Per-cell labels served in Alpha, and what Alpha does not offer. */
+const LABEL_ROWS = [
+  { title: "Per-cell labels", items: ["Cell type", "Chromosomal sex", "Genetic ancestry"], muted: false },
+  { title: "Not in Alpha", items: ["Genotypes", "mtDNA alleles", "Ambient RNA", "Doublets"], muted: true },
+];

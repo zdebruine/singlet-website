@@ -2,13 +2,13 @@
  * The install commands, in one place.
  *
  * Python installs from PyPI (`singlet` 1.2.0 and later: wheels with the compiled codec for Linux, macOS and Windows).
- * R installs from GitHub until a CRAN release and compiles a small C++17 extension against libzstd.
+ * R installs from GitHub until a CRAN release and compiles a small C++17 extension (Zstandard is bundled).
  */
 export const PY_INSTALL = "pip install singlet";
 export const R_INSTALL = 'remotes::install_github("Singlet-Bio/singlet", subdir = "r")';
 
-/** System packages the R source build needs (a C++17 compiler and the zstd headers). */
-export const BUILD_DEPS = "# Linux: sudo apt install build-essential libzstd-dev\n# macOS: brew install zstd";
+/** What the R source build needs: a C++17 compiler. Zstandard is bundled in the package. */
+export const BUILD_DEPS = "# Linux: sudo apt install build-essential\n# macOS: xcode-select --install\n# Windows: install Rtools";
 
 /** Python install with an extra, e.g. `pyInstallExtra("torch")`. */
 export function pyInstallExtra(extra: string): string {

@@ -138,7 +138,7 @@ const FORMAT_COMPRESSION: [string, number][] = [
   ["scipy npz", 3.2],
   ["RDS dgCMatrix", 3.3],
   ["BPCells", 3.8],
-  [".s1 (.1pz matrices)", 9.5],
+  ["Singlet .1pz", 9.5],
 ];
 
 export function FormatSizeChart() {
@@ -146,9 +146,13 @@ export function FormatSizeChart() {
     label,
     value: 100 / ratio,
     display: `${(100 / ratio).toFixed(0)}%`,
-    highlight: label.startsWith(".s1"),
+    highlight: label.startsWith("Singlet"),
   }));
   return <HBars data={data} max={40} labelWidth="w-[150px] sm:w-[170px]" />;
 }
 
-export const H5AD_RATIO = 9.5 / 2.7;
+/** The paper's paired comparison on the same datasets (main.tex, abstract): .1pz is 2-4x smaller than H5AD. */
+export const H5AD_PAIRED = "2–4×";
+
+/** Under the chart: what the bars are, and that .s1's pz2 codec is smaller again. */
+export const FORMAT_NOTE = "Medians over published datasets (SinglePress benchmark). .s1 files use pz2, whose counts are 15% smaller again.";

@@ -94,7 +94,7 @@ export function GetStarted() {
             <Step n={1} title="Install">
               <CodeBlock label="r" code={R_INSTALL_STANDALONE} compact wrap />
               <details>
-                <summary className="cursor-pointer text-[12.5px]">Needs a C++17 compiler and zstd</summary>
+                <summary className="cursor-pointer text-[12.5px]">Needs a C++17 compiler</summary>
                 <CodeBlock label="bash" code={BUILD_DEPS} compact className="mt-2" />
               </details>
             </Step>

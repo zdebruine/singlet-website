@@ -317,11 +317,12 @@ export async function loadStudy(db: D1Database, rawId: string): Promise<StudyDet
     v2: s1,
     bundle_n_samples: bundleNSamples != null && !Number.isNaN(bundleNSamples) ? bundleNSamples : null,
     reference_build: referenceBuild,
+    // The .s1 manifest describes the file that is served; the legacy bundle's version only when there is no .s1 file.
     singlet_version:
-      typeof manifestRow?.singlet_version === "string" && manifestRow.singlet_version
-        ? manifestRow.singlet_version
-        : typeof s1Pipeline?.singlet_version === "string" && s1Pipeline.singlet_version
-          ? s1Pipeline.singlet_version
+      typeof s1Pipeline?.singlet_version === "string" && s1Pipeline.singlet_version
+        ? s1Pipeline.singlet_version
+        : typeof manifestRow?.singlet_version === "string" && manifestRow.singlet_version
+          ? manifestRow.singlet_version
           : null,
     packed_at:
       typeof manifestRow?.manifest_created_at === "string" && manifestRow.manifest_created_at
