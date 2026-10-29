@@ -6,13 +6,14 @@
  *
  * Accepted paths (the same list for upload and read):
  *   latest.json · timeseries.json · history/<YYYYMMDDTHHZ>.json   (Clipper)
+ *   beta/<name>.json (product-test reports of the Beta channel)
  *   anvil/<name>.json · anvil/history/<YYYYMMDDTHHZ>.json          (ANVIL)
  * A name is lowercase letters, digits, "_" and "-", so no path can contain
  * "..", a leading "/", a backslash or an encoded character.
  */
 
 export const HPC_PATH_RE =
-  /^(?:latest\.json|timeseries\.json|history\/\d{8}T\d{2}Z\.json|anvil\/(?:[a-z0-9][a-z0-9_-]{0,63}\.json|history\/\d{8}T\d{2}Z\.json))$/;
+  /^(?:latest\.json|timeseries\.json|history\/\d{8}T\d{2}Z\.json|beta\/[a-z0-9][a-z0-9_-]{0,63}\.json|anvil\/(?:[a-z0-9][a-z0-9_-]{0,63}\.json|history\/\d{8}T\d{2}Z\.json))$/;
 
 /** Largest accepted upload (bytes). */
 export const HPC_MAX_BODY_BYTES = 2 * 1024 * 1024;
