@@ -24,7 +24,10 @@ export const onRequest: PagesFunction<AppEnv> = async ({ request, env, waitUntil
   const who = await requireUser(request, env, waitUntil, "Sign in to see site analytics.");
   if (!who.ok) return who.response;
   if (!isAnalyticsAdmin(who.identity.userId, env.ANALYTICS_ADMINS)) return json({ error: "forbidden", message: "Site analytics are for site admins." }, 403);
-  if (!env.CF_ANALYTICS_TOKEN || !env.CF_ACCOUNT_ID) {
+  // Trimmed: a secret piped in from a shell (Get-Clipboard | wrangler …) keeps its trailing newline, an invalid header value.
+  const token = env.CF_ANALYTICS_TOKEN?.trim();
+  const accountId = env.CF_ACCOUNT_ID?.trim();
+  if (!token || !accountId) {
     return json({ error: "not_configured", message: "Set the CF_ANALYTICS_TOKEN secret (Account Analytics: Read) to read analytics." }, 503);
   }
 
@@ -41,10 +44,13 @@ export const onRequest: PagesFunction<AppEnv> = async ({ request, env, waitUntil
 
   try {
     const entries = await Promise.all(
-      Object.entries(queries).map(async ([name, sql]) => [name, await runAnalyticsQuery(env.CF_ACCOUNT_ID!, env.CF_ANALYTICS_TOKEN!, sql)] as const),
+      Object.entries(queries).map(async ([name, sql]) => [name, await runAnalyticsQuery(accountId, token, sql)] as const),
     );
     return json({ days, host, generated_at: new Date().toISOString(), reports: Object.fromEntries(entries) });
   } catch (err) {
-    return json({ error: "analytics_unavailable", message: err instanceof Error ? err.message : "Analytics query failed." }, 502);
+    // 503, not 502: Cloudflare replaces a Function's 502 with its own error page, hiding this message.
+    const message = err instanceof Error ? err.message : "Analytics query failed.";
+    console.error("admin/analytics:", message);
+    return json({ error: "analytics_unavailable", message }, 503);
   }
 };

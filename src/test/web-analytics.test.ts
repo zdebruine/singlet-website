@@ -121,3 +121,42 @@ describe("reports", () => {
     expect(init.body).toBe("SELECT 1 FORMAT JSON");
   });
 });
+
+describe("GET /api/admin/analytics failures", () => {
+  it("passes the SQL API's error through as a 503 the dashboard can show", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("Authentication error", { status: 401 })));
+    const { onRequest } = await import("../../functions/api/admin/analytics");
+    const identity = await import("../../functions/_shared/identity");
+    const spy = vi.spyOn(identity, "requireUser").mockResolvedValue({ ok: true, identity: { userId: "admin" } } as never);
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const res = await (onRequest as unknown as (c: unknown) => Promise<Response>)({
+      request: new Request("https://singlet.bio/api/admin/analytics?days=7"),
+      env: { DB: {}, ANALYTICS_ADMINS: "admin", CF_ACCOUNT_ID: "acct", CF_ANALYTICS_TOKEN: "tok" },
+      waitUntil: () => undefined,
+    });
+    expect(res.status).toBe(503);
+    expect((await res.json()).message).toMatch(/analytics query failed \(401\): Authentication error/);
+    spy.mockRestore();
+    vi.unstubAllGlobals();
+  });
+});
+
+describe("GET /api/admin/analytics token", () => {
+  it("trims a secret stored with a trailing newline before using it", async () => {
+    const fetchMock = vi.fn(async () => Response.json({ data: [] }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { onRequest } = await import("../../functions/api/admin/analytics");
+    const identity = await import("../../functions/_shared/identity");
+    const spy = vi.spyOn(identity, "requireUser").mockResolvedValue({ ok: true, identity: { userId: "admin" } } as never);
+    const res = await (onRequest as unknown as (c: unknown) => Promise<Response>)({
+      request: new Request("https://singlet.bio/api/admin/analytics?days=1"),
+      env: { DB: {}, ANALYTICS_ADMINS: "admin", CF_ACCOUNT_ID: "acct", CF_ANALYTICS_TOKEN: "tok\r\n" },
+      waitUntil: () => undefined,
+    });
+    expect(res.status).toBe(200);
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(new Headers(init.headers).get("Authorization")).toBe("Bearer tok");
+    spy.mockRestore();
+    vi.unstubAllGlobals();
+  });
+});
