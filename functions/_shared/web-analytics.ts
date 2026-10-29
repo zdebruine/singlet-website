@@ -137,7 +137,9 @@ export function reportQueries(days: RangeDays, host: string): Record<string, str
       avgIf(double2, blob1 = 'leave') AS scroll FROM ${DATASET} WHERE ${where} GROUP BY key ORDER BY views DESC LIMIT 50`,
     landing: sessionsBy("blob3"),
     referrers: sessionsBy("blob7"),
-    campaigns: sessionsBy("concat(blob8, ' / ', blob9, ' / ', blob10)", "AND blob8 != ''"),
+    campaigns: `SELECT blob8 AS source, blob9 AS medium, blob10 AS campaign, COUNT(DISTINCT blob5) AS sessions,
+      COUNT(DISTINCT blob6) AS visitors FROM ${DATASET} WHERE ${where} AND blob1 = 'view' AND double4 = 1 AND blob8 != ''
+      GROUP BY source, medium, campaign ORDER BY sessions DESC LIMIT 25`,
     countries: visitorsBy("blob11"),
     devices: visitorsBy("blob13"),
     browsers: visitorsBy("blob14"),

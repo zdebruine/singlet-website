@@ -133,7 +133,12 @@ function Report({ reports, days }: { reports: Reports; days: number }) {
       />
       <div className="grid gap-6 lg:grid-cols-2">
         <Table title="Where visits come from" head={["Referrer", "Sessions", "Visitors"]} rows={bySessions(reports.referrers, "Direct or unknown")} />
-        <Table title="Campaigns (source / medium / campaign)" head={["Campaign", "Sessions", "Visitors"]} rows={bySessions(reports.campaigns, "–")} empty="No visits with utm_ tags yet." />
+        <Table
+          title="Campaigns (utm_source / medium / campaign)"
+          head={["Campaign", "Sessions", "Visitors"]}
+          rows={reports.campaigns.map((r) => [[r.source, r.medium, r.campaign].map((v) => String(v) || "–").join(" / "), fmt(n(r.sessions)), fmt(n(r.visitors))])}
+          empty="No visits with utm_ tags yet."
+        />
         <Table title="Landing pages" head={["Path", "Sessions", "Visitors"]} rows={bySessions(reports.landing, "/")} />
         <Table title="Countries" head={["Country", "Visitors", "Views"]} rows={byVisitors(reports.countries)} />
         <Table title="Devices" head={["Device", "Visitors", "Views"]} rows={byVisitors(reports.devices)} />
