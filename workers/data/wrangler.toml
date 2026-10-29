@@ -22,6 +22,11 @@ routes = [{ pattern = "data.singlet.bio/s1/*", zone_name = "singlet.bio" }]
 # `npx wrangler secret put CIDX_INTERNAL_SECRET`; without it the binding is unused.
 services = [{ binding = "SELF", service = "singlet-data" }]
 
+# CPU per request. POST /s1/cidx/export decodes pz2 matrices in the isolate (src/pz2.ts): an export at its caps (10,000 cells, 64 MiB
+# of sample objects) takes tens of CPU seconds, over the 30 s default. Every other route stays far below. Billed per CPU ms used.
+[limits]
+cpu_ms = 120000
+
 # Read-only: the Worker only calls get() and head().
 [[r2_buckets]]
 binding = "DATA"

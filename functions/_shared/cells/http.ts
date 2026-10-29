@@ -24,7 +24,7 @@ import { sampleFacts, type SampleFacts } from "./sample-facts";
 import { PAGE_CELLS_MAX, slicePage, slicePython } from "./slice";
 
 export const CELLS_CACHE_TTL = 300;
-const RESERVED = new Set(["where", "q", "include_low_qc", "limit", "offset", "ai", "cursor", "page_cells", "modalities", "format"]);
+const RESERVED = new Set(["where", "q", "include_low_qc", "limit", "offset", "ai", "cursor", "page_cells", "modalities", "format", "genes", "max_cells", "modality"]);
 
 export const LABEL_CAVEATS = [
   "Cell types are the .s1 labeller's calls (Cell Ontology), validated per study at four depths: compartment 0.84, lineage 0.75, cell type 0.43, subtype 0.32. Filters at cell-type and subtype depth are previews: expect many wrong calls there; lineage-level terms (T cell, B cell, myeloid cell) are the reliable ones.",

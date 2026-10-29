@@ -1,5 +1,6 @@
 /**
- * MCP tools over cell search (./http.ts): search_cells (the /api/cells answer) and get_cells_page (one /api/cells/slice page).
+ * MCP tools over cell search (./http.ts): search_cells (the /api/cells answer), get_cells_page (one /api/cells/slice page) and
+ * export_cells (a download link to the decoded cells, /api/cells/export, with per-cell-type gene means for a few genes: ./export.ts).
  * The answers are the endpoints' JSON, with a short text that quotes the computed numbers.
  */
 import type { AppEnv, WaitUntil } from "../env";
@@ -7,6 +8,7 @@ import type { Identity } from "../identity";
 import { fmt, fmtBytes, toolError, toolResult, type ToolResult } from "../mcp-core";
 import { cellSearchResponse, fieldsBody, loadInputs, parseCellRequest, sliceResponse } from "./http";
 import { FIELDS } from "./fields";
+import { callExport, EXPORT_BASE, exportLink, parseExportRequest, planExport } from "./export";
 
 const FIELD_LIST = FIELDS.map((f) => `${f.name} (${f.level}${f.ontology ? `, ${f.ontology.join("/")}` : ""})`).join(", ");
 
@@ -52,6 +54,26 @@ export const CELL_TOOLS = [
       additionalProperties: false,
     },
     annotations: { title: "Fetch a page of matching cells", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  },
+  {
+    name: "export_cells",
+    title: "Export matching cells as a download link",
+    description:
+      "Hand the user the cells a search_cells filter matches as a file: a plain HTTPS link (no account needed to download) to a zip of matrix.mtx.gz, features.tsv.gz, barcodes.tsv.gz and obs.tsv.gz (10x layout, genes x cells, UMI counts summed to genes; opens with scanpy.read_10x_mtx or Seurat::Read10X) with each cell's type, sex, ancestry and its sample's tissue, disease and stage. The server decodes the cells; no code execution or singlet package is needed. One link holds one page (max_cells, default 2,000, at most 10,000 cells from at most 10 studies); `next_link` holds the next page. With `genes` (up to 20) the answer also gives, computed now, each gene's mean count, mean counts per 10k and fraction of cells expressing it per cell type, so you can answer expression questions directly. Same `where` / `question` as search_cells.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        where: WHERE_PROP,
+        question: { type: "string", maxLength: 500, description: "Plain English, read with the built-in vocabulary only. AND-ed with `where`." },
+        include_low_qc: { type: "boolean", default: false },
+        genes: { type: "array", items: { type: "string" }, maxItems: 2000, description: "Gene symbols or Ensembl ids. Keeps only these genes in the file; with 20 or fewer, the answer carries per-cell-type means." },
+        max_cells: { type: "integer", minimum: 1, maximum: 10000, default: 2000, description: "Cells per link (one page)." },
+        modality: { type: "string", enum: ["counts", "spliced", "unspliced"], default: "counts", description: "counts = spliced + unspliced." },
+        cursor: { type: "string", description: "next_cursor of the previous answer (the next page)." },
+      },
+      additionalProperties: false,
+    },
+    annotations: { title: "Export matching cells as a download link", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   },
   {
     name: "list_cell_fields",
@@ -199,4 +221,93 @@ export async function cellFieldsTool(env: AppEnv, waitUntil: WaitUntil, args: Re
   }
   L.push("", `Syntax: ${b.syntax.flat}`, `Tree form: ${b.syntax.tree}`);
   return toolResult(L.join("\n"), { ...b, fields }, undefined, { textHasData: true });
+}
+
+/** Genes up to which export_cells computes the per-cell-type summary inline. */
+export const SUMMARY_GENES = 20;
+
+export async function exportCellsTool(env: AppEnv, identity: Identity, waitUntil: WaitUntil, args: Record<string, unknown>): Promise<ToolResult> {
+  let er;
+  try {
+    const body: Record<string, unknown> = {};
+    if (args.where !== undefined) body.where = args.where;
+    if (typeof args.question === "string") body.q = args.question;
+    for (const k of ["include_low_qc", "genes", "max_cells", "modality", "cursor"]) if (args[k] !== undefined) body[k] = args[k];
+    body.ai = false;
+    er = parseExportRequest(new URL(EXPORT_BASE), body);
+  } catch (e) {
+    return toolError(e instanceof Error ? e.message : String(e));
+  }
+  if (!er.p.query.where && !er.p.q) return toolError("Give `where` or `question` (the filter of search_cells).");
+  let plan;
+  try {
+    plan = await planExport(env, identity, waitUntil, er, null);
+  } catch (e) {
+    return toolError(e instanceof Error ? e.message : String(e));
+  }
+  const pg = plan.page;
+  const opts = { include_low_qc: er.p.query.include_low_qc, genes: er.genes, maxCells: er.maxCells, modality: er.modality };
+  if (!pg.cells.length)
+    return toolError(pg.progress.cells_total ? "This page is past the last one: the export is complete." : "No cells match this filter. search_cells shows each filter's count and relaxations.", { progress: pg.progress });
+  // the Worker's plan (cells, bytes, caps) before the link is handed out
+  const dry = await callExport(env, null, identity, { ...plan.body, format: "mtx", dry_run: true });
+  const dj = (await dry.json().catch(() => ({}))) as Record<string, any>;
+  if (!dry.ok) return toolError(`The export cannot be built as asked: ${dj.message ?? `HTTP ${dry.status}`}${dry.status === 413 ? " Pass a smaller max_cells." : ""}`, dj);
+  const link = exportLink(plan.where, { ...opts, cursor: er.p.cursor });
+  const next = pg.next_cursor ? exportLink(plan.where, { ...opts, cursor: pg.next_cursor }) : null;
+  let summary: Record<string, any> | null = null;
+  let summaryError: string | null = null;
+  if (er.genes && er.genes.length <= SUMMARY_GENES) {
+    const res = await callExport(env, null, identity, { ...plan.body, format: "summary" });
+    const j = (await res.json().catch(() => ({}))) as Record<string, any>;
+    if (res.ok) summary = j;
+    else summaryError = j.message ?? `HTTP ${res.status}`;
+  }
+  const out = {
+    link,
+    format: "zip: matrix.mtx.gz, features.tsv.gz, barcodes.tsv.gz, obs.tsv.gz, manifest.json, README.txt",
+    page: pg.page,
+    progress: pg.progress,
+    next_cursor: pg.next_cursor,
+    next_link: next,
+    plan: dj.plan ?? null,
+    query: { where: plan.where, include_low_qc: er.p.query.include_low_qc, genes: er.genes, max_cells: er.maxCells, modality: er.modality },
+    samples: pg.cells.map(([g, c]) => ({ gsm_id: g, gse_id: pg.objects.find((o) => o.gsm_id === g)?.gse_id ?? null, cells: c.length })),
+    ...(summary ? { summary } : {}),
+    ...(summaryError ? { summary_error: summaryError } : {}),
+    summary_link: er.genes?.length ? exportLink(plan.where, { ...opts, cursor: er.p.cursor, format: "summary" }) : null,
+  };
+  return toolResult(exportCellsText(out), out, undefined, { textHasData: true });
+}
+
+/** The text of an export_cells answer: the link first, what it holds, how to open it, and the gene summary when one was computed. */
+export function exportCellsText(j: Record<string, any>): string {
+  const L: string[] = [];
+  const pg = j.page ?? {};
+  const pr = j.progress ?? {};
+  const studies = new Set((j.samples ?? []).map((s: any) => s.gse_id)).size;
+  const what = j.query?.genes?.length ? `${j.query.genes.length} requested genes` : "every gene";
+  const counts = j.query?.modality && j.query.modality !== "counts" ? `${j.query.modality} UMI counts` : "UMI counts (spliced + unspliced)";
+  L.push(`Download (no account needed): ${j.link}`);
+  L.push(
+    `It holds ${fmt(pg.cells)} cells from ${fmt(pg.samples)} samples of ${fmt(studies)} studies (${fmt(pr.cells_total)} cells match in all${j.next_link ? `; this is one page: ${fmt(pr.samples_done)} of ${fmt(pr.samples_total)} samples so far` : ""}), ${what}, ${counts}. The server builds the zip when the link is opened (seconds to a minute) from ${fmtBytes(j.plan?.bytes)} of the sample objects.`
+  );
+  if (j.next_link) L.push(`Next page: ${j.next_link}`);
+  L.push("", `Files: ${j.format}. Python: adata = scanpy.read_10x_mtx("<folder>"), then join obs.tsv.gz. R: Seurat::Read10X("<folder>").`);
+  const smp = (j.samples ?? []) as any[];
+  L.push(`Samples in this page: ${smp.slice(0, 30).map((s) => `${s.gsm_id} (${s.gse_id}) ${s.cells}`).join(", ")}${smp.length > 30 ? ", ..." : ""}`);
+  const s = j.summary;
+  if (s) {
+    L.push("", `Expression in these ${fmt(s.cells)} cells by cell type (mean UMI count / mean counts per 10k / % of cells expressing):`);
+    const genes = (s.genes ?? []) as { id: string; symbol: string }[];
+    L.push(["cell type", "cells", ...genes.map((g) => g.symbol || g.id)].join("\t"));
+    for (const g of (s.groups ?? []).slice(0, 25)) {
+      L.push([g.cell_type, g.cells, ...g.genes.map((x: any) => `${x.mean.toFixed(2)} / ${x.mean_cp10k.toFixed(1)} / ${Math.round(100 * x.frac_expressing)}%`)].join("\t"));
+    }
+    if ((s.groups ?? []).length > 25) L.push(`... ${s.groups.length - 25} more cell types (structuredContent.summary).`);
+    if (s.missing_genes?.length) L.push(`Not found in the reference: ${s.missing_genes.join(", ")}.`);
+    L.push("Cell-type labels below lineage level are previews (per-study accuracy: compartment 0.84, lineage 0.75, cell type 0.43, subtype 0.32).");
+  } else if (j.summary_error) L.push("", `The gene summary could not be computed: ${j.summary_error}`);
+  else if (j.query?.genes?.length) L.push("", `Per-cell-type means of these genes (JSON): ${j.summary_link}`);
+  return L.join("\n");
 }

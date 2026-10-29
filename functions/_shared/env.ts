@@ -67,6 +67,11 @@ export interface AppEnv {
   S1_ORIGIN?: string;
   /** DUAL: old name of S1_ORIGIN. */
   V2_ORIGIN?: string;
+  /**
+   * The data Worker's CIDX_INTERNAL_SECRET (Pages secret, optional). With it, cell exports opened through the site are counted against
+   * the downloader (their address, or their account for an MCP call) instead of against the site's own address.
+   */
+  CIDX_INTERNAL_SECRET?: string;
 
   /** Secret salt for hashing anonymous visitors' addresses (default: a public constant). */
   ANON_IP_SALT?: string;

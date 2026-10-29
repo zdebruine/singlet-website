@@ -7,7 +7,7 @@
  *   initialize                → capabilities + serverInfo + instructions
  *   notifications/initialized → 202
  *   ping                      → {}
- *   tools/list                → the twenty tools below (find_cells, slice_cells, resolve_features, search_cells, get_cells_page and list_cell_fields are s1-only)
+ *   tools/list                → the twenty-one tools below (find_cells, slice_cells, resolve_features, search_cells, get_cells_page, export_cells and list_cell_fields are s1-only)
  *   tools/call                → needs a free account: an OAuth access token
  *                               (Authorization: Bearer sat_…, from signing in
  *                               when the client connects; _shared/mcp-oauth) or
@@ -53,7 +53,7 @@ import { getCohort, saveCohort, ProductError, type ProductCtx } from "./_shared/
 import { dietEnabled, diet, withDataText } from "./_shared/mcp-core";
 import { s1ToolsVisible } from "./_shared/s1-gate";
 import { findCells, resolveFeatures, sliceCells, s1DownloadUrl } from "./_shared/mcp-s1";
-import { CELL_TOOLS, cellFieldsTool, cellsPageTool, searchCellsTool } from "./_shared/cells/mcp";
+import { CELL_TOOLS, cellFieldsTool, cellsPageTool, exportCellsTool, searchCellsTool } from "./_shared/cells/mcp";
 import { combineRev, fileRev, knownRev, unchangedBody } from "./_shared/rev";
 import { getS1State, isLegacyAlive } from "./_shared/s1-catalog";
 import { configureS1, s1ManifestUrl } from "./_shared/s1-urls";
@@ -96,7 +96,7 @@ Every number and every "why" string is computed, not generated — quote them, d
 
 
 /** Added to the instructions only once some study is served from s1 (see _shared/s1-gate). */
-const S1_INSTRUCTIONS = `For a study in the .s1 format (format "singlet-s1") get_download_url returns its manifest, list_bundle_files and get_partial_download give byte ranges inside the sample objects, find_cells searches cells by their per-cell statistics and labels, slice_cells gives the byte ranges of just those cells' matrix chunks, and resolve_features turns row numbers into feature names. A study not yet in the .s1 format has one legacy .singlet file (zip64). Across the whole atlas, search_cells counts and locates cells by any metadata and get_cells_page returns them page by page; list_cell_fields is the vocabulary. You are the language model: write search_cells' \`where\` yourself (ontology ids, labels or synonyms); a plain-English \`question\` is read with the built-in vocabulary only. Count matrices are pz2-coded and need the singlet Python package to decode (it carries a compiled codec): \`pip install singlet\`, then \`from singlet.s1 import atlas; adata = atlas.gather(page["cells"])\` turns a get_cells_page page (or [(GSM, [columns])] from find_cells) into an AnnData of counts. Run that code wherever you can execute Python with network access to data.singlet.bio.`;
+const S1_INSTRUCTIONS = `For a study in the .s1 format (format "singlet-s1") get_download_url returns its manifest, list_bundle_files and get_partial_download give byte ranges inside the sample objects, find_cells searches cells by their per-cell statistics and labels, slice_cells gives the byte ranges of just those cells' matrix chunks, and resolve_features turns row numbers into feature names. A study not yet in the .s1 format has one legacy .singlet file (zip64). Across the whole atlas, search_cells counts and locates cells by any metadata and get_cells_page returns them page by page; list_cell_fields is the vocabulary. You are the language model: write search_cells' \`where\` yourself (ontology ids, labels or synonyms); a plain-English \`question\` is read with the built-in vocabulary only. To hand a user the cells themselves, call export_cells with the same filter: it returns a plain download link (no account needed) to a zip of decoded gene counts in the 10x layout with per-cell labels, and with a few \`genes\` also their mean and fraction expressing per cell type, so no code has to run. To work with the pz2-coded matrices directly, use the singlet Python package (it carries a compiled codec): \`pip install singlet\`, then \`from singlet.s1 import atlas; adata = atlas.gather(page["cells"])\` turns a get_cells_page page (or [(GSM, [columns])] from find_cells) into an AnnData of counts.`;
 const REV_INSTRUCTIONS = `Answers about a study carry a \`rev\`; send it back as \`known_rev\` to get {unchanged: true} instead of the same answer again.`;
 const DIET_INSTRUCTIONS = `Results hold their data in structuredContent with a short text; pass verbose=true for the full text too.`;
 
@@ -1216,6 +1216,8 @@ async function callToolInner(ctx: CallContext, params: Record<string, unknown>) 
         return { result: withQuota(await cellFieldsTool(ctx.env, ctx.waitUntil, args), meta) };
       case "get_cells_page":
         return { result: withQuota(await cellsPageTool(ctx.env, ctx.request, ctx.identity, ctx.waitUntil, args), meta) };
+      case "export_cells":
+        return { result: withQuota(await exportCellsTool(ctx.env, ctx.identity, ctx.waitUntil, args), meta) };
       case "get_cohort": {
         // Every tool here already needs a key; a link cohort additionally opens with its share token.
         return { result: await productTool(ctx, meta, (p) => getCohort(p, uid, { id: args.id, token: args.token })) };

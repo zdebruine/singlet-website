@@ -7,6 +7,7 @@ import { hydrateFacts, ageYears, type FactsWire } from "../../functions/_shared/
 import { canonicalWhere, cellPushdown, filterCellRows, parseWhere, QueryError, relaxations, rowScanWhere, runCellQuery } from "../../functions/_shared/cells/query";
 import { parseCellQuestion } from "../../functions/_shared/cells/nl";
 import { cacheKey, fieldsBody, parseCellRequest, unmappedFor } from "../../functions/_shared/cells/http";
+import { sampleColumns } from "../../functions/_shared/cells/export";
 
 const cellTypes = [
   { code: 0, id: null, label: "unknown", anc: [] },
@@ -299,5 +300,25 @@ describe("cell search: coverage gaps of the filters", () => {
   it("is empty without sample-level filters", () => {
     expect(unmappedFor(parseWhere({ cell_type: "T cell", sex: "female" }), false, idx, facts)).toEqual([]);
     expect(unmappedFor(null, false, idx, facts)).toEqual([]);
+  });
+});
+
+describe("cell export: sample columns", () => {
+  it("gives each exported sample its facts, labels and ontology ids", () => {
+    const cols = sampleColumns(makeFacts(), ["GSM1", "GSM3", "GSM404"]);
+    expect(Object.keys(cols).sort()).toEqual(["GSM1", "GSM3"]);
+    expect(cols.GSM1).toMatchObject({
+      organism: "Homo sapiens",
+      assay: "10x 3'",
+      tissue: "lung",
+      tissue_ontology_term_id: "UBERON:0002048",
+      disease: "lung cancer",
+      disease_ontology_term_id: "MONDO:0008903",
+      development_stage: "middle aged stage",
+      donor_status: "diseased",
+      age_years: 60,
+      cell_line: null,
+    });
+    expect(cols.GSM3).toMatchObject({ organism: "Mus musculus", tissue: "liver", disease: null, cell_line: "K-562" });
   });
 });
