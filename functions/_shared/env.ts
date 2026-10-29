@@ -71,6 +71,16 @@ export interface AppEnv {
   /** Secret salt for hashing anonymous visitors' addresses (default: a public constant). */
   ANON_IP_SALT?: string;
 
+  // ── Website analytics (_shared/web-analytics.ts) ────────────────────────
+  /** Analytics Engine dataset `singlet_web`: page beacons from POST /api/v. */
+  WEB_ANALYTICS?: AnalyticsEngineDataset;
+  /** Comma-separated account ids that may open /admin/analytics (wrangler.toml var). */
+  ANALYTICS_ADMINS?: string;
+  /** Cloudflare account id for the Analytics Engine SQL API (wrangler.toml var). */
+  CF_ACCOUNT_ID?: string;
+  /** Secret: API token with Account Analytics: Read, for reading the reports back. */
+  CF_ANALYTICS_TOKEN?: string;
+
   // ── Ingest ──────────────────────────────────────────────────────────────
   /** sha256 hex of the HPC ingest token. */
   INGEST_TOKEN_SHA256?: string;

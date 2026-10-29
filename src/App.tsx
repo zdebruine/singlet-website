@@ -6,6 +6,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AuthProvider } from "@/components/auth/AuthProvider";
+import { usePageTracking } from "@/lib/analytics";
 import AiSearch from "./pages/AiSearch.tsx";
 import Index from "./pages/Index.tsx";
 import NotFound from "./pages/NotFound.tsx";
@@ -27,6 +28,7 @@ import BenchmarkDetail from "./pages/BenchmarkDetail.tsx";
 import AuthCallback from "./pages/AuthCallback.tsx";
 import Account from "./pages/Account.tsx";
 import Brand from "./pages/Brand.tsx";
+import AdminAnalytics from "./pages/AdminAnalytics.tsx";
 import ProductHub from "./pages/ProductHub.tsx";
 import ProjectDetail from "./pages/ProjectDetail.tsx";
 import PrivateStudyDetail from "./pages/PrivateStudyDetail.tsx";
@@ -68,6 +70,12 @@ function ExternalRedirect({ href }: { href: string }) {
   return null;
 }
 
+/** Website analytics: one page view per route (src/lib/analytics.ts). */
+function PageTracking() {
+  usePageTracking();
+  return null;
+}
+
 /** Reset scroll on route change, except when navigating to a hash. */
 function ScrollToTop() {
   const { pathname, hash } = useLocation();
@@ -86,6 +94,7 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <ScrollToTop />
+        <PageTracking />
         <AuthProvider>
           <RouteBoundary>
             <Routes>
@@ -112,6 +121,7 @@ const App = () => (
               <Route path="/auth/callback" element={<AuthCallback />} />
               <Route path="/auth" element={<Navigate to="/auth/callback" replace />} />
               <Route path="/account" element={<Account />} />
+              <Route path="/admin/analytics" element={<AdminAnalytics />} />
               <Route path="/my-data" element={<ProductHub />} />
               <Route path="/projects/:id" element={<ProjectDetail />} />
               <Route path="/p/:projectId/:studyId" element={<PrivateStudyDetail />} />
