@@ -201,6 +201,7 @@ fi
 check "oauth protected resource" 200 "$BASE/.well-known/oauth-protected-resource" "\"resource\": *\"$BASE/mcp\"" "json"
 check "oauth resource (mcp path)" 200 "$BASE/.well-known/oauth-protected-resource/mcp" "\"authorization_servers\"" "json"
 check "oauth server metadata"   200 "$BASE/.well-known/oauth-authorization-server" "\"registration_endpoint\": *\"$BASE/oauth/register\"" "json"
+check "oauth server: CIMD"       200 "$BASE/.well-known/oauth-authorization-server" "\"client_id_metadata_document_supported\": *true" "json"
 code=$(curl -s -m 30 -o /dev/null -w '%{http_code}' -X POST "$BASE/oauth/token" -H 'content-type: application/x-www-form-urlencoded' -d 'grant_type=authorization_code&code=sac_nope&client_id=scl_nope')
 if [ "$code" = 401 ]; then ok "oauth token rejects an unknown client"; else bad "oauth token unknown client ($code, want 401)"; fi
 

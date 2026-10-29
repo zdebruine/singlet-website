@@ -40,7 +40,9 @@ const ISSUES: Issue[] = [
           10% of the reads deposited in SRA for it.
         </p>
         <p>
-          Measured against the authors' own Cell Ranger results on 135 samples. <L to="/benchmarking#alpha">See the measurements</L>.
+          Measured against the authors' own Cell Ranger results on 135 samples. The measurements are public:{" "}
+          <a href="/data/benchmarks/alpha/alpha-cell-calling.json" className="text-primary underline underline-offset-2">cell calls</a> and{" "}
+          <a href="/data/benchmarks/alpha/alpha-gex-counts.json" className="text-primary underline underline-offset-2">gene counts</a>.
         </p>
       </>
     ),
@@ -73,7 +75,7 @@ const ISSUES: Issue[] = [
   {
     id: "annotations",
     title: "Annotations: early accuracy",
-    effect: "Compartment and lineage labels are usable; cell type and subtype are previews.",
+    effect: "Compartment and lineage labels are usable; cell type and subtype are previews. Cells of cell-line samples carry the line's name instead of a cell type.",
     action: "Filter on compartment or lineage, and check deeper labels against your own markers.",
     details: (
       <>
@@ -93,6 +95,12 @@ const ISSUES: Issue[] = [
             genotype coverage (under 1,000 samples). Mixed ancestry is reported as "admixed". No genotypes are published.
           </li>
         </ul>
+        <p>
+          The labeller was trained on primary tissue, so on a cultured cell line it gives the nearest primary cell type, which is
+          often wrong: K-562 cells came out as "transit amplifying cell". Search, sample and study facts, and the MCP tools therefore
+          give the cells of a cell-line sample its line as their cell type (Cellosaurus name and id, under "cultured cell"). The cells
+          table inside each file keeps the labeller's original call.
+        </p>
         <p>Doublet, ambient-RNA and mitochondrial DNA allele layers are not in Alpha.</p>
         <p>
           <L to="/benchmarking#alpha-annotations">How accuracy was measured</L>
@@ -144,8 +152,34 @@ const ISSUES: Issue[] = [
     title: "Metadata: some labels are uncurated",
     effect: "Some GEO labels, such as sex, tissue and disease, may be wrong.",
     action: "For sex, prefer the per-cell chromosomal sex measured from the reads.",
-    details: <p>Sample characteristics are copied from GEO word for word and are not curated.</p>,
+    details: (
+      <p>
+        Sample characteristics come from each sample's own GEO record. Tissue, disease, development stage, cell line and sample type
+        are mapped to standard ontologies where the record states them; samples whose record does not state them have no value.
+        The rest is copied word for word and is not curated.
+      </p>
+    ),
     beta: "Curated metadata mapped to standard ontologies.",
+  },
+  {
+    id: "ai-assistants",
+    title: "AI assistants: cells are located, not delivered",
+    effect:
+      "Through the MCP tools, Claude and other assistants can find and count cells by cell type, sex, ancestry, tissue, disease and more, but they get back where the cells are in the files, not the expression values.",
+    action: (
+      <>
+        Load the cells with the Python or R package: get_cells_page returns code that does it in one call. See{" "}
+        <L to="/docs/mcp">the MCP docs</L>.
+      </>
+    ),
+    details: (
+      <p>
+        search_cells, get_cells_page, find_cells and slice_cells answer with sample objects, cell columns and HTTP byte ranges. Decoding
+        them needs the singlet package, so an assistant without code execution can describe the cells but cannot hand over their
+        matrix. Whole studies and single samples can be downloaded directly.
+      </p>
+    ),
+    beta: "A tool that returns the matching cells as a file you can open directly is being added.",
   },
   {
     id: "two-numbers",

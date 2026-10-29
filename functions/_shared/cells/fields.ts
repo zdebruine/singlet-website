@@ -26,8 +26,9 @@ export const FIELDS: FieldDef[] = [
     name: "cell_type",
     level: "cell",
     kind: "ontology",
-    ontology: ["CL"],
-    description: "Cell Ontology cell type the .s1 labeller called for the cell; a term matches its descendants (T cell finds CD4 and CD8 T cells).",
+    ontology: ["CL", "Cellosaurus"],
+    description:
+      "Cell Ontology cell type the .s1 labeller called for the cell; a term matches its descendants (T cell finds CD4 and CD8 T cells). Cells of a cell-line sample carry the line instead (Cellosaurus id and name, e.g. CVCL_0004 K-562), each line under CL:0000010 cultured cell: the labeller was trained on primary tissue and is unreliable on cultured lines.",
     source: "atlas cell index (cell_type, with each term's CL ancestors)",
     aliases: ["cell_type_label", "celltype"],
   },

@@ -49,7 +49,7 @@ export const CELL_TOOLS = [
         include_low_qc: { type: "boolean", default: false },
         page_cells: { type: "integer", minimum: 1, maximum: 10000, default: 5000 },
         cursor: { type: "string", description: "next_cursor of the previous page." },
-        modalities: { type: "array", items: { type: "string" }, description: "counts (default), spliced, unspliced, splice_junctions, mt, vdj." },
+        modalities: { type: "array", items: { type: "string" }, description: "counts (default), spliced, unspliced, splice_junctions, vdj." },
       },
       additionalProperties: false,
     },

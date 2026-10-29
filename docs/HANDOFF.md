@@ -71,7 +71,7 @@ claude                                                                    # appr
 ```
 Then ask: "Find human PBMC COVID-19 studies, show per-sample QC for GSE165080, and find matched controls."
 With your own key later: `claude mcp add --transport http singlet https://singlet.bio/mcp --header "Authorization: Bearer sk_live_..."`.
-Claude.ai: Settings → Connectors → Add custom connector → `https://singlet.bio/mcp?key=sk_live_...` (untested in that UI).
+Claude.ai: Settings → Connectors → Add custom connector → `https://singlet.bio/mcp`, then sign in (a key in the URL is not accepted).
 
 ## Cleanup of the test credentials (run anytime; they expire on their own)
 ```sql

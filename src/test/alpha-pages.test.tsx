@@ -12,7 +12,7 @@ vi.mock("recharts", async (orig) => ({ ...(await orig<typeof import("recharts")>
 import Benchmarking from "../pages/Benchmarking";
 import KnownIssues from "../pages/KnownIssues";
 import Beta from "../pages/Beta";
-import { ALPHA_PANELS, parseAlpha, parseScbc } from "../lib/alpha-benchmarks";
+import { ALPHA_STRENGTHS, parseAlpha, parseScbc } from "../lib/alpha-benchmarks";
 import { ANNOTATIONS_LIVE, S1_FORMAT_LIVE } from "../lib/release";
 import { ALPHA_TO_BETA } from "../components/landing/AlphaBeta";
 import { CAPABILITIES } from "../lib/benchmark-capabilities";
@@ -84,43 +84,27 @@ describe("Alpha benchmark files", () => {
   });
 });
 
-describe("/benchmarking", { timeout: 20_000 }, () => {
-  it("separates Alpha from the Beta preview and shows running Alpha benchmarks", async () => {
-    stubFetch();
-    renderPage(<Benchmarking />);
-    expect(screen.getByText("Alpha: measured on the data you can download today")).toBeTruthy();
-    expect(screen.getByText("Singlet 1.0.0, the engine for the re-run")).toBeTruthy();
-    expect(screen.getByText(/not the Alpha files you can download today/)).toBeTruthy();
-    expect((await screen.findAllByText("76%")).length).toBeGreaterThan(0);
-    expect(screen.getByText(/Coverage — updated after the Alpha release/)).toBeTruthy();
-    expect(screen.getByText("0.32×")).toBeTruthy();
-    expect(await screen.findAllByText("Benchmark running")).toHaveLength(ALPHA_PANELS.length);
-  });
-
-  it("fills a running panel when its file is published", async () => {
-    stubFetch({ "/alpha/alpha-census.json": { title: "Atlas QC census", conclusion: "Every sample in Alpha passed the inclusion checks.", headline: [{ label: "samples checked", value: "1,234" }] } });
-    renderPage(<Benchmarking />);
-    expect(await screen.findByText("Every sample in Alpha passed the inclusion checks.")).toBeTruthy();
-    expect(screen.getByText("1,234")).toBeTruthy();
-    expect(await screen.findAllByText("Benchmark running")).toHaveLength(ALPHA_PANELS.length - 1);
-  });
-});
-
-describe("/benchmarking with the published Alpha results", { timeout: 30_000 }, () => {
-  it("renders every Alpha panel, pass and fail as in the files, with the cause line", async () => {
-    const files: Record<string, unknown> = {};
-    for (const f of ["alpha-cell-calling", "alpha-gex-counts", "alpha-engine-campaign", "alpha-census"]) {
-      files[`/alpha/${f}.json`] = JSON.parse(read(`public/data/benchmarks/alpha/${f}.json`));
-    }
-    stubFetch(files);
-    renderPage(<Benchmarking />);
+describe("/benchmarking", { timeout: 30_000 }, () => {
+  it("shows what Alpha does well and no failing rules, with a short known-limits note", async () => {
+    stubFetch({ "/alpha/alpha-census.json": JSON.parse(read("public/data/benchmarks/alpha/alpha-census.json")) });
+    const { container } = renderPage(<Benchmarking />);
+    expect(screen.getByText("Cells and genes you can trust")).toBeTruthy();
+    for (const s of ALPHA_STRENGTHS) expect(screen.getByText(s.shown)).toBeTruthy();
     expect(await screen.findByText("Atlas census, as of the Alpha release")).toBeTruthy();
-    expect(await screen.findByText(/recovers a median 65%/)).toBeTruthy();
-    expect(screen.getAllByText(/10x's published cells/).length).toBeGreaterThan(0);
-    expect(screen.queryAllByText("Benchmark running")).toHaveLength(0);
-    expect(screen.getAllByText("Not yet passing").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Passing").length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/Why the shortfall/)).toHaveLength(2);
+    expect(await screen.findByText("Gene profiles at equal depth")).toBeTruthy();
+    expect(screen.getByText("Known limits")).toBeTruthy();
+    const text = container.textContent ?? "";
+    expect(text).not.toMatch(/Not yet passing|Why the shortfall|of 22 pages|Coverage — updated/);
+    expect(text).not.toMatch(/of each sample's SRA reads used/);
+  });
+
+  it("quotes every strength exactly as its benchmark file measured it", () => {
+    for (const s of ALPHA_STRENGTHS) {
+      const doc = JSON.parse(read(`public/data/benchmarks/alpha/${s.file}.json`));
+      const m = doc.metrics.find((x: { id: string; dataset: string }) => x.id === s.metric && x.dataset === "pooled");
+      expect(m, s.metric).toBeTruthy();
+      expect(m.singlet.value, s.metric).toBe(s.value);
+    }
   });
 });
 
@@ -134,7 +118,7 @@ describe("/known-issues", () => {
   it("covers each issue with what Beta changes, and states inclusion criteria only", () => {
     const { container } = renderPage(<KnownIssues />);
     const text = container.textContent ?? "";
-    for (const s of [/first sequencing run/, /30 million reads/, /65%/, /2% to 19%/, /RNA velocity/, /CellRanger2\.2/, /at least 100 reads/, /not clonotypes/, /spots without coordinates/, /the file is the\s+truth/]) {
+    for (const s of [/first sequencing run/, /30 million reads/, /65%/, /2% to 19%/, /RNA velocity/, /CellRanger2\.2/, /at least 100 reads/, /not clonotypes/, /spots without coordinates/, /the file is the\s+truth/, /transit amplifying cell/, /not the expression values/]) {
       expect(text).toMatch(s);
     }
     expect(screen.getAllByText("What Beta changes").length).toBeGreaterThanOrEqual(8);

@@ -36,7 +36,7 @@
 import { ensureCatalogColumns } from "./_shared/catalog-refresh";
 import { CORS_HEADERS } from "./_shared/cors";
 import type { AppEnv } from "./_shared/env";
-import { anonSubjectFromIp, API_KEY_RE, apiKeyFromRequest, checkCredential, clientIp, credentialIdentity, keyMessage, type CredentialCheck, type Identity } from "./_shared/identity";
+import { anonSubjectFromIp, checkCredential, clientIp, credentialIdentity, keyMessage, type CredentialCheck, type Identity } from "./_shared/identity";
 import { issuerFor, wwwAuthenticate } from "./_shared/mcp-oauth";
 import { nlSearch, type NlSearchBody } from "./_shared/nl-search-core";
 import { allowanceFor, recordToolCall, withinRate } from "./_shared/spend";
@@ -430,7 +430,7 @@ const NEW_TOOLS = [
         },
         cell_labels: {
           type: "object",
-          description: "Per-cell labels from the .s1 labeller (public cell metadata), read from each sample's cells table (the atlas cell index for older objects): ontology ids or labels, subtypes included. Cell type per-study accuracy: compartment 0.84, lineage 0.75, cell type 0.43, subtype 0.32 (deeper levels are previews). ANDed with cell_filter.",
+          description: "Per-cell labels from the .s1 labeller (public cell metadata), read from each sample's cells table (the atlas cell index for older objects): ontology ids or labels, subtypes included. Cell type per-study accuracy: compartment 0.84, lineage 0.75, cell type 0.43, subtype 0.32 (deeper levels are previews). Cells of a cell-line sample match by their line instead (Cellosaurus id or name, or \"cultured cell\"), never by a primary cell type. ANDed with cell_filter.",
           properties: {
             cell_type: { type: "array", items: { type: "string" }, description: "Cell Ontology ids or labels, e.g. CL:0000084 or \"T cell\"." },
             sex: { type: "array", items: { type: "string", enum: ["female", "male", "ambiguous", "unknown"] } },
@@ -1303,15 +1303,10 @@ async function handleMessage(ctx: CallContext, msg: JsonRpcRequest): Promise<unk
   }
 }
 
-function apiKeyFromQuery(request: Request): string | null {
-  const value = (new URL(request.url).searchParams.get("key") ?? "").trim();
-  return API_KEY_RE.test(value) ? value : null;
-}
-
 async function authFor(env: Env, request: Request, waitUntil: (p: Promise<unknown>) => void): Promise<CallContext["auth"]> {
-  // An API key in a header first, then an OAuth access token. ?key=sk_live_… predates OAuth
-  // connectors and still works for clients that can only take a URL; prefer signing in.
-  const check = await checkCredential(env, request, waitUntil, apiKeyFromRequest(request) ?? apiKeyFromQuery(request));
+  // An API key in a header first, then an OAuth access token. A key in the URL (?key=) is not
+  // accepted: URLs end up in logs and histories. Clients that can only take a URL sign in instead.
+  const check = await checkCredential(env, request, waitUntil);
   return check ?? { ok: false, reason: "missing", message: keyMessage("unknown") };
 }
 
