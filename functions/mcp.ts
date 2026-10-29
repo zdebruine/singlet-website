@@ -96,7 +96,7 @@ Every number and every "why" string is computed, not generated — quote them, d
 
 
 /** Added to the instructions only once some study is served from s1 (see _shared/s1-gate). */
-const S1_INSTRUCTIONS = `For a study in the .s1 format (format "singlet-s1") get_download_url returns its manifest, list_bundle_files and get_partial_download give byte ranges inside the sample objects, find_cells searches cells by their per-cell statistics and labels, slice_cells gives the byte ranges of just those cells' matrix chunks, and resolve_features turns row numbers into feature names. A study not yet in the .s1 format has one legacy .singlet file (zip64). Across the whole atlas, search_cells counts and locates cells by any metadata and get_cells_page returns them page by page; list_cell_fields is the vocabulary. You are the language model: write search_cells' \`where\` yourself (ontology ids, labels or synonyms); a plain-English \`question\` is read with the built-in vocabulary only. To hand a user the cells themselves, call export_cells with the same filter: it returns a plain download link (no account needed) to a zip of decoded gene counts in the 10x layout with per-cell labels, and with a few \`genes\` also their mean and fraction expressing per cell type, so no code has to run. To work with the pz2-coded matrices directly, use the singlet Python package (it carries a compiled codec): \`pip install singlet\`, then \`from singlet.s1 import atlas; adata = atlas.gather(page["cells"])\` turns a get_cells_page page (or [(GSM, [columns])] from find_cells) into an AnnData of counts.`;
+const S1_INSTRUCTIONS = `For a study in the .s1 format (format "singlet-s1") get_download_url returns its manifest, list_bundle_files and get_partial_download give byte ranges inside the sample objects, find_cells searches cells by their per-cell statistics and labels, slice_cells gives the byte ranges of just those cells' matrix chunks, and resolve_features turns row numbers into feature names. Every range these tools return can be fetched on its own: send them concurrently (about 8 requests in flight; each costs a round trip of 20-100 ms to the first byte), not one after another. A study not yet in the .s1 format has one legacy .singlet file (zip64). Across the whole atlas, search_cells counts and locates cells by any metadata and get_cells_page returns them page by page; list_cell_fields is the vocabulary. You are the language model: write search_cells' \`where\` yourself (ontology ids, labels or synonyms); a plain-English \`question\` is read with the built-in vocabulary only. To hand a user the cells themselves, call export_cells with the same filter: it returns a plain download link (no account needed) to a zip of decoded gene counts in the 10x layout with per-cell labels, and with a few \`genes\` also their mean and fraction expressing per cell type, so no code has to run. To work with the pz2-coded matrices directly, use the singlet Python package (it carries a compiled codec): \`pip install singlet\`, then \`from singlet.s1 import atlas; adata = atlas.gather(page["cells"])\` turns a get_cells_page page (or [(GSM, [columns])] from find_cells) into an AnnData of counts.`;
 const REV_INSTRUCTIONS = `Answers about a study carry a \`rev\`; send it back as \`known_rev\` to get {unchanged: true} instead of the same answer again.`;
 const DIET_INSTRUCTIONS = `Results hold their data in structuredContent with a short text; pass verbose=true for the full text too.`;
 
@@ -216,7 +216,7 @@ const TOOLS = [
     name: "list_bundle_files",
     title: "What is inside the file",
     description:
-      "List everything inside a study's files: each sample object's matrices and QC files with their sizes, plus the study-level files (manifest, metadata). Use it before get_partial_download. Not metered.",
+      "List everything inside a study's files: each sample object's matrices and QC files with their sizes, plus the study-level files (manifest, metadata). Use it before get_partial_download. With gsm_id or modalities it gives byte ranges inside the sample objects; the ranges are independent: fetch them concurrently (about 8 requests in flight), not one after another. Not metered.",
     inputSchema: {
       type: "object",
       properties: {
@@ -248,7 +248,7 @@ const TOOLS = [
     name: "get_partial_download",
     title: "Fetch one sample's file",
     description:
-      "Get the HTTP byte range for one file of one sample inside that sample's object, so a multi-GB study can be used by downloading only the sample you need. Returns the URL, the Range header, the compression method, compressed and uncompressed sizes, and ready-to-run curl and Python snippets (raw-deflate inflate included). Not metered.",
+      "Get the HTTP byte range for one file of one sample inside that sample's object, so a multi-GB study can be used by downloading only the sample you need. Returns the URL, the Range header, the compression method, compressed and uncompressed sizes, and ready-to-run curl and Python snippets (raw-deflate inflate included). With modalities it returns several ranges; the ranges are independent: fetch them concurrently (about 8 requests in flight), not one after another. Not metered.",
     inputSchema: {
       type: "object",
       properties: {
@@ -450,7 +450,7 @@ const NEW_TOOLS = [
     name: "slice_cells",
     title: "Byte ranges for some cells",
     description:
-      "Byte ranges (HTTP Range on the sample object) to read only some cells of one sample's count matrices: a prefix a decoder needs once, and the chunk runs covering the cells. Name cells as `runs` ([start, length] pairs, as find_cells returns), `indices` or `range` [start, end); none means every chunk. " + S1_ONLY,
+      "Byte ranges (HTTP Range on the sample object) to read only some cells of one sample's count matrices: a prefix a decoder needs once, and the chunk runs covering the cells. Name cells as `runs` ([start, length] pairs, as find_cells returns), `indices` or `range` [start, end); none means every chunk. The ranges are independent: fetch them concurrently (about 8 requests in flight), not one after another. " + S1_ONLY,
     inputSchema: {
       type: "object",
       properties: {

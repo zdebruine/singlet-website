@@ -51,6 +51,18 @@ export interface S1ToolCtx {
 /** Most ranged reads one tool call may make against the data host (the Workers free plan allows 50 external subrequests). */
 export const MAX_REQUESTS = 40;
 
+/** Attached to every answer that returns byte ranges: each range is its own request, and each request mostly waits a round trip. */
+export const FETCH_CONCURRENTLY = {
+  concurrent: true,
+  in_flight: 8,
+  why: "Every range is addressable on its own. Each request waits a round trip (20-100 ms to the first byte), so sending them together costs about one round trip instead of one per range. The singlet package does this (io_threads, default 8 over HTTP).",
+} as const;
+
+/** The curl commands as one line that runs them together (POSIX sh). */
+export function curlTogether(cmds: string[]): string | null {
+  return cmds.length > 1 ? `${cmds.join(" & ")} & wait` : null;
+}
+
 const FORMAT = "singlet-s1";
 const gseOf = (args: Record<string, unknown>): string | null => {
   const v = typeof args.gse_id === "string" ? args.gse_id.trim().toUpperCase() : "";
@@ -198,6 +210,7 @@ export async function s1PartialDownload(ctx: S1ToolCtx, gse: string, gsm: string
           ? `Nothing is stored for this file: it is regenerated from ${JSON.stringify(m.needs ?? [])} by recipe ${String(m.recipe)}. singlet.load and the singlet package do this.`
           : "The range holds the file zstd-compressed (kind 3) or as is (kind 5).",
     slice_with: m.kind === 1 ? { tool: "slice_cells", gse_id: gse, gsm_id: gsm, file: name } : null,
+    fetch: FETCH_CONCURRENTLY,
   };
   const text = d.range
     ? `${gse} / ${gsm} / ${name}: ${d.kind_name}, ${fmtBytes(d.bytes)} at ${d.range} of ${url}\n(immutable object, no If-Match needed)`
@@ -214,6 +227,7 @@ function partialByModalities(gse: string, gsm: string, state: S1State, sample: S
   }
   const url = sampleObjectUrl(sample.key);
   const out = selectionOut(sel, url, sample.bytes);
+  const curls = sel.files.filter((f) => f.range).map((f) => `curl -s -r ${f.range!.slice(6)} "${url}" -o ${f.name.split("/").pop()}.member`);
   const structured = {
     gse_id: gse,
     gsm_id: gsm,
@@ -223,11 +237,13 @@ function partialByModalities(gse: string, gsm: string, state: S1State, sample: S
     available: have,
     object: { key: sample.key, bytes: sample.bytes, sha256: sample.sha256, immutable: true },
     packs: packsOf(state),
-    curl: sel.files.filter((f) => f.range).map((f) => `curl -s -r ${f.range!.slice(6)} "${url}" -o ${f.name.split("/").pop()}.member`),
+    curl: curls,
+    curl_together: curlTogether(curls),
     load: loadSnippets(gse, gsm, sel.modalities.filter((m) => !sel.missing.includes(m))),
-    how: "Each range is one member of the immutable sample object. singlet.load with the same modalities fetches exactly these ranges and decodes them; slice_cells with modalities takes only some cells.",
+    how: "Each range is one member of the immutable sample object; fetch them concurrently. singlet.load with the same modalities fetches exactly these ranges together and decodes them; slice_cells with modalities takes only some cells.",
+    fetch: FETCH_CONCURRENTLY,
   };
-  const text = `${gse} / ${gsm}: ${names.join(", ")} is ${fmtBytes(sel.bytes)} of the ${fmtBytes(sample.bytes)} object in ${sel.files.filter((f) => f.range).length} ranges (${sel.files.map((f) => f.name).join(", ")}).${sel.missing.length ? ` Not in this sample: ${sel.missing.join(", ")}.` : ""}`;
+  const text = `${gse} / ${gsm}: ${names.join(", ")} is ${fmtBytes(sel.bytes)} of the ${fmtBytes(sample.bytes)} object in ${sel.files.filter((f) => f.range).length} ranges (${sel.files.map((f) => f.name).join(", ")}), to fetch concurrently.${sel.missing.length ? ` Not in this sample: ${sel.missing.join(", ")}.` : ""}`;
   return toolResult(text, structured);
 }
 
@@ -247,13 +263,13 @@ export async function s1ListFiles(ctx: S1ToolCtx, gse: string, gsm: string, stat
       const sel = selectMembers(parseMembers(sample.members_json), mods.names);
       return toolResult(
         `${gse} / ${gsm}: ${mods.names.join(", ")} is ${sel.files.length} files, ${fmtBytes(sel.bytes)} of the ${fmtBytes(sample.bytes)} object (${sampleObjectUrl(sample.key)}).${sel.missing.length ? ` Not in this sample: ${sel.missing.join(", ")}.` : ""}`,
-        { ...head, sample: sampleLine(sample), object_url: sampleObjectUrl(sample.key), files: sel.files, selection: selectionOut(sel, sampleObjectUrl(sample.key), sample.bytes), load: loadSnippets(gse, gsm, mods.names) }
+        { ...head, sample: sampleLine(sample), object_url: sampleObjectUrl(sample.key), files: sel.files, selection: selectionOut(sel, sampleObjectUrl(sample.key), sample.bytes), load: loadSnippets(gse, gsm, mods.names), fetch: FETCH_CONCURRENTLY }
       );
     }
     const files = describeMembers(sample);
     return toolResult(
       `${gse} / ${gsm}: ${files.length} files in one ${fmtBytes(sample.bytes)} object (${sampleObjectUrl(sample.key)}).`,
-      { ...head, sample: sampleLine(sample), object_url: sampleObjectUrl(sample.key), files }
+      { ...head, sample: sampleLine(sample), object_url: sampleObjectUrl(sample.key), files, fetch: FETCH_CONCURRENTLY }
     );
   }
 
@@ -287,6 +303,7 @@ export async function s1ListFiles(ctx: S1ToolCtx, gse: string, gsm: string, stat
     files_in_each_sample: kinds,
     samples,
     next_after: next,
+    ...(detail ? { fetch: FETCH_CONCURRENTLY } : {}),
     ...(detail ? {} : { more: "Pass gsm_id for one sample's files with their byte ranges, or detail=true (up to 25 samples a page) for every sample's." }),
   };
   const text = selected
@@ -898,10 +915,11 @@ export async function sliceCells(ctx: S1ToolCtx, args: Record<string, unknown>):
     cells_table: cellsMember ? describeMember("cells", cellsMember) : null,
     ...(mods ? { modalities: mods.names, load: loadSnippets(gse, gsm, mods.names) } : {}),
     requests,
-    how: "For each file, GET the prefix ranges once and the chunk ranges for the cells you want (each with a Range header on `url`); the chunks decode independently. Column numbers are positions in the stored matrix, the same positions find_cells reports. singlet.load(gse, samples=[gsm]) does all of this.",
+    how: "For each file, GET the prefix ranges once and the chunk ranges for the cells you want (each with a Range header on `url`), all of them concurrently; the chunks decode independently. Column numbers are positions in the stored matrix, the same positions find_cells reports. singlet.load(gse, samples=[gsm]) does all of this.",
+    fetch: FETCH_CONCURRENTLY,
   };
   const bytes = files.reduce((n, f) => n + (f as unknown as typeof first).bytes_prefix + (f as unknown as typeof first).bytes_chunks, 0);
-  const text = `${gse} / ${gsm}: ${files.length} matri${files.length === 1 ? "x" : "ces"}, ${fmtBytes(bytes)} to fetch in ${files.reduce((n, f) => n + (f as unknown as typeof first).chunks.length + (f as unknown as typeof first).prefix.length, 0)} ranges of ${url}.`;
+  const text = `${gse} / ${gsm}: ${files.length} matri${files.length === 1 ? "x" : "ces"}, ${fmtBytes(bytes)} to fetch in ${files.reduce((n, f) => n + (f as unknown as typeof first).chunks.length + (f as unknown as typeof first).prefix.length, 0)} ranges of ${url}, to fetch concurrently.`;
   return toolResult(text, structured);
 }
 
