@@ -17,6 +17,7 @@ import { loadInputs, parseCellRequest, readQuestion, type Inputs, type ParsedReq
 import { parseCellQuestion } from "./nl";
 import { canonicalWhere, QueryError, rowScanWhere, runCellQuery, type CellQuery, type Expr } from "./query";
 import { DONOR_STATUS, TISSUE_TYPES, TUMOR_SAMPLE_TYPES, type SampleFacts } from "./sample-facts";
+import { cellLineOf, CULTURED_CELL } from "./cell-lines";
 import { PAGE_CELLS_MAX, slicePage, type SlicePage } from "./slice";
 
 export const EXPORT_DEFAULT_CELLS = 2000;
@@ -99,6 +100,21 @@ export function sampleColumns(facts: SampleFacts, gsms: string[]): Record<string
   return out;
 }
 
+/**
+ * The cell type of every cell of each cell-line sample among these: its line (name, Cellosaurus id) or "cultured cell" (CL:0000010),
+ * as cell search gives them (./cell-lines). The data Worker reads the labeller's calls from the files and puts these in their place.
+ */
+export function cellLineTypes(facts: SampleFacts, gsms: string[]): Record<string, { label: string; id: string }> {
+  const lines = cellLineOf(facts);
+  const out: Record<string, { label: string; id: string }> = {};
+  for (const g of new Set(gsms)) {
+    const si = facts.index.get(g);
+    const term = si === undefined ? undefined : lines.get(si);
+    if (term) out[g] = { id: term, label: term === CULTURED_CELL ? "cultured cell" : (facts.labels[term] ?? term) };
+  }
+  return out;
+}
+
 export interface PlannedExport {
   where: Expr | null;
   page: SlicePage;
@@ -130,6 +146,7 @@ export async function planExport(env: AppEnv, identity: Identity, waitUntil: Wai
     format: er.format,
     name,
     samples: sampleColumns(inputs.facts, gsms),
+    cell_types: cellLineTypes(inputs.facts, gsms),
     provenance: {
       where: where ? JSON.parse(canonicalWhere(where)) : null,
       question: er.p.q,

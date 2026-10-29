@@ -45,6 +45,8 @@ export interface ExportBody extends Omit<GatherBody, "modalities" | "have_prefix
   modality?: string;
   format?: "mtx" | "summary";
   samples?: Record<string, Record<string, string | number | null>>;
+  /** per sample: the cell type that replaces the labeller's call on all its cells (a cell line: its Cellosaurus line, or cultured cell) */
+  cell_types?: Record<string, { label?: string; id?: string }>;
   /** folder name inside the zip, and the file name */
   name?: string;
   /** provenance written into manifest.json (the query that chose the cells, the link) */
@@ -444,6 +446,9 @@ export async function exportSamples(ctx: ExportCtx, body: ExportBody, version: s
     if (whole) table = await openCells(async (o, l) => whole.subarray(o, o + l), whole.length);
     const lab = await Promise.all(CELL_COLUMNS.map((c) => (table?.has(c) ? table.strings(c) : Promise.resolve(null))));
     const umi = await Promise.all(UMI_COLUMNS.map((c) => (table?.has(c) ? table.numeric(c) : Promise.resolve(null))));
+    // a cell line: the labeller (trained on primary tissue) is unreliable on it, so its cells carry the line the site names
+    const ct = body.cell_types?.[ps.gsm];
+    const lineType = ct && typeof ct.label === "string" && ct.label ? { label: ct.label.slice(0, 200), id: typeof ct.id === "string" ? ct.id.slice(0, 40) : "" } : null;
     const nSpace = space!.ids.length;
     const acc = new Float64Array(nSpace);
     const outIdx = new Int32Array(outGenes.length);
@@ -465,6 +470,10 @@ export async function exportSamples(ctx: ExportCtx, body: ExportBody, version: s
         acc[g] = 0;
       }
       const labels = lab.map((l) => (l ? (l[col] ?? "") : ""));
+      if (lineType) {
+        labels[0] = lineType.label;
+        labels[1] = lineType.id;
+      }
       const row: CellRow = { gsm: ps.gsm, gse: ps.gse, col, labels, umi: umi.reduce((n, u) => n + (u ? (u[col] ?? 0) : 0), 0), total };
       cells.push(row);
       if (format === "summary") {

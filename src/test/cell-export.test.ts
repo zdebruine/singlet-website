@@ -263,6 +263,15 @@ describe("export route", () => {
     for (const g of j.groups[0].genes) expect(g.frac_expressing).toBeGreaterThanOrEqual(0);
   });
 
+  it("gives a cell-line sample's cells its line as cell type, in the table and the summary", async () => {
+    const lineBody = { cell_types: { GSM1000001: { label: "K-562", id: "CVCL_0004" } } };
+    const zipRes = await run(lineBody);
+    const obs = new TextDecoder().decode(await gunzip(unzip(new Uint8Array(await zipRes.arrayBuffer())).get("t/obs.tsv.gz")!)).trim().split("\n").slice(1).map((l) => l.split("\t"));
+    expect(new Set(obs.map((r) => `${r[4]}|${r[5]}`))).toEqual(new Set(["K-562|CVCL_0004"]));
+    const sum = (await (await run({ ...lineBody, genes: ["GENE0"], format: "summary" })).json()) as { groups: { cell_type: string; cell_type_id: string; cells: number }[] };
+    expect(sum.groups).toEqual([expect.objectContaining({ cell_type: "K-562", cell_type_id: "CVCL_0004", cells: called.length })]);
+  });
+
   it("holds an export to its caps and answers a dry run with the plan", async () => {
     const dry = await run({ dry_run: true });
     expect(((await dry.json()) as { plan: { cells: number } }).plan.cells).toBe(called.length);

@@ -7,7 +7,7 @@ import { hydrateFacts, ageYears, type FactsWire } from "../../functions/_shared/
 import { canonicalWhere, cellPushdown, filterCellRows, parseWhere, QueryError, relaxations, rowScanWhere, runCellQuery } from "../../functions/_shared/cells/query";
 import { parseCellQuestion } from "../../functions/_shared/cells/nl";
 import { cacheKey, fieldsBody, parseCellRequest, unmappedFor } from "../../functions/_shared/cells/http";
-import { sampleColumns } from "../../functions/_shared/cells/export";
+import { cellLineTypes, sampleColumns } from "../../functions/_shared/cells/export";
 import { withCellLines } from "../../functions/_shared/cells/cell-lines";
 
 const cellTypes = [
@@ -321,6 +321,8 @@ describe("cell export: sample columns", () => {
       cell_line: null,
     });
     expect(cols.GSM3).toMatchObject({ organism: "Mus musculus", tissue: "liver", disease: null, cell_line: "K-562" });
+    // the K-562 sample's cells take its line as cell type in the export
+    expect(cellLineTypes(makeFacts(), ["GSM1", "GSM3", "GSM3"])).toEqual({ GSM3: { id: "CVCL_0004", label: "K-562" } });
   });
 });
 
