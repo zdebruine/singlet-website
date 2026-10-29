@@ -68,6 +68,11 @@ const STEM = /\b(h?ipscs?|i ?ps cells?|h?escs?|h?pscs?|pluripotent|embryonic ste
 const DERIVED = /\b(derived|differentiated|differentiation)\b/i;
 const CULTURE = /\b(primary (?:cell )?cultures?|cultured primary|primary cultured|in vitro cultured|ex vivo cultured|cultured (?:cells|fibroblasts|keratinocytes|hepatocytes|myoblasts|astrocytes|neurons|chondrocytes|osteoblasts|t cells|macrophages|monocytes))\b/i;
 const CELL_LINE_WORD = /\bcell ?lines?\b/i;
+/** A mouse or rat strain or a genotype written under a "cell line" key is not a cell line (scripts/sample-type/cellosaurus_resolve.py). */
+export const STRAIN =
+  /^(c57 ?bl[/ ]?6\w*|c57bl\w*|b6\w*|balb[/ ]?c\w*|129\S*|fvb\S*|dba\S*|cd-?1|nod\S*|nsg\S*|nu\/nu|nude|c3h\S*|swiss\S*|sprague[- ]dawley|wistar\S*|wild[- ]?type|wt|wt\/wt|\+\/\+|mixed background)$/i;
+/** The record says the material is (from) embryonic or induced pluripotent stem cells. */
+const STEM_CONTEXT = /\b(h?ipscs?|i ?ps cells?|h?escs?|h?pscs?|pluripotent|embryonic stem|es cells?|stem cell line)\b/i;
 /** A named line grown in an animal (syngeneic or xenografted tumour, transplant) and sampled from it: the sample is tissue. */
 const IN_VIVO = /\b(tumou?rs?|xenografts?|allografts?|injected|implanted|transplanted|engrafted|orthotopic|subcutaneous(?:ly)?|in vivo|tumou?r[- ]bearing)\b/i;
 const IN_VIVO_KEYS = new Set(["tissue", "source", "cell type", "treatment", "sample type", "tissue type", "in vitro or in vivo", "model", "condition", "group"]);
@@ -91,7 +96,7 @@ function tumorType(v: string): TumorSampleType | null {
  */
 export function classifySampleType(
   s: { source?: string | null; characteristics?: unknown; organism_primary?: string | null },
-  lookupLine: (raw: string) => CellLineHit | null
+  lookupLine: (raw: string, stemContext: boolean) => CellLineHit | null
 ): SampleTypeResult {
   const pairs: Pair[] = parsePairs(s.characteristics);
   const src = (s.source ?? "").trim();
@@ -101,9 +106,13 @@ export function classifySampleType(
   const typed = pairs.filter((p) => TYPE_KEYS.has(p.key) && p.value);
 
   const first = (re: RegExp) => typed.find((p) => re.test(p.value));
+  const stemContext = pairs.some((p) => STEM_CONTEXT.test(p.value));
   for (const p of pairs) {
-    if (!LINE_KEYS.has(p.key) || !p.value) continue;
-    const hit = lookupLine(p.value);
+    if (!p.value) continue;
+    // a "cell line" field (not a strain), or a type field that says "cell line" ("cell type: K562 leukemia cell line")
+    const lineField = LINE_KEYS.has(p.key) && !STRAIN.test(p.value.trim());
+    if (!lineField && !(TYPE_KEYS.has(p.key) && CELL_LINE_WORD.test(p.value))) continue;
+    const hit = lookupLine(p.value, stemContext);
     if (hit && !cellLines.some((c) => c.ac === hit.ac)) cellLines.push({ ...hit, raw: p.value, evidence: p.evidence });
   }
 

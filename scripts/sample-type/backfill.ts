@@ -92,12 +92,31 @@ function diseaseTerm(text: string, organism: string): { id: string; how: string 
 }
 
 // ── cell lines ──────────────────────────────────────────────────────────────
-const resolved: Record<string, { ac: string; id: string; category: string | null; synonyms: string[] } | null> = JSON.parse(
+type Candidate = { ac: string; id: string; category: string | null };
+const resolved: Record<string, { via: string; name: string; candidates: Candidate[] } | null> = JSON.parse(
   readFileSync("scripts/sample-type/cellosaurus_resolved.json", "utf8")
 );
-const lineKey = (s: string) => s.toLowerCase().replace(/[\s\-_.]/g, "");
-const cleanLine = (v: string) =>
-  v.replace(/\(.*?\)/g, " ").replace(/\b(cell ?lines?|cells?|human|mouse|murine|parental|wild[ -]?type|wt|line)\b/gi, " ").replace(/\s+/g, " ").replace(/^[ ,;-]+|[ ,;-]+$/g, "");
+/** Cellosaurus synonyms by accession, from the index of the dump (scripts/sample-type/cellosaurus_index.py). */
+const synonymsOf = new Map<string, string[]>();
+for (const list of Object.values(JSON.parse(readFileSync("scripts/sample-type/cello_index.json", "utf8")) as Record<string, { ac: string; synonyms?: string[] }[]>)) {
+  for (const e of list) if (!synonymsOf.has(e.ac)) synonymsOf.set(e.ac, e.synonyms ?? []);
+}
+const STEM_CATEGORY = /stem cell/i;
+/** One line for a value: the only candidate of the species, or the only stem-cell one when the record says stem cells. */
+/** In a stem cell record, "H1" / "H7" / "H9" are the WiCell ES lines (other lines share those names: an H9 T-cell line, ES lines named H-1). */
+const WICELL: Record<string, string> = { h1: "CVCL_9771", h7: "CVCL_9772", h9: "CVCL_9773" };
+function pickLine(r: { name: string; candidates: Candidate[] } | null | undefined, stem: boolean): Candidate | null {
+  if (!r) return null;
+  if (r.candidates.length === 1) return r.candidates[0];
+  if (stem) {
+    const wi = WICELL[r.name.toLowerCase().replace(/[\s\-_.]/g, "")];
+    const w = wi ? r.candidates.find((c) => c.ac === wi) : undefined;
+    if (w) return w;
+    const s = r.candidates.filter((c) => STEM_CATEGORY.test(c.category ?? ""));
+    if (s.length === 1) return s[0];
+  }
+  return null; // a name several lines share ("H9": a T-cell line and the WA09 ES line) with nothing to tell them apart
+}
 const cellosaurusTerms = new Map<string, { name: string; synonyms: string[] }>();
 
 // ── existing rows ───────────────────────────────────────────────────────────
@@ -117,9 +136,9 @@ const unmappedDisease = new Map<string, number>();
 
 for (const s of samples) {
   const gsm = String(s.gsm_id), gse = String(s.gse_id), org = String(s.organism_primary ?? "");
-  const lookup = (raw: string): CellLineHit | null => {
-    const r = resolved[`${lineKey(cleanLine(raw))}|${org}`];
-    return r ? { ac: r.ac, name: r.id, category: r.category } : null;
+  const lookup = (raw: string, stem: boolean): CellLineHit | null => {
+    const c = pickLine(resolved[`${raw.trim().toLowerCase()}|${org}`], stem);
+    return c ? { ac: c.ac, name: c.id, category: c.category } : null;
   };
   const res = classifySampleType(s, lookup);
   for (const f of res.facts) {
@@ -134,8 +153,7 @@ for (const s of samples) {
     bump(`${f.property}:${f.value}`);
   }
   for (const c of res.cellLines) {
-    const r = resolved[`${lineKey(cleanLine(c.raw))}|${org}`]!;
-    cellosaurusTerms.set(c.ac, { name: c.name, synonyms: r.synonyms });
+    cellosaurusTerms.set(c.ac, { name: c.name, synonyms: synonymsOf.get(c.ac) ?? [] });
     if (!haveAttr.has(`${gsm}|cell_line|${c.name}`)) {
       typeSql.push(
         `INSERT OR IGNORE INTO sample_attr (gsm_id, gse_id, attr, value_raw, value_norm, ontology_id, unit, value_num, source, confidence, evidence, extractor_version) VALUES (${q(gsm)}, ${q(gse)}, 'cell_line', ${q(c.raw)}, ${q(c.name)}, ${q(c.ac)}, NULL, NULL, 'geo', 0.95, ${q(c.evidence)}, ${q(SAMPLE_TYPE_VERSION)});`

@@ -38,6 +38,20 @@ describe("classifySampleType", () => {
   it("reads an organoid named only by an organoid field", () => {
     expect(facts({ characteristics: "tissue: esophagus;; cell line: H9;; organoid: HEO" }).tissue_type).toBe("organoid");
   });
+  it("never reads a mouse strain under a cell line key as a cell line", () => {
+    const strainLookup = () => ({ ac: "CVCL_C0MU", name: "Bone marrow macrophage immortalized C57BL/6", category: "Transformed cell line" });
+    for (const v of ["C57BL/6", "C57Bl/6J", "BALB/c", "wild type", "CD-1", "NSG"]) {
+      const r = classifySampleType({ organism_primary: "Mus musculus", characteristics: `cell line: ${v};; tissue: spleen` }, strainLookup);
+      expect(r.cellLines).toEqual([]);
+      expect(r.facts.find((f) => f.property === "tissue_type")?.value).toBe("tissue");
+    }
+  });
+  it("passes the stem cell context to the line lookup", () => {
+    const seen: boolean[] = [];
+    classifySampleType({ characteristics: "cell line: H9;; cell type: embryonic stem cells" }, (_raw, stem) => (seen.push(stem), null));
+    classifySampleType({ characteristics: "cell line: H9;; cell type: T cells" }, (_raw, stem) => (seen.push(stem), null));
+    expect(seen).toEqual([true, false]);
+  });
   it("reads xenografts under any key as tissue of kind xenograft", () => {
     expect(facts({ characteristics: "tissue: tumor;; group: O-PDX" })).toEqual({ tissue_type: "tissue", sample_kind: "xenograft", tumor_sample_type: "tumor" });
   });
