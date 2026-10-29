@@ -142,7 +142,7 @@ const BetaGpuEngine = () => {
             <li>Make the stitching stage about 4× faster while keeping it identical. Most of its time goes to reads that hit more than 16 alignment windows.</li>
             <li>Move the GPU pileup into <span className="font-mono">singlet --engine gpu</span> (in progress) and drop the BAM round trip. Today the binary maps and screens on the GPU and runs the other stages on the CPU, so it uses half the CPU per sample but is not yet cheaper per sample.</li>
             <li>Check whole samples against the CPU engine on 5′ and single-nucleus libraries, not only 3′.</li>
-            <li>Pass the same equivalence and <Link to="/benchmarking#beta" className="text-primary underline underline-offset-2">Beta benchmarks</Link> as the CPU engine. Until it does, Beta runs on the CPU engine.</li>
+            <li>Pass the same equivalence and Beta benchmarks as the CPU engine. Until it does, Beta runs on the CPU engine.</li>
           </ul>
         </section>
 
