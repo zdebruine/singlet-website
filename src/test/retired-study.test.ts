@@ -31,6 +31,7 @@ import { onRequestGet as searchGet } from "../../functions/api/search";
 import { onRequestGet as sitemapGet } from "../../functions/sitemap.xml";
 import { getCohort } from "../../functions/_shared/product";
 import { recomputeMeta, refreshNext } from "../../functions/_shared/catalog-refresh";
+import { clearRulesCache } from "../../functions/_shared/vocab";
 import { indexOf, sample as bitSample } from "./helpers/bitindex-fixture";
 import { createTestD1 } from "./helpers/d1-sqlite";
 import { FakeHost } from "./helpers/zip";
@@ -391,6 +392,46 @@ describe("MCP: a retired study answers from s1", () => {
     expectNoLegacy("controls", byId.get(RETIRED));
   });
 
+  it("find_matched_controls and search_datasets count studies with no tissue group and list the unclassified ones whose GEO text names it", async () => {
+    const env = await world();
+    seedStudy(env, "GSE9", ["GSM9000001"]);
+    // ENCODE liver series as served on 2026-10-28: no tissue or disease group, the tissue only in the GEO title and sample source
+    seedStudy(env, "GSE286615", ["GSM8729886"]);
+    seedStudy(env, "GSE8", ["GSM8000001"]);
+    env.DB.raw.exec(`
+      UPDATE gse_meta SET tissue_groups = '[]', disease_groups = '[]' WHERE gse_id IN ('GSE286615', 'GSE8');
+      UPDATE gse SET title = 'snRNA-seq from liver (ENCSR133IBO)' WHERE id = 'GSE286615';
+      UPDATE gse SET title = 'Kidney organoids', abstract = 'Nephron progenitors.' WHERE id = 'GSE8';
+      UPDATE gsm SET source = 'Homo sapiens female adult (39 years) liver tissue' WHERE gsm_id = 'GSM8729886';`);
+
+    const r = await rpc(env, "find_matched_controls", { gse_id: "GSE9", tissue: "Liver" });
+    expect(r.isError, r.content[0].text).toBeUndefined();
+    expect(r.structuredContent).toMatchObject({ tissue: "Liver", unmapped_studies: 2 });
+    expect(r.structuredContent.unclassified_candidates).toEqual([
+      expect.objectContaining({ gse_id: "GSE286615", classification: "unclassified", matched_in: "title", evidence: "snRNA-seq from liver (ENCSR133IBO)" }),
+    ]);
+    expect(r.content[0].text).toContain('2 served Human studies have no tissue group and could not match tissue "Liver".');
+    expect(r.content[0].text).toContain("Unclassified candidates");
+    const off = await rpc(env, "find_matched_controls", { gse_id: "GSE9", tissue: "Liver", include_unclassified: false });
+    expect(off.structuredContent.unclassified_candidates).toEqual([]);
+    expect(off.content[0].text).toContain("Pass include_unclassified: true");
+
+    const none = await rpc(env, "find_matched_controls", { gse_id: "GSE286615" });
+    expect(none.isError).toBe(true);
+    expect(none.content[0].text).toContain("Pass `tissue`");
+
+    nlSearch.mockImplementation(async () => {
+      const applied = { organism: ["Homo sapiens"], tissue_group: ["Liver"], disease_group: [], assay_family: [], cell_type: [], min_cells: null, year_min: null, year_max: null, q: "" };
+      return { ok: true, body: { level: "gse", data: [], total: 0, page: 1, limit: 10, applied, dropped: [], note: null, quota_exceeded: false, groups: undefined, suggestions: [], interpreted: {}, totals: {}, why: {} } };
+    });
+    const s = await rpc(env, "search_datasets", { query: "healthy human liver" });
+    expect(s.content[0].text).toContain('2 served Homo sapiens studies have no tissue group and could not match tissue "Liver".');
+    expect(s.structuredContent).toMatchObject({ unmapped_studies: { tissue_groups: 2 }, unclassified: [] });
+    const s2 = await rpc(env, "search_datasets", { query: "healthy human liver", include_unclassified: true });
+    expect(s2.structuredContent.unclassified.map((u: any) => u.gse_id)).toEqual(["GSE286615"]);
+    expect(s2.content[0].text).toContain("Unclassified (no tissue group in the catalog");
+  });
+
   it("export_manifest: json, tsv, curl, wget, python and R name no legacy file", async () => {
     const env = await world();
     for (const format of ["json", "tsv", "curl", "wget", "python", "r"]) {
@@ -439,6 +480,29 @@ describe("a study whose legacy file is gone keeps its summaries, usable flags an
     expect(requested.filter((u) => /\/data\//.test(u))).toEqual([]);
     const qc = env.DB.raw.prepare("SELECT gse_id, COUNT(*) AS n, SUM(usable) AS u FROM sample_qc GROUP BY gse_id ORDER BY gse_id").all() as any[];
     expect(qc).toEqual([{ gse_id: "GSE1", n: 2, u: 2 }, { gse_id: "GSE5", n: 1, u: 1 }]);
+  });
+
+  it("the catalog crank fills NULL groups of rows loaded with an organism, from sample_attr when gsm.tissue is empty (ENCODE liver GSE286615)", async () => {
+    const env = await setup();
+    seedStudy(env, "GSE286615", ["GSM8729886"]);
+    env.DB.raw.exec(`
+      CREATE TABLE sample_attr (gsm_id TEXT, gse_id TEXT, attr TEXT, value_raw TEXT, value_norm TEXT, source TEXT, confidence REAL);
+      INSERT INTO sample_attr VALUES ('GSM8729886', 'GSE286615', 'tissue', 'liver', 'liver', 'geo', 0.95), ('GSM8729886', 'GSE286615', 'disease', 'healthy', 'healthy', 'geo', 0.95);
+      INSERT INTO vocab_rules VALUES ('tissue', 169, 'Liver', 'contains', 'liver'), ('disease', 1, 'Healthy / control', 'exact', 'healthy');
+      UPDATE gsm SET tissue_group = NULL, disease_group = NULL, tissue = NULL, disease = NULL WHERE gsm_id = 'GSM8729886';
+      UPDATE gse_meta SET tissue_groups = '[]', disease_groups = '[]' WHERE gse_id = 'GSE286615';`);
+    clearRulesCache(); // an earlier test in this isolate loaded the empty rule table
+    for (let i = 0; i < 2; i++) await refreshNext(env.DB, 10);
+    expect(env.DB.raw.prepare("SELECT organism_primary, tissue_group, disease_group, assay_family FROM gsm WHERE gsm_id = 'GSM8729886'").get()).toEqual({
+      organism_primary: "Homo sapiens",
+      tissue_group: "Liver",
+      disease_group: "Healthy / control",
+      assay_family: "10x 3",
+    });
+    expect(env.DB.raw.prepare("SELECT tissue_groups, disease_groups FROM gse_meta WHERE gse_id = 'GSE286615'").get()).toEqual({
+      tissue_groups: '["Liver"]',
+      disease_groups: '["Healthy / control"]',
+    });
   });
 
   it("the catalog crank never resolves an s1-only study to usable = 0, measures it from the catalog, and sets has_bundle", async () => {

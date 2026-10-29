@@ -14,7 +14,7 @@
  * Pure functions, no I/O: used by the enrichment scripts, the card builder and the study page.
  */
 
-export const EXTRACTOR_VERSION = "geo-rules-2026-10-20";
+export const EXTRACTOR_VERSION = "geo-rules-2026-10-28";
 
 export const ATTRS = [
   "tissue",
@@ -107,7 +107,10 @@ export function parsePairs(raw: unknown): Pair[] {
     }
   }
   const out: Pair[] = [];
-  for (const part of text.split(";;")) {
+  // Most records join pairs with ";;". Some write "tissue: lung; hashtag number: HT5; ..." with single semicolons; split those only
+  // before something that looks like a key, so a value with its own ";" ("DM: no; HTN: no") stays in one piece under a ";;" record.
+  const parts = text.includes(";;") ? text.split(";;") : text.split(/;\s*(?=[A-Za-z][^;:]{0,59}:\s)/);
+  for (const part of parts) {
     const seg = part.trim();
     const idx = seg.indexOf(":");
     if (idx <= 0) continue;
@@ -363,6 +366,9 @@ function normDisease(v: string, key: string): Placed {
     if (/^(negative|neg|control|healthy|uninfected|non covid|noncovid)/.test(s)) return { norm: "healthy", placed: true };
   }
   if (HEALTHY.has(s)) return { norm: "healthy", placed: true };
+  // A comorbidity checklist ("DM: no; HTN: no; CAD: no", ENCODE donors) with every answer "no" is a healthy donor, not a case.
+  const checks = s.split(/\s*;\s*/).filter(Boolean);
+  if (checks.length > 1 && checks.every((c) => /^[a-z0-9 /-]{1,30}:\s*(no|none|negative)$/.test(c))) return { norm: "healthy", placed: true };
   const hit = DISEASE_LEX.get(s) ?? DISEASE_LEX.get(s.replace(/\s*\([^)]*\)$/, ""));
   if (hit) return { norm: hit, placed: true };
   return { norm: clean(v), placed: false };
@@ -551,6 +557,12 @@ export function extractSampleAttrs(s: SampleText): Extraction {
       if (/^(normal|adjacent normal|normal adjacent|non-?tumou?r|benign)$/.test(s1) && pair.key === "tissue type") { push("disease_state", { raw: value, norm: "control", evidence: ev, confidence: 0.95 }, pair.key); continue; }
       if (isMissing(value) || HEALTHY.has(s1) || UNTREATED.has(s1)) continue;
       const t = normTissue(value);
+      // A bare "region" key often holds a sampling code ("region: R1" for tumour region 1), which the ontology pass then read as
+      // rhombomere 1. Under that key only a value the lexicon knows is a tissue.
+      if (pair.key === "region" && !t && !tissueInText(value)) {
+        unplaced.push({ attr: "tissue", key: pair.key, value, evidence: ev });
+        continue;
+      }
       push("tissue", { raw: value, norm: t ?? clean(value), evidence: ev, confidence: t ? 0.95 : 0.7 }, pair.key, !!t);
     } else if (attr === "sample_type") {
       if (isMissing(value)) continue;

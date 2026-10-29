@@ -12,12 +12,12 @@ import { usePageMeta } from "@/hooks/usePageMeta";
 import { fmtCompact, fmtInt } from "@/lib/catalog-display";
 import { EXAMPLE_QUERIES } from "@/lib/search-routing";
 import { cn } from "@/lib/utils";
-import { FormatSizeChart, H5AD_RATIO, HBars } from "@/components/landing/charts";
+import { FORMAT_NOTE, FormatSizeChart, H5AD_PAIRED, HBars } from "@/components/landing/charts";
 import { QcFunnel, sampleFunnel } from "@/components/landing/QcFunnel";
 import { GetStarted } from "@/components/landing/GetStarted";
 import { ModalityGrid } from "@/components/landing/Modalities";
-import { S1_FORMAT_LIVE } from "@/lib/release";
-import { ACCESS, AlphaCtas, RIGOR, RigorFooter, SPEED, SpeedMeasured, TodayVsBeta } from "@/components/landing/AlphaBeta";
+import { QueryParse } from "@/components/landing/QueryParse";
+import { AlphaBetaTable, AlphaCtas, ALPHA_TO_BETA, RigorFooter, SpeedMeasured, ZoomStrip } from "@/components/landing/AlphaBeta";
 
 // One message per browser view. Each screen fills the visible window (below the header) up to a cap, so a large
 // monitor does not stretch it, and stacks naturally on a phone. Plan: docs/LANDING.md.
@@ -55,6 +55,7 @@ const JUMPS = [
   { href: "#layers", label: "Layers" },
   { href: "#qc", label: "Quality control" },
   { href: "#speed", label: "Speed" },
+  { href: "#access", label: "Search" },
   { href: "#rigor", label: "Rigor" },
 ];
 
@@ -169,7 +170,7 @@ const Index = () => {
 
         {/* 4 · It holds more than counts */}
         <Screen id="layers" label="Layers">
-          <Title sub="Spliced and unspliced counts and splice junctions; other layers where the data allow.">Gene expression, plus splicing.</Title>
+          <Title sub="Splicing layers in every file, plus per-cell labels.">Gene expression, plus splicing.</Title>
           <div className="mt-12">
             <ModalityGrid />
           </div>
@@ -183,34 +184,41 @@ const Index = () => {
 
         {/* 6 · It is small */}
         <Screen id="format" label="File size">
-          <Title sub="The same count matrix, compared with common formats.">{H5AD_RATIO.toFixed(1)}× smaller than AnnData.</Title>
+          <Title sub="Size of a count matrix in each format; uncompressed = 100%.">{H5AD_PAIRED} smaller than AnnData.</Title>
           <div className="mt-12 max-w-[760px] mx-auto">
             <FormatSizeChart />
+            <p className="mt-4 text-center text-[12.5px] text-muted-foreground">{FORMAT_NOTE}</p>
           </div>
         </Screen>
 
-        {/* 7 · It is fast: data structures and the edge */}
+        {/* 7 · It is fast: fetch only what you need */}
         <Screen id="speed" label="Speed">
-          <Title sub={S1_FORMAT_LIVE ? "One object per sample, an index into its cells, and serving from the edge." : "Small files, an index into each one, and serving from the edge."}>Fast because of how it is stored.</Title>
+          <Title sub="Fetch a whole study, one sample, or just the cells you need.">Fast because of how it is stored.</Title>
           <div className="mt-12">
-            <TodayVsBeta today={SPEED.today} beta={SPEED.beta} />
+            <ZoomStrip />
             <SpeedMeasured />
           </div>
         </Screen>
 
         {/* 8 · It is open */}
         <Screen id="access" label="Accessibility">
-          <Title sub="Ask in plain English, from your assistant, or from code. No account to download.">Open to anyone who asks.</Title>
-          <div className="mt-12">
-            <TodayVsBeta today={ACCESS.today} beta={ACCESS.beta} />
+          <Title sub="Ask the way you would ask a colleague. You see the filters it becomes, and can change them.">Search in plain English.</Title>
+          <div className="mt-12 max-w-[520px] mx-auto">
+            <QueryParse />
           </div>
+          <ul className="mt-10 flex flex-wrap justify-center gap-2 text-[13px]">
+            {["CC0 data", "No account to download", "Python, R and a Claude connector"].map((t) => (
+              <li key={t} className="rounded-full border border-border px-3 py-1 text-muted-foreground">{t}</li>
+            ))}
+          </ul>
         </Screen>
 
-        {/* 9 · It is honest about rigor: what Alpha is, and what Beta does */}
+        {/* 9 · It is honest about rigor: what Alpha is, and what Beta changes */}
         <Screen id="rigor" label="Rigor">
-          <Title sub="Alpha shows what is possible. Beta re-runs every sample with a benchmarked engine.">Measured, and shown as measured.</Title>
-          <div className="mt-12">
-            <TodayVsBeta today={RIGOR.today} beta={RIGOR.beta} footer={<RigorFooter />} />
+          <Title sub="Alpha is a research preview. Beta re-runs every sample with a benchmarked engine.">Measured, and shown as measured.</Title>
+          <div className="mt-12 max-w-[880px] mx-auto">
+            <AlphaBetaTable rows={ALPHA_TO_BETA.slice(0, 5)} />
+            <p className="mt-6 text-center text-[14px] text-muted-foreground"><RigorFooter /></p>
             <AlphaCtas className="mt-8 flex flex-wrap items-center justify-center gap-3" />
           </div>
         </Screen>

@@ -10,7 +10,7 @@ import { sampleFacetStatements, studyFacetStatements } from "../../functions/_sh
 import { createTestD1 } from "./helpers/d1-sqlite";
 
 const SCHEMA =
-  ["030_search_facts.sql", "039_s1_labels.sql"].map((f) => readFileSync(`schema/${f}`, "utf8")).join("\n") +
+  ["030_search_facts.sql", "039_s1_labels.sql", "041_sample_fact_tables.sql"].map((f) => readFileSync(`schema/${f}`, "utf8")).join("\n") +
   `
 CREATE TABLE gse_meta (gse_id TEXT PRIMARY KEY, organisms TEXT, tissue_groups TEXT, disease_groups TEXT, assay_families TEXT, cell_types_raw TEXT, year INTEGER,
   n_usable_cells INTEGER, n_usable_samples INTEGER, n_lowqc_cells INTEGER, has_bundle INTEGER, n_conditions INTEGER);

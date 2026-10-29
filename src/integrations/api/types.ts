@@ -381,8 +381,19 @@ export interface GseRow {
   reference_mismatch_note?: string | null;
 }
 
+/** Structured sample facts from the sample's own GEO fields (CELLxGENE tissue_type, Cellosaurus, GDC sample type, MONDO/PATO). */
+export interface GsmFacts {
+  tissue_type?: string;
+  tumor_sample_type?: string;
+  sample_kind?: string;
+  donor_status?: string;
+  cell_line?: { id: string; name: string | null }[];
+  disease?: { id: string; label: string | null }[];
+}
+
 export interface GsmRow {
   gsm_id: string;
+  facts?: GsmFacts;
   gse_id: string;
   organism: string | null;
   organism_primary?: string | null;

@@ -38,9 +38,22 @@ export function usePageMeta(opts: {
   noindex?: boolean;
   /** Structured data for this route (schema.org). Removed when the route unmounts. */
   jsonLd?: Record<string, unknown> | null;
+  /** URL of a JSON-LD document that describes this page's data (Croissant), as `<link rel="describedby">`. */
+  describedBy?: string | null;
 }) {
-  const { title, description, path, noindex, jsonLd } = opts;
+  const { title, description, path, noindex, jsonLd, describedBy } = opts;
   const jsonLdText = jsonLd ? JSON.stringify(jsonLd) : null;
+  useEffect(() => {
+    if (!describedBy) return;
+    const el = document.createElement("link");
+    el.rel = "describedby";
+    el.type = "application/ld+json";
+    el.href = describedBy;
+    document.head.appendChild(el);
+    return () => {
+      el.remove();
+    };
+  }, [describedBy]);
   useEffect(() => {
     const id = "route-jsonld";
     let el = document.getElementById(id) as HTMLScriptElement | null;

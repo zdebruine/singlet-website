@@ -7,7 +7,7 @@
  *   initialize                → capabilities + serverInfo + instructions
  *   notifications/initialized → 202
  *   ping                      → {}
- *   tools/list                → the seventeen tools below (find_cells, slice_cells and resolve_features are s1-only)
+ *   tools/list                → the twenty tools below (find_cells, slice_cells, resolve_features, search_cells, get_cells_page and list_cell_fields are s1-only)
  *   tools/call                → needs a free account: an OAuth access token
  *                               (Authorization: Bearer sat_…, from signing in
  *                               when the client connects; _shared/mcp-oauth) or
@@ -36,7 +36,7 @@
 import { ensureCatalogColumns } from "./_shared/catalog-refresh";
 import { CORS_HEADERS } from "./_shared/cors";
 import type { AppEnv } from "./_shared/env";
-import { anonSubjectFromIp, API_KEY_RE, apiKeyFromRequest, checkCredential, clientIp, credentialIdentity, keyMessage, type CredentialCheck, type Identity } from "./_shared/identity";
+import { anonSubjectFromIp, checkCredential, clientIp, credentialIdentity, keyMessage, type CredentialCheck, type Identity } from "./_shared/identity";
 import { issuerFor, wwwAuthenticate } from "./_shared/mcp-oauth";
 import { nlSearch, type NlSearchBody } from "./_shared/nl-search-core";
 import { allowanceFor, recordToolCall, withinRate } from "./_shared/spend";
@@ -45,13 +45,15 @@ import { loadStudy, bundleUrl, GSE_RE, type StudyDetail } from "./_shared/study-
 import { legacyUrl } from "./_shared/file-facts";
 import { computeStats } from "./_shared/stats-core";
 import { alphaToolArgs, studyServedSql } from "./_shared/alpha";
-import { TISSUE_GROUPS, DISEASE_GROUPS, ASSAY_FAMILIES } from "./_shared/vocab";
+import { TISSUE_GROUPS, DISEASE_GROUPS, ASSAY_FAMILIES, loadRules } from "./_shared/vocab";
+import { countUnmappedStudies, unclassifiedStudies, unmappedNote, type UnclassifiedStudy } from "./_shared/coverage-gaps";
 import { MANIFEST_FORMATS } from "./_shared/manifest-core";
 import type { StudyRow, SampleRow } from "./_shared/search-core";
 import { getCohort, saveCohort, ProductError, type ProductCtx } from "./_shared/product";
-import { dietEnabled, diet } from "./_shared/mcp-core";
+import { dietEnabled, diet, withDataText } from "./_shared/mcp-core";
 import { s1ToolsVisible } from "./_shared/s1-gate";
 import { findCells, resolveFeatures, sliceCells, s1DownloadUrl } from "./_shared/mcp-s1";
+import { CELL_TOOLS, cellFieldsTool, cellsPageTool, searchCellsTool } from "./_shared/cells/mcp";
 import { combineRev, fileRev, knownRev, unchangedBody } from "./_shared/rev";
 import { getS1State, isLegacyAlive } from "./_shared/s1-catalog";
 import { configureS1, s1ManifestUrl } from "./_shared/s1-urls";
@@ -88,13 +90,13 @@ const INSTRUCTIONS_BASE = `singlet.bio is an open atlas of public single-cell RN
 
 Recommended order: search_datasets → assess_study or get_study → get_sample_qc → get_modalities (what is in the file beyond gene counts) → get_download_url (whole study) or get_partial_download (one sample's matrix, by HTTP range) → export_manifest for a cohort. compare_studies and find_matched_controls help pick controls.
 
-What Alpha serves per sample: gene counts (spliced and unspliced), splice junctions and exon inclusion computed from them, cell calls and per-cell QC, and per-cell labels — Cell Ontology cell type (per-study accuracy: compartment 0.84, lineage 0.75, cell type 0.43, subtype 0.32; the last two are previews), chromosomal sex (98.1% of samples agree with GEO) and genetic ancestry (HANCESTRO; human donors with enough covered sites). The labels are public cell metadata: search_datasets and export_manifest filter studies by cell_type_label, sex_genetic and ancestry_genetic. Genotypes, mitochondrial allele data, ambient-RNA and doublet calls are not offered. Call get_modalities before telling a user a modality is available.
+What Alpha serves per sample: gene counts (spliced and unspliced), splice junctions and exon inclusion computed from them, cell calls and per-cell QC, and per-cell labels — Cell Ontology cell type (per-study accuracy: compartment 0.84, lineage 0.75, cell type 0.43, subtype 0.32; the last two are previews), chromosomal sex (98.1% of samples agree with GEO) and genetic ancestry (HANCESTRO; human donors with enough covered sites). The labels are public cell metadata: search_datasets and export_manifest filter studies by cell_type_label, sex_genetic and ancestry_genetic. Sample facts follow public conventions and come only from each sample's own GEO fields: tissue_type (CELLxGENE: tissue, organoid, primary cell culture, cell line), cell_line (Cellosaurus), tumor_sample_type (GDC: tumor, primary tumor, metastatic, recurrent tumor, adjacent normal), disease (MONDO, or PATO:0000461 normal for an explicitly healthy donor) and donor_status; search_datasets, export_manifest and search_cells filter on them. Genotypes, mitochondrial allele data, ambient-RNA and doublet calls are not offered. Call get_modalities before telling a user a modality is available.
 
 Every number and every "why" string is computed, not generated — quote them, don't paraphrase. Catalog cell counts can differ from the file's own QC; the file is the truth. Every tool call needs a free singlet.bio account: sign in when your client asks, or send a personal API key from ${ACCOUNT_URL}; calls are counted per account. Downloads themselves (the data.singlet.bio links) never need one. Searches the built-in vocabulary can read cost no AI tokens; a question that needs the AI reading uses your AI allowance (200 readings a day and a monthly token allowance; the monthly allowance is shown in \`_meta.quota\`).`;
 
 
 /** Added to the instructions only once some study is served from s1 (see _shared/s1-gate). */
-const S1_INSTRUCTIONS = `For a study in the .s1 format (format "singlet-s1") get_download_url returns its manifest, list_bundle_files and get_partial_download give byte ranges inside the sample objects, find_cells searches cells by their per-cell statistics and labels, slice_cells gives the byte ranges of just those cells' matrix chunks, and resolve_features turns row numbers into feature names. A study not yet in the .s1 format has one legacy .singlet file (zip64).`;
+const S1_INSTRUCTIONS = `For a study in the .s1 format (format "singlet-s1") get_download_url returns its manifest, list_bundle_files and get_partial_download give byte ranges inside the sample objects, find_cells searches cells by their per-cell statistics and labels, slice_cells gives the byte ranges of just those cells' matrix chunks, and resolve_features turns row numbers into feature names. A study not yet in the .s1 format has one legacy .singlet file (zip64). Across the whole atlas, search_cells counts and locates cells by any metadata and get_cells_page returns them page by page; list_cell_fields is the vocabulary. You are the language model: write search_cells' \`where\` yourself (ontology ids, labels or synonyms); a plain-English \`question\` is read with the built-in vocabulary only. Count matrices are pz2-coded and need the singlet Python package to decode (it carries a compiled codec): \`pip install singlet\`, then \`from singlet.s1 import atlas; adata = atlas.gather(page["cells"])\` turns a get_cells_page page (or [(GSM, [columns])] from find_cells) into an AnnData of counts. Run that code wherever you can execute Python with network access to data.singlet.bio.`;
 const REV_INSTRUCTIONS = `Answers about a study carry a \`rev\`; send it back as \`known_rev\` to get {unchanged: true} instead of the same answer again.`;
 const DIET_INSTRUCTIONS = `Results hold their data in structuredContent with a short text; pass verbose=true for the full text too.`;
 
@@ -132,11 +134,12 @@ const TOOLS = [
     name: "search_datasets",
     title: "Search single-cell studies",
     description:
-      "Find public scRNA-seq studies (or individual samples) in the singlet.bio atlas from a plain-English question, e.g. \"microglia in the aging mouse brain\" or \"human PBMC covid-19 10x\". GEO accessions (GSE…, GSM…) are looked up directly. The question is turned into structured filters (organism, tissue, disease, assay, cell type) which are ANDed and never relaxed silently; when nothing matches, `suggestions` says what dropping one filter would return. Each result carries a deterministic `why` explaining the match, the download URL and one-line Python/R loaders. Needs a free singlet.bio account (sign in when connecting, or an API key from https://singlet.bio/account). Questions the built-in vocabulary can read (and repeats of any question) use no AI tokens; a question that needs a fresh AI reading uses your monthly AI token allowance. Remaining monthly allowance is in `_meta.quota`.",
+      "Find public scRNA-seq studies (or individual samples) in the singlet.bio atlas from a plain-English question, e.g. \"microglia in the aging mouse brain\" or \"human PBMC covid-19 10x\". GEO accessions (GSE…, GSM…) are looked up directly. The question is turned into structured filters (organism, tissue, disease, assay, cell type) which are ANDed and never relaxed silently; when nothing matches, `suggestions` says what dropping one filter would return. Each result carries a deterministic `why` explaining the match, the download URL and one-line Python/R loaders. Needs a free singlet.bio account (sign in when connecting, or an API key from https://singlet.bio/account). By default the server reads `query` with its built-in vocabulary only and runs no model: you are the language model, so put what you understood into the structured filters (organism, tissue, disease, assay, cell_type_label, sex_genetic, ancestry_genetic) and check `Read as` / `Not recognised` in the answer. `interpret: \"ai\"` asks the server's model instead (uses your monthly AI token allowance, shown in `_meta.quota`).",
     inputSchema: {
       type: "object",
       properties: {
         query: { type: "string", description: "Plain English, keywords, or a GEO accession.", minLength: 1, maxLength: 500 },
+        interpret: { type: "string", enum: ["vocabulary", "ai"], default: "vocabulary", description: "vocabulary (default): deterministic reading, no model, no AI allowance; ai: the server's model reads what the vocabulary cannot." },
         level: { type: "string", enum: ["study", "sample"], default: "study", description: "Return studies (GSE, default) or individual samples (GSM)." },
         limit: { type: "integer", minimum: 1, maximum: 50, default: 10 },
         page: { type: "integer", minimum: 1, default: 1 },
@@ -148,8 +151,12 @@ const TOOLS = [
         sex_genetic: { type: "array", items: { type: "string", enum: ["female", "male"] }, description: "Chromosomal sex the .s1 labeller called from the cells (XIST vs chrY; 98.1% sample agreement with GEO)." },
         ancestry_genetic: { type: "array", items: { type: "string" }, description: "Genetic ancestry the .s1 labeller called (HANCESTRO id or label: European, African, East Asian, South Asian, Hispanic or Latin American, admixed ancestry). Human donors only." },
         cell_type_label: { type: "array", items: { type: "string" }, description: "Cell types the .s1 labeller called in the cells (Cell Ontology id or label, e.g. CL:0000084 or \"T cell\"; includes subtypes). Unlike the GEO-text cell type, this comes from the expression." },
+        tissue_type: { type: "array", items: { type: "string", enum: ["tissue", "organoid", "primary cell culture", "cell line"] }, description: "CELLxGENE tissue_type from the sample's own GEO fields: tissue (xenografts included), organoid, primary cell culture or cell line (stem-cell-derived cultures included)." },
+        tumor_sample_type: { type: "array", items: { type: "string", enum: ["tumor", "primary tumor", "metastatic", "recurrent tumor", "adjacent normal"] }, description: "Tumour or adjacent normal tissue (GDC sample_type vocabulary), when the sample's GEO fields say so." },
+        cell_line: { type: "array", items: { type: "string" }, description: "Cellosaurus cell line: accession (CVCL_0063) or name/synonym (\"HEK293T\")." },
         include_unbuilt: { type: "boolean", default: false, description: "Also return studies whose files are not published yet." },
         include_low_qc: { type: "boolean", default: false, description: "Also count and return samples singlet's QC flagged (few genes detected or few reads mapped). Left out by default; proceed with caution if you include them." },
+        include_unclassified: { type: "boolean", default: false, description: "With a tissue filter: also list (separately, flagged \"unclassified\") served studies the catalog has no tissue group for whose GEO title, sample source text or abstract names that tissue. Every answer with a tissue or disease filter already says how many studies have no group and could not match it." },
       },
       required: ["query"],
       additionalProperties: false,
@@ -275,6 +282,9 @@ const TOOLS = [
             sex_genetic: { type: "array", items: { type: "string", enum: ["female", "male"] } },
             ancestry_genetic: { type: "array", items: { type: "string" } },
             cell_type_label: { type: "array", items: { type: "string" } },
+            tissue_type: { type: "array", items: { type: "string", enum: ["tissue", "organoid", "primary cell culture", "cell line"] } },
+            tumor_sample_type: { type: "array", items: { type: "string", enum: ["tumor", "primary tumor", "metastatic", "recurrent tumor", "adjacent normal"] } },
+            cell_line: { type: "array", items: { type: "string" } },
             min_cells: { type: "integer", minimum: 0 },
             year_min: { type: "integer" },
             year_max: { type: "integer" },
@@ -294,13 +304,15 @@ const TOOLS = [
     name: "find_matched_controls",
     title: "Find matched control studies",
     description:
-      "Candidate control studies for a given study: same organism and tissue group, no disease label (or a healthy/control one), preferring the same assay family and reference build, ordered by samples in the file then year. Each candidate carries a deterministic `why` and its loader line, plus honest `caveats` about study-level labels and batch effects. Deterministic (no model call); needs an account like every tool, and uses no AI tokens.",
+      "Candidate control studies for a given study: same organism and tissue group, no disease label (or a healthy/control one), preferring the same assay family and reference build, ordered by samples in the file then year. Each candidate carries a deterministic `why` and its loader line, plus honest `caveats` about study-level labels and batch effects. The answer says how many same-organism studies have no tissue group (and so could not match), and lists those whose GEO text names the tissue as `unclassified_candidates`. Deterministic (no model call); needs an account like every tool, and uses no AI tokens.",
     inputSchema: {
       type: "object",
       properties: {
         gse_id: { type: "string", pattern: "^GSE\\d+$", description: "The study you want controls for." },
         min_samples: { type: "integer", minimum: 1, default: 1, description: "Minimum samples present in the candidate's file." },
         same_assay: { type: "boolean", default: false, description: "Require an overlapping assay family." },
+        tissue: { type: "string", enum: TISSUE_GROUPS as unknown as string[], description: "Tissue group to match. Default: the study's own first tissue group; needed when the catalog has none for it." },
+        include_unclassified: { type: "boolean", default: true, description: "Also list, separately and flagged \"unclassified\", same-organism studies with no tissue group whose GEO title, sample source text or abstract names the tissue. They are text matches to verify, not catalog facts." },
       },
       required: ["gse_id"],
       additionalProperties: false,
@@ -475,6 +487,7 @@ const NEW_TOOLS = [
     },
     annotations: { title: "Row numbers to feature names", readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   },
+  ...CELL_TOOLS,
 ];
 
 const VERBOSE_PROP = { type: "boolean", description: "Also return the full text (the data is always in structuredContent)." };
@@ -779,6 +792,36 @@ function describeApplied(applied: NlSearchBody["applied"]): string {
 
 // ── Tool implementations ────────────────────────────────────────────────────
 
+/**
+ * What the group filters of a search could not judge: per applied tissue / disease group, the served studies (same organisms) with no
+ * group at all, and, when asked and a tissue is filtered, the ones whose GEO text names it (flagged "unclassified", never mixed into results).
+ */
+async function groupCoverage(env: Env, applied: NlSearchBody["applied"], includeUnclassified: boolean, exclude: string[]) {
+  const organisms = applied.organism ?? [];
+  const notes: string[] = [];
+  const unmapped: Record<string, number | null> = {};
+  for (const [col, values] of [["tissue_groups", applied.tissue_group ?? []], ["disease_groups", applied.disease_group ?? []]] as const) {
+    if (!values.length) continue;
+    const n = await countUnmappedStudies(env.DB, col, organisms);
+    unmapped[col] = n;
+    const note = unmappedNote(n, col, values.join(" or "), organisms);
+    if (note) notes.push(note);
+  }
+  let unclassified: UnclassifiedStudy[] = [];
+  if (includeUnclassified && unmapped.tissue_groups) {
+    const rules = await loadRules(env.DB).catch(() => []);
+    const seen = new Set(exclude);
+    for (const group of (applied.tissue_group ?? []).slice(0, 3)) {
+      for (const u of await unclassifiedStudies(env.DB, rules, { col: "tissue_groups", group, organisms, exclude: [...seen], limit: 10 })) {
+        seen.add(u.gse_id);
+        unclassified.push(u);
+      }
+    }
+    unclassified = unclassified.slice(0, 10);
+  } else if (unmapped.tissue_groups) notes.push("Pass include_unclassified: true to also list those whose GEO text names the tissue.");
+  return { notes, unmapped, unclassified };
+}
+
 async function searchDatasets(
   env: Env,
   identity: Identity,
@@ -801,9 +844,10 @@ async function searchDatasets(
   for (const v of strArray(args.disease)) url.searchParams.append("disease_group", v);
   for (const v of strArray(args.assay)) url.searchParams.append("assay_family", v);
   if (args.min_cells != null && Number.isFinite(Number(args.min_cells))) url.searchParams.set("min_cells", String(Math.max(0, Math.floor(Number(args.min_cells)))));
-  for (const k of ["sex_genetic", "ancestry_genetic", "cell_type_label"] as const) for (const v of strArray(args[k])) url.searchParams.append(k, v);
+  for (const k of ["sex_genetic", "ancestry_genetic", "cell_type_label", "tissue_type", "tumor_sample_type", "cell_line"] as const) for (const v of strArray(args[k])) url.searchParams.append(k, v);
   if (args.include_unbuilt === true) url.searchParams.set("has_bundle", "0");
   if (args.include_low_qc === true) url.searchParams.set("include_low_qc", "1");
+  if (args.interpret !== "ai") url.searchParams.set("interpret", "vocab");
 
   const r = await nlSearch(env, identity, waitUntil, url);
   if (!r.ok) return toolError(r.message, { error: r.error });
@@ -814,11 +858,14 @@ async function searchDatasets(
   // assistant relays the sign-in advice rather than pretending the AI reading happened.
   const exhausted = !!b.quota_exceeded;
 
+  const includeUnclassified = args.include_unclassified === true;
   if (b.level === "gse") {
     const rows = (b.data as StudyRow[]).map((row) => studySummary(row, b.why[row.gse_id] ?? row.why));
+    const cov = await groupCoverage(env, b.applied, includeUnclassified, rows.map((r) => r.gse_id));
     const lines: string[] = [];
     lines.push(`${fmt(b.total)} matching stud${b.total === 1 ? "y" : "ies"} for "${query}" (page ${b.page}, showing ${rows.length}).`);
     lines.push(`Read as: ${describeApplied(b.applied)}.`);
+    for (const n of cov.notes) lines.push(n);
     if (b.dropped.length) lines.push(`Not recognised: ${b.dropped.map((d) => `${d.field} "${d.value}"`).join(", ")}.`);
     if (b.note) lines.push(b.note);
     if (b.quota_exceeded) lines.push("This month's AI allowance is used up; the question was read with the built-in vocabulary only.");
@@ -840,6 +887,11 @@ async function searchDatasets(
         lines.push(`- ${what} → ${fmt(s.total)} studies`);
       }
     }
+    if (cov.unclassified.length) {
+      lines.push("");
+      lines.push(`Unclassified (no tissue group in the catalog; their GEO text names ${(b.applied.tissue_group ?? []).join(" or ")}; verify with get_study before use):`);
+      for (const u of cov.unclassified) lines.push(`- ${u.gse_id} — ${u.title ?? "(untitled)"} · matched in ${u.matched_in}: "${u.evidence}"`);
+    }
     const result = toolResult(
       lines.join("\n"),
       {
@@ -856,6 +908,9 @@ async function searchDatasets(
          groups: b.groups ?? { full: b.total, partial: 0 },
          hard_applied: b.hard_applied ?? b.applied,
         suggestions: b.suggestions,
+        unmapped_studies: cov.unmapped,
+        unmapped_notes: cov.notes,
+        unclassified: cov.unclassified,
         note: b.note ?? null,
         quota_exceeded: exhausted,
         model: b.model ?? null,
@@ -866,9 +921,11 @@ async function searchDatasets(
   }
 
   const rows = (b.data as SampleRow[]).map(sampleSummary);
+  const cov = await groupCoverage(env, b.applied, false, []);
   const lines: string[] = [];
   lines.push(`${fmt(b.total)} matching sample${b.total === 1 ? "" : "s"} for "${query}" (page ${b.page}, showing ${rows.length}).`);
   lines.push(`Read as: ${describeApplied(b.applied)}.`);
+  for (const n of cov.notes.filter((n) => !n.startsWith("Pass include_unclassified"))) lines.push(n);
   if (b.note) lines.push(b.note);
   lines.push("");
   for (const s of rows) {
@@ -879,7 +936,7 @@ async function searchDatasets(
   lines.push("Note: files are per study — load the parent GSE and subset to these samples.");
   const result = toolResult(
     lines.join("\n"),
-    { query, level: "sample", interpreted: b.interpreted, applied: b.applied, not_recognised: b.dropped, total: b.total, totals: b.totals, page: b.page, limit: b.limit, results: rows, note: b.note ?? null, quota_exceeded: exhausted },
+    { query, level: "sample", interpreted: b.interpreted, applied: b.applied, not_recognised: b.dropped, total: b.total, totals: b.totals, page: b.page, limit: b.limit, results: rows, unmapped_studies: cov.unmapped, unmapped_notes: cov.notes, note: b.note ?? null, quota_exceeded: exhausted },
     meta
   );
   return exhausted ? { ...result, isError: true } : result;
@@ -1081,7 +1138,7 @@ async function callTool(ctx: CallContext, params: Record<string, unknown>) {
   const r = await callToolInner(ctx, params);
   if (!("result" in r) || !r.result) return r;
   const args = (params.arguments && typeof params.arguments === "object" ? params.arguments : {}) as Record<string, unknown>;
-  return { result: diet(r.result, args, ctx.env) };
+  return { result: withDataText(diet(r.result, args, ctx.env)) };
 }
 
 async function callToolInner(ctx: CallContext, params: Record<string, unknown>) {
@@ -1153,6 +1210,12 @@ async function callToolInner(ctx: CallContext, params: Record<string, unknown>) 
         return { result: withQuota(await sliceCells(db, args), meta) };
       case "resolve_features":
         return { result: withQuota(await resolveFeatures(db, args), meta) };
+      case "search_cells":
+        return { result: withQuota(await searchCellsTool(ctx.env, ctx.identity, ctx.waitUntil, args), meta) };
+      case "list_cell_fields":
+        return { result: withQuota(await cellFieldsTool(ctx.env, ctx.waitUntil, args), meta) };
+      case "get_cells_page":
+        return { result: withQuota(await cellsPageTool(ctx.env, ctx.request, ctx.identity, ctx.waitUntil, args), meta) };
       case "get_cohort": {
         // Every tool here already needs a key; a link cohort additionally opens with its share token.
         return { result: await productTool(ctx, meta, (p) => getCohort(p, uid, { id: args.id, token: args.token })) };
@@ -1238,15 +1301,10 @@ async function handleMessage(ctx: CallContext, msg: JsonRpcRequest): Promise<unk
   }
 }
 
-function apiKeyFromQuery(request: Request): string | null {
-  const value = (new URL(request.url).searchParams.get("key") ?? "").trim();
-  return API_KEY_RE.test(value) ? value : null;
-}
-
 async function authFor(env: Env, request: Request, waitUntil: (p: Promise<unknown>) => void): Promise<CallContext["auth"]> {
-  // An API key in a header first, then an OAuth access token. ?key=sk_live_… predates OAuth
-  // connectors and still works for clients that can only take a URL; prefer signing in.
-  const check = await checkCredential(env, request, waitUntil, apiKeyFromRequest(request) ?? apiKeyFromQuery(request));
+  // An API key in a header first, then an OAuth access token. A key in the URL (?key=) is not
+  // accepted: URLs end up in logs and histories. Clients that can only take a URL sign in instead.
+  const check = await checkCredential(env, request, waitUntil);
   return check ?? { ok: false, reason: "missing", message: keyMessage("unknown") };
 }
 

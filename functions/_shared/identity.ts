@@ -128,14 +128,10 @@ export function tokenMessage(reason: KeyReason): string {
 
 /**
  * The credential on the request — an API key (header) or an OAuth access token — checked against D1;
- * null when neither is present. `key` overrides the API key lookup (the MCP endpoint's ?key=).
+ * null when neither is present.
  */
-export async function checkCredential(
-  env: { DB: D1Database },
-  request: Request,
-  waitUntil: WaitUntil,
-  key: string | null = apiKeyFromRequest(request),
-): Promise<CredentialCheck | null> {
+export async function checkCredential(env: { DB: D1Database }, request: Request, waitUntil: WaitUntil): Promise<CredentialCheck | null> {
+  const key = apiKeyFromRequest(request);
   if (key) {
     const check = await checkApiKey(env, key, waitUntil);
     return { ...check, via: "api_key" };

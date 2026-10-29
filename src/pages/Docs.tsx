@@ -34,7 +34,7 @@ const GSE_2 = "GSE146974";
 type SectionId = (typeof SECTIONS)[number]["id"];
 
 /** Anchors inside a section, mapped to the section that holds them. */
-const SUB_ANCHORS: Record<string, SectionId> = { modalities: "singlet-file" };
+const SUB_ANCHORS: Record<string, SectionId> = { modalities: "singlet-file", croissant: "bulk-manifests" };
 
 /**
  * One section at a time: the URL hash picks it (default: Install). A hash that names an anchor inside a
@@ -138,13 +138,15 @@ const Docs = () => {
             {/* ── Install ── */}
             <Section id="install" title="Install">
               <p>
-                Both packages install from GitHub and compile a small C++17 extension against libzstd, so you need a C++
-                compiler and the zstd headers first. (The name <Mono>singlet</Mono> on PyPI belongs to an unrelated
-                package; install from GitHub as shown.)
+                Python 3.9 or newer, from PyPI. The wheels for Linux, macOS and Windows include the compiled codec, so no
+                compiler is needed:
               </p>
-              <p>Python 3.9 or newer:</p>
-              <CodeBlock label="bash" code={`${BUILD_DEPS}\n${PY_INSTALL}`} />
-              <p className="mt-4">R 4.2 or newer (the Bioconductor packages are needed for the default return type):</p>
+              <CodeBlock label="bash" code={PY_INSTALL} />
+              <p className="mt-4">
+                R 4.2 or newer, from GitHub until the CRAN release (the Bioconductor packages are needed for the default
+                return type). It compiles a small C++17 extension, so you need a C++ compiler; Zstandard is bundled:
+              </p>
+              <CodeBlock label="bash" code={BUILD_DEPS} />
               <CodeBlock label="r" code={R_INSTALL_STANDALONE} />
               <p className="mt-4">
                 No account, API key or configuration is needed to load data. Files are fetched from{" "}
@@ -175,8 +177,20 @@ const Docs = () => {
                     <td>A local MCP server (the hosted one at <Mono>singlet.bio/mcp</Mono> needs no install; see <a href="#api-keys">API keys &amp; MCP</a>).</td>
                   </tr>
                   <tr>
+                    <td><Mono>[analysis]</Mono></td>
+                    <td>scanpy, matplotlib, statsmodels and Leiden clustering for the analysis helpers.</td>
+                  </tr>
+                  <tr>
+                    <td><Mono>[zarr]</Mono>, <Mono>[tiledb]</Mono></td>
+                    <td>Convert to and from Zarr and TileDB-SOMA.</td>
+                  </tr>
+                  <tr>
+                    <td><Mono>[migrate]</Mono></td>
+                    <td>Numba, for converting legacy <Mono>.singlet</Mono> files to <Mono>.s1</Mono>.</td>
+                  </tr>
+                  <tr>
                     <td><Mono>[all]</Mono></td>
-                    <td>Every optional dependency.</td>
+                    <td>All of the above except <Mono>[migrate]</Mono>.</td>
                   </tr>
                 </tbody>
               </table>
@@ -479,6 +493,46 @@ python load_studies.py`}
                 Manifests are capped at 2,000 studies per request; the JSON response's <Mono>total</Mono> field tells
                 you if a search matched more than that, so you can narrow the filters. All rows are CC0.
               </p>
+              <h3 id="croissant" className="scroll-mt-24">Croissant metadata</h3>
+              <p>
+                The atlas, every study and every sample are described in{" "}
+                <a href="https://docs.mlcommons.org/croissant/" className="text-primary underline underline-offset-2">MLCommons Croissant 1.1</a>{" "}
+                JSON-LD, with the Responsible AI fields (collection, preprocessing, annotation, biases, limitations, sensitive
+                information, maintenance). The document's <Mono>version</Mono> is the Research Alpha release policy in force.
+              </p>
+              <table>
+                <thead>
+                  <tr>
+                    <th>URL</th>
+                    <th>What it describes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><Mono>/croissant.json</Mono></td>
+                    <td>The atlas: counts, release policy, and a <Mono>studies</Mono> record set (<Mono>/api/croissant/studies.csv</Mono>).</td>
+                  </tr>
+                  <tr>
+                    <td><Mono>/api/croissant/&lt;GSE&gt;</Mono></td>
+                    <td>One study: its sample objects and label sidecars, and the record sets <Mono>samples</Mono>, <Mono>cells</Mono>, <Mono>cell_qc</Mono>, <Mono>spliced_counts</Mono>, <Mono>unspliced_counts</Mono>, <Mono>features</Mono>.</td>
+                  </tr>
+                  <tr>
+                    <td><Mono>/api/croissant/&lt;GSE&gt;/&lt;GSM&gt;</Mono></td>
+                    <td>One sample, so the <Mono>cells</Mono> record set reads that sample's label sidecar alone.</td>
+                  </tr>
+                </tbody>
+              </table>
+              <CodeBlock
+                label="python — read a study's samples and one sample's cells with mlcroissant"
+                code={`# pip install "mlcroissant[parquet]"
+import mlcroissant as mlc
+samples = mlc.Dataset("https://singlet.bio/api/croissant/${GSE}").records("samples")
+cells = mlc.Dataset("https://singlet.bio/api/croissant/${GSE}/${GSM}").records("cells")`}
+              />
+              <p className="text-sm text-muted-foreground">
+                mlcroissant reads <Mono>samples</Mono>, <Mono>features</Mono> and a sample's <Mono>cells</Mono>; the count matrices and{" "}
+                <Mono>cell_qc</Mono> are inside the <Mono>.s1</Mono> objects, so read those with <Mono>singlet.load()</Mono>.
+              </p>
             </Section>
 
             {/* ── Provenance and versioning ── */}
@@ -601,7 +655,7 @@ BiocManager::install(c("SingleCellExperiment", "SummarizedExperiment", "S4Vector
                 </li>
                 <li>
                   The base package itself depends only on <Mono>Rcpp</Mono>, <Mono>Matrix</Mono> and <Mono>jsonlite</Mono>
-                  (plus a C++17 compiler and libzstd to build); the lower-level readers (<Mono>read_1pz()</Mono>,{" "}
+                  (plus a C++17 compiler to build); the lower-level readers (<Mono>read_1pz()</Mono>,{" "}
                   <Mono>read_singlet()</Mono>) work with sparse <Mono>Matrix</Mono> objects.
                 </li>
               </ul>

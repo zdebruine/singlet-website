@@ -10,7 +10,7 @@ import { usePageMeta } from "@/hooks/usePageMeta";
 import { fmtCompact, fmtInt } from "@/lib/catalog-display";
 import { cn } from "@/lib/utils";
 import { Railway, Station } from "@/components/about/Railway";
-import { FormatSizeChart, H5AD_RATIO, HBars } from "@/components/landing/charts";
+import { FORMAT_NOTE, FormatSizeChart, H5AD_PAIRED, HBars } from "@/components/landing/charts";
 import { QcFunnel, sampleFunnel } from "@/components/landing/QcFunnel";
 import { QueryParse } from "@/components/landing/QueryParse";
 import { MODALITIES } from "@/components/landing/Modalities";
@@ -144,7 +144,7 @@ const About = () => {
               title="Protocol detected from the reads"
               claim="The barcode and UMI layout is read from the reads themselves, so each library is counted the way it was built."
               visual={facets ? (<><Caption>Studies by assay</Caption><HBars data={assays} labelWidth="w-[150px] sm:w-[190px]" /></>) : <Loading />}
-              detail={<p>10x 3′ and 5′, Multiome, Drop-seq, inDrop, CITE-seq, BD Rhapsody, Smart-seq and more.</p>}
+              detail={<p>10x 3′ and 5′, Multiome and CITE-seq (RNA library), Drop-seq, inDrop, Seq-Well, BD Rhapsody, CEL-seq2, MARS-seq2, SPLiT-seq, DNBelab C4 and more. Plate-based Smart-seq is not processed in Alpha.</p>}
               link={{ to: "/browse", label: "Filter by assay in Browse" }}
             />
 
@@ -157,10 +157,10 @@ const About = () => {
               detail={
                 <>
                   <p>
-                    Human GRCh38 (GENCODE v44), mouse GRCm39 (vM33), rat mRatBN7.2, macaque Mmul_10, zebrafish GRCz11. The build is recorded on
-                    every cell.
+                    Human GRCh38 (GENCODE v44), mouse GRCm39 (vM33), rat mRatBN7.2, macaque Mmul_10, zebrafish GRCz11, and a combined
+                    human-mouse reference for mixed-species studies. The build is in every study manifest and on every cell you load.
                   </p>
-                  <p>Spliced and unspliced counts are in every file. In Alpha some molecules are counted in both, so they are not yet suited to RNA velocity; Beta counts every molecule once.</p>
+                  <p>In Alpha some molecules are counted twice, so the spliced and unspliced layers are not yet suited to RNA velocity.</p>
                 </>
               }
               link={{ to: "/docs#provenance", label: "References and versions" }}
@@ -170,7 +170,7 @@ const About = () => {
               id="layers"
               n={4}
               title="More than gene expression"
-              claim="Gene expression plus splicing layers; other layers where the data allow."
+              claim="Splicing layers, immune receptor genes, and a cell type, sex and ancestry label for each cell where the data allow."
               visual={
                 <ul className="space-y-4">
                   {MODALITIES.map((m) => (
@@ -184,7 +184,7 @@ const About = () => {
                   ))}
                 </ul>
               }
-              detail={<p>Research Alpha serves transcriptomics only, with per-cell cell type, sex and genetic ancestry labels. Mitochondrial allele data, genotypes, ambient-RNA and doublet calls are not offered in Alpha.</p>}
+              detail={<p>Alpha is transcriptomics only. No genotypes, mtDNA alleles, ambient-RNA or doublet calls.</p>}
               link={{ to: "/docs#modalities", label: "Layers in the docs" }}
             />
 
@@ -207,13 +207,10 @@ const About = () => {
               id="file"
               n={6}
               title="One small file per sample"
-              claim={<>Each sample in one <Mono>.s1</Mono> object, its matrices in <Mono>.1pz</Mono>: raw counts, {H5AD_RATIO.toFixed(1)}× smaller than H5AD. A study's manifest lists its samples. Free, no account.</>}
-              visual={<><Caption>Size of the same count matrix (uncompressed = 100%)</Caption><FormatSizeChart /></>}
+              claim={<>Each sample is one <Mono>.s1</Mono> object of raw counts, {H5AD_PAIRED} smaller than H5AD. A study's manifest lists its samples. Free, no account.</>}
+              visual={<><Caption>Size of a count matrix (uncompressed = 100%)</Caption><FormatSizeChart /><p className="mt-3 text-[12px] text-muted-foreground">{FORMAT_NOTE}</p></>}
               detail={
-                <>
-                  <p>Per sample: exon and intron counts, cell calls, QC and provenance. Nothing is normalised or batch-corrected.</p>
-                  <p>One sample can be read on its own over HTTP range requests.</p>
-                </>
+<p>Per sample: exon and intron counts, cell calls, QC and provenance, nothing normalised or batch-corrected. One sample, or a few of its cells, can be read on its own over HTTP range requests.</p>
               }
               link={{ to: "/docs#singlet-file", label: "Modalities and files" }}
             />
@@ -225,10 +222,7 @@ const About = () => {
               claim="Type a question the way you would ask a colleague. It becomes exact filters you can see and change."
               visual={<QueryParse />}
               detail={
-                <>
-                  <p>A fixed vocabulary reads the question first, with no model call and no cost. Only words it cannot place go to a language model, once; the answer is cached and checked against the vocabulary.</p>
-                  <p>Species comes only from words like "mouse" or "patients". A disease never implies a tissue: "melanoma" is cancer, not skin.</p>
-                </>
+<p>A fixed vocabulary reads the question first, at no cost; only words it cannot place go to a language model. Species comes only from words like "mouse"; a disease never implies a tissue.</p>
               }
               link={{ to: "/ai-search", label: "What AI Search adds" }}
             />

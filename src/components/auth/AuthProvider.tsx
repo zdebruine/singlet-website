@@ -14,6 +14,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { apiClient } from "@/integrations/api/client";
 import { aiQuotaStore } from "@/lib/ai-quota";
+import { setAnalyticsSignedIn } from "@/lib/analytics";
 import { SignInDialog } from "./SignInDialog";
 
 export interface AuthUser {
@@ -138,6 +139,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Compared across page loads too: signing in always ends in a reload.
       if (noteQuotaSubject(id, lastUserId.current)) aiQuotaStore.clear();
       lastUserId.current = id;
+      setAnalyticsSignedIn(id !== null);
       // Keep object identity when nothing changed, so consumers' effects don't re-run.
       setUser((prev) => (sameUser(prev, u) ? prev : u));
       setProviders((prev) => (prev.github === me.providers.github && prev.google === me.providers.google ? prev : me.providers));
@@ -180,6 +182,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     lastUserId.current = null;
     setUser(null);
     aiQuotaStore.clear();
+    setAnalyticsSignedIn(false);
     return true;
   }, []);
 

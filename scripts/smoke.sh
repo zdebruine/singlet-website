@@ -173,12 +173,13 @@ fi
 xfo=$(curl -s -m 30 -o /dev/null -D - "$BASE/" | tr -d '\r' | grep -i '^x-frame-options:' | head -n 1)
 if printf '%s' "$xfo" | grep -q -i -E '^x-frame-options: *DENY$'; then ok "x-frame-options on /"; else bad "x-frame-options on / (got '${xfo:-none}')"; fi
 
-# MCP: tools/list returns the original 14 tools, or 17 once a study is served from s1 (find_cells, slice_cells, resolve_features are listed only then).
+# MCP: tools/list returns the original 14 tools, or 19 once a study is served from s1 (find_cells, slice_cells, resolve_features,
+# search_cells and get_cells_page are listed only then).
 mcp=$(curl -s -m 30 -X POST "$BASE/mcp" -H 'content-type: application/json' \
   -H 'accept: application/json, text/event-stream' \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}')
 n=$(printf '%s' "$mcp" | grep -o '"name":"[a-z_]*","title"' | wc -l | tr -d ' ')
-if [ "$n" = "14" ] || [ "$n" = "17" ]; then ok "mcp tools/list ($n)"; else bad "mcp tools/list ($n tools, want 14 or 17)"; fi
+if [ "$n" = "14" ] || [ "$n" = "20" ]; then ok "mcp tools/list ($n)"; else bad "mcp tools/list ($n tools, want 14 or 20)"; fi
 
 # MCP tool calls need an account: without a credential a call is HTTP 401 whose WWW-Authenticate points at the
 # OAuth metadata (that 401 is what makes Claude's connectors start sign-in; a 200 tool error never does).
@@ -193,6 +194,7 @@ fi
 check "oauth protected resource" 200 "$BASE/.well-known/oauth-protected-resource" "\"resource\": *\"$BASE/mcp\"" "json"
 check "oauth resource (mcp path)" 200 "$BASE/.well-known/oauth-protected-resource/mcp" "\"authorization_servers\"" "json"
 check "oauth server metadata"   200 "$BASE/.well-known/oauth-authorization-server" "\"registration_endpoint\": *\"$BASE/oauth/register\"" "json"
+check "oauth server: CIMD"       200 "$BASE/.well-known/oauth-authorization-server" "\"client_id_metadata_document_supported\": *true" "json"
 code=$(curl -s -m 30 -o /dev/null -w '%{http_code}' -X POST "$BASE/oauth/token" -H 'content-type: application/x-www-form-urlencoded' -d 'grant_type=authorization_code&code=sac_nope&client_id=scl_nope')
 if [ "$code" = 401 ]; then ok "oauth token rejects an unknown client"; else bad "oauth token unknown client ($code, want 401)"; fi
 

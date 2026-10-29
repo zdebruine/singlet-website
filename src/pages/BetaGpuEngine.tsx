@@ -56,9 +56,9 @@ const STAGES: Stage[] = [
     state: "exact",
   },
   {
-    stage: "Whole sample, in singlet --engine gpu",
-    check: "64,775,880 reads took the GPU's mapping, each re-mapped by STAR: 0 mismatches (PBMC 1k v3, 66.6 M read pairs). Every count matrix, cell table and pileup identical to --engine cpu on 3 samples",
-    speed: "39–44% less CPU per read pair than the CPU engine; not yet faster per sample",
+    stage: "Whole sample, in singlet --engine gpu (mapping and non-host screen on the GPU)",
+    check: "66.5 M reads took the GPU's mapping, each re-mapped by STAR: 0 mismatches (PBMC 1k v3). Every data output identical to --engine cpu with 3 and 6 samples in flight",
+    speed: "half the CPU per read pair of the CPU engine (17.6 vs 35.2 core-s per M pairs, 6 samples); not yet cheaper per sample",
     state: "slow",
   },
 ];
@@ -140,7 +140,7 @@ const BetaGpuEngine = () => {
           <h2 id="next-h" className="text-[22px] font-semibold text-foreground">What is left</h2>
           <ul className="mt-3 space-y-2 text-[14.5px] leading-relaxed text-foreground">
             <li>Make the stitching stage about 4× faster while keeping it identical. Most of its time goes to reads that hit more than 16 alignment windows.</li>
-            <li>Move the GPU annotation, pileup and non-host stages into <span className="font-mono">singlet --engine gpu</span>. Today the binary maps on the GPU and runs every other stage on the CPU, so it uses less CPU per sample but is not yet cheaper per sample.</li>
+            <li>Move the GPU pileup into <span className="font-mono">singlet --engine gpu</span> (in progress) and drop the BAM round trip. Today the binary maps and screens on the GPU and runs the other stages on the CPU, so it uses half the CPU per sample but is not yet cheaper per sample.</li>
             <li>Check whole samples against the CPU engine on 5′ and single-nucleus libraries, not only 3′.</li>
             <li>Pass the same equivalence and <Link to="/benchmarking#beta" className="text-primary underline underline-offset-2">Beta benchmarks</Link> as the CPU engine. Until it does, Beta runs on the CPU engine.</li>
           </ul>

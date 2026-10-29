@@ -36,14 +36,15 @@ beforeEach(() => {
 });
 
 describe("MCP access", () => {
-  it("accepts the key in the query string for clients that cannot set headers", async () => {
+  it("ignores a key in the query string: the call needs sign-in or a header", async () => {
     const env = await setup();
     const res = await post(call("get_atlas_stats"), env, {}, `?key=${KEY}`);
-    const body = (await res.json()) as { result: { _meta?: { auth?: string } } };
-    expect(res.status).toBe(200);
-    expect(body.result._meta?.auth).not.toBe("key_required"); // the tool itself fails here: no catalog tables
-    const bad = await post(call("get_atlas_stats"), env, {}, "?key=sk_live_" + "c".repeat(32));
-    expect(bad.status).toBe(401);
+    expect(res.status).toBe(401);
+    expect(res.headers.get("WWW-Authenticate")).toMatch(/resource_metadata=/);
+    const body = (await res.json()) as { error: { data: { auth: string } } };
+    expect(body.error.data.auth).toBe("sign_in_required");
+    const n = await env.DB.prepare(`SELECT COUNT(*) AS n FROM mcp_usage`).first<{ n: number }>();
+    expect(n?.n).toBe(0);
   });
 
   it("lists tools without a key", async () => {

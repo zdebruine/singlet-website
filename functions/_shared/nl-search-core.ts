@@ -268,6 +268,8 @@ export async function nlSearch(
   const acc = extractAccessions(q);
   const isAccession = acc.gse.length > 0 || acc.gsm.length > 0;
   const skipInterpret = isAccession || url.searchParams.get("interpret") === "0";
+  // interpret=vocab: the built-in vocabulary only, never the model (MCP callers bring their own model)
+  const vocabOnly = url.searchParams.get("interpret") === "vocab";
 
   let interpreted: Interpreted | null = null;
   let model: string | undefined;
@@ -279,7 +281,7 @@ export async function nlSearch(
   let cacheable = true;
 
   if (!skipInterpret) {
-    const r = await interpretQuery(env, ctx, identity, q);
+    const r = await interpretQuery(env, ctx, identity, q, { model: !vocabOnly });
     interpreted = r.interpreted;
     model = r.model;
     quota = r.quota;

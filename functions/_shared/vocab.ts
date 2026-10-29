@@ -122,6 +122,11 @@ function edgeCache(): Cache | null {
   }
 }
 
+/** Forget the isolate's copy of the rules (tests that load different rules into one isolate). */
+export function clearRulesCache(): void {
+  isolateRules = null;
+}
+
 /**
  * Load `vocab_rules`, cached per isolate (1h) and in the Cache API (1h) so D1
  * is touched roughly once an hour per colo.

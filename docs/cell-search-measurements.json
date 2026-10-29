@@ -1,0 +1,1534 @@
+{
+ "engine": {
+  "machine": "win32 x64, node v24.14.1 (V8, the engine Workers run)",
+  "index": {
+   "version": "20261027T2236Z-3bdf42bc",
+   "summary_rows": 1476601,
+   "bytes": 7809935,
+   "requests": 4,
+   "load_ms": 3694
+  },
+  "facts": {
+   "samples": 47670,
+   "built_at": "2026-10-28T11:38:46.693Z",
+   "release_policy": "alpha-2026-10-27e",
+   "json_bytes": 5148028,
+   "hydrate_ms": 40.1,
+   "facts_build_ms": 62147,
+   "facts_build_d1_rows_read": 467824
+  },
+  "join_ms": 158.1,
+  "reps": 25,
+  "queries": [
+   {
+    "id": "all",
+    "kind": "none",
+    "depth": null,
+    "where": {},
+    "totals": {
+     "cells": 221164736,
+     "samples": 46649,
+     "studies": 6977,
+     "rows": 1460682
+    },
+    "cpu_ms_first": 188.8,
+    "cpu_ms_p50": 148.3,
+    "cpu_ms_p95": 251.3
+   },
+   {
+    "id": "ct-hematopoietic",
+    "kind": "single",
+    "depth": "CL compartment (hematopoietic cell)",
+    "where": {
+     "cell_type": "CL:0000988"
+    },
+    "totals": {
+     "cells": 92743222,
+     "samples": 36411,
+     "studies": 5723,
+     "rows": 799035
+    },
+    "cpu_ms_first": 143.9,
+    "cpu_ms_p50": 116.2,
+    "cpu_ms_p95": 161.2
+   },
+   {
+    "id": "ct-leukocyte",
+    "kind": "single",
+    "depth": "CL closure only (leukocyte)",
+    "where": {
+     "cell_type": "CL:0000738"
+    },
+    "totals": {
+     "cells": 27677032,
+     "samples": 33908,
+     "studies": 5352,
+     "rows": 325109
+    },
+    "cpu_ms_first": 91.3,
+    "cpu_ms_p50": 98.2,
+    "cpu_ms_p95": 126.5
+   },
+   {
+    "id": "ct-lymphocyte",
+    "kind": "single",
+    "depth": "CL lineage (lymphocyte)",
+    "where": {
+     "cell_type": "CL:0000542"
+    },
+    "totals": {
+     "cells": 48871610,
+     "samples": 28312,
+     "studies": 4549,
+     "rows": 438813
+    },
+    "cpu_ms_first": 107.9,
+    "cpu_ms_p50": 79.5,
+    "cpu_ms_p95": 103.5
+   },
+   {
+    "id": "ct-tcell",
+    "kind": "single",
+    "depth": "CL cell type (T cell)",
+    "where": {
+     "cell_type": "CL:0000084"
+    },
+    "totals": {
+     "cells": 33312852,
+     "samples": 24072,
+     "studies": 3831,
+     "rows": 242657
+    },
+    "cpu_ms_first": 54.8,
+    "cpu_ms_p50": 64.1,
+    "cpu_ms_p95": 103.6
+   },
+   {
+    "id": "ct-cd8",
+    "kind": "single",
+    "depth": "CL type (CD8 alpha-beta T cell)",
+    "where": {
+     "cell_type": "CL:0000625"
+    },
+    "totals": {
+     "cells": 12450443,
+     "samples": 21115,
+     "studies": 3440,
+     "rows": 94489
+    },
+    "cpu_ms_first": 54.5,
+    "cpu_ms_p50": 58.4,
+    "cpu_ms_p95": 77.6
+   },
+   {
+    "id": "ct-cd8-em",
+    "kind": "single",
+    "depth": "CL subtype (effector memory CD8)",
+    "where": {
+     "cell_type": "CL:0000913"
+    },
+    "totals": {
+     "cells": 2197120,
+     "samples": 15585,
+     "studies": 2755,
+     "rows": 17523
+    },
+    "cpu_ms_first": 54.4,
+    "cpu_ms_p50": 46.9,
+    "cpu_ms_p95": 91.3
+   },
+   {
+    "id": "sex-female",
+    "kind": "single",
+    "depth": "PATO",
+    "where": {
+     "sex": "female"
+    },
+    "totals": {
+     "cells": 82122774,
+     "samples": 21706,
+     "studies": 4303,
+     "rows": 571066
+    },
+    "cpu_ms_first": 144.7,
+    "cpu_ms_p50": 130.1,
+    "cpu_ms_p95": 270.6
+   },
+   {
+    "id": "anc-african",
+    "kind": "single",
+    "depth": "HANCESTRO",
+    "where": {
+     "ancestry": "HANCESTRO:0010"
+    },
+    "totals": {
+     "cells": 188804,
+     "samples": 87,
+     "studies": 19,
+     "rows": 971
+    },
+    "cpu_ms_first": 68.5,
+    "cpu_ms_p50": 33.6,
+    "cpu_ms_p95": 97.2
+   },
+   {
+    "id": "tissue-respiratory",
+    "kind": "single",
+    "depth": "UBERON system (respiratory system)",
+    "where": {
+     "tissue": "UBERON:0001004"
+    },
+    "totals": {
+     "cells": 7737697,
+     "samples": 2121,
+     "studies": 301,
+     "rows": 75971
+    },
+    "cpu_ms_first": 215.2,
+    "cpu_ms_p50": 40.2,
+    "cpu_ms_p95": 99.7
+   },
+   {
+    "id": "tissue-lung",
+    "kind": "single",
+    "depth": "UBERON organ (lung)",
+    "where": {
+     "tissue": "UBERON:0002048"
+    },
+    "totals": {
+     "cells": 6837872,
+     "samples": 1829,
+     "studies": 255,
+     "rows": 66379
+    },
+    "cpu_ms_first": 32.5,
+    "cpu_ms_p50": 30.7,
+    "cpu_ms_p95": 81.4
+   },
+   {
+    "id": "disease-cancer",
+    "kind": "single",
+    "depth": "MONDO root-level (cancer)",
+    "where": {
+     "disease": "MONDO:0004992"
+    },
+    "totals": {
+     "cells": 3004380,
+     "samples": 745,
+     "studies": 85,
+     "rows": 21461
+    },
+    "cpu_ms_first": 19,
+    "cpu_ms_p50": 28.3,
+    "cpu_ms_p95": 83.3
+   },
+   {
+    "id": "disease-lung-cancer",
+    "kind": "single",
+    "depth": "MONDO organ (lung cancer)",
+    "where": {
+     "disease": "MONDO:0008903"
+    },
+    "totals": {
+     "cells": 648540,
+     "samples": 119,
+     "studies": 9,
+     "rows": 3858
+    },
+    "cpu_ms_first": 23.2,
+    "cpu_ms_p50": 29.5,
+    "cpu_ms_p95": 74.9
+   },
+   {
+    "id": "disease-nsclc",
+    "kind": "single",
+    "depth": "MONDO leaf (NSCLC)",
+    "where": {
+     "disease": "MONDO:0005233"
+    },
+    "totals": {
+     "cells": 630944,
+     "samples": 111,
+     "studies": 7,
+     "rows": 3720
+    },
+    "cpu_ms_first": 23.2,
+    "cpu_ms_p50": 37.3,
+    "cpu_ms_p95": 90.5
+   },
+   {
+    "id": "stage-adult",
+    "kind": "single",
+    "depth": "HsapDv/MmusDv (adult)",
+    "where": {
+     "development_stage": "adult"
+    },
+    "totals": {
+     "cells": 21030872,
+     "samples": 4959,
+     "studies": 643,
+     "rows": 163941
+    },
+    "cpu_ms_first": 149.5,
+    "cpu_ms_p50": 96.2,
+    "cpu_ms_p95": 177
+   },
+   {
+    "id": "study-year",
+    "kind": "single",
+    "depth": "study",
+    "where": {
+     "year": [
+      2023,
+      2026
+     ]
+    },
+    "totals": {
+     "cells": 156797004,
+     "samples": 31718,
+     "studies": 4696,
+     "rows": 1048034
+    },
+    "cpu_ms_first": 418.2,
+    "cpu_ms_p50": 266.8,
+    "cpu_ms_p95": 421.6
+   },
+   {
+    "id": "and-3",
+    "kind": "combined",
+    "depth": null,
+    "where": {
+     "cell_type": "CL:0000625",
+     "sex": "female",
+     "disease": "MONDO:0008903"
+    },
+    "totals": {
+     "cells": 129143,
+     "samples": 69,
+     "studies": 7,
+     "rows": 321
+    },
+    "cpu_ms_first": 40.6,
+    "cpu_ms_p50": 32,
+    "cpu_ms_p95": 63
+   },
+   {
+    "id": "and-6",
+    "kind": "combined",
+    "depth": null,
+    "where": {
+     "cell_type": "CL:0000625",
+     "sex": "female",
+     "development_stage": "adult",
+     "tissue": "lung",
+     "disease": "MONDO:0005070",
+     "ancestry": "HANCESTRO:0010"
+    },
+    "totals": {
+     "cells": 0,
+     "samples": 0,
+     "studies": 0,
+     "rows": 0
+    },
+    "cpu_ms_first": 60.8,
+    "cpu_ms_p50": 65.6,
+    "cpu_ms_p95": 139.1
+   },
+   {
+    "id": "or-not",
+    "kind": "combined",
+    "depth": null,
+    "where": {
+     "or": [
+      {
+       "tissue": "lung"
+      },
+      {
+       "cell_type": "hepatocyte"
+      }
+     ],
+     "not": {
+      "sex": "male"
+     }
+    },
+    "totals": {
+     "cells": 3958475,
+     "samples": 1534,
+     "studies": 371,
+     "rows": 32599
+    },
+    "cpu_ms_first": 186.2,
+    "cpu_ms_p50": 163,
+    "cpu_ms_p95": 262
+   },
+   {
+    "id": "or-cell-sample",
+    "kind": "combined",
+    "depth": null,
+    "where": {
+     "or": [
+      {
+       "and": [
+        {
+         "tissue": "blood"
+        },
+        {
+         "cell_type": "B cell"
+        }
+       ]
+      },
+      {
+       "and": [
+        {
+         "tissue": "bone marrow"
+        },
+        {
+         "cell_type": "plasma cell"
+        }
+       ]
+      }
+     ],
+     "organism": "Homo sapiens"
+    },
+    "totals": {
+     "cells": 2670283,
+     "samples": 4692,
+     "studies": 468,
+     "rows": 25464
+    },
+    "cpu_ms_first": 249.9,
+    "cpu_ms_p50": 186.4,
+    "cpu_ms_p95": 340.2
+   },
+   {
+    "id": "not-tcell-cancer",
+    "kind": "combined",
+    "depth": null,
+    "where": {
+     "organism": "Homo sapiens",
+     "disease": "MONDO:0004992",
+     "not_cell_type": "T cell",
+     "year": [
+      2020,
+      2026
+     ]
+    },
+    "totals": {
+     "cells": 2057506,
+     "samples": 712,
+     "studies": 81,
+     "rows": 16488
+    },
+    "cpu_ms_first": 75.9,
+    "cpu_ms_p50": 74.9,
+    "cpu_ms_p95": 135.4
+   },
+   {
+    "id": "nl-example",
+    "kind": "question",
+    "depth": null,
+    "q": "female CD8 T cells from adult lung tumours of African ancestry",
+    "readings": [
+     "sex=female",
+     "cell_type=CD8-positive, alpha-beta T cell",
+     "development_stage=adult stage|young adult stage|prime adult stage|middle aged stage|late adult stage",
+     "disease=lung neoplasm",
+     "ancestry=African"
+    ],
+    "totals": {
+     "cells": 0,
+     "samples": 0,
+     "studies": 0,
+     "rows": 0
+    },
+    "cpu_ms_first": 244.9,
+    "cpu_ms_p50": 37.1,
+    "cpu_ms_p95": 97.6
+   },
+   {
+    "id": "nl-lung-cancer",
+    "kind": "question",
+    "depth": null,
+    "q": "female CD8 T cells from lung cancer",
+    "readings": [
+     "sex=female",
+     "cell_type=CD8-positive, alpha-beta T cell",
+     "disease=lung cancer"
+    ],
+    "totals": {
+     "cells": 129143,
+     "samples": 69,
+     "studies": 7,
+     "rows": 321
+    },
+    "cpu_ms_first": 25.4,
+    "cpu_ms_p50": 25.9,
+    "cpu_ms_p95": 73.4
+   },
+   {
+    "id": "nl-microglia",
+    "kind": "question",
+    "depth": null,
+    "q": "microglia from aged mouse brain",
+    "readings": [
+     "cell_type=microglial cell",
+     "development_stage=late adult stage|late adult stage",
+     "organism=Mus musculus",
+     "tissue=brain"
+    ],
+    "totals": {
+     "cells": 10094,
+     "samples": 22,
+     "studies": 8,
+     "rows": 22
+    },
+    "cpu_ms_first": 72.6,
+    "cpu_ms_p50": 44.5,
+    "cpu_ms_p95": 109.2
+   },
+   {
+    "id": "nl-bm",
+    "kind": "question",
+    "depth": null,
+    "q": "B cells or plasma cells in human bone marrow, not leukemia",
+    "readings": [
+     "cell_type=B cell|plasma cell",
+     "organism=Homo sapiens",
+     "tissue=bone marrow",
+     "not disease=leukemia"
+    ],
+    "totals": {
+     "cells": 501741,
+     "samples": 795,
+     "studies": 79,
+     "rows": 5544
+    },
+    "cpu_ms_first": 91.9,
+    "cpu_ms_p50": 85,
+    "cpu_ms_p95": 153.5
+   }
+  ]
+ },
+ "coverage": {
+  "totals": {
+   "cells": 221164736,
+   "samples": 46649,
+   "studies": 6977
+  },
+  "fields": [
+   {
+    "name": "cell_type",
+    "level": "cell",
+    "ontology": [
+     "CL"
+    ],
+    "coverage": {
+     "cells": 159085553,
+     "cells_share": 0.7193
+    }
+   },
+   {
+    "name": "sex",
+    "level": "cell",
+    "ontology": [
+     "PATO"
+    ],
+    "coverage": {
+     "cells": 196310887,
+     "cells_share": 0.8876
+    }
+   },
+   {
+    "name": "ancestry",
+    "level": "cell",
+    "ontology": [
+     "HANCESTRO"
+    ],
+    "coverage": {
+     "cells": 3457431,
+     "cells_share": 0.0156
+    }
+   },
+   {
+    "name": "n_umi",
+    "level": "cell",
+    "ontology": null,
+    "coverage": null
+   },
+   {
+    "name": "n_genes",
+    "level": "cell",
+    "ontology": null,
+    "coverage": null
+   },
+   {
+    "name": "tissue",
+    "level": "sample",
+    "ontology": [
+     "UBERON"
+    ],
+    "coverage": {
+     "samples": 21082,
+     "samples_share": 0.4519,
+     "cells": 96105057,
+     "cells_share": 0.4345
+    }
+   },
+   {
+    "name": "disease",
+    "level": "sample",
+    "ontology": [
+     "MONDO",
+     "PATO"
+    ],
+    "coverage": {
+     "samples": 3401,
+     "samples_share": 0.0729,
+     "cells": 15209166,
+     "cells_share": 0.0688
+    }
+   },
+   {
+    "name": "development_stage",
+    "level": "sample",
+    "ontology": [
+     "HsapDv",
+     "MmusDv"
+    ],
+    "coverage": {
+     "samples": 5903,
+     "samples_share": 0.1265,
+     "cells": 26147072,
+     "cells_share": 0.1182
+    }
+   },
+   {
+    "name": "age_years",
+    "level": "sample",
+    "ontology": null,
+    "coverage": {
+     "samples": 5707,
+     "samples_share": 0.1223,
+     "cells": 24920002,
+     "cells_share": 0.1127
+    }
+   },
+   {
+    "name": "donor_sex",
+    "level": "sample",
+    "ontology": [
+     "PATO"
+    ],
+    "coverage": {
+     "samples": 6410,
+     "samples_share": 0.1374,
+     "cells": 30315371,
+     "cells_share": 0.1371
+    }
+   },
+   {
+    "name": "donor_ancestry",
+    "level": "sample",
+    "ontology": [
+     "HANCESTRO"
+    ],
+    "coverage": {
+     "samples": 1155,
+     "samples_share": 0.0248,
+     "cells": 4639808,
+     "cells_share": 0.021
+    }
+   },
+   {
+    "name": "sorted_cell_type",
+    "level": "sample",
+    "ontology": [
+     "CL"
+    ],
+    "coverage": {
+     "samples": 8561,
+     "samples_share": 0.1835,
+     "cells": 41511080,
+     "cells_share": 0.1877
+    }
+   },
+   {
+    "name": "organism",
+    "level": "sample",
+    "ontology": null,
+    "coverage": {
+     "samples": 46617,
+     "samples_share": 0.9993,
+     "cells": 221046502,
+     "cells_share": 0.9995
+    }
+   },
+   {
+    "name": "assay",
+    "level": "sample",
+    "ontology": null,
+    "coverage": {
+     "samples": 44135,
+     "samples_share": 0.9461,
+     "cells": 210638935,
+     "cells_share": 0.9524
+    }
+   },
+   {
+    "name": "chemistry",
+    "level": "sample",
+    "ontology": null,
+    "coverage": {
+     "samples": 46579,
+     "samples_share": 0.9985,
+     "cells": 221158729,
+     "cells_share": 1
+    }
+   },
+   {
+    "name": "tissue_group",
+    "level": "sample",
+    "ontology": null,
+    "coverage": {
+     "samples": 27705,
+     "samples_share": 0.5939,
+     "cells": 128195339,
+     "cells_share": 0.5796
+    }
+   },
+   {
+    "name": "disease_group",
+    "level": "sample",
+    "ontology": null,
+    "coverage": {
+     "samples": 7868,
+     "samples_share": 0.1687,
+     "cells": 39030554,
+     "cells_share": 0.1765
+    }
+   },
+   {
+    "name": "donor_status",
+    "level": "sample",
+    "ontology": null,
+    "coverage": {
+     "samples": 3401,
+     "samples_share": 0.0729,
+     "cells": 15209166,
+     "cells_share": 0.0688
+    }
+   },
+   {
+    "name": "perturbation",
+    "level": "sample",
+    "ontology": null,
+    "coverage": {
+     "samples": 11711,
+     "samples_share": 0.251,
+     "cells": 58017905,
+     "cells_share": 0.2623
+    }
+   },
+   {
+    "name": "sample_kind",
+    "level": "sample",
+    "ontology": null,
+    "coverage": {
+     "samples": 2885,
+     "samples_share": 0.0618,
+     "cells": 15317651,
+     "cells_share": 0.0693
+    }
+   },
+   {
+    "name": "median_umi",
+    "level": "sample",
+    "ontology": null,
+    "coverage": {
+     "samples": 46649,
+     "samples_share": 1,
+     "cells": 221164736,
+     "cells_share": 1
+    }
+   },
+   {
+    "name": "median_genes",
+    "level": "sample",
+    "ontology": null,
+    "coverage": {
+     "samples": 46649,
+     "samples_share": 1,
+     "cells": 221164736,
+     "cells_share": 1
+    }
+   },
+   {
+    "name": "mito_fraction",
+    "level": "sample",
+    "ontology": null,
+    "coverage": {
+     "samples": 43627,
+     "samples_share": 0.9352,
+     "cells": 203493300,
+     "cells_share": 0.9201
+    }
+   },
+   {
+    "name": "cells_called",
+    "level": "sample",
+    "ontology": null,
+    "coverage": {
+     "samples": 46649,
+     "samples_share": 1,
+     "cells": 221164736,
+     "cells_share": 1
+    }
+   },
+   {
+    "name": "mapping_rate",
+    "level": "sample",
+    "ontology": null,
+    "coverage": {
+     "samples": 46649,
+     "samples_share": 1,
+     "cells": 221164736,
+     "cells_share": 1
+    }
+   },
+   {
+    "name": "qc",
+    "level": "sample",
+    "ontology": null,
+    "coverage": {
+     "samples": 46649,
+     "samples_share": 1,
+     "cells": 221164736,
+     "cells_share": 1
+    }
+   },
+   {
+    "name": "sample",
+    "level": "sample",
+    "ontology": null,
+    "coverage": {
+     "samples": 46649,
+     "samples_share": 1,
+     "cells": 221164736,
+     "cells_share": 1
+    }
+   },
+   {
+    "name": "study",
+    "level": "study",
+    "ontology": null,
+    "coverage": {
+     "samples": 46649,
+     "samples_share": 1,
+     "cells": 221164736,
+     "cells_share": 1
+    }
+   },
+   {
+    "name": "year",
+    "level": "study",
+    "ontology": null,
+    "coverage": {
+     "samples": 46163,
+     "samples_share": 0.9896,
+     "cells": 219670877,
+     "cells_share": 0.9932
+    }
+   },
+   {
+    "name": "has_publication",
+    "level": "study",
+    "ontology": null,
+    "coverage": {
+     "samples": 6415,
+     "samples_share": 0.1375,
+     "cells": 30453658,
+     "cells_share": 0.1377
+    }
+   }
+  ]
+ },
+ "updated_at": "2026-10-28T11:57:54.514Z",
+ "edge": {
+  "base": "https://singlet.bio",
+  "client": "this machine (residential connection; includes network round trip)",
+  "reps": 12,
+  "first_request_timing": {
+   "total_ms": 112,
+   "eval_ms": 0,
+   "inputs_ms": 112,
+   "index_cold": true,
+   "facts_source": "edge"
+  },
+  "queries": [
+   {
+    "id": "all",
+    "kind": "none",
+    "totals": {
+     "cells": 221164736,
+     "samples": 46649,
+     "studies": 6977,
+     "rows": 1460682
+    },
+    "miss_ms_p50": 147.4,
+    "miss_ms_p95": 1760.4,
+    "hit_ms_p50": 137.3,
+    "hit_ms_p95": 223.7,
+    "hits": 12,
+    "n": 12
+   },
+   {
+    "id": "ct-hematopoietic",
+    "kind": "single",
+    "totals": {
+     "cells": 92743222,
+     "samples": 36411,
+     "studies": 5723,
+     "rows": 799035
+    },
+    "miss_ms_p50": 123.9,
+    "miss_ms_p95": 193,
+    "hit_ms_p50": 132.1,
+    "hit_ms_p95": 164.7,
+    "hits": 12,
+    "n": 12
+   },
+   {
+    "id": "ct-leukocyte",
+    "kind": "single",
+    "totals": {
+     "cells": 27677032,
+     "samples": 33908,
+     "studies": 5352,
+     "rows": 325109
+    },
+    "miss_ms_p50": 114.9,
+    "miss_ms_p95": 185.2,
+    "hit_ms_p50": 115.5,
+    "hit_ms_p95": 186.6,
+    "hits": 12,
+    "n": 12
+   },
+   {
+    "id": "ct-lymphocyte",
+    "kind": "single",
+    "totals": {
+     "cells": 48871610,
+     "samples": 28312,
+     "studies": 4549,
+     "rows": 438813
+    },
+    "miss_ms_p50": 116.5,
+    "miss_ms_p95": 238,
+    "hit_ms_p50": 118.6,
+    "hit_ms_p95": 154.1,
+    "hits": 12,
+    "n": 12
+   },
+   {
+    "id": "ct-tcell",
+    "kind": "single",
+    "totals": {
+     "cells": 33312852,
+     "samples": 24072,
+     "studies": 3831,
+     "rows": 242657
+    },
+    "miss_ms_p50": 105.7,
+    "miss_ms_p95": 235.9,
+    "hit_ms_p50": 104.5,
+    "hit_ms_p95": 165.3,
+    "hits": 12,
+    "n": 12
+   },
+   {
+    "id": "ct-cd8",
+    "kind": "single",
+    "totals": {
+     "cells": 12450443,
+     "samples": 21115,
+     "studies": 3440,
+     "rows": 94489
+    },
+    "miss_ms_p50": 109.7,
+    "miss_ms_p95": 236.2,
+    "hit_ms_p50": 108.3,
+    "hit_ms_p95": 117.5,
+    "hits": 12,
+    "n": 12
+   },
+   {
+    "id": "ct-cd8-em",
+    "kind": "single",
+    "totals": {
+     "cells": 2197120,
+     "samples": 15585,
+     "studies": 2755,
+     "rows": 17523
+    },
+    "miss_ms_p50": 96.2,
+    "miss_ms_p95": 134.6,
+    "hit_ms_p50": 95.2,
+    "hit_ms_p95": 122.4,
+    "hits": 12,
+    "n": 12
+   },
+   {
+    "id": "sex-female",
+    "kind": "single",
+    "totals": {
+     "cells": 82122774,
+     "samples": 21706,
+     "studies": 4303,
+     "rows": 571066
+    },
+    "miss_ms_p50": 99.4,
+    "miss_ms_p95": 171.4,
+    "hit_ms_p50": 107.7,
+    "hit_ms_p95": 128.3,
+    "hits": 12,
+    "n": 12
+   },
+   {
+    "id": "anc-african",
+    "kind": "single",
+    "totals": {
+     "cells": 188804,
+     "samples": 87,
+     "studies": 19,
+     "rows": 971
+    },
+    "miss_ms_p50": 73.2,
+    "miss_ms_p95": 93.1,
+    "hit_ms_p50": 68.7,
+    "hit_ms_p95": 113.7,
+    "hits": 12,
+    "n": 12
+   },
+   {
+    "id": "tissue-respiratory",
+    "kind": "single",
+    "totals": {
+     "cells": 7737697,
+     "samples": 2121,
+     "studies": 301,
+     "rows": 75971
+    },
+    "miss_ms_p50": 115.6,
+    "miss_ms_p95": 182.3,
+    "hit_ms_p50": 89.6,
+    "hit_ms_p95": 128.4,
+    "hits": 12,
+    "n": 12
+   },
+   {
+    "id": "tissue-lung",
+    "kind": "single",
+    "totals": {
+     "cells": 6837872,
+     "samples": 1829,
+     "studies": 255,
+     "rows": 66379
+    },
+    "miss_ms_p50": 116.8,
+    "miss_ms_p95": 203.5,
+    "hit_ms_p50": 103.4,
+    "hit_ms_p95": 212.9,
+    "hits": 12,
+    "n": 12
+   },
+   {
+    "id": "disease-cancer",
+    "kind": "single",
+    "totals": {
+     "cells": 3004380,
+     "samples": 745,
+     "studies": 85,
+     "rows": 21461
+    },
+    "miss_ms_p50": 104.6,
+    "miss_ms_p95": 140.7,
+    "hit_ms_p50": 95.2,
+    "hit_ms_p95": 115.3,
+    "hits": 12,
+    "n": 12
+   },
+   {
+    "id": "disease-lung-cancer",
+    "kind": "single",
+    "totals": {
+     "cells": 648540,
+     "samples": 119,
+     "studies": 9,
+     "rows": 3858
+    },
+    "miss_ms_p50": 96.9,
+    "miss_ms_p95": 222.9,
+    "hit_ms_p50": 142.5,
+    "hit_ms_p95": 433.4,
+    "hits": 12,
+    "n": 12
+   },
+   {
+    "id": "disease-nsclc",
+    "kind": "single",
+    "totals": {
+     "cells": 630944,
+     "samples": 111,
+     "studies": 7,
+     "rows": 3720
+    },
+    "miss_ms_p50": 83.1,
+    "miss_ms_p95": 142.8,
+    "hit_ms_p50": 165.1,
+    "hit_ms_p95": 310.2,
+    "hits": 12,
+    "n": 12
+   },
+   {
+    "id": "stage-adult",
+    "kind": "single",
+    "totals": {
+     "cells": 21030872,
+     "samples": 4959,
+     "studies": 643,
+     "rows": 163941
+    },
+    "miss_ms_p50": 116.7,
+    "miss_ms_p95": 261.7,
+    "hit_ms_p50": 265.4,
+    "hit_ms_p95": 480.9,
+    "hits": 12,
+    "n": 12
+   },
+   {
+    "id": "study-year",
+    "kind": "single",
+    "totals": {
+     "cells": 156797004,
+     "samples": 31718,
+     "studies": 4696,
+     "rows": 1048034
+    },
+    "miss_ms_p50": 113.4,
+    "miss_ms_p95": 148.6,
+    "hit_ms_p50": 143.3,
+    "hit_ms_p95": 547.5,
+    "hits": 12,
+    "n": 12
+   },
+   {
+    "id": "and-3",
+    "kind": "combined",
+    "totals": {
+     "cells": 129143,
+     "samples": 69,
+     "studies": 7,
+     "rows": 321
+    },
+    "miss_ms_p50": 64.5,
+    "miss_ms_p95": 118.2,
+    "hit_ms_p50": 67.4,
+    "hit_ms_p95": 100.4,
+    "hits": 12,
+    "n": 12
+   },
+   {
+    "id": "and-6",
+    "kind": "combined",
+    "totals": {
+     "cells": 0,
+     "samples": 0,
+     "studies": 0,
+     "rows": 0
+    },
+    "miss_ms_p50": 64.4,
+    "miss_ms_p95": 310.6,
+    "hit_ms_p50": 59.1,
+    "hit_ms_p95": 94,
+    "hits": 12,
+    "n": 12
+   },
+   {
+    "id": "or-not",
+    "kind": "combined",
+    "totals": {
+     "cells": 3958475,
+     "samples": 1534,
+     "studies": 371,
+     "rows": 32599
+    },
+    "miss_ms_p50": 101.1,
+    "miss_ms_p95": 161.1,
+    "hit_ms_p50": 130.5,
+    "hit_ms_p95": 165,
+    "hits": 12,
+    "n": 12
+   },
+   {
+    "id": "or-cell-sample",
+    "kind": "combined",
+    "totals": {
+     "cells": 2670283,
+     "samples": 4692,
+     "studies": 468,
+     "rows": 25464
+    },
+    "miss_ms_p50": 101.5,
+    "miss_ms_p95": 183.8,
+    "hit_ms_p50": 109.5,
+    "hit_ms_p95": 149,
+    "hits": 12,
+    "n": 12
+   },
+   {
+    "id": "not-tcell-cancer",
+    "kind": "combined",
+    "totals": {
+     "cells": 2057506,
+     "samples": 712,
+     "studies": 81,
+     "rows": 16488
+    },
+    "miss_ms_p50": 91.6,
+    "miss_ms_p95": 134.8,
+    "hit_ms_p50": 100.4,
+    "hit_ms_p95": 135.4,
+    "hits": 12,
+    "n": 12
+   },
+   {
+    "id": "nl-example",
+    "kind": "question",
+    "totals": {
+     "cells": 0,
+     "samples": 0,
+     "studies": 0,
+     "rows": 0
+    },
+    "miss_ms_p50": 65.5,
+    "miss_ms_p95": 531.8,
+    "hit_ms_p50": 57.4,
+    "hit_ms_p95": 179.7,
+    "hits": 12,
+    "n": 12
+   },
+   {
+    "id": "nl-lung-cancer",
+    "kind": "question",
+    "totals": {
+     "cells": 129143,
+     "samples": 69,
+     "studies": 7,
+     "rows": 321
+    },
+    "miss_ms_p50": 62.9,
+    "miss_ms_p95": 107.5,
+    "hit_ms_p50": 142.6,
+    "hit_ms_p95": 261.2,
+    "hits": 12,
+    "n": 12
+   },
+   {
+    "id": "nl-microglia",
+    "kind": "question",
+    "totals": {
+     "cells": 10094,
+     "samples": 22,
+     "studies": 8,
+     "rows": 22
+    },
+    "miss_ms_p50": 57.5,
+    "miss_ms_p95": 89.5,
+    "hit_ms_p50": 99.4,
+    "hit_ms_p95": 121.3,
+    "hits": 12,
+    "n": 12
+   },
+   {
+    "id": "nl-bm",
+    "kind": "question",
+    "totals": {
+     "cells": 501741,
+     "samples": 795,
+     "studies": 79,
+     "rows": 5544
+    },
+    "miss_ms_p50": 86.7,
+    "miss_ms_p95": 127.5,
+    "hit_ms_p50": 146.6,
+    "hit_ms_p95": 250.1,
+    "hits": 12,
+    "n": 12
+   }
+  ],
+  "slices": [
+   {
+    "id": "and-3",
+    "where": {
+     "cell_type": "CL:0000625",
+     "sex": "female",
+     "disease": "MONDO:0008903"
+    },
+    "pages": [
+     {
+      "ms": 578.2,
+      "cells": 3886,
+      "samples": 3,
+      "studies": 1,
+      "bytes": 10344182,
+      "requests": 6,
+      "bytes_per_cell": 2662,
+      "filtered": "index",
+      "worker_ms": {
+       "cells": 423,
+       "plan": 33
+      }
+     },
+     {
+      "ms": 1376.3,
+      "cells": 4809,
+      "samples": 16,
+      "studies": 5,
+      "bytes": 34323935,
+      "requests": 93,
+      "bytes_per_cell": 7137,
+      "filtered": "index",
+      "worker_ms": {
+       "cells": 762,
+       "plan": 68
+      }
+     },
+     {
+      "ms": 389.2,
+      "cells": 3843,
+      "samples": 4,
+      "studies": 1,
+      "bytes": 23255829,
+      "requests": 9,
+      "bytes_per_cell": 6051,
+      "filtered": "index",
+      "worker_ms": {
+       "cells": 276,
+       "plan": 16
+      }
+     }
+    ],
+    "first_page_stream": {
+     "status": 200,
+     "bytes": 10346217,
+     "ms": 6442.4,
+     "mb_per_s": 1.6
+    }
+   },
+   {
+    "id": "ct-cd8-em",
+    "where": {
+     "cell_type": "CL:0000913"
+    },
+    "pages": [
+     {
+      "ms": 1399.2,
+      "cells": 2,
+      "samples": 1,
+      "studies": 1,
+      "bytes": 180736,
+      "requests": 4,
+      "bytes_per_cell": 90368,
+      "filtered": "index",
+      "worker_ms": {
+       "cells": 503,
+       "plan": 31
+      }
+     },
+     {
+      "ms": 398,
+      "cells": 1,
+      "samples": 1,
+      "studies": 1,
+      "bytes": 207876,
+      "requests": 4,
+      "bytes_per_cell": 207876,
+      "filtered": "index",
+      "worker_ms": {
+       "cells": 175,
+       "plan": 13
+      }
+     },
+     {
+      "ms": 345.4,
+      "cells": 3,
+      "samples": 1,
+      "studies": 1,
+      "bytes": 439494,
+      "requests": 8,
+      "bytes_per_cell": 146498,
+      "filtered": "index",
+      "worker_ms": {
+       "cells": 146,
+       "plan": 0
+      }
+     }
+    ],
+    "first_page_stream": {
+     "status": 200,
+     "bytes": 181739,
+     "ms": 344.4,
+     "mb_per_s": 0.5
+    }
+   },
+   {
+    "id": "or-not",
+    "where": {
+     "or": [
+      {
+       "tissue": "lung"
+      },
+      {
+       "cell_type": "hepatocyte"
+      }
+     ],
+     "not": {
+      "sex": "male"
+     }
+    },
+    "pages": [
+     {
+      "ms": 1286.4,
+      "cells": 1745,
+      "samples": 4,
+      "studies": 2,
+      "bytes": 6014444,
+      "requests": 8,
+      "bytes_per_cell": 3447,
+      "filtered": "here",
+      "worker_ms": {
+       "cells": 1067,
+       "plan": 22
+      }
+     },
+     {
+      "ms": 879.5,
+      "cells": 3499,
+      "samples": 2,
+      "studies": 1,
+      "bytes": 5925793,
+      "requests": 4,
+      "bytes_per_cell": 1694,
+      "filtered": "here",
+      "worker_ms": {
+       "cells": 712,
+       "plan": 13
+      }
+     },
+     {
+      "ms": 810.2,
+      "cells": 27,
+      "samples": 4,
+      "studies": 1,
+      "bytes": 853141,
+      "requests": 8,
+      "bytes_per_cell": 31598,
+      "filtered": "here",
+      "worker_ms": {
+       "cells": 639,
+       "plan": 0
+      }
+     }
+    ],
+    "first_page_stream": {
+     "status": 200,
+     "bytes": 5928727,
+     "ms": 3473.4,
+     "mb_per_s": 1.7
+    }
+   }
+  ],
+  "isolate_cold_observations": [
+   {
+    "what": "cold isolate, snapshot built from D1 (first request on the PR preview)",
+    "server_total_ms": 4101,
+    "query": "cell_type=T cell&tissue=lung"
+   },
+   {
+    "what": "cold isolate, snapshot built from D1 (after a preview redeploy)",
+    "server_total_ms": 2343,
+    "query": "cell_type=leukocyte"
+   },
+   {
+    "what": "cold isolate, snapshot from the colo's Cache API (preview)",
+    "server_total_ms": 257,
+    "query": "cell_type=leukocyte"
+   },
+   {
+    "what": "first production request after the deploy (cold isolate, snapshot from the Cache API)",
+    "server_total_ms": 72,
+    "query": "cell_type=T cell&tissue=lung"
+   }
+  ],
+  "response_bytes": {
+   "cell_type=T cell, limit 20": 36369,
+   "question 'female CD8 T cells from lung cancer'": 10758,
+   "/api/cells/fields": 41169
+  },
+  "note": "Production (singlet.bio) after the merge of zdebruine/singlet-website#88 on 2026-10-28."
+ },
+ "cost": {
+  "prices": {
+   "workers_request_per_m": {
+    "usd": 0.3,
+    "source": "https://developers.cloudflare.com/workers/platform/pricing/ (Standard: +$0.30 per additional million requests)"
+   },
+   "workers_cpu_ms_per_m": {
+    "usd": 0.02,
+    "source": "https://developers.cloudflare.com/workers/platform/pricing/ (+$0.02 per additional million CPU milliseconds)"
+   },
+   "r2_class_b_per_m": {
+    "usd": 0.36,
+    "source": "https://developers.cloudflare.com/r2/pricing/ (Class B $0.36 / million requests; egress free)"
+   },
+   "r2_egress_per_gb": {
+    "usd": 0,
+    "source": "https://developers.cloudflare.com/r2/pricing/ (Egress: Free)"
+   },
+   "d1_rows_read_per_m": {
+    "usd": 0.001,
+    "source": "https://developers.cloudflare.com/d1/platform/pricing/ (first 25 billion / month included + $0.001 / million rows)"
+   }
+  },
+  "assumptions": [
+   "Paid plan, beyond the included monthly allowances (10 M requests, 30 M CPU-ms, 10 M Class B reads, 25 B D1 rows): the marginal price.",
+   "CPU per query = the evaluator's V8 time on this machine (Workers bill CPU time, not wall time; Workers hardware differs).",
+   "A cache hit (same canonical query within 5 minutes in a colo) is billed as a request with no CPU (Workers Cache pricing); the Pages Function still runs its cache lookup, about 1 ms.",
+   "Inputs (the 7.8 MB index summary, the sample-facts snapshot) are read once per isolate from the edge cache, and the snapshot is built from D1 once per colo and six hours; their cost is spread over the queries of that hour."
+  ],
+  "query_uncached_usd_per_m": {
+   "cpu_ms_p50": 64.1,
+   "at_p50": 1.58,
+   "cpu_ms_p95": 340.2,
+   "at_p95": 7.1
+  },
+  "query_cached_usd_per_m": 0.32,
+  "snapshot_build": {
+   "d1_rows_read": 467824,
+   "usd": 0.00046782400000000004,
+   "every_hours": 6,
+   "worst_case_month": {
+    "colos": 330,
+    "d1_rows_read": 18525830400,
+    "usd_marginal": 18.53,
+    "note": "every colo rebuilding every 6 h all month; within the 25 B rows included on Workers Paid"
+   }
+  },
+  "slice_page": {
+   "cells": 1745,
+   "ranged_reads": 8,
+   "usd_per_m_pages_worst_case": 4.78,
+   "egress_usd": 0
+  }
+ }
+}

@@ -18,7 +18,8 @@ import {
 } from "./manifest-core";
 import { normalizeFilters, parseSearchParams, type Ctx } from "./search-core";
 import { MODALITIES, resolveModalities } from "./modalities";
-import { loadRules, organismToCommon } from "./vocab";
+import { loadRules, organismToCommon, resolveGroup } from "./vocab";
+import { countUnmappedStudies, unclassifiedStudies, unmappedNote, type UnclassifiedStudy } from "./coverage-gaps";
 import { safeList } from "./json";
 import { QC_LOW_MESSAGE, QC_RULES, qcReasons, qcStatus } from "./qc-rules";
 
@@ -481,6 +482,9 @@ export async function exportManifest(
     push("sex_genetic", f.sex_genetic);
     push("ancestry_genetic", f.ancestry_genetic);
     push("cell_type_label", f.cell_type_label);
+    push("tissue_type", f.tissue_type);
+    push("tumor_sample_type", f.tumor_sample_type);
+    push("cell_line", f.cell_line);
     if (f.min_cells != null && Number.isFinite(Number(f.min_cells))) url.searchParams.set("min_cells", String(Math.floor(Number(f.min_cells))));
     if (f.year_min != null && Number.isFinite(Number(f.year_min))) url.searchParams.set("year_min", String(Math.floor(Number(f.year_min))));
     if (f.year_max != null && Number.isFinite(Number(f.year_max))) url.searchParams.set("year_max", String(Math.floor(Number(f.year_max))));
@@ -563,10 +567,18 @@ export async function findMatchedControls(ctx: SampleQcArgs, args: Record<string
   const tissues = safeList(ref.tissue_groups);
   const assays = safeList(ref.assay_families);
   const refBuild = (ref.reference_build as string | null) ?? null;
-  if (!organism || !tissues.length)
-    return toolError(`${gse} has no organism or tissue group recorded, so a matched control cannot be chosen deterministically.`);
+  const includeUnclassified = args.include_unclassified !== false;
+  const rules = await loadRules(ctx.db).catch(() => []);
+  const asked = typeof args.tissue === "string" && args.tissue.trim() ? args.tissue.trim() : null;
+  const tissueArg = asked ? resolveGroup(rules, "tissue_group", asked) : null;
+  if (asked && !tissueArg) return toolError(`"${asked}" is not a tissue group. Use one of search_datasets' tissue groups, e.g. "Liver".`);
+  if (!organism) return toolError(`${gse} has no organism recorded, so a matched control cannot be chosen deterministically.`);
+  if (!tissueArg && !tissues.length)
+    return toolError(
+      `${gse} has no tissue group recorded in the catalog, so a matched control cannot be chosen deterministically. Pass \`tissue\` (a search_datasets tissue group, e.g. "Liver") to match on it.`
+    );
 
-  const tissue = tissues[0];
+  const tissue = tissueArg ?? tissues[0];
   const rows = await ctx.db
     .prepare(
       `SELECT m.gse_id, g.title, m.organism_primary, m.tissue_groups, m.disease_groups, m.assay_families,
@@ -653,6 +665,21 @@ export async function findMatchedControls(ctx: SampleQcArgs, args: Record<string
       };
     });
 
+  // Same-organism studies the tissue filter could not judge (no tissue group), and those whose GEO text names the tissue.
+  const nUnmapped = await countUnmappedStudies(ctx.db, "tissue_groups", [organism]);
+  const unmapped = unmappedNote(nUnmapped, "tissue_groups", tissue, [organismToCommon(organism)]);
+  const unclassified: UnclassifiedStudy[] =
+    includeUnclassified && nUnmapped
+      ? await unclassifiedStudies(ctx.db, rules, { col: "tissue_groups", group: tissue, organisms: [organism], exclude: [gse, ...candidates.map((c) => c.gse_id)] })
+      : [];
+  const unclassifiedLines = (lines: string[]) => {
+    if (unmapped) lines.push("", `${unmapped}${includeUnclassified ? "" : " Pass include_unclassified: true to list those whose GEO text names it."}`);
+    if (!unclassified.length) return;
+    lines.push(`Unclassified candidates (no tissue group in the catalog; their GEO text names ${tissue}; check tissue and disease with get_study before use):`);
+    for (const u of unclassified) lines.push(`- ${u.gse_id} — ${u.title ?? "(untitled)"} · matched in ${u.matched_in}: "${u.evidence}"`);
+  };
+  const coverage = { unmapped_studies: nUnmapped, unmapped_note: unmapped, unclassified_candidates: unclassified };
+
   const caveats = [
     "The disease label is study-level: a study labelled healthy can still contain treated samples — check per-sample characteristics with get_study.",
     "Assay families marked \"10x (version unconfirmed)\" come from GEO text, not from the reads.",
@@ -662,11 +689,13 @@ export async function findMatchedControls(ctx: SampleQcArgs, args: Record<string
     "Batch effects between studies are usually larger than the biology; treat these as candidates, not as drop-in controls.",
   ];
 
-  if (!candidates.length)
-    return toolResult(
+  if (!candidates.length) {
+    const lines = [
       `No control candidates for ${gse}: no other ${organismToCommon(organism)} ${tissue} study with a built file${sameAssay ? " on the same assay" : ""} has at least ${minSamples} samples and no disease label.`,
-      { gse_id: gse, organism: organismToCommon(organism), tissue, candidates: [], caveats }
-    );
+    ];
+    unclassifiedLines(lines);
+    return toolResult(lines.join("\n"), { gse_id: gse, organism: organismToCommon(organism), tissue, candidates: [], ...coverage, caveats });
+  }
 
   const lines = [
     `${candidates.length} candidate control stud${candidates.length === 1 ? "y" : "ies"} for ${gse} (${organismToCommon(organism)}, ${tissue}${sameAssay ? `, assay ${assays.join("/")}` : ""}).`,
@@ -677,6 +706,7 @@ export async function findMatchedControls(ctx: SampleQcArgs, args: Record<string
     lines.push(`  why: ${c.why}`);
     lines.push(`  load: ${c.loader} · ${fmtBytes(c.bytes)} · ${c.study_url}`);
   }
+  unclassifiedLines(lines);
   lines.push("");
   lines.push("Caveats:");
   for (const c of caveats) lines.push(`- ${c}`);
@@ -690,6 +720,7 @@ export async function findMatchedControls(ctx: SampleQcArgs, args: Record<string
     min_samples: minSamples,
     same_assay: sameAssay,
     candidates,
+    ...coverage,
     caveats,
   });
 }

@@ -415,6 +415,32 @@ describe("GEO fact extraction", () => {
     expect(parsePairs({ Tissue: "lung" })[0]).toMatchObject({ key: "tissue", value: "lung" });
   });
 
+  it("splits single-semicolon records before a key, never inside a ;; record's value", () => {
+    // GSM10063213 (GSE347938) as stored
+    expect(parsePairs("tissue: lung; immgent igt_10xlane_id: IGT47; hashtag number: HT5").map((p) => [p.key, p.value])).toEqual([
+      ["tissue", "lung"],
+      ["immgent igt 10xlane id", "IGT47"],
+      ["hashtag number", "HT5"],
+    ]);
+    expect(parsePairs("treatment: IL2; IL7").map((p) => p.value)).toEqual(["IL2; IL7"]);
+    expect(get("tissue: lung; hashtag number: HT5", "tissue")!.value_norm).toBe("lung");
+  });
+
+  it("does not read a sampling code under a bare 'region' key as a tissue (GSM5608037: region R1 is not rhombomere 1)", () => {
+    const e = ex("patient: MSK 1263 ;; region: R1 ;; cell type: CD3+ lymphocytes");
+    expect(e.rows.find((r) => r.attr === "tissue")).toBeUndefined();
+    expect(e.unplaced).toContainEqual(expect.objectContaining({ attr: "tissue", value: "R1" }));
+    expect(get("region: lung", "tissue")!.value_norm).toBe("lung");
+    expect(get("brain region: BA9", "tissue")!.value_raw).toBe("BA9");
+  });
+
+  it("reads an all-'no' comorbidity checklist as a healthy donor (ENCODE GSM8730146)", () => {
+    const c = "tissue_type: right lobe of liver ;; health state: DM: no; HTN: no; CAD: no ;; dev stage: adult";
+    expect(get(c, "disease")!.value_norm).toBe("healthy");
+    expect(get(c, "disease_state")!.value_norm).toBe("control");
+    expect(get("health state: DM: yes; HTN: yes; CAD: no", "disease_state")!.value_norm).toBe("case");
+  });
+
   it("ignores sentences in label fields and placeholder values", () => {
     const e = ex("tissue: Photoconverted CD4+ T cells isolated from the draining lymph node after immunisation ;; disease: NA ;; cell type: all cells");
     expect(e.rows).toHaveLength(0);
