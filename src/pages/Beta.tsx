@@ -36,7 +36,8 @@ const Beta = () => {
 
         <p className="mt-4 max-w-4xl text-[13.5px] text-muted-foreground">
           Genotypes are never released. Progress against the standard tools, including where the engine falls short:{" "}
-          <Link to="/benchmarking#beta" className="text-primary underline underline-offset-2">Beta benchmarks</Link>. What is wrong
+          <Link to="/benchmarking#beta" className="text-primary underline underline-offset-2">Beta benchmarks</Link>. The GPU port of the
+          aligner: <Link to="/beta/gpu-engine" className="text-primary underline underline-offset-2">GPU engine</Link>. What is wrong
           today: <Link to="/known-issues" className="text-primary underline underline-offset-2">Known issues</Link>.
         </p>
 
