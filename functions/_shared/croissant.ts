@@ -247,6 +247,7 @@ export const TERM_ATTRS = [
   { attr: "sex", stem: "sex", what: "Sex as recorded in GEO (PATO)", cls: [ONTOLOGY_CLASS.PATO_SEX] },
   { attr: "ancestry", stem: "self_reported_ancestry", what: "Ancestry as recorded in GEO (HANCESTRO)", cls: [ONTOLOGY_CLASS.HANCESTRO] },
   { attr: "cell_type", stem: "sorted_cell_type", what: "Cell type the sample was sorted or enriched for, as recorded in GEO (Cell Ontology)", cls: [ONTOLOGY_CLASS.CL] },
+  { attr: "cell_line", stem: "cell_line", what: "Cell line the GEO cell line field names (Cellosaurus accession, CVCL_xxxx; exact identifier or synonym of the sample's species only)", cls: [] },
 ] as const;
 export type TermAttr = (typeof TERM_ATTRS)[number]["attr"];
 
@@ -268,6 +269,8 @@ export interface SampleInput {
   sex_genetic: OntologyValue[];
   ancestry_genetic: OntologyValue[];
   cell_types_called: OntologyValue[];
+  /** Structured sample facts (sample_property, ./sample-type): tissue_type, tumor_sample_type, sample_kind, donor_status. */
+  props: Partial<Record<SampleProp, string>>;
   /** The manifest's entry for the sample. */
   object: ManifestSample;
   /** The default label sidecar (manifest annotations[annotations_default]), when the sample has one. */
@@ -350,6 +353,13 @@ export const STUDY_TERMS_SQL = `SELECT t.gsm_id, t.attr, t.term_id, t.source, t.
  WHERE t.gsm_id IN (${SERVED_GSMS})
  ORDER BY t.gsm_id, t.attr, t.confidence DESC, t.term_id`;
 
+export const SAMPLE_PROPS = ["tissue_type", "tumor_sample_type", "sample_kind", "donor_status"] as const;
+export type SampleProp = (typeof SAMPLE_PROPS)[number];
+
+/** Structured sample facts from the sample's own GEO fields (sample_property). */
+export const STUDY_PROPS_SQL = `SELECT p.gsm_id, p.property, p.value FROM sample_property p
+ WHERE p.gse_id = ?1 AND p.property IN (${SAMPLE_PROPS.map((x) => `'${x}'`).join(", ")}) ORDER BY p.gsm_id, p.property`;
+
 /** The labeller's per-sample facts (sample_attr, source 'pipeline'): chromosomal sex, genetic ancestry, cell types present. */
 export const STUDY_LABELS_SQL = `SELECT a.gsm_id, a.attr, a.value_norm, a.ontology_id
   FROM sample_attr a
@@ -385,11 +395,16 @@ export async function loadStudyInput(db: D1Database, rawGse: string, fetchManife
   if (!GSE_RE.test(gse)) return null;
   const study = await db.prepare(STUDY_SQL).bind(gse).first<StudyRow>();
   if (!study) return null;
-  const [manifest, samples, terms, labels, pubs, policy, releases] = await Promise.all([
+  const [manifest, samples, terms, labels, props, pubs, policy, releases] = await Promise.all([
     fetchManifest(gse),
     db.prepare(STUDY_SAMPLES_SQL).bind(gse).all<SampleRow>(),
     db.prepare(STUDY_TERMS_SQL).bind(gse).all<{ gsm_id: string; attr: string; term_id: string; source: string; confidence: number; label: string | null }>(),
     db.prepare(STUDY_LABELS_SQL).bind(gse).all<{ gsm_id: string; attr: string; value_norm: string; ontology_id: string | null }>(),
+    db
+      .prepare(STUDY_PROPS_SQL)
+      .bind(gse)
+      .all<{ gsm_id: string; property: string; value: string }>()
+      .catch(() => ({ results: [] as { gsm_id: string; property: string; value: string }[] })),
     db
       .prepare(
         `SELECT p.pmid, p.title, p.doi, p.year, p.journal FROM gse_publication gp JOIN publications p ON p.pmid = gp.pmid WHERE gp.gse_id = ?1 ORDER BY p.pmid`
@@ -405,6 +420,12 @@ export async function loadStudyInput(db: D1Database, rawGse: string, fetchManife
   ]);
   if (!manifest || !Array.isArray(manifest.samples)) return null;
 
+  const propsBy = new Map<string, Partial<Record<SampleProp, string>>>();
+  for (const p of props.results ?? []) {
+    const m = propsBy.get(p.gsm_id) ?? {};
+    m[p.property as SampleProp] = p.value;
+    propsBy.set(p.gsm_id, m);
+  }
   const termsBy = new Map<string, Partial<Record<TermAttr, OntologyValue[]>>>();
   const known = new Set<string>(TERM_ATTRS.map((t) => t.attr));
   for (const t of terms.results ?? []) {
@@ -449,6 +470,7 @@ export async function loadStudyInput(db: D1Database, rawGse: string, fetchManife
       sex_genetic: lab?.sex_genetic ?? [],
       ancestry_genetic: lab?.ancestry_genetic ?? [],
       cell_types_called: lab?.cell_type ?? [],
+      props: propsBy.get(r.gsm_id) ?? {},
       object: obj,
       sidecar: side && side.key ? side : null,
     });
@@ -558,6 +580,10 @@ export const SAMPLE_COLUMNS: Column<SampleRowCtx>[] = [
   { name: "median_genes", type: "sc:Float", description: "Median genes per called cell (the file's own statistic).", value: (r) => r.s.median_genes },
   { name: "n_cells_called", type: "sc:Integer", description: "Cells called in the file (sample_qc.n_cells_called, the basis of every cell count on singlet.bio).", value: (r) => r.s.n_cells_called },
   ...termColumns(),
+  { name: "tissue_type", type: "sc:Text", description: 'CELLxGENE schema 7.0.0 tissue_type from the sample’s own GEO fields: "tissue" (xenografts included), "organoid", "primary cell culture" or "cell line" (stem-cell-derived cultures included); empty when GEO does not say.', value: (r) => r.s.props?.tissue_type ?? "" },
+  { name: "tumor_sample_type", type: "sc:Text", description: 'GDC sample_type vocabulary, when the sample’s GEO fields say so: "tumor", "primary tumor", "metastatic", "recurrent tumor" or "adjacent normal" (Solid Tissue Normal).', value: (r) => r.s.props?.tumor_sample_type ?? "" },
+  { name: "sample_kind", type: "sc:Text", description: 'Coarse kind: "primary", "cell_line", "stem_cell", "organoid" or "xenograft".', value: (r) => r.s.props?.sample_kind ?? "" },
+  { name: "donor_status", type: "sc:Text", description: '"healthy" (disease PATO:0000461 from explicit text) or "diseased" (a MONDO disease term); empty when not recorded.', value: (r) => r.s.props?.donor_status ?? "" },
   {
     name: "sex_genetic_ontology_term_id",
     type: "sc:Text",

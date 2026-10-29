@@ -72,6 +72,9 @@ const FACETS: [string, string][] = [
   ["assay", "Assay"],
   ["donor_status", "Donor status"],
   ["perturbation", "Perturbation"],
+  ["tissue_type", "Tissue type"],
+  ["cell_line", "Cell line"],
+  ["tumor_sample_type", "Tumour sample type"],
   ["sample_kind", "Sample kind"],
   ["donor_sex", "Recorded sex"],
 ];

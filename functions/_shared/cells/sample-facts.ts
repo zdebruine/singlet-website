@@ -9,7 +9,7 @@
  *   gse_meta    study year; gse.pubmed_ids (has a publication)
  *   sample_term ontology terms per sample (tissue UBERON, disease MONDO/PATO, development_stage HsapDv/MmusDv, author sex PATO,
  *               author ancestry HANCESTRO, author-sorted cell type CL)
- *   sample_property  donor_status, perturbation, sample_kind
+ *   sample_property  donor_status, perturbation, sample_kind, tissue_type (CELLxGENE 7.0.0), tumor_sample_type (GDC sample_type)
  *   sample_attr age (geo), converted to years
  *   ontology_closure / ontology_term / ontology_label  descendants, labels and synonyms of the terms the samples use, and the
  *               whole CL closure in D1 (cell-type filters match a call by its CL ancestors, not only the labeller's levels)
@@ -17,13 +17,15 @@
  */
 import { sampleServedSql } from "../alpha";
 import { downloadableSql } from "../search-core";
+import { TISSUE_TYPES, TUMOR_SAMPLE_TYPES } from "../sample-type";
 
-export const SAMPLE_TERM_ATTRS = ["tissue", "disease", "development_stage", "sex", "ancestry", "cell_type"] as const;
+export const SAMPLE_TERM_ATTRS = ["tissue", "disease", "development_stage", "sex", "ancestry", "cell_type", "cell_line"] as const;
 export type SampleTermAttr = (typeof SAMPLE_TERM_ATTRS)[number];
 
 export const DONOR_STATUS = ["healthy", "diseased"] as const;
 export const SAMPLE_KINDS = ["primary", "cell_line", "stem_cell", "organoid", "xenograft"] as const;
 export const PERTURBATIONS = ["treated", "genetic", "control"] as const;
+export { TISSUE_TYPES, TUMOR_SAMPLE_TYPES };
 
 /** The snapshot as stored (columnar JSON). */
 export interface FactsWire {
@@ -50,6 +52,9 @@ export interface FactsWire {
   /** 0 unknown, else 1 + index in DONOR_STATUS / SAMPLE_KINDS; perturbation: bit i = PERTURBATIONS[i] */
   donor_status: number[];
   sample_kind: number[];
+  /** 0 unknown, else 1 + index in TISSUE_TYPES / TUMOR_SAMPLE_TYPES */
+  tissue_type: number[];
+  tumor_sample_type: number[];
   perturbation: number[];
   /** attr -> term -> sample indices */
   terms: Record<string, Record<string, number[]>>;
@@ -163,6 +168,8 @@ export async function buildFacts(db: D1Database): Promise<FactsWire> {
     pub: keep.map((r) => Number(r.pub) || 0),
     donor_status: new Array(n).fill(0),
     sample_kind: new Array(n).fill(0),
+    tissue_type: new Array(n).fill(0),
+    tumor_sample_type: new Array(n).fill(0),
     perturbation: new Array(n).fill(0),
     terms: {},
     ancestors: {},
@@ -192,6 +199,8 @@ export async function buildFacts(db: D1Database): Promise<FactsWire> {
     const v = String(r.value);
     if (r.property === "donor_status") wire.donor_status[i] = (DONOR_STATUS as readonly string[]).indexOf(v) + 1;
     else if (r.property === "sample_kind") wire.sample_kind[i] = (SAMPLE_KINDS as readonly string[]).indexOf(v) + 1;
+    else if (r.property === "tissue_type") wire.tissue_type[i] = (TISSUE_TYPES as readonly string[]).indexOf(v) + 1;
+    else if (r.property === "tumor_sample_type") wire.tumor_sample_type[i] = (TUMOR_SAMPLE_TYPES as readonly string[]).indexOf(v) + 1;
     else if (r.property === "perturbation") {
       const b = (PERTURBATIONS as readonly string[]).indexOf(v);
       if (b >= 0) wire.perturbation[i] |= 1 << b;
@@ -257,7 +266,7 @@ export function hydrateFacts(w: FactsWire, bytes: number, source: SampleFacts["s
 /** Six hours: the facts change with catalog loads and Alpha policy updates, a few times a week. */
 const SNAPSHOT_TTL_S = 6 * 3600;
 /** Bump when buildFacts changes what the snapshot holds: the Cache API copy is keyed by it, so a deploy never reads an older layout. */
-export const FACTS_LAYOUT = 2;
+export const FACTS_LAYOUT = 3;
 const SNAPSHOT_URL = "https://singlet.bio/__internal/cell-search/sample-facts";
 let memo: { at: number; facts: Promise<SampleFacts> } | null = null;
 

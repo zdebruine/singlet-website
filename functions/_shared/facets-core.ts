@@ -30,6 +30,7 @@ import {
   type SearchFilters,
 } from "./search-core";
 import { LABEL_FILTERS, LABEL_FILTER_FIELDS, type LabelFilterField } from "./s1-labels";
+import { TYPE_FILTER_FIELDS, typeFacetSelect, type TypeFilterField } from "./sample-type-filters";
 import { ASSAY_FAMILIES, DISEASE_GROUPS, TISSUE_GROUPS, organismToCommon } from "./vocab";
 import { D1_MAX_COMPOUND_TERMS } from "./d1-limits";
 
@@ -53,6 +54,10 @@ export interface FacetsResponse {
   sex_genetic: FacetOption[];
   ancestry_genetic: FacetOption[];
   cell_type_label: FacetOption[];
+  /** Structured sample type facts (./sample-type-filters), counted over served samples. */
+  tissue_type: FacetOption[];
+  tumor_sample_type: FacetOption[];
+  cell_line: FacetOption[];
   year: FacetOption[];
   reference_build: FacetOption[];
   protocol: FacetOption[];
@@ -74,7 +79,7 @@ const LABEL_FACET_LIMIT = 40;
 const YEAR_FACET_LIMIT = 40;
 const DAY_MS = 24 * 3600 * 1000;
 
-type FacetName = ArrayFilterField | LabelFilterField | "year" | "reference_build" | "protocol" | "file_samples" | "file_cells" | "file_size";
+type FacetName = ArrayFilterField | LabelFilterField | TypeFilterField | "year" | "reference_build" | "protocol" | "file_samples" | "file_cells" | "file_size";
 
 interface FacetRow {
   facet: string;
@@ -182,6 +187,10 @@ export function studyFacetStatements(f: SearchFilters, gseIds: string[] | null, 
                  WHERE sl.attr = '${LABEL_FILTERS[k]}' AND sl.gse_id IN (SELECT gse_id FROM ${base.name}) GROUP BY sl.value ORDER BY n DESC LIMIT ${LABEL_FACET_LIMIT})`,
     });
   }
+  for (const k of opts.labels === false ? [] : TYPE_FILTER_FIELDS) {
+    const base = baseFor(k);
+    items.push({ base, select: typeFacetSelect(k, base.name, "gse") });
+  }
   const by = baseFor("year");
   items.push({
     base: by,
@@ -252,6 +261,10 @@ export function sampleFacetStatements(f: SearchFilters, gsmIds: string[] | null,
                  WHERE la.source = 'pipeline' AND la.attr = '${LABEL_FILTERS[k]}' AND la.gsm_id IN (SELECT gsm_id FROM ${base.name}) GROUP BY la.value_norm ORDER BY n DESC LIMIT ${LABEL_FACET_LIMIT})`,
     });
   }
+  for (const k of opts.labels === false ? [] : TYPE_FILTER_FIELDS) {
+    const base = baseFor(k);
+    items.push({ base, select: typeFacetSelect(k, base.name, "gsm") });
+  }
   const by = baseFor("year");
   items.push({
     base: by,
@@ -276,6 +289,9 @@ function emptyFacets(level: Level): FacetsResponse {
     sex_genetic: [],
     ancestry_genetic: [],
     cell_type_label: [],
+    tissue_type: [],
+    tumor_sample_type: [],
+    cell_line: [],
     year: [],
     reference_build: [],
     protocol: [],
@@ -299,7 +315,7 @@ function assemble(level: Level, rows: FacetRow[]): FacetsResponse {
     if (r.facet === "organism") opt.label = organismToCommon(r.value);
     (out[r.facet as FacetName] as FacetOption[]).push(opt);
   }
-  for (const k of ["organism", "tissue_group", "disease_group", "assay_family", "cell_type", ...LABEL_FILTER_FIELDS, "reference_build", "protocol", "file_samples", "file_cells", "file_size"] as const) {
+  for (const k of ["organism", "tissue_group", "disease_group", "assay_family", "cell_type", ...LABEL_FILTER_FIELDS, ...TYPE_FILTER_FIELDS, "reference_build", "protocol", "file_samples", "file_cells", "file_size"] as const) {
     out[k].sort((a, b) => b.count - a.count || a.value.localeCompare(b.value));
   }
   out.year.sort((a, b) => Number(b.value) - Number(a.value));
@@ -339,7 +355,7 @@ export async function computeFacets(ctx: Ctx, f: SearchFilters, level: Level, sc
   if (scopedGseIds) return computeFacetsLive(ctx, f, level, scopedGseIds);
   const unfiltered = !hasAnyFilter(f) && !f.q;
   if (unfiltered) {
-    const key = `facets:v14:${level}:all:${f.has_bundle === true ? "hb1" : "hb0"}`;
+    const key = `facets:v15:${level}:all:${f.has_bundle === true ? "hb1" : "hb0"}`;
     return metaCached(ctx.db, ctx.waitUntil, key, DAY_MS, () => computeFacetsLive(ctx, f, level));
   }
   return computeFacetsLive(ctx, f, level);

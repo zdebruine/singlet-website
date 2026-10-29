@@ -116,6 +116,18 @@ export interface StudySample extends Record<string, unknown> {
   /** Pipeline QC verdict: "HEALTHY" | "WARN" | "LOW_QUALITY", or null if not yet scored. */
   qc_flag: string | null;
   organism_label: string;
+  /** Structured facts from the sample's own GEO fields (./sample-type): CELLxGENE tissue_type, Cellosaurus cell line, GDC tumour sample
+   *  type, MONDO / PATO disease, donor status and the coarse sample kind. Absent fields are not recorded, never inferred. */
+  facts: SampleFacts;
+}
+
+export interface SampleFacts {
+  tissue_type?: string;
+  tumor_sample_type?: string;
+  sample_kind?: string;
+  donor_status?: string;
+  cell_line?: { id: string; name: string | null }[];
+  disease?: { id: string; label: string | null }[];
 }
 
 export interface StudyDetail {
@@ -164,6 +176,26 @@ export async function loadStudy(db: D1Database, rawId: string): Promise<StudyDet
     .bind(id)
     .all<{ gsm_id: string; qc_tier: number; median_genes: number | null; mapping_rate: number | null }>()
     .catch(() => ({ results: [] as { gsm_id: string; qc_tier: number; median_genes: number | null; mapping_rate: number | null }[] }));
+  // Structured sample facts: properties and the cell line / disease terms with their labels.
+  const factsPromise = Promise.all([
+    db.prepare(`SELECT gsm_id, property, value FROM sample_property WHERE gse_id = ? AND property IN ('tissue_type', 'tumor_sample_type', 'sample_kind', 'donor_status')`).bind(id).all<{ gsm_id: string; property: string; value: string }>(),
+    db
+      .prepare(`SELECT t.gsm_id, t.attr, t.term_id, ot.label FROM sample_term t LEFT JOIN ontology_term ot ON ot.term_id = t.term_id WHERE t.gse_id = ? AND t.attr IN ('cell_line', 'disease')`)
+      .bind(id)
+      .all<{ gsm_id: string; attr: string; term_id: string; label: string | null }>(),
+  ])
+    .then(([p, t]) => {
+      const by = new Map<string, SampleFacts>();
+      const get = (g: string) => by.get(g) ?? (by.set(g, {}), by.get(g)!);
+      for (const r of p.results ?? []) (get(r.gsm_id) as Record<string, unknown>)[r.property] = r.value;
+      for (const r of t.results ?? []) {
+        const f = get(r.gsm_id);
+        if (r.attr === "cell_line") (f.cell_line ??= []).push({ id: r.term_id, name: r.label });
+        else (f.disease ??= []).push({ id: r.term_id, label: r.term_id === "PATO:0000461" ? "normal" : r.label });
+      }
+      return by;
+    })
+    .catch(() => new Map<string, SampleFacts>());
   // Samples the study's .s1 files hold that the catalog files under another series (GEO lists some samples in two series; gsm keeps
   // one gse_id). Without the .s1 tables there are none.
   const crossPromise = db
@@ -232,6 +264,7 @@ export async function loadStudy(db: D1Database, rawId: string): Promise<StudyDet
     samplesResult.results.push(...cross);
     samplesResult.results.sort((a, b) => String(a.gsm_id).localeCompare(String(b.gsm_id)));
   }
+  const factsBy = await factsPromise;
   const tiers = (await tiersPromise).results ?? [];
   const lowById = new Map(tiers.filter((t) => Number(t.qc_tier) === 1).map((t) => [t.gsm_id, t]));
   const removedIds = new Set(tiers.filter((t) => Number(t.qc_tier) === 2).map((t) => t.gsm_id));
@@ -258,6 +291,7 @@ export async function loadStudy(db: D1Database, rawId: string): Promise<StudyDet
       exclusion: exclusionFor(r.status as string, r.failure_category as string | null),
       suspect_cells: verdict === "suspect",
       cell_verdict: verdict,
+      facts: factsBy.get(String(r.gsm_id)) ?? {},
       qc_flag: sanitizeQcFlag(r.qc_flag),
       modality: normalizeModality(r.modality, r.assay_family),
       organism_label: organismToCommon((r.organism_primary as string | null) ?? (r.organism as string | null)),

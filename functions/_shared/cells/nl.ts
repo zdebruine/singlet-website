@@ -35,7 +35,7 @@ interface Entry {
 }
 
 /** Field preference when a phrase names terms in several ontologies. */
-const FIELD_ORDER = ["sex", "ancestry", "cell_type", "development_stage", "disease", "tissue", "organism", "donor_status", "sample_kind", "perturbation", "assay"];
+const FIELD_ORDER = ["sex", "ancestry", "cell_type", "development_stage", "disease", "tissue", "organism", "donor_status", "tissue_type", "tumor_sample_type", "sample_kind", "perturbation", "assay"];
 
 const STOP = new Set(
   "a an the of from in on at to for with and by as that which are is were was be all any show me find get give list cells cell samples sample studies study donors donor patients patient people individuals subjects tissue tissues derived origin ancestry descent".split(
@@ -49,8 +49,15 @@ const PROPERTY_WORDS: Record<string, Entry> = {
   healthy: { field: "donor_status", values: ["healthy"] },
   "healthy donor": { field: "donor_status", values: ["healthy"] },
   diseased: { field: "donor_status", values: ["diseased"] },
-  organoid: { field: "sample_kind", values: ["organoid"] },
-  "cell line": { field: "sample_kind", values: ["cell_line"] },
+  organoid: { field: "tissue_type", values: ["organoid"] },
+  organoids: { field: "tissue_type", values: ["organoid"] },
+  "cell line": { field: "tissue_type", values: ["cell line"] },
+  "cell lines": { field: "tissue_type", values: ["cell line"] },
+  "primary cell culture": { field: "tissue_type", values: ["primary cell culture"] },
+  "primary culture": { field: "tissue_type", values: ["primary cell culture"] },
+  "adjacent normal": { field: "tumor_sample_type", values: ["adjacent normal"] },
+  metastatic: { field: "tumor_sample_type", values: ["metastatic"] },
+  metastasis: { field: "tumor_sample_type", values: ["metastatic"] },
   xenograft: { field: "sample_kind", values: ["xenograft"] },
   "stem cell derived": { field: "sample_kind", values: ["stem_cell"] },
   "ipsc derived": { field: "sample_kind", values: ["stem_cell"] },

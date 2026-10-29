@@ -482,6 +482,9 @@ export async function exportManifest(
     push("sex_genetic", f.sex_genetic);
     push("ancestry_genetic", f.ancestry_genetic);
     push("cell_type_label", f.cell_type_label);
+    push("tissue_type", f.tissue_type);
+    push("tumor_sample_type", f.tumor_sample_type);
+    push("cell_line", f.cell_line);
     if (f.min_cells != null && Number.isFinite(Number(f.min_cells))) url.searchParams.set("min_cells", String(Math.floor(Number(f.min_cells))));
     if (f.year_min != null && Number.isFinite(Number(f.year_min))) url.searchParams.set("year_min", String(Math.floor(Number(f.year_min))));
     if (f.year_max != null && Number.isFinite(Number(f.year_max))) url.searchParams.set("year_max", String(Math.floor(Number(f.year_max))));

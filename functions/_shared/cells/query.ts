@@ -11,7 +11,7 @@ import { HANCESTRO_LABELS } from "../hancestro";
 import { organismToScientific } from "../vocab";
 import type { CellIndex, IndexDictEntry } from "./atlas-index";
 import { fieldDef, FIELDS, type FieldDef } from "./fields";
-import { DONOR_STATUS, normLabel, PERTURBATIONS, SAMPLE_KINDS, type SampleFacts } from "./sample-facts";
+import { DONOR_STATUS, normLabel, PERTURBATIONS, SAMPLE_KINDS, TISSUE_TYPES, TUMOR_SAMPLE_TYPES, type SampleFacts } from "./sample-facts";
 
 // ── the query ───────────────────────────────────────────────────────────────
 
@@ -229,7 +229,9 @@ export const STAGE_ALIASES: Record<string, string[]> = {
   elderly: ["HsapDv:0000227"],
 };
 
-const ID_RE = /^[A-Za-z][A-Za-z_]*:\d+$/;
+const ID_RE = /^(?:[A-Za-z][A-Za-z_]*:\d+|[Cc][Vv][Cc][Ll]_[A-Za-z0-9]{4})$/;
+/** Whether a term id belongs to an ontology; Cellosaurus accessions are written CVCL_xxxx, the others PREFIX:digits. */
+const inOntology = (id: string, o: string) => (o === "Cellosaurus" ? id.startsWith("CVCL_") : id.startsWith(o + ":"));
 
 /** Singular forms to try for a label that did not match ("T cells" -> "t cell", "tumours" -> "tumour"). */
 export function singulars(s: string): string[] {
@@ -269,13 +271,13 @@ function labelIds(idx: CellIndex, facts: SampleFacts, v: string, ontologies: str
   for (const s of singulars(normLabel(v))) {
     const ids = new Set<string>();
     for (const id of extra[s] ?? []) ids.add(id);
-    for (const id of facts.synonyms[s] ?? []) if (ontologies.some((o) => id.startsWith(o + ":"))) ids.add(id);
+    for (const id of facts.synonyms[s] ?? []) if (ontologies.some((o) => inOntology(id, o))) ids.add(id);
     if (ontologies.includes("CL")) {
       for (const e of idx.cellTypes) if (e.id && normLabel(e.label) === s) ids.add(e.id);
       for (const [id, l] of Object.entries(idx.terms)) if (id.startsWith("CL:") && normLabel(l) === s) ids.add(id);
     }
     if (ontologies.includes("HANCESTRO")) for (const [id, l] of Object.entries(HANCESTRO_LABELS)) if (normLabel(l) === s) ids.add(id);
-    for (const [id, l] of Object.entries(facts.labels)) if (normLabel(l) === s && ontologies.some((o) => id.startsWith(o + ":"))) ids.add(id);
+    for (const [id, l] of Object.entries(facts.labels)) if (normLabel(l) === s && ontologies.some((o) => inOntology(id, o))) ids.add(id);
     if (ids.size) return [...ids].sort();
   }
   return [];
@@ -288,6 +290,7 @@ function canonId(facts: SampleFacts, idx: CellIndex, v: string): string {
   const lower = v.toLowerCase();
   const known = facts.idCase.get(lower);
   if (known) return known;
+  if (/^cvcl_/i.test(v)) return `CVCL_${v.slice(5).toUpperCase()}`;
   const [p, n] = v.split(":");
   for (const id of Object.keys(idx.terms)) if (id.toLowerCase() === lower) return id;
   return /^(hsapdv|mmusdv)$/i.test(p) ? `${p.toLowerCase() === "hsapdv" ? "HsapDv" : "MmusDv"}:${n}` : `${p.toUpperCase()}:${n}`;
@@ -300,6 +303,15 @@ const SAMPLE_TERM_FIELD: Record<string, string> = {
   donor_sex: "sex",
   donor_ancestry: "ancestry",
   sorted_cell_type: "cell_type",
+  cell_line: "cell_line",
+};
+
+/** Sample properties stored as 0 (unknown) or 1 + index into a fixed list. */
+const CODE_FIELDS: Record<string, { list: readonly string[]; col: (f: SampleFacts) => number[] }> = {
+  donor_status: { list: DONOR_STATUS, col: (f) => f.donor_status },
+  sample_kind: { list: SAMPLE_KINDS, col: (f) => f.sample_kind },
+  tissue_type: { list: TISSUE_TYPES, col: (f) => f.tissue_type ?? new Array(f.n).fill(0) },
+  tumor_sample_type: { list: TUMOR_SAMPLE_TYPES, col: (f) => f.tumor_sample_type ?? new Array(f.n).fill(0) },
 };
 
 const SEX_CODES: Record<string, number> = { unknown: 0, female: 1, male: 2, ambiguous: 3, "pato:0000383": 1, "pato:0000384": 2 };
@@ -425,9 +437,11 @@ export function resolveLeaf(leaf: Leaf, idx: CellIndex, facts: SampleFacts): Res
       r.sampleMask = enumCol("disease_group", facts.disease_group);
       break;
     case "donor_status":
-    case "sample_kind": {
-      const list = (def.name === "donor_status" ? DONOR_STATUS : SAMPLE_KINDS) as readonly string[];
-      const col = def.name === "donor_status" ? facts.donor_status : facts.sample_kind;
+    case "sample_kind":
+    case "tissue_type":
+    case "tumor_sample_type": {
+      const list = CODE_FIELDS[def.name].list;
+      const col = CODE_FIELDS[def.name].col(facts);
       const hit = ci([...list], vals);
       const unk = vals.some((v) => v.toLowerCase() === "unknown");
       r.unknown = r.unknown.filter((v) => v.toLowerCase() !== "unknown");
@@ -776,6 +790,8 @@ export function runCellQuery(q: CellQuery, idx: CellIndex, facts: SampleFacts): 
   };
   facets.donor_status = codeFacet(DONOR_STATUS, facts.donor_status);
   facets.sample_kind = codeFacet(SAMPLE_KINDS, facts.sample_kind);
+  facets.tissue_type = codeFacet(TISSUE_TYPES, facts.tissue_type ?? new Array(facts.n).fill(0));
+  facets.tumor_sample_type = codeFacet(TUMOR_SAMPLE_TYPES, facts.tumor_sample_type ?? new Array(facts.n).fill(0));
   {
     const sums = new Float64Array(PERTURBATIONS.length + 1);
     const ns = new Uint32Array(PERTURBATIONS.length + 1);
