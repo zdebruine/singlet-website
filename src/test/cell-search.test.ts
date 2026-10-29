@@ -89,11 +89,14 @@ function makeFacts() {
     pub: [1, 1, 0, 0],
     donor_status: [2, 1, 0, 0],
     sample_kind: [1, 1, 4, 0],
+    tissue_type: [1, 1, 4, 0],
+    tumor_sample_type: [2, 0, 0, 0],
     perturbation: [0, 4, 1, 0],
     terms: {
       tissue: { "UBERON:0002048": [0, 1], "UBERON:0002107": [2, 3] },
       disease: { "MONDO:0008903": [0], "PATO:0000461": [1] },
       development_stage: { "HsapDv:0000267": [0], "HsapDv:0000266": [1] },
+      cell_line: { CVCL_0004: [2] },
     },
     ancestors: {
       "UBERON:0002048": ["UBERON:0000062"],
@@ -117,8 +120,9 @@ function makeFacts() {
       "HsapDv:0000267": "middle aged stage",
       "HsapDv:0000266": "young adult stage",
       "CL:0000945": "lymphocyte of B lineage",
+      CVCL_0004: "K-562",
     },
-    synonyms: { lung: ["UBERON:0002048"], liver: ["UBERON:0002107"], "lung cancer": ["MONDO:0008903"], cancer: ["MONDO:0004992"], tumor: ["MONDO:0005070"], "t cell": ["CL:0000084"] },
+    synonyms: { lung: ["UBERON:0002048"], liver: ["UBERON:0002107"], "lung cancer": ["MONDO:0008903"], cancer: ["MONDO:0004992"], tumor: ["MONDO:0005070"], "t cell": ["CL:0000084"], "k 562": ["CVCL_0004"], k562: ["CVCL_0004"] },
   };
   return hydrateFacts(wire, 0, "edge");
 }
@@ -201,6 +205,18 @@ describe("cell search: evaluation", () => {
         { filter: "tissue=lung", alone: 230, without: 200 },
       ])
     );
+  });
+});
+
+describe("cell search: sample type fields", () => {
+  it("filters on CELLxGENE tissue_type, GDC tumour sample type and a Cellosaurus line by accession or name", () => {
+    const line = run({ tissue_type: "cell line" });
+    expect(line.totals.samples).toBe(1);
+    expect(run({ cell_line: "CVCL_0004" }).totals).toEqual(line.totals);
+    expect(run({ cell_line: "K-562" }).totals).toEqual(line.totals);
+    expect(run({ cell_line: "cvcl_0004" }).totals).toEqual(line.totals);
+    expect(run({ tumor_sample_type: "primary tumor" }).totals.samples).toBe(1);
+    expect(run({ tissue_type: "tissue" }).totals.samples).toBe(2);
   });
 });
 

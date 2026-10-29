@@ -259,9 +259,9 @@ export async function sliceResponse(env: AppEnv, request: Request, waitUntil: Wa
 /** Sample-level fields a served sample can lack (the facts have no value for it). */
 export const UNMAPPABLE = [
   "tissue", "disease", "development_stage", "donor_sex", "donor_ancestry", "sorted_cell_type", "age_years", "organism", "assay", "chemistry",
-  "tissue_group", "disease_group", "donor_status", "perturbation", "sample_kind",
+  "tissue_group", "disease_group", "donor_status", "perturbation", "sample_kind", "tissue_type", "tumor_sample_type", "cell_line",
 ] as const;
-const TERM_ATTR: Record<string, string> = { tissue: "tissue", disease: "disease", development_stage: "development_stage", donor_sex: "sex", donor_ancestry: "ancestry", sorted_cell_type: "cell_type" };
+const TERM_ATTR: Record<string, string> = { tissue: "tissue", disease: "disease", development_stage: "development_stage", donor_sex: "sex", donor_ancestry: "ancestry", sorted_cell_type: "cell_type", cell_line: "cell_line" };
 
 /** Whether served sample i carries any value for a sample-level field; null for fields every sample has and for cell-level fields. */
 export function sampleFieldHas(name: string, facts: SampleFacts): ((i: number) => boolean) | null {
@@ -281,6 +281,8 @@ export function sampleFieldHas(name: string, facts: SampleFacts): ((i: number) =
     case "donor_status": return (i) => facts.donor_status[i] > 0;
     case "perturbation": return (i) => facts.perturbation[i] > 0;
     case "sample_kind": return (i) => facts.sample_kind[i] > 0;
+    case "tissue_type": return (i) => (facts.tissue_type?.[i] ?? 0) > 0;
+    case "tumor_sample_type": return (i) => (facts.tumor_sample_type?.[i] ?? 0) > 0;
     default: return null;
   }
 }

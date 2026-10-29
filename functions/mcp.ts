@@ -90,7 +90,7 @@ const INSTRUCTIONS_BASE = `singlet.bio is an open atlas of public single-cell RN
 
 Recommended order: search_datasets → assess_study or get_study → get_sample_qc → get_modalities (what is in the file beyond gene counts) → get_download_url (whole study) or get_partial_download (one sample's matrix, by HTTP range) → export_manifest for a cohort. compare_studies and find_matched_controls help pick controls.
 
-What Alpha serves per sample: gene counts (spliced and unspliced), splice junctions and exon inclusion computed from them, cell calls and per-cell QC, and per-cell labels — Cell Ontology cell type (per-study accuracy: compartment 0.84, lineage 0.75, cell type 0.43, subtype 0.32; the last two are previews), chromosomal sex (98.1% of samples agree with GEO) and genetic ancestry (HANCESTRO; human donors with enough covered sites). The labels are public cell metadata: search_datasets and export_manifest filter studies by cell_type_label, sex_genetic and ancestry_genetic. Genotypes, mitochondrial allele data, ambient-RNA and doublet calls are not offered. Call get_modalities before telling a user a modality is available.
+What Alpha serves per sample: gene counts (spliced and unspliced), splice junctions and exon inclusion computed from them, cell calls and per-cell QC, and per-cell labels — Cell Ontology cell type (per-study accuracy: compartment 0.84, lineage 0.75, cell type 0.43, subtype 0.32; the last two are previews), chromosomal sex (98.1% of samples agree with GEO) and genetic ancestry (HANCESTRO; human donors with enough covered sites). The labels are public cell metadata: search_datasets and export_manifest filter studies by cell_type_label, sex_genetic and ancestry_genetic. Sample facts follow public conventions and come only from each sample's own GEO fields: tissue_type (CELLxGENE: tissue, organoid, primary cell culture, cell line), cell_line (Cellosaurus), tumor_sample_type (GDC: tumor, primary tumor, metastatic, recurrent tumor, adjacent normal), disease (MONDO, or PATO:0000461 normal for an explicitly healthy donor) and donor_status; search_datasets, export_manifest and search_cells filter on them. Genotypes, mitochondrial allele data, ambient-RNA and doublet calls are not offered. Call get_modalities before telling a user a modality is available.
 
 Every number and every "why" string is computed, not generated — quote them, don't paraphrase. Catalog cell counts can differ from the file's own QC; the file is the truth. Every tool call needs a free singlet.bio account: sign in when your client asks, or send a personal API key from ${ACCOUNT_URL}; calls are counted per account. Downloads themselves (the data.singlet.bio links) never need one. Searches the built-in vocabulary can read cost no AI tokens; a question that needs the AI reading uses your AI allowance (200 readings a day and a monthly token allowance; the monthly allowance is shown in \`_meta.quota\`).`;
 
@@ -151,6 +151,9 @@ const TOOLS = [
         sex_genetic: { type: "array", items: { type: "string", enum: ["female", "male"] }, description: "Chromosomal sex the .s1 labeller called from the cells (XIST vs chrY; 98.1% sample agreement with GEO)." },
         ancestry_genetic: { type: "array", items: { type: "string" }, description: "Genetic ancestry the .s1 labeller called (HANCESTRO id or label: European, African, East Asian, South Asian, Hispanic or Latin American, admixed ancestry). Human donors only." },
         cell_type_label: { type: "array", items: { type: "string" }, description: "Cell types the .s1 labeller called in the cells (Cell Ontology id or label, e.g. CL:0000084 or \"T cell\"; includes subtypes). Unlike the GEO-text cell type, this comes from the expression." },
+        tissue_type: { type: "array", items: { type: "string", enum: ["tissue", "organoid", "primary cell culture", "cell line"] }, description: "CELLxGENE tissue_type from the sample's own GEO fields: tissue (xenografts included), organoid, primary cell culture or cell line (stem-cell-derived cultures included)." },
+        tumor_sample_type: { type: "array", items: { type: "string", enum: ["tumor", "primary tumor", "metastatic", "recurrent tumor", "adjacent normal"] }, description: "Tumour or adjacent normal tissue (GDC sample_type vocabulary), when the sample's GEO fields say so." },
+        cell_line: { type: "array", items: { type: "string" }, description: "Cellosaurus cell line: accession (CVCL_0063) or name/synonym (\"HEK293T\")." },
         include_unbuilt: { type: "boolean", default: false, description: "Also return studies whose files are not published yet." },
         include_low_qc: { type: "boolean", default: false, description: "Also count and return samples singlet's QC flagged (few genes detected or few reads mapped). Left out by default; proceed with caution if you include them." },
         include_unclassified: { type: "boolean", default: false, description: "With a tissue filter: also list (separately, flagged \"unclassified\") served studies the catalog has no tissue group for whose GEO title, sample source text or abstract names that tissue. Every answer with a tissue or disease filter already says how many studies have no group and could not match it." },
@@ -279,6 +282,9 @@ const TOOLS = [
             sex_genetic: { type: "array", items: { type: "string", enum: ["female", "male"] } },
             ancestry_genetic: { type: "array", items: { type: "string" } },
             cell_type_label: { type: "array", items: { type: "string" } },
+            tissue_type: { type: "array", items: { type: "string", enum: ["tissue", "organoid", "primary cell culture", "cell line"] } },
+            tumor_sample_type: { type: "array", items: { type: "string", enum: ["tumor", "primary tumor", "metastatic", "recurrent tumor", "adjacent normal"] } },
+            cell_line: { type: "array", items: { type: "string" } },
             min_cells: { type: "integer", minimum: 0 },
             year_min: { type: "integer" },
             year_max: { type: "integer" },
@@ -838,7 +844,7 @@ async function searchDatasets(
   for (const v of strArray(args.disease)) url.searchParams.append("disease_group", v);
   for (const v of strArray(args.assay)) url.searchParams.append("assay_family", v);
   if (args.min_cells != null && Number.isFinite(Number(args.min_cells))) url.searchParams.set("min_cells", String(Math.max(0, Math.floor(Number(args.min_cells)))));
-  for (const k of ["sex_genetic", "ancestry_genetic", "cell_type_label"] as const) for (const v of strArray(args[k])) url.searchParams.append(k, v);
+  for (const k of ["sex_genetic", "ancestry_genetic", "cell_type_label", "tissue_type", "tumor_sample_type", "cell_line"] as const) for (const v of strArray(args[k])) url.searchParams.append(k, v);
   if (args.include_unbuilt === true) url.searchParams.set("has_bundle", "0");
   if (args.include_low_qc === true) url.searchParams.set("include_low_qc", "1");
   if (args.interpret !== "ai") url.searchParams.set("interpret", "vocab");

@@ -415,6 +415,13 @@ export function StudySamplesTable({ gseId, studyTitle, samples, highlightGsm, co
               const pairs = conditionPairs(s.characteristics, 3);
               const nPairs = Object.keys(s.characteristics ?? {}).length;
               const tissueCell = [s.tissue, s.cell_type].filter(Boolean).join(" · ");
+              const f = s.facts ?? {};
+              const factLine = [
+                f.tissue_type,
+                ...(f.cell_line ?? []).map((c) => c.name ?? c.id),
+                f.tumor_sample_type,
+                ...(f.disease ?? []).map((d) => d.label ?? d.id),
+              ].filter(Boolean).join(" · ");
               const qc = qcByGsm?.[s.gsm_id.toUpperCase()];
               return (
                 <Fragment key={s.gsm_id}>
@@ -463,6 +470,7 @@ export function StudySamplesTable({ gseId, studyTitle, samples, highlightGsm, co
                     </td>
                     <td className="text-[12.5px] max-w-[220px]">
                       <div className="truncate" title={tissueCell || undefined}>{tissueCell || <span className="text-muted-foreground">—</span>}</div>
+                      {factLine && <div className="truncate text-[11.5px] text-muted-foreground" title="From the sample's own GEO fields: tissue type (CELLxGENE), cell line (Cellosaurus), tumour sample type (GDC), disease (MONDO)">{factLine}</div>}
                     </td>
                     <td className="text-[12px] max-w-[320px]">
                       {pairs.length ? (

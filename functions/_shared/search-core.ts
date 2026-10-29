@@ -15,6 +15,7 @@
 import { safeList } from "./json";
 import { sampleServedSql, studyServedSql } from "./alpha";
 import { LABEL_FILTERS, LABEL_FILTER_FIELDS, labelMatchSql, normalizeLabelValues, type LabelFilterField } from "./s1-labels";
+import { TYPE_FILTER_FIELDS, normalizeTypeValues, typeSampleClause, typeStudyClause, type TypeFilterField } from "./sample-type-filters";
 import { attachFileFacts, type StudyS1 } from "./file-facts";
 import { parseCharacteristics, summarizeConditions, type ConditionSummary } from "./conditions";
 import { cellCountVerdict, isSuspectStudyCells, type CellCountVerdict } from "./suspect-cells";
@@ -47,6 +48,10 @@ export interface SearchFilters {
   sex_genetic: string[];
   ancestry_genetic: string[];
   cell_type_label: string[];
+  /** Structured sample type facts (./sample-type-filters): CELLxGENE tissue_type, GDC tumor sample type, Cellosaurus cell line. */
+  tissue_type: string[];
+  tumor_sample_type: string[];
+  cell_line: string[];
   min_cells: number | null;
   has_bundle: boolean | null;
   /** Count and list samples flagged low QC too (they are left out by default). */
@@ -389,6 +394,9 @@ export function emptyFilters(): SearchFilters {
     sex_genetic: [],
     ancestry_genetic: [],
     cell_type_label: [],
+    tissue_type: [],
+    tumor_sample_type: [],
+    cell_line: [],
     min_cells: null,
     has_bundle: null,
     include_low_qc: false,
@@ -431,6 +439,9 @@ export function parseSearchParams(url: URL): SearchParams {
     sex_genetic: multi(url, "sex_genetic"),
     ancestry_genetic: multi(url, "ancestry_genetic"),
     cell_type_label: multi(url, "cell_type_label"),
+    tissue_type: multi(url, "tissue_type"),
+    tumor_sample_type: multi(url, "tumor_sample_type"),
+    cell_line: multi(url, "cell_line"),
     min_cells: intOrNull(url.searchParams.get("min_cells")),
     has_bundle,
     include_low_qc: bool("include_low_qc") === true,
@@ -489,6 +500,9 @@ export function normalizeFilters<T extends SearchFilters>(f: T, rules: VocabRule
       sex_genetic: normalizeLabelValues(f.sex_genetic ?? []),
       ancestry_genetic: normalizeLabelValues(f.ancestry_genetic ?? []),
       cell_type_label: normalizeLabelValues(f.cell_type_label ?? []),
+      tissue_type: normalizeTypeValues("tissue_type", f.tissue_type ?? []),
+      tumor_sample_type: normalizeTypeValues("tumor_sample_type", f.tumor_sample_type ?? []),
+      cell_line: normalizeTypeValues("cell_line", f.cell_line ?? []),
     },
     dropped,
   };
@@ -505,6 +519,7 @@ export function canonicalQuery(p: SearchParams | (SearchFilters & Partial<Search
   add("assay_family", p.assay_family);
   add("cell_type", p.cell_type);
   for (const k of LABEL_FILTER_FIELDS) add(k, p[k] ?? []);
+  for (const k of TYPE_FILTER_FIELDS) add(k, p[k] ?? []);
   add("reference_build", p.reference_build);
   add("protocol", p.protocol);
   if (p.min_cells != null) sp.set("min_cells", String(p.min_cells));
@@ -535,6 +550,7 @@ export function hasAnyFilter(f: SearchFilters): boolean {
     f.assay_family.length > 0 ||
     f.cell_type.length > 0 ||
     LABEL_FILTER_FIELDS.some((k) => (f[k]?.length ?? 0) > 0) ||
+    TYPE_FILTER_FIELDS.some((k) => (f[k]?.length ?? 0) > 0) ||
     f.min_cells != null ||
     f.year_min != null ||
     f.year_max != null
@@ -669,7 +685,7 @@ export interface Built {
 
 export interface StudyWhereOpts {
   /** Facet field whose own constraint should be skipped (contextual facet counts). */
-  exclude?: ArrayFilterField | LabelFilterField | "year" | "min_cells" | "q" | "reference_build" | "protocol" | "file_samples" | "file_cells" | "file_size";
+  exclude?: ArrayFilterField | LabelFilterField | TypeFilterField | "year" | "min_cells" | "q" | "reference_build" | "protocol" | "file_samples" | "file_cells" | "file_size";
   /** Restrict to these gse_ids (JSON array string is built here). */
   gseIds?: string[] | null;
 }
@@ -718,6 +734,13 @@ export function buildStudyWhere(f: SearchFilters, opts: StudyWhereOpts = {}): Bu
     const m = labelMatchSql("sl", "value", vals);
     clauses.push(`m.gse_id IN (SELECT sl.gse_id FROM study_label sl WHERE sl.attr = '${LABEL_FILTERS[k]}' AND ${m.sql})`);
     params.push(...m.params);
+  }
+  for (const k of TYPE_FILTER_FIELDS) {
+    const vals = f[k] ?? [];
+    if (!vals.length || ex === k) continue;
+    const c = typeStudyClause(k, vals, "m.gse_id");
+    clauses.push(c.sql);
+    params.push(...c.params);
   }
   if (f.min_cells != null && ex !== "min_cells") {
     clauses.push(`${FILE_CELLS} >= ?`);
@@ -806,6 +829,13 @@ export function buildSampleWhere(f: SearchFilters, opts: StudyWhereOpts = {}): B
     const m = labelMatchSql("la", "value_norm", vals);
     clauses.push(`s.gsm_id IN (SELECT la.gsm_id FROM sample_attr la WHERE la.source = 'pipeline' AND la.attr = '${LABEL_FILTERS[k]}' AND ${m.sql})`);
     params.push(...m.params);
+  }
+  for (const k of TYPE_FILTER_FIELDS) {
+    const vals = f[k] ?? [];
+    if (!vals.length || ex === k) continue;
+    const c = typeSampleClause(k, vals, "s.gsm_id");
+    clauses.push(c.sql);
+    params.push(...c.params);
   }
   if (f.min_cells != null && ex !== "min_cells") {
     clauses.push(`${SAMPLE_FILE_CELLS} >= ?`);
@@ -1851,6 +1881,9 @@ export function pickFilters(p: SearchFilters): SearchFilters {
     sex_genetic: p.sex_genetic ?? [],
     ancestry_genetic: p.ancestry_genetic ?? [],
     cell_type_label: p.cell_type_label ?? [],
+    tissue_type: p.tissue_type ?? [],
+    tumor_sample_type: p.tumor_sample_type ?? [],
+    cell_line: p.cell_line ?? [],
     min_cells: p.min_cells,
     has_bundle: p.has_bundle,
     include_low_qc: p.include_low_qc,
