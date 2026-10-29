@@ -1105,7 +1105,7 @@ export function normalizeRelated(raw: unknown): RelatedResponse {
 
 /** Public download URL for a study's legacy single bundle. It is a dead link once the study is retired: use studyFileUrl. */
 export function bundleUrl(gseId: string): string {
-  return `https://data.singlet.bio/data/${gseId}/${gseId}.singlet`;
+  return `${(import.meta.env?.VITE_DATA_BASE as string | undefined) || "https://data.singlet.bio"}/data/${gseId}/${gseId}.singlet`;
 }
 
 /** True when the study's single .singlet file is gone and its files are the per-sample objects listed in a manifest. */
