@@ -12,7 +12,7 @@ const Privacy = () => {
         <h1 className="font-display text-3xl md:text-4xl font-bold text-foreground tracking-tightest mb-8">
           Privacy Policy
         </h1>
-        <p className="text-xs text-muted-foreground mb-8 font-mono">Last updated: October 26, 2026</p>
+        <p className="text-xs text-muted-foreground mb-8 font-mono">Last updated: October 28, 2026</p>
 
         <div className="prose prose-sm max-w-none space-y-8 text-muted-foreground">
           <section>
@@ -47,6 +47,11 @@ const Privacy = () => {
             </ul>
             <p className="text-sm leading-relaxed mt-2">
               We use this only in aggregate to understand traffic, keep the site reliable, and protect against abuse.
+            </p>
+            <p className="text-sm leading-relaxed mt-3">
+              We also use product analytics on this website (section 10) to see how it is used: which pages are visited
+              and for how long, how far they are scrolled, what is clicked, which site or campaign link brought a visit,
+              and whether a visitor comes back.
             </p>
             <p className="text-sm leading-relaxed mt-3 mb-2">
               AI-assisted search is rate-limited per day. To enforce that limit we keep one counter per person per day
@@ -175,7 +180,8 @@ const Privacy = () => {
             <p className="text-sm leading-relaxed">
               Standard technical logs are retained for a limited period for security and operational purposes, then
               discarded or aggregated. Expired sessions and unfinished sign-ins are deleted. Account data is kept while
-              the account exists. We do not build profiles of individual visitors.
+              the account exists. Analytics events (section 10) are kept by PostHog under its plan's retention limit and
+              are deleted on request.
             </p>
           </section>
 
@@ -183,8 +189,9 @@ const Privacy = () => {
             <h2 className="font-display text-lg font-bold text-foreground mb-3">9. Third-Party Services</h2>
             <p className="text-sm leading-relaxed">
               The website, its database, file storage, downloads and the default language model all run on Cloudflare
-              (Pages, D1, R2, Workers AI and AI Gateway). GitHub or Google handle sign-in if you choose them, and
-              Anthropic receives AI search text only if we enable it (section 5). These providers process requests under
+              (Pages, D1, R2, Workers AI and AI Gateway). GitHub or Google handle sign-in if you choose them,
+              Anthropic receives AI search text only if we enable it (section 5), and PostHog (United States) receives
+              website analytics (section 10). These providers process requests under
               their own privacy policies. We do not sell or share your data with advertisers.
             </p>
           </section>
@@ -192,9 +199,18 @@ const Privacy = () => {
           <section>
             <h2 className="font-display text-lg font-bold text-foreground mb-3">10. Cookies and Tracking</h2>
             <p className="text-sm leading-relaxed">
-              We do not use third-party advertising or cross-site tracking cookies. Any cookies used are limited to
-              what is necessary for the website to function: signing in sets one first-party cookie that keeps you
-              signed in (and a short-lived one while the sign-in completes).
+              We do not use third-party advertising or cross-site tracking cookies. Signing in sets one first-party
+              cookie that keeps you signed in (and a short-lived one while the sign-in completes).
+            </p>
+            <p className="text-sm leading-relaxed mt-2">
+              For analytics we use PostHog. Its script stores a random visitor id in a first-party cookie and your
+              browser's local storage, so a return visit is recognised. It records page views, time on page, scroll
+              depth, clicks, the referring site and any campaign tags in the link, browser and device type, and the
+              country and region derived from your network address (the address itself is not kept). If you are signed
+              in, these events are linked to your singlet.bio account id, never your email. We do not record your
+              screen or what you type, and the API, MCP server and data downloads are not tracked this way. Analytics
+              is sent through singlet.bio and is off when your browser sends Do Not Track. To have your analytics data
+              deleted, ask through the contact in section 12.
             </p>
           </section>
 
