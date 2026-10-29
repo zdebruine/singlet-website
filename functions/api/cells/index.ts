@@ -12,6 +12,7 @@ import { handleOptions } from "../../_shared/cors";
 import type { AppEnv } from "../../_shared/env";
 import { resolveIdentity } from "../../_shared/identity";
 import { cachedJson, cacheKey, CELLS_CACHE_TTL, cellSearchResponse, errorResponse, parseCellRequest } from "../../_shared/cells/http";
+import { factsEpoch } from "../../_shared/cells/sample-facts";
 
 async function handle(request: Request, env: AppEnv, waitUntil: (p: Promise<unknown>) => void, body: Record<string, unknown> | null): Promise<Response> {
   const id = await resolveIdentity(request, env, waitUntil);
@@ -23,7 +24,8 @@ async function handle(request: Request, env: AppEnv, waitUntil: (p: Promise<unkn
     return errorResponse(e, "parse");
   }
   const run = () => cellSearchResponse(env, id.identity, waitUntil, p).catch((e) => errorResponse(e, "query"));
-  return cachedJson(request, waitUntil, run, { ttl: CELLS_CACHE_TTL, key: cacheKey(p) });
+  // keyed by facts_epoch too, so an answer cached before a metadata backfill is not served after it
+  return cachedJson(request, waitUntil, run, { ttl: CELLS_CACHE_TTL, key: `${cacheKey(p)}&e=${encodeURIComponent(await factsEpoch(env.DB))}` });
 }
 
 export const onRequestGet: PagesFunction<AppEnv> = ({ request, env, waitUntil }) => handle(request, env, waitUntil, null);
