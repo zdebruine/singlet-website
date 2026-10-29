@@ -154,6 +154,7 @@ describe("discovery metadata", () => {
     expect(body.code_challenge_methods_supported).toEqual(["S256"]);
     expect(body.grant_types_supported).toEqual(["authorization_code", "refresh_token"]);
     expect(body.token_endpoint_auth_methods_supported).toContain("none");
+    expect(body.client_id_metadata_document_supported).toBe(true);
   });
 
   it("is served for a preview on its own origin, and other paths fall through", async () => {

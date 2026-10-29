@@ -140,6 +140,8 @@ export function authorizationServerMetadata(issuer: string) {
     response_modes_supported: ["query"],
     grant_types_supported: ["authorization_code", "refresh_token"],
     token_endpoint_auth_methods_supported: ["none", "client_secret_post", "client_secret_basic"],
+    // Claude picks CIMD over DCR only when this is true and "none" is listed above.
+    client_id_metadata_document_supported: true,
     revocation_endpoint_auth_methods_supported: ["none", "client_secret_post", "client_secret_basic"],
     code_challenge_methods_supported: ["S256"],
     authorization_response_iss_parameter_supported: true,
