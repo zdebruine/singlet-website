@@ -75,8 +75,8 @@ const ISSUES: Issue[] = [
   {
     id: "annotations",
     title: "Annotations: early accuracy",
-    effect: "Compartment and lineage labels are usable; cell type and subtype are previews. Labels on cell lines are unreliable.",
-    action: "Filter on compartment or lineage, and check deeper labels against your own markers. For cell lines, use the cell_line field, not the cell type.",
+    effect: "Compartment and lineage labels are usable; cell type and subtype are previews. Cells of cell-line samples carry the line's name instead of a cell type.",
+    action: "Filter on compartment or lineage, and check deeper labels against your own markers.",
     details: (
       <>
         <ul className="list-disc pl-5 space-y-1.5">
@@ -96,9 +96,10 @@ const ISSUES: Issue[] = [
           </li>
         </ul>
         <p>
-          The labeller was trained on primary tissue. A cultured cell line gets the nearest primary cell type, which is often wrong:
-          K-562 cells, for example, are labelled "transit amplifying cell". The sample's cell_line (Cellosaurus) and tissue_type fields
-          say what the cells are.
+          The labeller was trained on primary tissue, so on a cultured cell line it gives the nearest primary cell type, which is
+          often wrong: K-562 cells came out as "transit amplifying cell". Search, sample and study facts, and the MCP tools therefore
+          give the cells of a cell-line sample its line as their cell type (Cellosaurus name and id, under "cultured cell"). The cells
+          table inside each file keeps the labeller's original call.
         </p>
         <p>Doublet, ambient-RNA and mitochondrial DNA allele layers are not in Alpha.</p>
         <p>

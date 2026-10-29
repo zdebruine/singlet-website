@@ -7,6 +7,7 @@
  * Nothing here reads cell data or D1 per query: both inputs are in isolate memory. Per-cell numeric ranges (n_umi, n_genes) are the one
  * exception: they need the cell index's row scan, which the data Worker runs (`rowScanWhere` builds its request).
  */
+import type { CellLineIndex } from "./cell-lines";
 import { HANCESTRO_LABELS } from "../hancestro";
 import { organismToScientific } from "../vocab";
 import type { CellIndex, IndexDictEntry } from "./atlas-index";
@@ -332,7 +333,8 @@ export function resolveLeaf(leaf: Leaf, idx: CellIndex, facts: SampleFacts): Res
       const ids = new Set<string>();
       let unknownLabel = false;
       for (const v of vals) {
-        const got = ID_RE.test(v) ? [canonId(facts, idx, v)] : labelIds(idx, facts, v, ["CL"], CELL_TYPE_ALIASES);
+        // a cell line's name or synonym too: cell-line samples carry their line as cell type (./cell-lines)
+        const got = ID_RE.test(v) ? [canonId(facts, idx, v)] : labelIds(idx, facts, v, ["CL", "Cellosaurus"], CELL_TYPE_ALIASES);
         if (normLabel(v) === "unknown") unknownLabel = true;
         else if (!got.length) r.unknown.push(v);
         got.forEach((x) => ids.add(x));
@@ -913,6 +915,9 @@ export function cellPushdown(where: Expr | null, idx: CellIndex, facts: SampleFa
     }
     if (w[def.name]) return null;
     const r = resolveLeaf(e, idx, facts);
+    // the data Worker knows only the labeller's cell types, not the cell lines that replace them here: filter those cells here
+    const lineCodes = (idx as Partial<CellLineIndex>).lineCodes;
+    if (def.name === "cell_type" && lineCodes && [...lineCodes].some((c) => r.codeMask?.[c])) return null;
     if (def.name === "sex") w.sex = (e.any ?? []).map((v) => ({ "pato:0000383": "female", "pato:0000384": "male" })[v.toLowerCase()] ?? v.toLowerCase());
     else {
       const ids = [...new Set(r.values.flatMap((v) => v.ids))];
@@ -945,6 +950,8 @@ export function filterCellRows(
   const n = cells.gsm.length;
   const ctCode = new Map<string, number>();
   for (const e of idx.cellTypes) if (e.id) ctCode.set(e.id, e.code);
+  // the data Worker answers with the labeller's cell type; a cell-line sample's cells carry their line here (./cell-lines)
+  const lineCode = (idx as Partial<CellLineIndex>).lineCode;
   const ancCode = new Map<string, number>();
   for (const e of idx.ancestries) if (e.id) ancCode.set(e.id, e.code);
   const sexCode = new Map<string, number>();
@@ -952,7 +959,7 @@ export function filterCellRows(
   const mini = { n, ct: new Uint16Array(n), sex: new Uint8Array(n), anc: new Uint8Array(n) } as unknown as CellIndex;
   const rowSi = new Int32Array(n);
   for (let i = 0; i < n; i++) {
-    mini.ct[i] = ctCode.get(cells.cell_type[i] ?? "") ?? 0;
+    mini.ct[i] = lineCode?.get(cells.gsm[i]) ?? ctCode.get(cells.cell_type[i] ?? "") ?? 0;
     mini.sex[i] = sexCode.get(cells.sex[i] ?? "unknown") ?? 0;
     mini.anc[i] = ancCode.get(cells.ancestry[i] ?? "") ?? 0;
     rowSi[i] = facts.index.get(cells.gsm[i]) ?? -1;

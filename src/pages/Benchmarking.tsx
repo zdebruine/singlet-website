@@ -60,7 +60,7 @@ const Benchmarking = () => {
           <ul className="mt-2 list-disc pl-5 space-y-1 text-[14px] text-muted-foreground">
             <li>Alpha read at most 30M reads of each sample's first run, so cells and UMIs per cell are fewer than the authors report.</li>
             <li>The knee filter misses low-RNA cells; every barcode is in the file, so cells can be called again.</li>
-            <li>Cell-type labels below lineage level are previews, and labels on cell lines are unreliable.</li>
+            <li>Cell-type labels below lineage level are previews. Cells of cell-line samples carry the line's name instead.</li>
           </ul>
           <p className="mt-3 text-[14px]">
             <Link to="/known-issues" className="text-primary underline underline-offset-2">All known issues</Link>

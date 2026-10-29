@@ -39,7 +39,7 @@ import {
   selectColumns,
 } from "./s1-serve";
 import { s1ManifestUrl, s1PackIndexUrl, s1PackUrl, s1Url } from "./s1-urls";
-import { HANCESTRO_LABELS, LABEL_FILTERS, LABEL_FILTER_FIELDS, labelMatchSql, normalizeLabelValues } from "./s1-labels";
+import { cellLinesOf, CULTURED_CELL, HANCESTRO_LABELS, LABEL_FILTERS, LABEL_FILTER_FIELDS, labelMatchSql, normalizeLabelValues, type CellLine } from "./s1-labels";
 import { loadModality, loadSnippets, OFFERED_LOAD_MODALITY_NAMES, parseLoadModalities, sampleLoadModalities, selectMembers, type Selection } from "./s1-load-modalities";
 import { organismToScientific } from "./vocab";
 
@@ -443,15 +443,17 @@ export async function resolveLabels(db: D1Database, labels: CellLabels): Promise
  * the labels moved into the cells table), so the caller asks the atlas cell index instead. A cell type id matches any level of the call
  * (cell_type_path, or cell_type_cl in tables without a path), so a query for T cell finds CD4 and CD8 T cells.
  */
-export async function labelMaskFromTable(table: CellsTable, want: ResolvedLabels, labels: CellLabels): Promise<Uint8Array | null> {
+export async function labelMaskFromTable(table: CellsTable, want: ResolvedLabels, labels: CellLabels, line?: CellLine): Promise<Uint8Array | null> {
   const needs: string[] = [];
-  if (labels.cell_type) needs.push(table.has("cell_type_path") ? "cell_type_path" : "cell_type_cl", "cell_type_label");
+  if (labels.cell_type && !line) needs.push(table.has("cell_type_path") ? "cell_type_path" : "cell_type_cl", "cell_type_label");
   if (labels.sex) needs.push("sex_chrom");
   if (labels.ancestry) needs.push("ancestry_hancestro");
   for (const c of needs) if (!table.has(c) || table.info(c)!.dtype !== DT_STR) return null;
   const n = table.nRows;
   const mask = new Uint8Array(n).fill(1);
-  if (labels.cell_type) {
+  if (labels.cell_type && line) {
+    if (!lineMatches(line, want)) mask.fill(0);
+  } else if (labels.cell_type) {
     const pathCol = table.has("cell_type_path") ? await table.strings("cell_type_path") : await table.strings("cell_type_cl");
     const labelCol = await table.strings("cell_type_label");
     for (let i = 0; i < n; i++) {
@@ -469,6 +471,16 @@ export async function labelMaskFromTable(table: CellsTable, want: ResolvedLabels
     for (let i = 0; i < n; i++) if (mask[i] && !want.ancestryIds.has(col[i])) mask[i] = 0;
   }
   return mask;
+}
+
+/**
+ * A cell-line sample's cells all carry the line as their cell type, not the labeller's call (trained on primary tissue, it is often
+ * wrong on cultured lines): they match the line's id or name, or "cultured cell" (CL:0000010).
+ */
+export function lineMatches(line: CellLine, want: ResolvedLabels): boolean {
+  const ids = [line.id, CULTURED_CELL];
+  const names = [line.label.toLowerCase(), line.id.toLowerCase(), "cultured cell"];
+  return ids.some((x) => want.cellTypeIds.has(x)) || names.some((x) => want.cellTypeLabels.has(x));
 }
 
 interface LabelCells {
@@ -646,6 +658,7 @@ export async function findCells(ctx: S1ToolCtx, args: Record<string, unknown>, o
 
   // 2. the per-cell labels asked for: from each cells table's own label columns; for an object without them, from the atlas cell index
   const wanted = lab.labels ? await resolveLabels(ctx.db, lab.labels) : null;
+  const lines = lab.labels?.cell_type ? await cellLinesOf(ctx.db, rows.map((r) => r.gsm_id)) : new Map<string, CellLine>();
   let labelCells: LabelCells | null = null;
   let fromTables = 0;
   const deferred: { r: SampleRow; table: CellsTable }[] = [];
@@ -679,7 +692,7 @@ export async function findCells(ctx: S1ToolCtx, args: Record<string, unknown>, o
           const table = await openCells((off, len) => fetchObjectRange(url, member.off + off, len), member.len, { wholeMax: WHOLE_MAX });
           let allow: Uint8Array | null = null;
           if (lab.labels && wanted) {
-            allow = await labelMaskFromTable(table, wanted, lab.labels);
+            allow = await labelMaskFromTable(table, wanted, lab.labels, lines.get(r.gsm_id));
             if (!allow) return { ok: true as const, r, table, out: null };
           }
           const out = await filterCells(table, filter, { maxRuns, allow });
@@ -711,7 +724,23 @@ export async function findCells(ctx: S1ToolCtx, args: Record<string, unknown>, o
   }
   // objects without label columns: one cell-index request for all of them
   if (deferred.length && lab.labels) {
-    const li = await cidxLabelCells(deferred.map((x) => x.r.gsm_id), lab.labels);
+    // a cell-line sample answers its cell-type filter from its line (lineMatches); the index is asked only for its other labels
+    const otherLabels: CellLabels = { ...lab.labels };
+    delete otherLabels.cell_type;
+    const lineGsms = deferred.filter((x) => lines.has(x.r.gsm_id) && lineMatches(lines.get(x.r.gsm_id)!, wanted!)).map((x) => x.r.gsm_id);
+    const plain = deferred.filter((x) => !lines.has(x.r.gsm_id)).map((x) => x.r.gsm_id);
+    const li: LabelCells | { error: string } = plain.length
+      ? await cidxLabelCells(plain, lab.labels)
+      : { cols: new Map(), eligible: 0, returned: 0, complete: true, version: null };
+    if (lineGsms.length && !("error" in li)) {
+      const lo = Object.keys(otherLabels).length ? await cidxLabelCells(lineGsms, otherLabels) : null;
+      requests += lo ? 1 : 0;
+      if (lo && "error" in lo) for (const g of lineGsms) li.cols.delete(g);
+      for (const x of deferred) {
+        if (!lineGsms.includes(x.r.gsm_id)) continue;
+        li.cols.set(x.r.gsm_id, lo && !("error" in lo) ? (lo.cols.get(x.r.gsm_id) ?? new Set()) : new Set(Array.from({ length: x.table.nRows }, (_, c) => c)));
+      }
+    }
     requests += 1;
     if ("error" in li) {
       for (const x of deferred) errors.push({ gse_id: x.r.gse_id, gsm_id: x.r.gsm_id, error: `no label columns, and ${li.error}`.slice(0, 200) });
