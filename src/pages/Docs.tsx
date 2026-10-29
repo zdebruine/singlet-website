@@ -143,8 +143,8 @@ const Docs = () => {
               </p>
               <CodeBlock label="bash" code={PY_INSTALL} />
               <p className="mt-4">
-                R 4.2 or newer, from GitHub (the Bioconductor packages are needed for the default return type). It compiles
-                a small C++17 extension against libzstd, so you need a C++ compiler and the zstd headers first:
+                R 4.2 or newer, from GitHub until the CRAN release (the Bioconductor packages are needed for the default
+                return type). It compiles a small C++17 extension, so you need a C++ compiler; Zstandard is bundled:
               </p>
               <CodeBlock label="bash" code={BUILD_DEPS} />
               <CodeBlock label="r" code={R_INSTALL_STANDALONE} />
@@ -177,8 +177,20 @@ const Docs = () => {
                     <td>A local MCP server (the hosted one at <Mono>singlet.bio/mcp</Mono> needs no install; see <a href="#api-keys">API keys &amp; MCP</a>).</td>
                   </tr>
                   <tr>
+                    <td><Mono>[analysis]</Mono></td>
+                    <td>scanpy, matplotlib, statsmodels and Leiden clustering for the analysis helpers.</td>
+                  </tr>
+                  <tr>
+                    <td><Mono>[zarr]</Mono>, <Mono>[tiledb]</Mono></td>
+                    <td>Convert to and from Zarr and TileDB-SOMA.</td>
+                  </tr>
+                  <tr>
+                    <td><Mono>[migrate]</Mono></td>
+                    <td>Numba, for converting legacy <Mono>.singlet</Mono> files to <Mono>.s1</Mono>.</td>
+                  </tr>
+                  <tr>
                     <td><Mono>[all]</Mono></td>
-                    <td>Every optional dependency.</td>
+                    <td>All of the above except <Mono>[migrate]</Mono>.</td>
                   </tr>
                 </tbody>
               </table>
@@ -643,7 +655,7 @@ BiocManager::install(c("SingleCellExperiment", "SummarizedExperiment", "S4Vector
                 </li>
                 <li>
                   The base package itself depends only on <Mono>Rcpp</Mono>, <Mono>Matrix</Mono> and <Mono>jsonlite</Mono>
-                  (plus a C++17 compiler and libzstd to build); the lower-level readers (<Mono>read_1pz()</Mono>,{" "}
+                  (plus a C++17 compiler to build); the lower-level readers (<Mono>read_1pz()</Mono>,{" "}
                   <Mono>read_singlet()</Mono>) work with sparse <Mono>Matrix</Mono> objects.
                 </li>
               </ul>

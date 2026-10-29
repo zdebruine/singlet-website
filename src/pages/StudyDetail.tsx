@@ -535,8 +535,8 @@ const StudyDetail = () => {
               ))}
           </dl>
           <p className="text-[12px] text-muted-foreground leading-relaxed px-0.5">
-            Reprocessed from raw reads. Files were made by more than one pipeline release, so compare the reference build and
-            pipeline version before merging this study with another.{" "}
+            Reprocessed from raw reads. Studies in the atlas were made by more than one build of the pipeline: compare the
+            reference build and pipeline version before merging studies.{" "}
             <Link to="/about#processing" className="text-primary hover:underline">How processing works →</Link>
           </p>
           <p className="text-[12px] text-muted-foreground leading-relaxed px-0.5">
