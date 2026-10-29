@@ -9,6 +9,7 @@
  *
  * Answers are edge-cached by their canonical query (Cache API, 5 minutes), so a repeated question costs one cache read.
  */
+import { withCellLines } from "./cell-lines";
 import { cachedJson, NO_CACHE_HEADER } from "../cache";
 import { CORS_HEADERS } from "../cors";
 import type { AppEnv, WaitUntil } from "../env";
@@ -109,7 +110,7 @@ export async function loadInputs(env: AppEnv, waitUntil: WaitUntil): Promise<Inp
   const timed = <T,>(p: Promise<T>) => p.then((v) => [v, Date.now() - t0] as const);
   const [[idx, msIndex], [facts, msFacts]] = await Promise.all([timed(cellIndex()), timed(sampleFacts(env.DB, waitUntil))]);
   warmIndex = true;
-  return { idx, facts, ms: { index: msIndex, facts: msFacts }, cold: { index: !wasWarm, facts: facts.source } };
+  return { idx: withCellLines(idx, facts), facts, ms: { index: msIndex, facts: msFacts }, cold: { index: !wasWarm, facts: facts.source } };
 }
 
 /** The natural-language reading: vocabulary first, then the catalog interpreter for what is left (charged to the caller's AI allowance). */

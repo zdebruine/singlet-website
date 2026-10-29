@@ -7,6 +7,7 @@ import { hydrateFacts, ageYears, type FactsWire } from "../../functions/_shared/
 import { canonicalWhere, cellPushdown, filterCellRows, parseWhere, QueryError, relaxations, rowScanWhere, runCellQuery } from "../../functions/_shared/cells/query";
 import { parseCellQuestion } from "../../functions/_shared/cells/nl";
 import { cacheKey, fieldsBody, parseCellRequest, unmappedFor } from "../../functions/_shared/cells/http";
+import { withCellLines } from "../../functions/_shared/cells/cell-lines";
 
 const cellTypes = [
   { code: 0, id: null, label: "unknown", anc: [] },
@@ -299,5 +300,30 @@ describe("cell search: coverage gaps of the filters", () => {
   it("is empty without sample-level filters", () => {
     expect(unmappedFor(parseWhere({ cell_type: "T cell", sex: "female" }), false, idx, facts)).toEqual([]);
     expect(unmappedFor(null, false, idx, facts)).toEqual([]);
+  });
+});
+
+describe("cell lines carry their line as cell type", () => {
+  // GSM3 is the K-562 sample of the fixture; the labeller called its 200 cells hepatocytes
+  const lidx = withCellLines(makeIndex(), facts);
+  const lrun = (where: unknown) => runCellQuery({ where: parseWhere(where), include_low_qc: false, limit: 20, offset: 0 }, lidx, facts);
+
+  it("drops the labeller's type on a cell line and answers by the line's name, id or synonym", () => {
+    expect(lrun({ cell_type: "hepatocyte" }).totals.cells).toBe(0);
+    for (const v of ["K-562", "CVCL_0004", "k562", "cultured cell"]) expect(lrun({ cell_type: v }).totals.cells, v).toBe(200);
+    expect(lrun({ cell_type: "T cell" }).totals.cells).toBe(run({ cell_type: "T cell" }).totals.cells);
+    expect(lrun({ cell_type: "K-562" }).facets.cell_type.map((f) => f.label)).toEqual(["K-562"]);
+  });
+
+  it("filters a cell-line page here: the data Worker only has the labeller's types", () => {
+    expect(cellPushdown(parseWhere({ cell_type: "K-562" }), lidx, facts)).toBeNull();
+    expect(cellPushdown(parseWhere({ cell_type: "T cell" }), lidx, facts)).not.toBeNull();
+    const keep = filterCellRows(parseWhere({ cell_type: "K-562" }), lidx, facts, {
+      gsm: ["GSM3", "GSM3", "GSM1"],
+      cell_type: ["CL:0000182", null, "CL:0000182"],
+      sex: ["female", "female", "female"],
+      ancestry: [null, null, null],
+    });
+    expect([...keep]).toEqual([0, 1]);
   });
 });

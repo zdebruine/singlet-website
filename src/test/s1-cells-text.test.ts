@@ -147,6 +147,17 @@ describe("label columns of the cells table (the transcode writes them into every
     expect(await run({ cell_type: ["T cell"], ancestry: ["HANCESTRO:0005"] })).toEqual([0, 1]);
   });
 
+  it("a cell-line sample matches by its line (id, name or 'cultured cell'), never by the labeller's primary types", async () => {
+    const db = createTestD1(readFileSync("schema/039_s1_labels.sql", "utf8"));
+    db.raw.exec(`INSERT INTO label_term (term_id, subject, label) VALUES ('CL:0000084', 'cell_type', 'T cell')`);
+    const t = await open(labelled());
+    const k562 = { id: "CVCL_0004", label: "K-562" };
+    const run = async (labels: Parameters<typeof resolveLabels>[1]) => idx(await labelMaskFromTable(t, await resolveLabels(db as unknown as D1Database, labels), labels, k562));
+    for (const v of ["K-562", "CVCL_0004", "cultured cell", "CL:0000010"]) expect(await run({ cell_type: [v] }), v).toEqual([0, 1, 2, 3, 4, 5]);
+    expect(await run({ cell_type: ["T cell"] })).toEqual([]);
+    expect(await run({ cell_type: ["K-562"], sex: ["female"] })).toEqual([0, 2, 4, 5]);
+  });
+
   it("says null (ask the cell index) when the table has no label columns", async () => {
     const t = await open(table());
     const labels = { cell_type: ["T cell"] };

@@ -430,7 +430,7 @@ const NEW_TOOLS = [
         },
         cell_labels: {
           type: "object",
-          description: "Per-cell labels from the .s1 labeller (public cell metadata), read from each sample's cells table (the atlas cell index for older objects): ontology ids or labels, subtypes included. Cell type per-study accuracy: compartment 0.84, lineage 0.75, cell type 0.43, subtype 0.32 (deeper levels are previews). ANDed with cell_filter.",
+          description: "Per-cell labels from the .s1 labeller (public cell metadata), read from each sample's cells table (the atlas cell index for older objects): ontology ids or labels, subtypes included. Cell type per-study accuracy: compartment 0.84, lineage 0.75, cell type 0.43, subtype 0.32 (deeper levels are previews). Cells of a cell-line sample match by their line instead (Cellosaurus id or name, or \"cultured cell\"), never by a primary cell type. ANDed with cell_filter.",
           properties: {
             cell_type: { type: "array", items: { type: "string" }, description: "Cell Ontology ids or labels, e.g. CL:0000084 or \"T cell\"." },
             sex: { type: "array", items: { type: "string", enum: ["female", "male", "ambiguous", "unknown"] } },

@@ -4,7 +4,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { buildLabelSqlFiles, parseSummaryCsv, termsFromDirectory } from "../../scripts/s1/labels-sql";
-import { labelFactsSql, normalizeLabelValues } from "../../functions/_shared/s1-labels";
+import { cellLineFixSql, labelFactsSql, normalizeLabelValues, studyLabelSql } from "../../functions/_shared/s1-labels";
 import { buildSampleWhere, buildStudyWhere, emptyFilters, type SearchFilters } from "../../functions/_shared/search-core";
 import { sampleFacetStatements, studyFacetStatements } from "../../functions/_shared/facets-core";
 import { createTestD1 } from "./helpers/d1-sqlite";
@@ -153,6 +153,33 @@ describe("label facts from sample_cell_summary", () => {
     expect(ct.find((r) => r.value_norm === "T cell")).toMatchObject({ ontology_id: "CL:0000084", value_num: 0.7 });
     expect(ct.find((r) => r.value_norm === "lymphocyte")!.value_num).toBe(0.98);
     expect(facts(db, "cell_type").some((r) => r.ontology_id === "CL:0000000")).toBe(false);
+  });
+
+  it("cell type: a cell-line sample gets its line and 'cultured cell', never the labeller's primary types", async () => {
+    const { db } = await loaded();
+    // GSM3 turns out to be K-562 (its GEO record names the line); GSM2 is a cell line the record does not name
+    db.raw.exec(`INSERT INTO ontology_term (term_id, ontology, label) VALUES ('CVCL_0004', 'Cellosaurus', 'K-562');
+      INSERT INTO sample_term (gsm_id, gse_id, attr, term_id, source, confidence, from_attr) VALUES ('GSM3', 'GSE2', 'cell_line', 'CVCL_0004', 'geo', 1, 'cell_line');
+      INSERT INTO sample_property (gsm_id, gse_id, property, value, source, confidence, version) VALUES ('GSM2', 'GSE1', 'tissue_type', 'cell line', 'geo', 1, 't');`);
+    for (const g of ["GSE1", "GSE2"]) for (const st of [...labelFactsSql([g]), ...studyLabelSql([g])]) db.raw.exec(st);
+    const ct = (g: string) => facts(db, "cell_type").filter((r) => r.gsm_id === g).map((r) => `${r.value_norm}:${r.ontology_id}`);
+    expect(ct("GSM3")).toEqual(["K-562:CVCL_0004", "cultured cell:CL:0000010"]);
+    expect(ct("GSM2")).toEqual(["cultured cell:CL:0000010"]);
+    expect(ct("GSM1")).toContain("T cell:CL:0000084");
+    const sl = db.raw.prepare(`SELECT value FROM study_label WHERE gse_id = 'GSE2' AND attr = 'cell_type' ORDER BY value`).all() as { value: string }[];
+    expect(sl.map((r) => r.value)).toEqual(["K-562", "cultured cell"]);
+  });
+
+  it("the one-time fix turns a loaded catalog's cell-line facts into the line, and is idempotent", async () => {
+    const { db } = await loaded();
+    db.raw.exec(`INSERT INTO ontology_term (term_id, ontology, label) VALUES ('CVCL_0004', 'Cellosaurus', 'K-562');
+      INSERT INTO sample_term (gsm_id, gse_id, attr, term_id, source, confidence, from_attr) VALUES ('GSM3', 'GSE2', 'cell_line', 'CVCL_0004', 'geo', 1, 'cell_line');`);
+    expect(facts(db, "cell_type").filter((r) => r.gsm_id === "GSM3").map((r) => r.value_norm)).toEqual(["monocyte"]);
+    for (let k = 0; k < 2; k++) for (const st of cellLineFixSql()) db.raw.exec(st);
+    expect(facts(db, "cell_type").filter((r) => r.gsm_id === "GSM3").map((r) => r.value_norm)).toEqual(["K-562", "cultured cell"]);
+    expect(facts(db, "cell_type").filter((r) => r.gsm_id === "GSM1").length).toBe(5);
+    const sl = db.raw.prepare(`SELECT value FROM study_label WHERE gse_id = 'GSE2' AND attr = 'cell_type' ORDER BY value`).all() as { value: string }[];
+    expect(sl.map((r) => r.value)).toEqual(["K-562", "cultured cell"]);
   });
 
   it("study_label rolls the served samples up; an excluded sample adds nothing", async () => {
