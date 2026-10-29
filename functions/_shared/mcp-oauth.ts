@@ -10,7 +10,9 @@
  *   /.well-known/oauth-authorization-server      RFC 8414 metadata
  *   POST /oauth/register                          RFC 7591 dynamic client registration (public or confidential)
  *   GET  /oauth/authorize                         checks client, redirect_uri and S256 challenge, parks the request,
- *                                                 sends the browser to /oauth/consent
+ *                                                 sends the browser to /oauth/consent. A client_id that is an https URL
+ *                                                 is a Client ID Metadata Document: fetched here, checked, and cached in
+ *                                                 oauth_clients as a public client (written only when it changes)
  *   GET  /oauth/consent?request=…                 sign-in buttons (the existing GitHub/Google flow, which returns
  *                                                 here), then "Allow <client> to use singlet tools as you"
  *   POST /oauth/consent                           allow → redirect with a single-use code; cancel → access_denied
@@ -42,6 +44,8 @@ const MEMO_TTL_MS = 60_000;
 const TOUCH_EVERY_MS = 5 * 60_000;
 const REGISTER_PER_HOUR = 30;
 const MAX_REDIRECT_URIS = 10;
+const CIMD_TIMEOUT_MS = 5000;
+const CIMD_MAX_BYTES = 10_240;
 
 export const ACCESS_TOKEN_RE = /^sat_[A-Za-z0-9_-]{43}$/;
 const REFRESH_TOKEN_RE = /^srt_[A-Za-z0-9_-]{43}$/;
@@ -223,7 +227,7 @@ function parseUris(row: ClientRow): string[] {
 }
 
 async function getClient(db: D1Database, clientId: string): Promise<ClientRow | null> {
-  if (!CLIENT_ID_RE.test(clientId)) return null;
+  if (!CLIENT_ID_RE.test(clientId) && !metadataDocumentUrl(clientId)) return null;
   return db
     .prepare(`SELECT client_id, client_secret_hash, client_name, client_uri, redirect_uris, token_endpoint_auth_method FROM oauth_clients WHERE client_id = ?1`)
     .bind(clientId)
@@ -307,6 +311,145 @@ export async function register(request: Request, env: OAuthEnv): Promise<Respons
   );
 }
 
+// ── Client ID Metadata Documents ───────────────────────────────────────────
+
+/**
+ * A client_id that names a Client ID Metadata Document (draft-ietf-oauth-client-id-metadata-document):
+ * https on the default port, a DNS name (no IP literal, no localhost), a path, and no query, fragment,
+ * userinfo or anything URL parsing would rewrite (dot segments, case, encodings). Else null.
+ */
+export function metadataDocumentUrl(v: string): URL | null {
+  if (!v.startsWith("https://") || v.length > 512) return null;
+  let u: URL;
+  try {
+    u = new URL(v);
+  } catch {
+    return null;
+  }
+  if (u.href !== v || u.username || u.password || u.port || u.search || u.hash || u.pathname === "/") return null;
+  const host = u.hostname;
+  if (host.startsWith("[") || /^[\d.]+$/.test(host) || !host.includes(".") || host === "localhost" || host.endsWith(".localhost")) return null;
+  return u;
+}
+
+/** The name shown for a client: the host of a metadata-document client_id (its client_name is self-asserted). */
+export function clientLabel(clientId: string, clientName: string | null): string {
+  return metadataDocumentUrl(clientId)?.host ?? clientName ?? "An MCP client";
+}
+
+async function readCapped(res: Response, max: number): Promise<string | null> {
+  const declared = Number(res.headers.get("Content-Length") ?? "");
+  if (Number.isFinite(declared) && declared > max) {
+    await res.body?.cancel().catch(() => undefined);
+    return null;
+  }
+  if (!res.body) return "";
+  const reader = res.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let n = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    n += value.byteLength;
+    if (n > max) {
+      await reader.cancel().catch(() => undefined);
+      return null;
+    }
+    chunks.push(value);
+  }
+  const all = new Uint8Array(n);
+  let at = 0;
+  for (const c of chunks) {
+    all.set(c, at);
+    at += c.byteLength;
+  }
+  return new TextDecoder().decode(all);
+}
+
+/**
+ * Fetch and check the metadata document at `url` (5 s, 10 KB, no redirects). The document must name
+ * itself as client_id, list valid redirect_uris, and be a public client: no secret, auth method none.
+ */
+async function fetchClientMetadata(url: string): Promise<{ ok: true; client: ClientRow } | { ok: false; message: string }> {
+  const fail = (message: string) => ({ ok: false as const, message });
+  let res: Response;
+  try {
+    res = await fetch(url, { headers: { Accept: "application/json" }, redirect: "manual", signal: AbortSignal.timeout(CIMD_TIMEOUT_MS) });
+  } catch (e) {
+    console.warn("oauth client metadata fetch:", url, errText(e));
+    return fail("singlet.bio could not fetch this app's client metadata document.");
+  }
+  if (res.status !== 200) {
+    await res.body?.cancel().catch(() => undefined);
+    return fail(`This app's client metadata document answered HTTP ${res.status}.`);
+  }
+  let text: string | null;
+  try {
+    text = await readCapped(res, CIMD_MAX_BYTES);
+  } catch {
+    return fail("singlet.bio could not read this app's client metadata document.");
+  }
+  if (text === null) return fail(`This app's client metadata document is larger than ${CIMD_MAX_BYTES / 1024} KB.`);
+  let doc: Record<string, unknown>;
+  try {
+    const v: unknown = JSON.parse(text);
+    if (!v || typeof v !== "object" || Array.isArray(v)) throw new Error("not an object");
+    doc = v as Record<string, unknown>;
+  } catch {
+    return fail("This app's client metadata document is not a JSON object.");
+  }
+  if (doc.client_id !== url) return fail("This app's client metadata document names a different client_id.");
+  if (doc.client_secret != null || doc.client_secret_expires_at != null) return fail("A client metadata document must not carry a client secret.");
+  if ((doc.token_endpoint_auth_method ?? "none") !== "none") {
+    return fail("singlet.bio accepts client metadata documents for public clients (token_endpoint_auth_method none) only.");
+  }
+  const grants = Array.isArray(doc.grant_types) ? doc.grant_types : ["authorization_code"];
+  if (!grants.includes("authorization_code") || !grants.every((g) => g === "authorization_code" || g === "refresh_token")) {
+    return fail("grant_types may be authorization_code and refresh_token.");
+  }
+  if (Array.isArray(doc.response_types) && !doc.response_types.every((r) => r === "code")) return fail("response_types must be [\"code\"].");
+  const uris = Array.isArray(doc.redirect_uris) ? doc.redirect_uris : [];
+  if (!uris.length || uris.length > MAX_REDIRECT_URIS) return fail(`A client metadata document must list 1 to ${MAX_REDIRECT_URIS} redirect_uris.`);
+  const redirectUris: string[] = [];
+  for (const u of uris) {
+    const ok = validRedirectUri(u);
+    if (!ok) return fail("Each redirect_uri must be https, or http on localhost / 127.0.0.1 / [::1], without a fragment.");
+    if (!redirectUris.includes(ok)) redirectUris.push(ok);
+  }
+  return {
+    ok: true,
+    client: {
+      client_id: url,
+      client_secret_hash: null,
+      client_name: new URL(url).host,
+      client_uri: url,
+      redirect_uris: JSON.stringify(redirectUris),
+      token_endpoint_auth_method: "none",
+    },
+  };
+}
+
+/**
+ * Cache a fetched metadata document so /oauth/token can find the client. Writes only a new client or
+ * changed redirect_uris; a new one counts against the same per-address limit as registration.
+ */
+async function cacheMetadataClient(db: D1Database, client: ClientRow, cached: ClientRow | null, request: Request): Promise<"ok" | "limited"> {
+  if (cached && cached.redirect_uris === client.redirect_uris) return "ok";
+  if (!cached) {
+    const ipHash = (await sha256Hex(`oauth-register:${request.headers.get("CF-Connecting-IP") ?? "0.0.0.0"}`)).slice(0, 32);
+    if (!(await withinRate(db, `ip:${ipHash}`, "oauth_register", REGISTER_PER_HOUR, 3_600_000))) return "limited";
+  }
+  await db
+    .prepare(
+      `INSERT INTO oauth_clients (client_id, client_secret_hash, client_name, client_uri, redirect_uris, token_endpoint_auth_method, created_at)
+       VALUES (?1, NULL, ?2, ?3, ?4, 'none', ?5)
+       ON CONFLICT (client_id) DO UPDATE SET redirect_uris = excluded.redirect_uris WHERE oauth_clients.redirect_uris IS NOT excluded.redirect_uris`,
+    )
+    .bind(client.client_id, client.client_name, client.client_uri, client.redirect_uris, nowIso())
+    .run();
+  return "ok";
+}
+
 // ── HTML (sign-in and consent pages) ───────────────────────────────────────
 
 function esc(s: string): string {
@@ -382,7 +525,15 @@ export async function authorize(request: Request, env: OAuthEnv, waitUntil: Wait
   const q = url.searchParams;
   const issuer = issuerFor(request);
   const clientId = q.get("client_id") ?? "";
-  const client = await getClient(env.DB, clientId).catch(() => null);
+  const metadataUrl = metadataDocumentUrl(clientId);
+  const cached = await getClient(env.DB, clientId).catch(() => null);
+  let client = cached;
+  if (metadataUrl) {
+    // Fetched on every authorization, so a changed document takes effect at the next sign-in.
+    const fetched = await fetchClientMetadata(clientId);
+    if (!fetched.ok) return errorPage("App not recognised", fetched.message);
+    client = fetched.client;
+  }
   if (!client) return errorPage("Unknown app", "This app is not registered with singlet.bio, or its registration expired.");
 
   const registered = parseUris(client);
@@ -400,6 +551,15 @@ export async function authorize(request: Request, env: OAuthEnv, waitUntil: Wait
     return fail("invalid_request", "PKCE is required: send code_challenge with code_challenge_method=S256.");
   }
   if (!resourceOk(q.get("resource"), issuer)) return fail("invalid_target", `resource must be ${resourceFor(issuer)}.`);
+
+  if (metadataUrl) {
+    const stored = await cacheMetadataClient(env.DB, client, cached, request).catch((e: unknown) => {
+      console.error("oauth authorize: client metadata not cached:", errText(e));
+      return "error" as const;
+    });
+    if (stored === "limited") return fail("temporarily_unavailable", "Too many new apps from this address. Try again later.");
+    if (stored === "error") return fail("temporarily_unavailable", "singlet.bio cannot start a sign-in right now. Try again in a minute.");
+  }
 
   const id = randomToken(32);
   const now = Date.now();
@@ -483,7 +643,7 @@ export async function consentPage(request: Request, env: OAuthEnv, waitUntil: Wa
   const id = new URL(request.url).searchParams.get("request") ?? "";
   const row = await loadRequest(env.DB, id).catch(() => null);
   if (!row) return errorPage("This link has expired", "Sign-in requests last 15 minutes and work once.");
-  const app = row.client_name ?? "An MCP client";
+  const app = clientLabel(row.client_id, row.client_name);
   const { host, loopback } = hostOf(row.redirect_uri);
   const returnTo = `/oauth/consent?request=${id}`;
   const user = await lookupSession(env.DB, request, waitUntil);

@@ -36,7 +36,7 @@
 import { ensureCatalogColumns } from "./_shared/catalog-refresh";
 import { CORS_HEADERS } from "./_shared/cors";
 import type { AppEnv } from "./_shared/env";
-import { anonSubjectFromIp, API_KEY_RE, apiKeyFromRequest, checkCredential, clientIp, credentialIdentity, keyMessage, type CredentialCheck, type Identity } from "./_shared/identity";
+import { anonSubjectFromIp, checkCredential, clientIp, credentialIdentity, keyMessage, type CredentialCheck, type Identity } from "./_shared/identity";
 import { issuerFor, wwwAuthenticate } from "./_shared/mcp-oauth";
 import { nlSearch, type NlSearchBody } from "./_shared/nl-search-core";
 import { allowanceFor, recordToolCall, withinRate } from "./_shared/spend";
@@ -1301,15 +1301,10 @@ async function handleMessage(ctx: CallContext, msg: JsonRpcRequest): Promise<unk
   }
 }
 
-function apiKeyFromQuery(request: Request): string | null {
-  const value = (new URL(request.url).searchParams.get("key") ?? "").trim();
-  return API_KEY_RE.test(value) ? value : null;
-}
-
 async function authFor(env: Env, request: Request, waitUntil: (p: Promise<unknown>) => void): Promise<CallContext["auth"]> {
-  // An API key in a header first, then an OAuth access token. ?key=sk_live_… predates OAuth
-  // connectors and still works for clients that can only take a URL; prefer signing in.
-  const check = await checkCredential(env, request, waitUntil, apiKeyFromRequest(request) ?? apiKeyFromQuery(request));
+  // An API key in a header first, then an OAuth access token. A key in the URL (?key=) is not
+  // accepted: URLs end up in logs and histories. Clients that can only take a URL sign in instead.
+  const check = await checkCredential(env, request, waitUntil);
   return check ?? { ok: false, reason: "missing", message: keyMessage("unknown") };
 }
 

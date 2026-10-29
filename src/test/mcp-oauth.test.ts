@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { onRequestPost as mcpPost } from "../../functions/mcp";
 import { onRequest as middleware } from "../../functions/_middleware";
@@ -11,6 +11,7 @@ import {
   consentDecision,
   consentPage,
   forgetAccessMemo,
+  metadataDocumentUrl,
   redirectMatches,
   register,
   revoke,
@@ -470,5 +471,190 @@ describe("connected apps on /account", () => {
     expect((await api(env, cookie, { action: "revoke", id: list.items[0].id })).status).toBe(200);
     expect((await mcp(env, call("get_atlas_stats"), { Authorization: `Bearer ${t.access_token}` })).status).toBe(401);
     expect(((await (await api(env, cookie, { action: "list" })).json()) as { items: unknown[] }).items).toHaveLength(0);
+  });
+});
+
+describe("client ID metadata documents", () => {
+  const CIMD = "https://claude.ai/oauth/mcp-client-metadata";
+  const CLAUDE_CODE = "https://claude.ai/oauth/claude-code-client-metadata";
+  const docFor = (clientId: string, extra: Record<string, unknown> = {}) => ({
+    client_id: clientId,
+    client_name: "Claude",
+    client_uri: "https://claude.ai",
+    redirect_uris: [CLAUDE_CALLBACK],
+    grant_types: ["authorization_code", "refresh_token"],
+    response_types: ["code"],
+    token_endpoint_auth_method: "none",
+    ...extra,
+  });
+  const CLAUDE_CODE_DOC = docFor(CLAUDE_CODE, { client_name: "Claude Code", redirect_uris: ["http://localhost/callback", "http://127.0.0.1/callback"] });
+
+  /** Stub fetch with one document per URL; anything else is a 404. */
+  function serve(docs: Record<string, unknown>) {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input instanceof Request ? input.url : input);
+      if (!(url in docs)) return new Response("not found", { status: 404 });
+      const body = docs[url];
+      if (typeof body !== "string") return Response.json(body);
+      return new Response(body, { headers: { "Content-Type": "application/json", "Content-Length": String(new TextEncoder().encode(body).byteLength) } });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  }
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const clientCount = async (env: Env) => (await env.DB.prepare(`SELECT COUNT(*) AS n FROM oauth_clients`).first<{ n: number }>())?.n;
+
+  it("recognises only https URLs on a DNS name with a path", () => {
+    expect(metadataDocumentUrl(CLAUDE_CODE)?.host).toBe("claude.ai");
+    for (const bad of [
+      "http://claude.ai/oauth/claude-code-client-metadata",
+      "https://claude.ai",
+      "https://claude.ai/",
+      "https://127.0.0.1/meta",
+      "https://[::1]/meta",
+      "https://localhost/meta",
+      "https://app.localhost/meta",
+      "https://intranet/meta",
+      "https://claude.ai:8443/meta",
+      "https://claude.ai/meta?x=1",
+      "https://claude.ai/meta#x",
+      "https://user@claude.ai/meta",
+      "https://claude.ai/a/../meta",
+      "https://CLAUDE.ai/meta",
+      "scl_" + "x".repeat(22),
+    ]) {
+      expect(metadataDocumentUrl(bad), bad).toBeNull();
+    }
+  });
+
+  it("fetches the document, caches the client once and completes sign-in as a public client", async () => {
+    const env = await setup();
+    const fetchMock = serve({ [CIMD]: docFor(CIMD) });
+    const challenge = await s256(VERIFIER);
+    const start = await authorize(new Request(authorizeUrl(CIMD, {}, SITE, challenge)), env, noWait);
+    expect(start.status).toBe(302);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe(CIMD);
+    expect(init.redirect).toBe("manual");
+    expect(init.signal).toBeDefined();
+
+    // The consent page names the app by the client_id's host, not its self-asserted name.
+    const consent = await (await consentPage(new Request(start.headers.get("Location") ?? ""), env, noWait)).text();
+    expect(consent).toContain("Sign in to connect claude.ai");
+    expect(consent).not.toContain("connect Claude<");
+
+    const { code } = await getCode(env, { clientId: CIMD });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(await clientCount(env)).toBe(1); // the unchanged document was not written again
+    const t = await exchange(env, CIMD, code);
+    expect(t.res.status).toBe(200);
+    expect(t.body.access_token).toMatch(/^sat_/);
+    // Token and refresh identify the client from the cache, without fetching again.
+    const fresh = await refreshWith(env, CIMD, t.body.refresh_token as string);
+    expect(fresh.res.status).toBe(200);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const grant = await env.DB.prepare(`SELECT client_id, client_name FROM oauth_grants`).first<{ client_id: string; client_name: string }>();
+    expect(grant).toEqual({ client_id: CIMD, client_name: "claude.ai" });
+    const row = await env.DB.prepare(`SELECT client_secret_hash, token_endpoint_auth_method FROM oauth_clients WHERE client_id = ?1`).bind(CIMD).first();
+    expect(row).toEqual({ client_secret_hash: null, token_endpoint_auth_method: "none" });
+  });
+
+  it("accepts Claude Code's loopback redirect on any port", async () => {
+    const env = await setup();
+    serve({ [CLAUDE_CODE]: CLAUDE_CODE_DOC });
+    const res = await authorize(new Request(authorizeUrl(CLAUDE_CODE, { redirect_uri: "http://localhost:53682/callback" }, SITE, await s256(VERIFIER))), env, noWait);
+    expect(res.status).toBe(302);
+    expect(new URL(res.headers.get("Location") ?? "").pathname).toBe("/oauth/consent");
+  });
+
+  it("updates the cached redirect_uris when the document changes", async () => {
+    const env = await setup();
+    const challenge = await s256(VERIFIER);
+    serve({ [CIMD]: docFor(CIMD) });
+    expect((await authorize(new Request(authorizeUrl(CIMD, {}, SITE, challenge)), env, noWait)).status).toBe(302);
+    const moved = "https://claude.com/api/mcp/auth_callback";
+    serve({ [CIMD]: docFor(CIMD, { redirect_uris: [moved] }) });
+    expect((await authorize(new Request(authorizeUrl(CIMD, { redirect_uri: moved }, SITE, challenge)), env, noWait)).status).toBe(302);
+    const row = await env.DB.prepare(`SELECT redirect_uris FROM oauth_clients WHERE client_id = ?1`).bind(CIMD).first<{ redirect_uris: string }>();
+    expect(JSON.parse(row?.redirect_uris ?? "[]")).toEqual([moved]);
+  });
+
+  it("refuses a document whose client_id is not its URL, without redirecting or caching", async () => {
+    const env = await setup();
+    serve({ [CIMD]: docFor("https://evil.example/oauth/client") });
+    const res = await authorize(new Request(authorizeUrl(CIMD, {}, SITE, await s256(VERIFIER))), env, noWait);
+    expect(res.status).toBe(400);
+    expect(res.headers.get("Location")).toBeNull();
+    expect(await res.text()).toContain("names a different client_id");
+    expect(await clientCount(env)).toBe(0);
+  });
+
+  it("refuses a redirect_uri the document does not list, without redirecting or caching", async () => {
+    const env = await setup();
+    serve({ [CIMD]: docFor(CIMD) });
+    const res = await authorize(new Request(authorizeUrl(CIMD, { redirect_uri: "https://evil.example/cb" }, SITE, await s256(VERIFIER))), env, noWait);
+    expect(res.status).toBe(400);
+    expect(res.headers.get("Location")).toBeNull();
+    expect(await res.text()).toContain("Redirect not allowed");
+    expect(await clientCount(env)).toBe(0);
+  });
+
+  it("refuses a document over 10 KB, with or without a Content-Length", async () => {
+    const env = await setup();
+    const big = JSON.stringify(docFor(CIMD, { client_name: "x".repeat(11_000) }));
+    serve({ [CIMD]: big });
+    const declared = await authorize(new Request(authorizeUrl(CIMD, {}, SITE, await s256(VERIFIER))), env, noWait);
+    expect(declared.status).toBe(400);
+    expect(await declared.text()).toContain("larger than 10 KB");
+
+    // A streamed body has no Content-Length: the reader stops at the cap.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(new Blob([big]).stream())),
+    );
+    const streamed = await authorize(new Request(authorizeUrl(CIMD, {}, SITE, await s256(VERIFIER))), env, noWait);
+    expect(streamed.status).toBe(400);
+    expect(await streamed.text()).toContain("larger than 10 KB");
+    expect(await clientCount(env)).toBe(0);
+  });
+
+  it("never fetches a non-https, IP or localhost client_id", async () => {
+    const env = await setup();
+    const fetchMock = serve({});
+    for (const id of ["http://claude.ai/oauth/meta", "https://127.0.0.1/meta", "https://localhost/meta"]) {
+      const res = await authorize(new Request(authorizeUrl(id, {}, SITE, await s256(VERIFIER))), env, noWait);
+      expect(res.status, id).toBe(400);
+      expect(await res.text(), id).toContain("Unknown app");
+    }
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("refuses a document that cannot be fetched, is not 200, or asks for a secret", async () => {
+    const env = await setup();
+    const challenge = await s256(VERIFIER);
+    vi.stubGlobal("fetch", vi.fn(async () => Promise.reject(new DOMException("timed out", "TimeoutError"))));
+    const timeout = await authorize(new Request(authorizeUrl(CIMD, {}, SITE, challenge)), env, noWait);
+    expect(await timeout.text()).toContain("could not fetch");
+
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(null, { status: 302, headers: { Location: "https://evil.example/doc" } })));
+    expect(await (await authorize(new Request(authorizeUrl(CIMD, {}, SITE, challenge)), env, noWait)).text()).toContain("HTTP 302");
+
+    serve({ [CIMD]: docFor(CIMD, { token_endpoint_auth_method: "client_secret_basic" }) });
+    expect(await (await authorize(new Request(authorizeUrl(CIMD, {}, SITE, challenge)), env, noWait)).text()).toContain("public clients");
+    expect(await clientCount(env)).toBe(0);
+  });
+
+  it("keeps dynamic client registration working", async () => {
+    const env = await setup();
+    const fetchMock = serve({});
+    const { clientId, code } = await getCode(env);
+    expect(clientId).toMatch(/^scl_/);
+    expect((await exchange(env, clientId, code)).res.status).toBe(200);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
