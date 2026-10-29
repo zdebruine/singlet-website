@@ -7,7 +7,7 @@ import { AlphaBetaTable } from "@/components/landing/AlphaBeta";
 import { usePageMeta } from "@/hooks/usePageMeta";
 
 // Sneak peek of Research Beta, from Singlet-Bio/singlet docs/research-beta.md. Every Beta cell is a goal, not a claim
-// about today's files. The rows are shared with the home page (ALPHA_TO_BETA). Measured progress lives on /benchmarking#beta.
+// about today's files. The rows are shared with the home page (ALPHA_TO_BETA).
 
 const Beta = () => {
   usePageMeta({
@@ -35,9 +35,8 @@ const Beta = () => {
         <AlphaBetaTable className="mt-10 max-w-4xl" />
 
         <p className="mt-4 max-w-4xl text-[13.5px] text-muted-foreground">
-          Genotypes are never released. Progress against the standard tools, including where the engine falls short:{" "}
-          <Link to="/benchmarking#beta" className="text-primary underline underline-offset-2">Beta benchmarks</Link>. The GPU port of the
-          aligner: <Link to="/beta/gpu-engine" className="text-primary underline underline-offset-2">GPU engine</Link>. What is wrong
+          Genotypes are never released. The GPU port of the aligner:{" "}
+          <Link to="/beta/gpu-engine" className="text-primary underline underline-offset-2">GPU engine</Link>. What is wrong
           today: <Link to="/known-issues" className="text-primary underline underline-offset-2">Known issues</Link>.
         </p>
 

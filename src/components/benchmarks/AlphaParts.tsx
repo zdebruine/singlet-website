@@ -2,9 +2,8 @@ import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Check, Clock, ExternalLink, Minus } from "lucide-react";
 import { commitUrl } from "@/lib/benchmarks";
-import { loadAlphaPanel, loadScbc, pct, times, type AlphaResult, type AlphaSource, type ScbcDoc } from "@/lib/alpha-benchmarks";
+import { loadAlphaPanel, loadScbc, type AlphaResult, type AlphaSource, type ScbcDoc } from "@/lib/alpha-benchmarks";
 import { FigureChart, figureSupported, MetricTable } from "@/components/benchmarks/BenchParts";
-import { fmtInt } from "@/lib/catalog-display";
 
 /** One number with its label: the stat tile used across the Alpha panels. */
 export function Stat({ value, label, detail }: { value: string; label: string; detail?: string }) {
@@ -50,18 +49,15 @@ const mark = (v: boolean | string) => (typeof v === "string" ? <span>{v}</span> 
 
 /** The scBaseCount and Cell Ranger comparison, measured on the Alpha files. */
 export function ScbcPanels({ doc }: { doc: ScbcDoc }) {
-  const { cell_calls: cc, depth: dp, coverage: cov, depth_matched: dm } = doc;
+  const { coverage: cov, depth_matched: dm } = doc;
   const gap = dm.rows.map((r) => r.noise_floor - r.depth_matched);
+  const rho = dm.rows.map((r) => r.pseudobulk_spearman);
   return (
     <>
       <Panel title="Coverage and protocol breadth" id="alpha-coverage">
         <p className="max-w-3xl text-[14px] text-muted-foreground">
           scBaseCount (Arc Institute) processes 10x Genomics libraries only. Singlet also processes other droplet and plate-based
           protocols, and keeps every barcode so cells can be re-called.
-        </p>
-        <p className="mt-4 max-w-3xl rounded border border-dashed border-border px-4 py-3 text-[13.5px] text-muted-foreground">
-          <span className="font-medium text-foreground">Coverage — updated after the Alpha release.</span> Sample counts for this
-          comparison are recomputed on the Alpha atlas once the catalog is loaded. Today's totals are in the census below.
         </p>
         <div className="mt-4 overflow-x-auto max-w-3xl">
           <table className="w-full text-[13.5px]">
@@ -92,53 +88,10 @@ export function ScbcPanels({ doc }: { doc: ScbcDoc }) {
         </div>
       </Panel>
 
-      <Panel title="Cell recovery against the authors' Cell Ranger results" id="alpha-cells">
-        <div className="grid gap-3 sm:grid-cols-3">
-          <Stat value={pct(cc.singlet_median_recovery)} label="of the authors' cells found (median)" detail={`${cc.n} samples; range ${pct(cc.singlet_recovery_range[0])}–${pct(cc.singlet_recovery_range[1])}; scBaseCount ${pct(cc.scbasecount_median_recovery)}`} />
-          <Stat value={`${pct(cc.singlet_precision_range[0])}–${pct(cc.singlet_precision_range[1])}`} label="of Singlet's cells are in the authors' sets" detail={`precision, the same ${cc.n} samples`} />
-          <Stat value={times(dp.cell_ratio_median)} label="cells per sample, against scBaseCount (median)" detail={`${fmtInt(dp.samples)} shared human samples`} />
-        </div>
-        <div className="mt-4 overflow-x-auto max-w-3xl">
-          <table className="w-full text-[13.5px]">
-            <thead>
-              <tr className="border-b border-border text-left text-[12px] uppercase tracking-wider text-muted-foreground">
-                <th className="py-2 pr-4 font-medium">Sample</th>
-                <th className="py-2 pr-4 font-medium">Singlet recovery</th>
-                <th className="py-2 pr-4 font-medium">scBaseCount recovery</th>
-                <th className="py-2 font-medium">Singlet precision</th>
-              </tr>
-            </thead>
-            <tbody>
-              {cc.rows.map((r, i) => (
-                <tr key={i} className="border-b border-border/60 tabular">
-                  <td className="py-1.5 pr-4 text-foreground">{r.category}</td>
-                  <td className="py-1.5 pr-4">{pct(r.singlet_recovery)}</td>
-                  <td className="py-1.5 pr-4 text-muted-foreground">{pct(r.scbasecount_recovery)}</td>
-                  <td className="py-1.5 text-muted-foreground">{pct(r.singlet_precision)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <p className="mt-3 max-w-3xl text-[13.5px] text-muted-foreground">Basis: {cc.basis}. {cc.note}</p>
-      </Panel>
-
-      <Panel title="Depth: UMIs per cell" id="alpha-depth">
-        <div className="grid gap-3 sm:grid-cols-3">
-          <Stat value={times(dp.umi_ratio_median)} label="UMIs per cell, against scBaseCount (median)" detail={`${fmtInt(dp.median_umi_per_cell.singlet)} vs ${fmtInt(dp.median_umi_per_cell.scbasecount)} UMIs per cell`} />
-          <Stat value={pct(dp.reads_used_median)} label="of each sample's reads used (median)" detail="Alpha read at most 30M reads of the first run" />
-          <Stat value={times(dp.full_depth.umi_ratio_median)} label="UMIs per cell where Alpha used over 90% of the reads" detail={`${fmtInt(dp.full_depth.samples)} samples; cells ${times(dp.full_depth.cell_ratio_median)}`} />
-        </div>
-        <p className="mt-3 max-w-3xl text-[13.5px] text-muted-foreground">
-          The gap follows the read cap: where Alpha used nearly all of a sample's reads, the ratio rises to {times(dp.full_depth.umi_ratio_median)}.
-          Basis: {fmtInt(dp.samples)} {dp.basis}.
-        </p>
-      </Panel>
-
       <Panel title="Gene profiles at equal depth" id="alpha-profiles">
         <p className="max-w-3xl text-[14px] text-muted-foreground">
-          At equal depth, Singlet's per-cell gene profiles match scBaseCount's within its own sampling noise: {gap.length} of {gap.length} samples
-          are {Math.min(...gap).toFixed(2)}–{Math.max(...gap).toFixed(2)} below the noise floor. {dm.note}
+          At equal depth, Singlet's per-cell gene profiles come within {Math.min(...gap).toFixed(2)}–{Math.max(...gap).toFixed(2)} of the best agreement
+          sampling noise allows (the noise floor), on {gap.length} of {gap.length} samples, and pseudobulk profiles correlate at ρ {Math.min(...rho).toFixed(2)}–{Math.max(...rho).toFixed(2)}. {dm.note}
         </p>
         <div className="mt-4 overflow-x-auto max-w-3xl">
           <table className="w-full text-[13.5px]">
@@ -247,7 +200,7 @@ function AlphaResultView({ result }: { result: AlphaResult }) {
 }
 
 /** One Alpha measurement panel: "Benchmark running" until at least one of its files is published. */
-export function AlphaPendingPanel({ id, name, what, files, note }: { id: string; name: string; what: string; files: readonly string[]; note?: ReactNode }) {
+export function AlphaPendingPanel({ id, name, what, files, note, omitHeadline }: { id: string; name: string; what: string; files: readonly string[]; note?: ReactNode; omitHeadline?: RegExp }) {
   const { data, isLoading } = useQuery({ queryKey: ["alpha-benchmark", ...files], queryFn: ({ signal }) => loadAlphaPanel(files, signal), staleTime: 5 * 60_000 });
   if (isLoading) return <div className="h-32 rounded bg-secondary animate-pulse" aria-hidden="true" />;
   if (!data?.length) return <Running name={name} what={what} />;
@@ -258,7 +211,7 @@ export function AlphaPendingPanel({ id, name, what, files, note }: { id: string;
         {data.map((r, i) => (
           <div key={i}>
             <h4 className="mb-2 text-[14.5px] font-semibold text-foreground">{r.kind === "contract" ? r.doc.title : r.title}</h4>
-            <AlphaResultView result={r} />
+            <AlphaResultView result={omitHeadline && r.kind === "summary" ? { ...r, headline: r.headline.filter((h) => !omitHeadline.test(h.label)) } : r} />
           </div>
         ))}
       </div>
