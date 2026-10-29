@@ -286,7 +286,8 @@ export function clearFactsMemo(): void {
   epochMemo = null;
 }
 
-async function factsEpoch(db: D1Database, now: number): Promise<string> {
+/** The current facts_epoch (cached per isolate for EPOCH_CHECK_S); edge-cached answers built on the facts put it in their cache key. */
+export async function factsEpoch(db: D1Database, now = Date.now()): Promise<string> {
   if (epochMemo && now - epochMemo.at < EPOCH_CHECK_S * 1000) return epochMemo.epoch;
   const p = db
     .prepare(`SELECT value FROM meta_cache WHERE key = ?`)
