@@ -18,6 +18,9 @@ the server refuses private/* keys.
 
 D1 cost: 3 rows per sample of the new rev + 1 per sample of the rev it replaces + about 3 for the study rows (measured: 5 samples replacing 3 = 21), printed before the post
 and checked against the count D1 returns. Publish once per job, or every k samples, rather than after each sample of a large study.
+Clean-up (Beta only; dry run unless --apply): --delete-study GSE removes the study manifest from R2 and its rows from D1, then
+--delete-object KEY (repeatable) removes objects the catalog no longer references, through DELETE /api/ingest/s1-delete. The server
+answers 403 unless CHANNEL=beta, and this script refuses a --base whose host does not contain "beta".
 Exit status 0 on success, 1 on a failed check, 2 on a usage error.
 """
 import argparse
@@ -117,18 +120,52 @@ def upload(c, key, path, sha):
     return size, "uploaded"
 
 
+def cleanup(a, token):
+    """--delete-study / --delete-object: Beta only, dry run unless --apply."""
+    from urllib.parse import urlparse
+
+    host = (urlparse(a.base).hostname or "").lower()
+    if "beta" not in host or host in ("singlet.bio", "www.singlet.bio", "data.singlet.bio"):
+        print(f"FAIL: refusing to delete through {host or a.base!r}: not a Beta host", file=sys.stderr)
+        return 1
+    c = Client(a.base, token)
+    flag = {"apply": "1"} if a.apply else {}
+    results, ok = [], True
+    if a.delete_study:
+        st, d = c.call("DELETE", "s1-delete", {"gse": a.delete_study, **flag})
+        results.append({"study": a.delete_study, "status": st, **d})
+        ok &= st == 200
+        for key in (d.get("objects") or []) if st == 200 else []:
+            if key not in a.delete_object:
+                print(f"note: {key} is still stored; remove it with --delete-object after the study is deleted", file=sys.stderr)
+    for key in a.delete_object:
+        st, d = c.call("DELETE", "s1-delete", {"key": key, **flag})
+        results.append({"object": key, "status": st, **d})
+        ok &= st in (200, 404)
+    print(json.dumps({"apply": a.apply, "results": results}))
+    return 0 if ok else 1
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--manifest", required=True, help="study manifest JSON (docs/format-s1.md section 7) listing the finished samples")
-    ap.add_argument("--root", required=True, help="directory holding the manifest's object keys")
+    ap.add_argument("--manifest", required=False, help="study manifest JSON (docs/format-s1.md section 7) listing the finished samples")
+    ap.add_argument("--root", required=False, help="directory holding the manifest's object keys")
     ap.add_argument("--base", default=os.environ.get("SINGLET_BETA_BASE", "https://beta.singlet.bio"))
     ap.add_argument("--ledger", help="append one JSON line with the result here")
     ap.add_argument("--no-publish", action="store_true", help="upload objects only")
     ap.add_argument("--force", action="store_true", help="rewrite D1 rows even when this rev is stored")
+    ap.add_argument("--delete-study", metavar="GSE", help="Beta clean-up: remove this study (manifest + D1 rows); objects are listed")
+    ap.add_argument("--delete-object", action="append", default=[], metavar="KEY", help="Beta clean-up: remove this unreferenced object")
+    ap.add_argument("--apply", action="store_true", help="with --delete-*: really delete (default is a dry run)")
     a = ap.parse_args(argv)
     token = os.environ.get("SINGLET_INGEST_TOKEN", "")
     if not token:
         print("SINGLET_INGEST_TOKEN is not set", file=sys.stderr)
+        return 2
+    if a.delete_study or a.delete_object:
+        return cleanup(a, token)
+    if not a.manifest or not a.root:
+        print("--manifest and --root are required (or --delete-study / --delete-object)", file=sys.stderr)
         return 2
     text = open(a.manifest, encoding="utf-8").read()
     manifest = json.loads(text)
