@@ -6,6 +6,7 @@ import Footer from "@/components/Footer";
 import { CodeBlock } from "@/components/CodeBlock";
 import { usePageMeta } from "@/hooks/usePageMeta";
 import { cn } from "@/lib/utils";
+import { RELEASE_NAME, SOFTWARE_BIBTEX, atlasBibtex } from "../../functions/_shared/citation";
 import { BUILD_DEPS, EXAMPLE_GSE, GITHUB_ISSUES, GITHUB_REPO, PY_INSTALL, R_INSTALL_STANDALONE, pyInstallExtra } from "@/lib/install-snippets";
 
 const SECTIONS = [
@@ -22,6 +23,7 @@ const SECTIONS = [
   { id: "api-keys", label: "API keys & MCP" },
   { id: "private-projects", label: "Private projects & cohorts" },
   { id: "pipeline", label: "Run the pipeline (advanced)" },
+  { id: "cite", label: "How to cite" },
 ] as const;
 
 const MCP_URL = "https://singlet.bio/mcp";
@@ -895,6 +897,27 @@ accs <- singlet::find("microglia in the aging mouse brain")`}
                 <li>To keep private results next to the public catalogue, pack them into a <Mono>.singlet</Mono> file and add it under <a href="#private-projects">Private projects</a>.</li>
                 <li>Build steps, the CLI reference and known issues are on <a href={GITHUB_REPO} target="_blank" rel="noopener noreferrer">GitHub</a>; questions and bugs go to <a href={GITHUB_ISSUES} target="_blank" rel="noopener noreferrer">GitHub Issues</a>.</li>
               </ul>
+            </Section>
+
+            {/* ── Citation (text lives in functions/_shared/citation.ts) ── */}
+            <Section id="cite" title="How to cite">
+              <p>
+                In a paper, cite the original study (its paper and GEO accession; the Cite button on each study page gives
+                both) and singlet.bio with its release, {RELEASE_NAME}, and the date you downloaded the data:
+              </p>
+              <CodeBlock label="BibTeX" code={atlasBibtex()} />
+              <p>
+                For reproducibility, also report each study's pipeline version (<Mono>singlet_version</Mono>, see{" "}
+                <a href="#provenance">Provenance and versioning</a>). If you used the Python or R package, cite it with the
+                version you ran (<Mono>singlet.__version__</Mono>, <Mono>packageVersion("singlet")</Mono>):
+              </p>
+              <CodeBlock label="BibTeX" code={SOFTWARE_BIBTEX} />
+              <p>
+                In R, <Mono>citation("singlet")</Mono> prints both entries. The{" "}
+                <a href={GITHUB_REPO} target="_blank" rel="noopener noreferrer">GitHub repository</a> has a{" "}
+                <Mono>CITATION.cff</Mono> ("Cite this repository"). Plain text and RIS:{" "}
+                <Link to="/about#cite">How to cite</Link>.
+              </p>
             </Section>
             </SelectedSection.Provider>
             <nav className="mt-12 pt-6 border-t border-border flex justify-between gap-4 text-[14px]" aria-label="Previous and next topic">

@@ -35,6 +35,7 @@
  */
 import { ensureCatalogColumns } from "./_shared/catalog-refresh";
 import { CORS_HEADERS } from "./_shared/cors";
+import { CITE_PAGE, atlasCitation } from "./_shared/citation";
 import type { AppEnv } from "./_shared/env";
 import { anonSubjectFromIp, checkCredential, clientIp, credentialIdentity, keyMessage, type CredentialCheck, type Identity } from "./_shared/identity";
 import { issuerFor, wwwAuthenticate } from "./_shared/mcp-oauth";
@@ -92,7 +93,7 @@ Recommended order: search_datasets → assess_study or get_study → get_sample_
 
 What Alpha serves per sample: gene counts (spliced and unspliced), splice junctions and exon inclusion computed from them, cell calls and per-cell QC, and per-cell labels — Cell Ontology cell type (per-study accuracy: compartment 0.84, lineage 0.75, cell type 0.43, subtype 0.32; the last two are previews), chromosomal sex (98.1% of samples agree with GEO) and genetic ancestry (HANCESTRO; human donors with enough covered sites). The labels are public cell metadata: search_datasets and export_manifest filter studies by cell_type_label, sex_genetic and ancestry_genetic. Sample facts follow public conventions and come only from each sample's own GEO fields: tissue_type (CELLxGENE: tissue, organoid, primary cell culture, cell line), cell_line (Cellosaurus), tumor_sample_type (GDC: tumor, primary tumor, metastatic, recurrent tumor, adjacent normal), disease (MONDO, or PATO:0000461 normal for an explicitly healthy donor) and donor_status; search_datasets, export_manifest and search_cells filter on them. Genotypes, mitochondrial allele data, ambient-RNA and doublet calls are not offered. Call get_modalities before telling a user a modality is available.
 
-Every number and every "why" string is computed, not generated — quote them, don't paraphrase. Catalog cell counts can differ from the file's own QC; the file is the truth. {{access}}`;
+Every number and every "why" string is computed, not generated — quote them, don't paraphrase. Catalog cell counts can differ from the file's own QC; the file is the truth. When a user publishes with the data, they cite the original study (its paper and GEO accession) and singlet.bio: ${atlasCitation()} The text, BibTeX and package citations are at ${CITE_PAGE}. {{access}}`;
 
 /** The access paragraph of the instructions: /mcp needs an account; /mcp/public needs none and serves the read-only tools. */
 const ACCESS_ACCOUNT = `Every tool call needs a free singlet.bio account: sign in when your client asks, or send a personal API key from ${ACCOUNT_URL}; calls are counted per account and tool. Downloads themselves (the data.singlet.bio links) never need one. search_datasets reads questions with the built-in vocabulary (no model, no allowance); interpret:"ai" asks the server's model, up to 200 readings a day.`;

@@ -25,10 +25,11 @@ import { ANCESTRY_MIN_SHARE, CELL_TYPE_MIN_CELLS, CELL_TYPE_MIN_SHARE, MIN_CELLS
 import type { CorpusStats } from "./stats-core";
 import type { GeneRow } from "./s1-packs";
 import { CORS_HEADERS } from "./cors";
+import { RELEASE_NAME, atlasCitation } from "./citation";
 
 export const CROISSANT_SPEC = "http://mlcommons.org/croissant/1.1";
 export const SITE_ORIGIN = "https://singlet.bio";
-export const RELEASE_NAME = "Singlet Research Alpha (October 2026)";
+export { RELEASE_NAME };
 export const DATA_LICENSE = "https://creativecommons.org/publicdomain/zero/1.0/";
 export const CODE_LICENSE = "https://opensource.org/licenses/MIT";
 /** encodingFormat of a .s1 sample object: an unregistered format, named by its specification (Croissant 1.1: "the most appropriate URL"). */
@@ -1246,7 +1247,7 @@ export function buildAtlasCroissant(input: AtlasInput, urls: CroissantUrls = cro
     ...(datePublished ? { datePublished } : {}),
     ...(dateModified ? { dateModified } : {}),
     keywords: ["single-cell RNA-seq", "scRNA-seq", "transcriptomics", "atlas", "GEO", "SRA", "Cell Ontology", "HANCESTRO", RELEASE_NAME],
-    citeAs: `${RELEASE_NAME}. ${SITE_ORIGIN}. Cite the original GEO study of every dataset you use as well (studies.geo_url).`,
+    citeAs: `${atlasCitation()} Cite the original GEO study of every dataset you use as well (studies.geo_url).`,
     citation: [RELEASE_NAME],
     isLiveDataset: true,
     "prov:wasDerivedFrom": [
