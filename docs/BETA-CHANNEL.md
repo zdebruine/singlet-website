@@ -81,3 +81,14 @@ rev, the stats and study API, the SPA shell, the Python client (`SINGLET_DATA_BA
 
 Until Beta outputs exist, the validation uses three to five GSE138867 samples copied from Alpha's `.s1` objects with their catalog rows.
 They are test data, not Beta results, and are removed before the first real Beta sample is published.
+
+## Release policy and clean-up (Beta)
+
+The data Worker's `src/policy.ts` imports `../policy/alpha-policy.json` (Alpha's withheld studies and excluded samples). `workers/data/wrangler.beta.toml`
+aliases that import to `policy/beta-policy.json` (no withheld studies, no excluded samples; Beta excludes on its own QC later), so Alpha's lists do not apply
+on beta-data.singlet.bio. The layers a public object may not carry (genotype, mtDNA alleles, ancestry call, ambient, doublet scores, per-cell non-host,
+legacy PSI and sex call) are removed when the object is written, by the producer's `--policy`; the Worker does not see layers.
+
+`DELETE /api/ingest/s1-delete` (Beta only, token, dry run unless `apply=1`) removes a study (manifest in R2, rows in `s1_sample`, `s1_migration`, `s1_study`) or
+an object the catalog no longer references. `python scripts/beta/beta_ingest.py --delete-study GSE… [--delete-object KEY …] [--apply]`
+calls it and refuses a base URL that is not a Beta host.

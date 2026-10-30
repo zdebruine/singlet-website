@@ -10,6 +10,11 @@ workers_dev = false
 # name such as data.beta.singlet.bio is not covered by the zone's certificate.)
 routes = [{ pattern = "beta-data.singlet.bio", custom_domain = true }]
 
+# Beta's own release policy: Alpha's withheld studies and excluded samples do not apply here (src/policy.ts imports
+# ../policy/alpha-policy.json; the bundle gets policy/beta-policy.json in its place). Beta excludes on its own QC later.
+[alias]
+"../policy/alpha-policy.json" = "./policy/beta-policy.json"
+
 [vars]
 # Edge-cache keys use this host so Beta manifests never collide with Alpha's (the Cache API is shared across the zone).
 CACHE_ORIGIN = "https://beta-data.singlet.bio"
