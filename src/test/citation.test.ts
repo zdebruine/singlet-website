@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { RELEASE_NAME, SOFTWARE_BIBTEX, atlasBibtex, atlasCitation, atlasRis } from "../../functions/_shared/citation";
 import { RELEASE_NAME as CROISSANT_RELEASE } from "../../functions/_shared/croissant";
 
-const read = (p: string) => readFileSync(p, "utf8");
+const read = (p: string) => readFileSync(p, "utf8").replace(/\r\n/g, "\n");
 
 describe("citation", () => {
   it("cites the atlas with its release and the access date", () => {
