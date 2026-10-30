@@ -123,7 +123,7 @@ const Docs = () => {
               <h1 className="text-[36px] md:text-[42px] mb-3">Docs</h1>
               <p className="text-[17px] text-muted-foreground">Reference for the packages, the file and the API. One topic at a time.</p>
               {/* Mobile TOC */}
-              <ul className="lg:hidden mt-5 flex flex-wrap gap-2 list-none pl-0 space-y-0">
+              <ul className="lg:hidden mt-5 flex flex-wrap gap-2 !list-none !pl-0 !space-y-0">
                 {SECTIONS.map((s) => (
                   <li key={s.id}>
                     <a href={`#${s.id}`} className={cn("chip", active === s.id && "chip-active")}>
