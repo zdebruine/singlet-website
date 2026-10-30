@@ -23,7 +23,7 @@ describe("Function responses", () => {
     (onRequest as unknown as (c: unknown) => Promise<Response>)({ request: new Request(`https://singlet.bio${path}`), next: async () => new Response(body) });
 
   it("wraps what the next handler returns for data paths, body included", async () => {
-    for (const path of ["/api/stats", "/mcp", "/auth/github/callback", "/sitemap.xml"]) {
+    for (const path of ["/api/stats", "/mcp", "/mcp/public", "/auth/github/callback", "/sitemap.xml"]) {
       const res = await run(path);
       expect(await res.text(), path).toBe("hello");
       expect(res.headers.get("X-Frame-Options"), path).toBe("DENY");

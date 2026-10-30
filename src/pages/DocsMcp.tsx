@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { usePageMeta } from "@/hooks/usePageMeta";
 import { GITHUB_ISSUES } from "@/lib/install-snippets";
 import {
+  MCP_PUBLIC_URL,
   MCP_URL,
   claudeCodeConfig,
   claudeCodeConfigNoKey,
@@ -124,7 +125,7 @@ export default function DocsMcp() {
   usePageMeta({
     title: "Use singlet from Claude, Cursor or ChatGPT",
     description:
-      "Connect an AI assistant to the singlet.bio atlas: search public single-cell studies, read their QC, download one sample by byte range and export a cohort manifest — tool calls need a free account; downloads need none.",
+      "Connect an AI assistant to the singlet.bio atlas: search public single-cell studies, read their QC, download one sample by byte range and export a cohort manifest. Tool calls on /mcp need a free account; /mcp/public serves the read-only tools without one; downloads need none.",
     path: "/docs/mcp",
   });
 
@@ -187,7 +188,8 @@ export default function DocsMcp() {
               <Link to="/account">your account</Link> instead. Without either, <code className="code-inline">initialize</code> and every{" "}
               <code className="code-inline">tools/call</code> answer HTTP 401 with <code className="code-inline">sign_in_required</code>, which is
               what makes a client start sign-in; <code className="code-inline">tools/list</code> and <code className="code-inline">ping</code> stay
-              open. Downloads from <code className="code-inline">data.singlet.bio</code> never need an account.
+              open. Downloads from <code className="code-inline">data.singlet.bio</code> never need an account. To try the tools
+              without an account first, use the <a href="#public">public endpoint</a>.
             </p>
             <Tabs defaultValue="claude">
               <TabsList className="flex-wrap h-auto">
@@ -239,6 +241,24 @@ export default function DocsMcp() {
             />
           </Section>
 
+          <Section id="public" title="Try it without an account">
+            <p>
+              <code className="code-inline">{MCP_PUBLIC_URL}</code> serves the same tools with the same definitions, with no account
+              and no sign-in. It is read-only: every tool except <code className="code-inline">save_cohort</code>.{" "}
+              <code className="code-inline">search_datasets</code> reads questions with the built-in vocabulary only, so no model is
+              called; your assistant puts what it understood into the structured filters. Each network address may make 60 calls an
+              hour. Sign in at <code className="code-inline">{MCP_URL}</code> to save cohorts and for the server's model readings.
+            </p>
+            <p>Add the URL as a custom connector (Claude: Settings → Connectors → Add custom connector), or:</p>
+            <CodeBlock label="claude code" code={`claude mcp add --transport http singlet-public ${MCP_PUBLIC_URL}`} />
+            <CodeBlock
+              className="mt-3"
+              label="bash"
+              code={`curl -sX POST ${MCP_PUBLIC_URL} -H "Content-Type: application/json" \\
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"get_atlas_stats","arguments":{}}}'`}
+            />
+          </Section>
+
           <Section id="tools" title="Tool reference">
             <table>
               <thead>
@@ -263,7 +283,9 @@ export default function DocsMcp() {
               </tbody>
             </table>
             <p className="text-sm text-muted-foreground">
-              Every tool needs sign-in or a personal API key. Every tool also returns the machine-readable version of its answer, so an assistant can act on the numbers
+              On <code className="code-inline">{MCP_URL}</code> every tool needs sign-in or a personal API key;{" "}
+              <a href="#public">{MCP_PUBLIC_URL}</a> serves every tool but <code className="code-inline">save_cohort</code> without
+              one. Every tool also returns the machine-readable version of its answer, so an assistant can act on the numbers
               rather than re-typing them.
             </p>
           </Section>

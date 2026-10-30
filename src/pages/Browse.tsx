@@ -611,6 +611,9 @@ const Browse = () => {
                         {state.sort === "relevance" && shown?.groups && index === shown.groups.full && shown.groups.partial > 0 && (
                           <div className="border-t border-border pt-4 mt-5">
                             <h2 className="text-[13px] font-semibold text-foreground">Partial matches, best first ({fmtInt(shown.groups.partial)})</h2>
+                            <p className="mt-0.5 text-[12.5px] text-muted-foreground">
+                              {shown.groups.full === 0 ? "No study matches every term; closest first." : "These match some of the terms; closest first."}
+                            </p>
                           </div>
                         )}
                         <StudyCard

@@ -92,17 +92,23 @@ Recommended order: search_datasets → assess_study or get_study → get_sample_
 
 What Alpha serves per sample: gene counts (spliced and unspliced), splice junctions and exon inclusion computed from them, cell calls and per-cell QC, and per-cell labels — Cell Ontology cell type (per-study accuracy: compartment 0.84, lineage 0.75, cell type 0.43, subtype 0.32; the last two are previews), chromosomal sex (98.1% of samples agree with GEO) and genetic ancestry (HANCESTRO; human donors with enough covered sites). The labels are public cell metadata: search_datasets and export_manifest filter studies by cell_type_label, sex_genetic and ancestry_genetic. Sample facts follow public conventions and come only from each sample's own GEO fields: tissue_type (CELLxGENE: tissue, organoid, primary cell culture, cell line), cell_line (Cellosaurus), tumor_sample_type (GDC: tumor, primary tumor, metastatic, recurrent tumor, adjacent normal), disease (MONDO, or PATO:0000461 normal for an explicitly healthy donor) and donor_status; search_datasets, export_manifest and search_cells filter on them. Genotypes, mitochondrial allele data, ambient-RNA and doublet calls are not offered. Call get_modalities before telling a user a modality is available.
 
-Every number and every "why" string is computed, not generated — quote them, don't paraphrase. Catalog cell counts can differ from the file's own QC; the file is the truth. Every tool call needs a free singlet.bio account: sign in when your client asks, or send a personal API key from ${ACCOUNT_URL}; calls are counted per account. Downloads themselves (the data.singlet.bio links) never need one. Searches the built-in vocabulary can read cost no AI tokens; a question that needs the AI reading uses your AI allowance (200 readings a day and a monthly token allowance; the monthly allowance is shown in \`_meta.quota\`).`;
+Every number and every "why" string is computed, not generated — quote them, don't paraphrase. Catalog cell counts can differ from the file's own QC; the file is the truth. {{access}}`;
+
+/** The access paragraph of the instructions: /mcp needs an account; /mcp/public needs none and serves the read-only tools. */
+const ACCESS_ACCOUNT = `Every tool call needs a free singlet.bio account: sign in when your client asks, or send a personal API key from ${ACCOUNT_URL}; calls are counted per account and tool. Downloads themselves (the data.singlet.bio links) never need one. search_datasets reads questions with the built-in vocabulary (no model, no allowance); interpret:"ai" asks the server's model, up to 200 readings a day.`;
+const ACCESS_PUBLIC = `No account is needed here. Calls are counted per tool and salted network-address hash, and limited per address. Downloads themselves (the data.singlet.bio links) never need an account. search_datasets reads questions with the built-in vocabulary only (no model; interpret:"ai" is read the same way here): you are the language model, so put what you understood into its structured filters.`;
+const PUBLIC_HEAD = `Public endpoint: read-only tools, rate-limited per network address; sign in at ${SITE}/mcp to save cohorts and for the server's model readings.`;
 
 
 /** Added to the instructions only once some study is served from s1 (see _shared/s1-gate). */
-const S1_INSTRUCTIONS = `For a study in the .s1 format (format "singlet-s1") get_download_url returns its manifest, list_bundle_files and get_partial_download give byte ranges inside the sample objects, find_cells searches cells by their per-cell statistics and labels, slice_cells gives the byte ranges of just those cells' matrix chunks, and resolve_features turns row numbers into feature names. A study not yet in the .s1 format has one legacy .singlet file (zip64). Across the whole atlas, search_cells counts and locates cells by any metadata and get_cells_page returns them page by page; list_cell_fields is the vocabulary. You are the language model: write search_cells' \`where\` yourself (ontology ids, labels or synonyms); a plain-English \`question\` is read with the built-in vocabulary only. To hand a user the cells themselves, call export_cells with the same filter: it returns a plain download link (no account needed) to a zip of decoded gene counts in the 10x layout with per-cell labels, and with a few \`genes\` also their mean and fraction expressing per cell type, so no code has to run. To work with the pz2-coded matrices directly, use the singlet Python package (it carries a compiled codec): \`pip install singlet\`, then \`from singlet.s1 import atlas; adata = atlas.gather(page["cells"])\` turns a get_cells_page page (or [(GSM, [columns])] from find_cells) into an AnnData of counts.`;
+const S1_INSTRUCTIONS = `For a study in the .s1 format (format "singlet-s1") get_download_url returns its manifest, list_bundle_files and get_partial_download give byte ranges inside the sample objects, find_cells searches cells by their per-cell statistics and labels, slice_cells gives the byte ranges of just those cells' matrix chunks, and resolve_features turns row numbers into feature names. Across the whole atlas, search_cells counts and locates cells by any metadata and get_cells_page returns them page by page; list_cell_fields is the vocabulary. You are the language model: write search_cells' \`where\` yourself (ontology ids, labels or synonyms); a plain-English \`question\` is read with the built-in vocabulary only. To hand a user the cells themselves, call export_cells with the same filter: it returns a plain download link (no account needed) to a zip of decoded gene counts in the 10x layout with per-cell labels, and with a few \`genes\` also their mean and fraction expressing per cell type, so no code has to run. To work with the pz2-coded matrices directly, use the singlet Python package (it carries a compiled codec): \`pip install singlet\`, then \`from singlet.s1 import atlas; adata = atlas.gather(page["cells"])\` turns a get_cells_page page (or [(GSM, [columns])] from find_cells) into an AnnData of counts.`;
 const REV_INSTRUCTIONS = `Answers about a study carry a \`rev\`; send it back as \`known_rev\` to get {unchanged: true} instead of the same answer again.`;
 const DIET_INSTRUCTIONS = `Results hold their data in structuredContent with a short text; pass verbose=true for the full text too.`;
 
-function instructions(s1: boolean, diet: boolean): string {
+export function instructions(s1: boolean, diet: boolean, pub = false): string {
   const extra = [s1 ? S1_INSTRUCTIONS : null, REV_INSTRUCTIONS, diet ? DIET_INSTRUCTIONS : null].filter(Boolean).join(" ");
-  return INSTRUCTIONS_BASE.replace("\n\nWhat Alpha serves per sample:", `\n\n${extra}\n\nWhat Alpha serves per sample:`);
+  const base = INSTRUCTIONS_BASE.replace("{{access}}", pub ? ACCESS_PUBLIC : ACCESS_ACCOUNT);
+  return (pub ? `${PUBLIC_HEAD}\n\n` : "") + base.replace("\n\nWhat Alpha serves per sample:", `\n\n${extra}\n\nWhat Alpha serves per sample:`);
 }
 
 // ── JSON-RPC plumbing ───────────────────────────────────────────────────────
@@ -526,13 +532,16 @@ const S1_PROPS: Record<string, Record<string, unknown>> = {
 };
 
 const ALL_TOOL_NAMES = new Set([...TOOLS, ...NEW_TOOLS].map((t) => t.name));
+/** /mcp/public serves only the tools that read (readOnlyHint): every tool but save_cohort. */
+export const PUBLIC_TOOL_NAMES: ReadonlySet<string> = new Set([...TOOLS, ...NEW_TOOLS].filter((t) => t.annotations.readOnlyHint).map((t) => t.name));
 
 /**
  * The tools as advertised. The original fourteen always, each with `known_rev` where it applies; `verbose` only when the response diet is on
  * (MCP_DIET=1); the s1 tools and the s1-only inputs only once some study is served from s1 (or S1_TOOLS=1, see _shared/s1-gate).
+ * The public endpoint lists the same definitions, read-only ones only.
  */
-function toolList(opts: { s1: boolean; diet: boolean }) {
-  return (opts.s1 ? [...TOOLS, ...NEW_TOOLS] : TOOLS).map((t) => {
+function toolList(opts: { s1: boolean; diet: boolean; pub?: boolean }) {
+  return (opts.s1 ? [...TOOLS, ...NEW_TOOLS] : TOOLS).filter((t) => !opts.pub || PUBLIC_TOOL_NAMES.has(t.name)).map((t) => {
     const extra = { ...(REV_PROPS[t.name] ?? {}), ...(opts.s1 ? (S1_PROPS[t.name] ?? {}) : {}), ...(opts.diet ? { verbose: VERBOSE_PROP } : {}) };
     return Object.keys(extra).length ? { ...t, inputSchema: { ...t.inputSchema, properties: { ...t.inputSchema.properties, ...extra } } } : t;
   });
@@ -540,6 +549,10 @@ function toolList(opts: { s1: boolean; diet: boolean }) {
 
 /** MCP calls per minute and key (override with MCP_RATE_PER_MIN). */
 const DEFAULT_MCP_RATE_PER_MIN = 60;
+/** /mcp/public: calls an hour per salted network-address hash (MCP_PUBLIC_RATE_PER_HOUR), and a daily ceiling for all addresses together (MCP_PUBLIC_DAILY_CAP). */
+const DEFAULT_PUBLIC_RATE_PER_HOUR = 60;
+const DEFAULT_PUBLIC_DAILY_CAP = 5000;
+const PUBLIC_ALL_SUBJECT = "anon:*";
 /** Requests are small JSON-RPC messages; anything bigger is refused before parsing. */
 const MAX_BODY_BYTES = 256 * 1024;
 const MAX_BATCH = 10;
@@ -827,7 +840,8 @@ async function searchDatasets(
   identity: Identity,
   waitUntil: (p: Promise<unknown>) => void,
   args: Record<string, unknown>,
-  hasKey: boolean
+  hasKey: boolean,
+  metaOverride?: Record<string, unknown>
 ): Promise<ToolResult> {
   const query = typeof args.query === "string" ? args.query.trim() : "";
   if (!query) return toolError("`query` is required — describe what you are looking for, or give a GEO accession.");
@@ -852,7 +866,7 @@ async function searchDatasets(
   const r = await nlSearch(env, identity, waitUntil, url);
   if (!r.ok) return toolError(r.message, { error: r.error });
   const b = r.body;
-  const meta = await quotaMeta(env, identity);
+  const meta = metaOverride ?? (await quotaMeta(env, identity));
   // The budget is spent: nlSearch already fell back to the vocabulary-only
   // reading, so the caller still gets results — flagged as an error so the
   // assistant relays the sign-in advice rather than pretending the AI reading happened.
@@ -1120,6 +1134,27 @@ interface CallContext {
   auth: CredentialCheck | { ok: false; reason: "missing"; message: string };
   /** Who metered search is charged to: the key's owner, or the anonymous IP subject. */
   identity: Identity;
+  /** /mcp/public: no account, read-only tools, vocabulary-only search, limited per address (publicRefusal). */
+  pub: boolean;
+}
+
+/** _meta.quota on the public endpoint: nothing there is metered in AI tokens. */
+function publicMeta(env: Env) {
+  const perHour = Number.parseInt(env.MCP_PUBLIC_RATE_PER_HOUR ?? "", 10) || DEFAULT_PUBLIC_RATE_PER_HOUR;
+  return { quota: { metered: false, public: true, calls_per_hour: perHour, note: `Public endpoint: read-only tools and vocabulary-only search, ${perHour} calls an hour per network address. Sign in at ${SITE}/mcp (free) to save cohorts and for the server's model readings.` } };
+}
+
+/** The public endpoint's limits: per salted address hash per hour, then all addresses together per day. The refusal text, or null. */
+async function publicRefusal(ctx: CallContext): Promise<string | null> {
+  const perHour = Number.parseInt(ctx.env.MCP_PUBLIC_RATE_PER_HOUR ?? "", 10) || DEFAULT_PUBLIC_RATE_PER_HOUR;
+  if (!(await withinRate(ctx.env.DB, ctx.identity.subject, "mcp_public", perHour, 3_600_000))) {
+    return `Rate limit: the public endpoint allows ${perHour} calls an hour per network address. Try again next hour, or sign in at ${SITE}/mcp (free).`;
+  }
+  const perDay = Number.parseInt(ctx.env.MCP_PUBLIC_DAILY_CAP ?? "", 10) || DEFAULT_PUBLIC_DAILY_CAP;
+  if (!(await withinRate(ctx.env.DB, PUBLIC_ALL_SUBJECT, "mcp_public_all", perDay, 86_400_000))) {
+    return `The public endpoint has reached its daily limit for all visitors. Try again tomorrow, or sign in at ${SITE}/mcp (free).`;
+  }
+  return null;
 }
 
 /** Product actions run in-process; failures come back as tool errors, not JSON-RPC errors. */
@@ -1145,6 +1180,17 @@ async function callToolInner(ctx: CallContext, params: Record<string, unknown>) 
   const name = typeof params.name === "string" ? params.name : "";
   let args = (params.arguments && typeof params.arguments === "object" ? params.arguments : {}) as Record<string, unknown>;
   if (!ALL_TOOL_NAMES.has(name)) return { error: rpcError(null, -32602, `Unknown tool: ${name}`) };
+  if (ctx.pub) {
+    if (!PUBLIC_TOOL_NAMES.has(name)) {
+      return { result: toolError(`${name} is not on the public endpoint: it saves to an account. Connect ${SITE}/mcp and sign in (free) to use it.`, { auth: "sign_in_required", tool: name, endpoint: `${SITE}/mcp` }) };
+    }
+    const refused = await publicRefusal(ctx);
+    if (refused) return { result: toolError(refused, { error: "rate_limited", ...publicMeta(ctx.env) }) };
+    await recordToolCall(ctx.env.DB, ctx.identity.subject, name);
+    // The vocabulary reads every question here: no model is called for an anonymous caller.
+    if (name === "search_datasets") args = { ...args, interpret: "vocabulary" };
+    return runTool(ctx, name, args, publicMeta(ctx.env), false, null);
+  }
 
   const hasKey = ctx.auth.ok;
   // A key that was sent but is wrong or revoked is always an error, whatever
@@ -1170,10 +1216,12 @@ async function callToolInner(ctx: CallContext, params: Record<string, unknown>) 
     };
   }
   await recordToolCall(ctx.env.DB, ctx.identity.subject, name);
+  return runTool(ctx, name, args, await quotaMeta(ctx.env, ctx.identity), hasKey, ctx.auth.userId);
+}
 
-  const meta = await quotaMeta(ctx.env, ctx.identity);
+/** Runs one tool once access and limits are settled. uid is null on the public endpoint (a link cohort opens with its token alone). */
+async function runTool(ctx: CallContext, name: string, args: Record<string, unknown>, meta: Record<string, unknown>, hasKey: boolean, uid: string | null) {
   const db = { db: ctx.env.DB, waitUntil: ctx.waitUntil };
-  const uid = ctx.auth.userId;
   try {
     // Research Alpha: a withheld study or an excluded sample is answered as not found, and dropped from id lists.
     const alpha = await alphaToolArgs(ctx.env.DB, args);
@@ -1181,7 +1229,7 @@ async function callToolInner(ctx: CallContext, params: Record<string, unknown>) 
     args = alpha.args;
     switch (name) {
       case "search_datasets":
-        return { result: await searchDatasets(ctx.env, ctx.identity, ctx.waitUntil, args, hasKey) };
+        return { result: await searchDatasets(ctx.env, ctx.identity, ctx.waitUntil, args, hasKey, ctx.pub ? meta : undefined) };
       case "get_study":
         return { result: withQuota(await getStudy(ctx.env, args), meta) };
       case "get_download_url":
@@ -1223,6 +1271,7 @@ async function callToolInner(ctx: CallContext, params: Record<string, unknown>) 
         return { result: await productTool(ctx, meta, (p) => getCohort(p, uid, { id: args.id, token: args.token })) };
       }
       case "save_cohort": {
+        if (!uid) return { result: toolError("save_cohort needs an account.", { auth: "sign_in_required" }) };
         const body = { name: args.name, notes: args.notes ?? "", visibility: args.visibility ?? "private", workspace_id: args.workspace_id ?? null, public_gse_ids: args.gse_ids };
         return { result: await productTool(ctx, meta, (p) => saveCohort(p, uid, body)) };
       }
@@ -1253,7 +1302,7 @@ async function handleMessage(ctx: CallContext, msg: JsonRpcRequest): Promise<unk
         protocolVersion,
         capabilities: { tools: { listChanged: false }, prompts: { listChanged: false }, resources: { listChanged: false, subscribe: false } },
         serverInfo: SERVER_INFO,
-        instructions: instructions(await s1ToolsVisible(ctx.env), dietEnabled(ctx.env)),
+        instructions: instructions(await s1ToolsVisible(ctx.env), dietEnabled(ctx.env), ctx.pub),
       });
     }
     case "notifications/initialized":
@@ -1263,7 +1312,7 @@ async function handleMessage(ctx: CallContext, msg: JsonRpcRequest): Promise<unk
     case "ping":
       return rpcResult(id, {});
     case "tools/list":
-      return rpcResult(id, { tools: toolList({ s1: await s1ToolsVisible(ctx.env), diet: dietEnabled(ctx.env) }) });
+      return rpcResult(id, { tools: toolList({ s1: await s1ToolsVisible(ctx.env), diet: dietEnabled(ctx.env), pub: ctx.pub }) });
     case "tools/call": {
       const r = await callTool(ctx, params);
       if ("error" in r && r.error) return { ...r.error, id };
@@ -1275,10 +1324,14 @@ async function handleMessage(ctx: CallContext, msg: JsonRpcRequest): Promise<unk
       return rpcResult(id, { resourceTemplates: [] });
     case "resources/read": {
       // singlet://stats and singlet://vocab run aggregate queries over the catalog, so reading them
-      // is a metered tool call like any other: it needs a key and counts against the per-key limit.
-      if (!ctx.auth.ok) return rpcError(id, -32001, `Reading resources needs a singlet.bio account: sign in when your client asks, or create an API key at ${ACCOUNT_URL}.`);
+      // is a metered tool call like any other: it needs a key and counts against the per-key limit
+      // (on the public endpoint, against the per-address limit).
+      if (ctx.pub) {
+        const refused = await publicRefusal(ctx);
+        if (refused) return rpcError(id, -32002, refused);
+      } else if (!ctx.auth.ok) return rpcError(id, -32001, `Reading resources needs a singlet.bio account: sign in when your client asks, or create an API key at ${ACCOUNT_URL}.`);
       const perMinute = Number.parseInt(ctx.env.MCP_RATE_PER_MIN ?? "", 10) || DEFAULT_MCP_RATE_PER_MIN;
-      if (!(await withinRate(ctx.env.DB, ctx.identity.subject, "mcp", perMinute, 60_000))) {
+      if (!ctx.pub && !(await withinRate(ctx.env.DB, ctx.identity.subject, "mcp", perMinute, 60_000))) {
         return rpcError(id, -32002, `Rate limit: ${perMinute} MCP calls a minute per key.`);
       }
       await recordToolCall(ctx.env.DB, ctx.identity.subject, "resources/read");
@@ -1313,53 +1366,68 @@ async function authFor(env: Env, request: Request, waitUntil: (p: Promise<unknow
 /** Methods that need an account: without a credential they answer 401 so the client starts sign-in. */
 const NEEDS_ACCOUNT = new Set(["initialize", "tools/call", "resources/read"]);
 
-export const onRequestPost: PagesFunction<Env> = async ({ env, request, waitUntil }) => {
-  configureS1(env);
-  await ensureCatalogColumns(env.DB).catch(() => undefined);
-  const version = (request.headers.get("MCP-Protocol-Version") ?? "").trim();
-  const versionOk = !version || (PROTOCOL_VERSIONS as readonly string[]).includes(version);
+/**
+ * The POST handler of /mcp, or with `pub` of /mcp/public (functions/mcp/public.ts). The public endpoint never answers 401: it ignores
+ * credentials, serves every caller as the salted hash of their network address, lists and runs only the read-only tools, reads search
+ * questions with the vocabulary alone and limits calls per address (publicRefusal). /mcp keeps its 401s so connectors start sign-in.
+ */
+export function mcpPostHandler(opts: { pub: boolean }): PagesFunction<Env> {
+  return async ({ env, request, waitUntil }) => {
+    configureS1(env);
+    await ensureCatalogColumns(env.DB).catch(() => undefined);
+    const version = (request.headers.get("MCP-Protocol-Version") ?? "").trim();
+    const versionOk = !version || (PROTOCOL_VERSIONS as readonly string[]).includes(version);
 
-  const declared = Number.parseInt(request.headers.get("Content-Length") ?? "", 10);
-  if (Number.isFinite(declared) && declared > MAX_BODY_BYTES) {
-    return json(rpcError(null, -32600, `Request body too large (limit ${MAX_BODY_BYTES} bytes)`), 413);
-  }
-  let payload: unknown;
-  try {
-    const text = await request.text();
-    if (text.length > MAX_BODY_BYTES) return json(rpcError(null, -32600, `Request body too large (limit ${MAX_BODY_BYTES} bytes)`), 413);
-    payload = JSON.parse(text);
-  } catch {
-    return json(rpcError(null, -32700, "Parse error: body must be JSON"), 400);
-  }
+    const declared = Number.parseInt(request.headers.get("Content-Length") ?? "", 10);
+    if (Number.isFinite(declared) && declared > MAX_BODY_BYTES) {
+      return json(rpcError(null, -32600, `Request body too large (limit ${MAX_BODY_BYTES} bytes)`), 413);
+    }
+    let payload: unknown;
+    try {
+      const text = await request.text();
+      if (text.length > MAX_BODY_BYTES) return json(rpcError(null, -32600, `Request body too large (limit ${MAX_BODY_BYTES} bytes)`), 413);
+      payload = JSON.parse(text);
+    } catch {
+      return json(rpcError(null, -32700, "Parse error: body must be JSON"), 400);
+    }
 
-  const messages = Array.isArray(payload) ? (payload as JsonRpcRequest[]) : [payload as JsonRpcRequest];
-  if (!messages.length) return json(rpcError(null, -32600, "Empty batch"), 400);
-  if (messages.length > MAX_BATCH) return json(rpcError(null, -32600, `Batch too large (limit ${MAX_BATCH} messages)`), 400);
-  if (!versionOk && !messages.every((m) => m && typeof m === "object" && m.method === "initialize")) {
-    return json({ jsonrpc: "2.0", id: null, error: { code: -32600, message: `Unsupported MCP-Protocol-Version: ${version}. Supported: ${PROTOCOL_VERSIONS.join(", ")}` } }, 400);
-  }
+    const messages = Array.isArray(payload) ? (payload as JsonRpcRequest[]) : [payload as JsonRpcRequest];
+    if (!messages.length) return json(rpcError(null, -32600, "Empty batch"), 400);
+    if (messages.length > MAX_BATCH) return json(rpcError(null, -32600, `Batch too large (limit ${MAX_BATCH} messages)`), 400);
+    if (!versionOk && !messages.every((m) => m && typeof m === "object" && m.method === "initialize")) {
+      return json({ jsonrpc: "2.0", id: null, error: { code: -32600, message: `Unsupported MCP-Protocol-Version: ${version}. Supported: ${PROTOCOL_VERSIONS.join(", ")}` } }, 400);
+    }
 
-  const issuer = issuerFor(request);
-  const auth = await authFor(env, request, waitUntil);
-  // A credential that was sent but is wrong, revoked or expired is an HTTP 401 for the
-  // whole request, so a client with a stale key sees it at once instead of being served
-  // as someone else, and an OAuth client knows to refresh.
-  if (!auth.ok && auth.reason !== "missing") {
-    return new Response(JSON.stringify(rpcError(null, -32001, auth.message)), {
-      status: auth.reason === "unavailable" ? 503 : 401,
-      headers: { ...JSON_HEADERS, "WWW-Authenticate": wwwAuthenticate(issuer, "invalid_token") },
-    });
-  }
-  if (!auth.ok && messages.some((m) => m && typeof m === "object" && NEEDS_ACCOUNT.has(String(m.method)))) {
-    const message = `Sign in to singlet.bio (free) when your MCP client asks, or send a personal API key from ${ACCOUNT_URL} as \`Authorization: Bearer sk_live_…\`.`;
-    return new Response(JSON.stringify(rpcError(null, -32001, message, { auth: "sign_in_required", account_url: ACCOUNT_URL })), {
-      status: 401,
-      headers: { ...JSON_HEADERS, "WWW-Authenticate": wwwAuthenticate(issuer) },
-    });
-  }
-  const identity: Identity = auth.ok ? credentialIdentity(auth) : { kind: "anonymous", subject: await anonSubjectFromIp(clientIp(request)) };
-  const ctx: CallContext = { env, request, waitUntil, auth, identity };
+    if (opts.pub) {
+      const identity: Identity = { kind: "anonymous", subject: await anonSubjectFromIp(clientIp(request)) };
+      const auth = { ok: false as const, reason: "missing" as const, message: "" };
+      return reply(payload, messages, { env, request, waitUntil, auth, identity, pub: true }, versionOk, version);
+    }
 
+    const issuer = issuerFor(request);
+    const auth = await authFor(env, request, waitUntil);
+    // A credential that was sent but is wrong, revoked or expired is an HTTP 401 for the
+    // whole request, so a client with a stale key sees it at once instead of being served
+    // as someone else, and an OAuth client knows to refresh.
+    if (!auth.ok && auth.reason !== "missing") {
+      return new Response(JSON.stringify(rpcError(null, -32001, auth.message)), {
+        status: auth.reason === "unavailable" ? 503 : 401,
+        headers: { ...JSON_HEADERS, "WWW-Authenticate": wwwAuthenticate(issuer, "invalid_token") },
+      });
+    }
+    if (!auth.ok && messages.some((m) => m && typeof m === "object" && NEEDS_ACCOUNT.has(String(m.method)))) {
+      const message = `Sign in to singlet.bio (free) when your MCP client asks, or send a personal API key from ${ACCOUNT_URL} as \`Authorization: Bearer sk_live_…\`.`;
+      return new Response(JSON.stringify(rpcError(null, -32001, message, { auth: "sign_in_required", account_url: ACCOUNT_URL })), {
+        status: 401,
+        headers: { ...JSON_HEADERS, "WWW-Authenticate": wwwAuthenticate(issuer) },
+      });
+    }
+    const identity: Identity = auth.ok ? credentialIdentity(auth) : { kind: "anonymous", subject: await anonSubjectFromIp(clientIp(request)) };
+    return reply(payload, messages, { env, request, waitUntil, auth, identity, pub: false }, versionOk, version);
+  };
+}
+
+async function reply(payload: unknown, messages: JsonRpcRequest[], ctx: CallContext, versionOk: boolean, version: string): Promise<Response> {
   const replies: unknown[] = [];
   for (const m of messages) {
     const rep = await handleMessage(ctx, m && typeof m === "object" ? m : {});
@@ -1370,22 +1438,29 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request, waitUnti
   if (!replies.length) return new Response(null, { status: 202, headers: JSON_HEADERS });
   const body = Array.isArray(payload) ? replies : replies[0];
   return json(body, 200, { "MCP-Protocol-Version": versionOk ? version || "2025-03-26" : LATEST_PROTOCOL });
-};
+}
 
-export const onRequestGet: PagesFunction<Env> = async ({ env }) =>
-  json(
-    {
-      name: SERVER_INFO.name,
-      transport: "streamable-http",
-      endpoint: `${SITE}/mcp`,
-      protocol_versions: PROTOCOL_VERSIONS,
-      tools: toolList({ s1: await s1ToolsVisible(env), diet: false }).map((t) => t.name),
-      docs: `${SITE}/docs#mcp`,
-      note: "POST JSON-RPC 2.0 messages to this URL. Server-initiated streams are not offered.",
-    },
-    405,
-    { Allow: "POST, OPTIONS" }
-  );
+export const onRequestPost: PagesFunction<Env> = mcpPostHandler({ pub: false });
+
+export function mcpGetHandler(opts: { pub: boolean }): PagesFunction<Env> {
+  return async ({ env }) =>
+    json(
+      {
+        name: SERVER_INFO.name,
+        transport: "streamable-http",
+        endpoint: opts.pub ? `${SITE}/mcp/public` : `${SITE}/mcp`,
+        access: opts.pub ? "no account; read-only tools; vocabulary-only search; limited per network address" : "free account (sign-in or API key) for initialize and tools/call",
+        protocol_versions: PROTOCOL_VERSIONS,
+        tools: toolList({ s1: await s1ToolsVisible(env), diet: false, pub: opts.pub }).map((t) => t.name),
+        docs: `${SITE}/docs/mcp`,
+        note: "POST JSON-RPC 2.0 messages to this URL. Server-initiated streams are not offered.",
+      },
+      405,
+      { Allow: "POST, OPTIONS" }
+    );
+}
+
+export const onRequestGet: PagesFunction<Env> = mcpGetHandler({ pub: false });
 
 export const onRequestDelete: PagesFunction<Env> = async () => new Response(null, { status: 405, headers: { ...JSON_HEADERS, Allow: "POST, OPTIONS" } });
 

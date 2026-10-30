@@ -57,6 +57,10 @@ export interface AppEnv {
   AI_PRICE_OUT_USD_PER_M?: string;
   /** MCP calls per minute per API key (default 60). */
   MCP_RATE_PER_MIN?: string;
+  /** /mcp/public: calls an hour per salted network-address hash (default 60). */
+  MCP_PUBLIC_RATE_PER_HOUR?: string;
+  /** /mcp/public: calls a day for all addresses together (default 5000). */
+  MCP_PUBLIC_DAILY_CAP?: string;
   /** "1" shortens MCP result texts and makes `verbose` meaningful (the response diet, off by default; see _shared/mcp-core.ts). */
   MCP_DIET?: string;
   /** "1" lists find_cells, slice_cells and resolve_features in tools/list before any study is served from s1. */

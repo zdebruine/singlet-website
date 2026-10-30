@@ -132,7 +132,7 @@ describe("/beta", () => {
   it("shows the estimate, every Alpha-to-Beta row, the sign-up form and its privacy line", () => {
     renderPage(<Beta />);
     for (const r of ALPHA_TO_BETA) expect(screen.getByText(r.beta)).toBeTruthy();
-    expect(screen.getByText("Estimated Q1 2027")).toBeTruthy();
+    expect(screen.getByText("Beta begins in Q1 2027; the full re-run continues through 2027")).toBeTruthy();
     expect(screen.getByRole("form", { name: "Join the Beta" })).toBeTruthy();
     expect(screen.getByText(/never share\s+or sell it/)).toBeTruthy();
     expect(screen.getByRole("link", { name: "Privacy" }).getAttribute("href")).toBe("/privacy#beta");

@@ -61,7 +61,7 @@ const DataLicense = () => {
                         </div>
                         <p className="text-sm text-muted-foreground leading-relaxed mb-4">
                             All atlas data published by Singlet Bio — processed count matrices, QC metrics,
-                            metadata, and the <span className="font-mono">.singlet</span> / <span className="font-mono">.1pz</span> bundles —
+                            metadata, and the <span className="font-mono">.s1</span> files (one object per sample, pz2-compressed matrices) —
                             is released under the{" "}
                             <a href="https://creativecommons.org/publicdomain/zero/1.0/" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
                                 Creative Commons CC0 1.0 Universal <ExternalLink size={10} className="inline" />
