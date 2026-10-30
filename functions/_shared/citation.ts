@@ -12,7 +12,7 @@ const AUTHOR = "DeBruine Z";
 const AUTHOR_BIB = "DeBruine, Zachary";
 const YEAR = 2026;
 const ATLAS_TITLE = "singlet.bio: an open atlas of public single-cell RNA-seq studies reprocessed from raw reads";
-const SOFTWARE_TITLE = "singlet: Python and R packages for the singlet.bio atlas";
+const SOFTWARE_TITLE = "singlet: Python, R and C++ client and engine for singlet.bio";
 
 /** Today as YYYY-MM-DD, for the access date. */
 export function today(): string {
@@ -56,7 +56,7 @@ export const SOFTWARE_CITATION = `${AUTHOR}. ${SOFTWARE_TITLE}. ${YEAR}. ${PACKA
 export const SOFTWARE_BIBTEX = [
   `@misc{debruine${YEAR}singlet,`,
   `  author       = {${AUTHOR_BIB}},`,
-  `  title        = {singlet: {Python} and {R} packages for the {singlet.bio} atlas},`,
+  `  title        = {singlet: {Python}, {R} and {C++} client and engine for {singlet.bio}},`,
   `  year         = {${YEAR}},`,
   `  howpublished = {\\url{${PACKAGE_REPO}}},`,
   `  url          = {${PACKAGE_REPO}}`,
