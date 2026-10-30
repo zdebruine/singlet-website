@@ -341,7 +341,8 @@ export async function withinRate(
       .bind(subject, bucket, window, limit)
       .first<{ count: number }>();
     if (Math.random() < 0.01) {
-      await db.prepare(`DELETE FROM rate_window WHERE window < ?1`).bind(window - 2).run().catch(() => undefined);
+      // Per bucket: window numbers depend on the bucket's window length, so a minute bucket's cut-off would empty an hour or day bucket.
+      await db.prepare(`DELETE FROM rate_window WHERE bucket = ?1 AND window < ?2`).bind(bucket, window - 2).run().catch(() => undefined);
     }
     return !!row;
   } catch (e) {
@@ -361,6 +362,27 @@ export async function recordToolCall(db: D1Database, subject: string, tool: stri
     .bind(subject, monthOf(now), tool, new Date(now).toISOString())
     .run()
     .catch((e) => console.warn("[mcp] usage not recorded:", String(e)));
+  if (Math.random() < 0.01) await pruneToolCalls(db, now);
+}
+
+/**
+ * How long the monthly tool-call counts are kept (Privacy, section 6). Counts of the public endpoint, keyed to a salted address hash,
+ * go once their month is more than two months past (about 90 days); an account's go after 24 months. No per-call log exists.
+ */
+export const MCP_USAGE_KEEP_MONTHS = { anonymous: 2, account: 24 } as const;
+
+function monthsBefore(now: number, months: number): string {
+  const d = new Date(now);
+  return monthOf(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - months, 1));
+}
+
+export async function pruneToolCalls(db: D1Database, now: number = Date.now()): Promise<void> {
+  await db
+    .batch([
+      db.prepare(`DELETE FROM mcp_usage WHERE subject LIKE 'anon:%' AND month < ?1`).bind(monthsBefore(now, MCP_USAGE_KEEP_MONTHS.anonymous)),
+      db.prepare(`DELETE FROM mcp_usage WHERE month < ?1`).bind(monthsBefore(now, MCP_USAGE_KEEP_MONTHS.account)),
+    ])
+    .catch((e) => console.warn("[mcp] usage not pruned:", String(e)));
 }
 
 export async function toolCallsThisMonth(

@@ -748,7 +748,7 @@ function maintenance(policy: ReleasePolicy): string[] {
   return [
     "Per-sample .s1 objects and label sidecars are immutable and content-addressed (the key contains the digest); a change writes a new object, and the study manifest (mutable) gets a new rev.",
     `Which samples and studies are served is set by the Research Alpha release policy; this document's version is the policy id in force (${policy.version}).`,
-    "Research Alpha (October 2026) is a feedback-oriented research preview. Beta, a full re-run with a new engine, is estimated for Q1 2027 and will be released separately.",
+    "Research Alpha (October 2026) is a feedback-oriented research preview. Beta, a full re-run with a new engine, begins in Q1 2027; the full re-run continues through 2027, and Beta will be released separately.",
     "Feedback from any page of https://singlet.bio; known issues at https://singlet.bio/known-issues.",
   ];
 }

@@ -30,7 +30,7 @@ describe("Research Alpha label", { timeout: 20_000 }, () => {
     const { unmount } = render(<MemoryRouter><AlphaBanner /></MemoryRouter>);
     expect(screen.getByRole("button", { name: "send feedback" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Dismiss/ }));
-    expect(screen.queryByText(/help us shape Beta/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Beta begins in Q1 2027/)).not.toBeInTheDocument();
     unmount();
     render(<MemoryRouter><AlphaBanner /></MemoryRouter>);
     expect(screen.queryByText(/help us shape Beta/)).not.toBeInTheDocument();
@@ -44,7 +44,7 @@ describe("Research Alpha label", { timeout: 20_000 }, () => {
       throw new Error("blocked");
     });
     render(<MemoryRouter><AlphaBanner /></MemoryRouter>);
-    expect(screen.getByText(/help us shape Beta \(Q1 2027\)/)).toBeInTheDocument();
+    expect(screen.getByText(/Beta begins in Q1 2027; the full re-run continues through 2027/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Dismiss/ }));
     expect(screen.queryByText(/help us shape Beta/)).not.toBeInTheDocument();
   });

@@ -197,6 +197,17 @@ else
   bad "mcp tool call without a credential (got: $(printf '%s' "$mcpcall" | head -c 200))"
 fi
 
+# The public MCP endpoint (functions/mcp/public.ts): initialize and a read-only tool call answer 200 with no account, and
+# save_cohort is not listed.
+code=$(curl -s -m 30 -o /dev/null -w '%{http_code}' -X POST "$BASE/mcp/public" -H 'content-type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"smoke","version":"1"}}}')
+if [ "$code" = 200 ]; then ok "mcp/public initialize"; else bad "mcp/public initialize ($code, want 200)"; fi
+pubcall=$(curl -s -m 30 -X POST "$BASE/mcp/public" -H 'content-type: application/json' \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"get_atlas_stats","arguments":{}}}')
+if printf '%s' "$pubcall" | grep -q '"studies_with_files"'; then ok "mcp/public get_atlas_stats"; else bad "mcp/public get_atlas_stats (got: $(printf '%s' "$pubcall" | head -c 200))"; fi
+publist=$(curl -s -m 30 -X POST "$BASE/mcp/public" -H 'content-type: application/json' -d '{"jsonrpc":"2.0","id":3,"method":"tools/list"}')
+if printf '%s' "$publist" | grep -q '"name":"search_datasets"' && ! printf '%s' "$publist" | grep -q '"name":"save_cohort"'; then ok "mcp/public tools/list is read-only"; else bad "mcp/public tools/list (got: $(printf '%s' "$publist" | head -c 200))"; fi
+
 # OAuth discovery for MCP clients (functions/_shared/mcp-oauth.ts), on this deployment's own origin.
 check "oauth protected resource" 200 "$BASE/.well-known/oauth-protected-resource" "\"resource\": *\"$BASE/mcp\"" "json"
 check "oauth resource (mcp path)" 200 "$BASE/.well-known/oauth-protected-resource/mcp" "\"authorization_servers\"" "json"

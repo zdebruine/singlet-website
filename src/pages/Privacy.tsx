@@ -132,11 +132,21 @@ const Privacy = () => {
             <h2 className="font-display text-lg font-bold text-foreground mb-3">6. The MCP Server</h2>
             <p className="text-sm leading-relaxed">
               The MCP server at <span className="font-mono">https://singlet.bio/mcp</span> lets an AI assistant you
-              connect call singlet.bio tools. It only ever receives the arguments of each tool call your assistant makes
-              (for example a search question or a GEO accession), never the rest of your conversation. It keeps no
-              session and does not log tool calls, their arguments or their results. What it does record:
+              connect call singlet.bio tools; <span className="font-mono">https://singlet.bio/mcp/public</span> serves
+              the read-only tools without an account. The server only ever receives the arguments of each tool call your
+              assistant makes (for example a search question or a GEO accession), never the rest of your conversation. It
+              keeps no session and no log of individual calls, their arguments or their results. What it does record:
             </p>
             <ul className="list-disc list-inside text-sm space-y-1 mt-2">
+              <li>
+                A count of tool calls per account, tool and month (on <span className="font-mono">/mcp/public</span>, per
+                salted hash of your network address instead of an account). Account counts are kept for 24 months; counts
+                from the public endpoint for about 90 days. Then they are deleted.
+              </li>
+              <li>
+                Short-lived rate-limit counters (calls per minute per account, or per hour per address on the public
+                endpoint), deleted after a few windows.
+              </li>
               <li>
                 The daily AI-search counter from section 3, only when a search needs a fresh AI reading: keyed to the
                 salted hash of your network address, or to your account when you send an API key.
@@ -180,7 +190,8 @@ const Privacy = () => {
             <p className="text-sm leading-relaxed">
               Standard technical logs are retained for a limited period for security and operational purposes, then
               discarded or aggregated. Expired sessions and unfinished sign-ins are deleted. Account data is kept while
-              the account exists. Website analytics (section 10) are kept for 90 days, then deleted.
+              the account exists. Website analytics (section 10) are kept for 90 days, then deleted. MCP tool-call counts
+              (section 6) are kept for 24 months per account and about 90 days per network address.
             </p>
           </section>
 

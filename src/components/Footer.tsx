@@ -23,7 +23,7 @@ const Footer = () => (
   <footer className="mt-auto border-t border-border bg-background">
     <div className="container-site py-7 flex flex-col md:flex-row md:items-center gap-5 md:gap-8">
       <div className="md:flex-1 space-y-1">
-        <p className="text-[13px] text-muted-foreground">Data CC0 · Code MIT · No account required</p>
+        <p className="text-[13px] text-muted-foreground">Data CC0 · Code MIT · No account to download or search</p>
         {/* The support contact for the site, the API and the MCP connector (no email address exists). */}
         <p className="text-[13px] text-muted-foreground">
           Contact and support (site, API, MCP connector):{" "}

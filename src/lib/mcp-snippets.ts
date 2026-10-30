@@ -1,5 +1,7 @@
 // Shared MCP config snippets used by /docs, /docs/mcp and /quickstart.
 export const MCP_URL = "https://singlet.bio/mcp";
+/** No account: read-only tools, vocabulary-only search, limited per network address (functions/mcp/public.ts). */
+export const MCP_PUBLIC_URL = `${MCP_URL}/public`;
 
 /** With no key: the client signs in when it connects (OAuth). Without sign-in or a key, initialize and every tools/call answer 401. */
 export const claudeDesktopConfigNoKey = `{

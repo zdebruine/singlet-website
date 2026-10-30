@@ -208,8 +208,8 @@ const KnownIssues = () => {
         <div className="max-w-3xl">
           <h1 className="font-display text-3xl md:text-4xl font-bold tracking-tightest text-foreground">Known issues</h1>
           <p className="mt-3 text-[15px] text-muted-foreground">
-            What we know is wrong or missing in the Research Alpha files, what to do about it, and what the Beta re-run (estimated
-            Q1 2027) changes. Found another? Tell us.
+            What we know is wrong or missing in the Research Alpha files, what to do about it, and what the Beta re-run changes (Beta begins in
+            Q1 2027; the full re-run continues through 2027). Found another? Tell us.
           </p>
           <div className="mt-5 flex flex-wrap gap-3">
             <FeedbackButton category="data" className="btn-primary btn-sm">Report an issue</FeedbackButton>
