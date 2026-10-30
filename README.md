@@ -20,6 +20,25 @@ The install commands shown on the site come from one file, `src/lib/install-snip
 
 Questions and bugs: [GitHub Issues](https://github.com/Singlet-Bio/singlet/issues).
 
+## How to cite
+
+In a paper, cite the original study of every dataset you use (its paper and GEO accession; each study page has a Cite button) and singlet.bio with its release and the date you downloaded the data:
+
+> DeBruine Z. singlet.bio: an open atlas of public single-cell RNA-seq studies reprocessed from raw reads. Singlet Research Alpha (October 2026). https://singlet.bio (accessed YYYY-MM-DD).
+
+```bibtex
+@misc{debruine2026singletbio,
+  author       = {DeBruine, Zachary},
+  title        = {{singlet.bio}: an open atlas of public single-cell {RNA-seq} studies reprocessed from raw reads},
+  year         = {2026},
+  howpublished = {\url{https://singlet.bio}},
+  url          = {https://singlet.bio},
+  note         = {Singlet Research Alpha (October 2026). Accessed YYYY-MM-DD}
+}
+```
+
+Also report each study's pipeline version (`singlet_version`, on the study page), and cite the Python or R package with the version you ran (see [Singlet-Bio/singlet](https://github.com/Singlet-Bio/singlet#how-to-cite)). The site shows the same text, BibTeX and RIS at [singlet.bio/about#cite](https://singlet.bio/about#cite), generated from `functions/_shared/citation.ts`; GitHub's "Cite this repository" reads `CITATION.cff`. Change them together.
+
 ## Architecture
 
 Everything runs on Cloudflare; there is no other backend.
