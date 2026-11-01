@@ -2,9 +2,11 @@ import { Link } from "react-router-dom";
 import { FeedbackButton } from "@/components/FeedbackDialog";
 import { GITHUB_ISSUES, GITHUB_REPO } from "@/lib/install-snippets";
 
-const LINKS: { label: string; to?: string; href?: string }[] = [
+/** `reload`: a page served by Functions (the blog), so the link loads it in full instead of routing in the app. */
+const LINKS: { label: string; to?: string; href?: string; reload?: boolean }[] = [
   { label: "Docs", to: "/docs" },
   { label: "MCP", to: "/docs/mcp" },
+  { label: "Blog", to: "/blog/", reload: true },
   { label: "About", to: "/about" },
   { label: "Benchmarks", to: "/benchmarking" },
   { label: "Known issues", to: "/known-issues" },
@@ -47,7 +49,7 @@ const Footer = () => (
               {l.label}
             </a>
           ) : (
-            <Link key={l.label} to={l.to!} className="text-[13px] text-muted-foreground hover:text-foreground transition-colors">
+            <Link key={l.label} to={l.to!} reloadDocument={l.reload} className="text-[13px] text-muted-foreground hover:text-foreground transition-colors">
               {l.label}
             </Link>
           ),
