@@ -30,6 +30,12 @@ bucket_name = "singlet-user-data"
 binding = "HPC_DASHBOARD"
 bucket_name = "singlet-hpc-dashboard"
 
+# Blog posts and their index (functions/_shared/blog.ts). Private: pages are served by functions/blog/[[path]].ts,
+# which shows drafts only to blog admins (BLOG_ADMINS, else ANALYTICS_ADMINS).
+[[r2_buckets]]
+binding = "BLOG"
+bucket_name = "singlet-blog"
+
 # ── Environment variables (non-secret) ───────────────────────────────────────
 # NOTE: VITE_R2_PUBLIC_URL is a Vite *build-time* var (baked into the static
 # bundle), NOT a Worker runtime var, so it does NOT belong here. Its committed
