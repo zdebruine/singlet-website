@@ -16,7 +16,7 @@
  * outputs moved from the sample root into a `donor/` subdirectory).
  */
 
-export type ModalityKind = "matrix" | "table" | "json" | "text";
+export type ModalityKind = "matrix" | "table" | "json" | "text" | "binary";
 
 export interface Modality {
   name: string;
@@ -76,6 +76,52 @@ export const MODALITIES: Modality[] = [
   M("vdj_gene_usage", "matrix", "Immune", ["vdj_gene_usage.1pz"],
     "TR/IG gene expression (not clonotypes): per-cell reads on T- and B-cell receptor gene segments.",
     `b.vdj(gsm)`, `singlet_read(path, gsm, "vdj_gene_usage")`),
+  // ── Companion libraries, chromatin, spatial ───────────────────────────────
+  M("adt_counts", "matrix", "Protein", ["adt_counts.1pz"],
+    "Antibody-derived tag (ADT/CITE-seq) UMI counts per tag and cell, columns aligned to the cells table.",
+    `b.read("adt_counts", gsm)`, `singlet_read(path, gsm, "adt_counts")`),
+  M("adt_panel", "json", "Protein", ["adt_panel.json"],
+    "ADT/HTO panel: tag, antibody clone, sequence, specificity and ambient level.",
+    `b.read("adt_panel", gsm)`, `singlet_read(path, gsm, "adt_panel")`),
+  M("hto_counts", "matrix", "Protein", ["hto_counts.1pz"],
+    "Hashtag-oligo (HTO) UMI counts per hashtag and cell.",
+    `b.read("hto_counts", gsm)`, `singlet_read(path, gsm, "hto_counts")`),
+  M("hto_classification", "table", "Protein", ["hto_classification.tsv"],
+    "HTO demultiplexing: hashtag call, doublet flag and log-fold margins per cell.",
+    `b.read("hto_classification", gsm)`, `singlet_read(path, gsm, "hto_classification")`),
+  M("crispr_counts", "matrix", "CRISPR", ["crispr_counts.1pz"],
+    "CRISPR guide UMI counts per guide and cell, columns aligned to the cells table.",
+    `b.read("crispr_counts", gsm)`, `singlet_read(path, gsm, "crispr_counts")`),
+  M("crispr_guides", "json", "CRISPR", ["crispr_guides.json"],
+    "CRISPR guide library, per-cell guide-call summary and QC.",
+    `b.read("crispr_guides", gsm)`, `singlet_read(path, gsm, "crispr_guides")`),
+  M("vdj_contigs", "binary", "Immune", ["vdj_contigs.parquet"],
+    "Assembled V(D)J contigs (chain, V/D/J/C genes, CDR3, UMIs) with per-cell clonotype labels (Parquet).",
+    `b.read("vdj_contigs", gsm)`, `singlet_read(path, gsm, "vdj_contigs")`),
+  M("vdj_summary", "json", "Immune", ["vdj_summary.json"],
+    "V(D)J assembly provenance: method, reference, counting and library QC.",
+    `b.read("vdj_summary", gsm)`, `singlet_read(path, gsm, "vdj_summary")`),
+  M("atac_peak_counts", "matrix", "Chromatin", ["atac_peak_counts.1pz"],
+    "ATAC cut sites per peak and cell, columns aligned to the cells table.",
+    `b.read("atac_peak_counts", gsm)`, `singlet_read(path, gsm, "atac_peak_counts")`),
+  M("atac_gene_activity", "matrix", "Chromatin", ["atac_gene_activity.1pz"],
+    "ATAC fragments per gene (gene activity) and cell.",
+    `b.read("atac_gene_activity", gsm)`, `singlet_read(path, gsm, "atac_gene_activity")`),
+  M("atac_peaks", "table", "Chromatin", ["atac_peaks.bed", "peaks.bed"],
+    "ATAC peaks called on the sample (BED).",
+    `b.read("atac_peaks", gsm)`, `singlet_read(path, gsm, "atac_peaks")`),
+  M("atac_fragments", "binary", "Chromatin", ["atac_fragments.tsv.gz", "fragments.tsv.gz"],
+    "ATAC fragments (bgzip TSV, one row per fragment); the index is the same name plus .tbi.",
+    `b.read("atac_fragments", gsm)`, `singlet_read(path, gsm, "atac_fragments")`),
+  M("atac_summary", "json", "Chromatin", ["atac_summary.json"],
+    "ATAC sample summary.",
+    `b.read("atac_summary", gsm)`, `singlet_read(path, gsm, "atac_summary")`),
+  M("spatial_positions", "table", "Spatial", ["spatial_positions.tsv", "spatial_coordinates.tsv"],
+    "Spatial spot positions (array row/col, in tissue) per barcode.",
+    `b.read("spatial_positions", gsm)`, `singlet_read(path, gsm, "spatial_positions")`),
+  M("spatial_summary", "json", "Spatial", ["spatial_summary.json"],
+    "Spatial sample summary.",
+    `b.read("spatial_summary", gsm)`, `singlet_read(path, gsm, "spatial_summary")`),
   // ── Per-cell annotations ──────────────────────────────────────────────────
   M("cell_cycle_scores", "table", "Annotations", ["cell_cycle_scores.tsv"],
     "Per-cell S/G2M scores and phase assignment.",
