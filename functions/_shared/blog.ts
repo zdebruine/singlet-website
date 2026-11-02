@@ -168,7 +168,14 @@ ${entries}
 </feed>`;
 }
 
-/** Headers for blog pages: they are HTML documents, so they get a page CSP (inline styles and Google Fonts, no script). */
+/**
+ * Inline scripts a blog page may run, by hash: only the outline's scroll highlight, from the post template
+ * (singlet-agents .claude/skills/singlet-blog/assets/template.html). Changing that script changes its hash: add the new
+ * one here before uploading posts built with it, and drop the old one once every post is rebuilt.
+ */
+export const BLOG_SCRIPT_HASHES: readonly string[] = ["sha256-9zsBW7KW4l2cVmbSiNWWSUrsP04LT1NhvDK/+m8fgv4="];
+
+/** Headers for blog pages: they are HTML documents, so they get a page CSP (inline styles and Google Fonts, and only the scripts in BLOG_SCRIPT_HASHES). */
 export function pageHeaders(contentType: string, admin: boolean): Record<string, string> {
   return {
     "Content-Type": contentType,
@@ -179,6 +186,6 @@ export function pageHeaders(contentType: string, admin: boolean): Record<string,
     "Referrer-Policy": "strict-origin-when-cross-origin",
     "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
     "Content-Security-Policy":
-      "default-src 'none'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
+      `default-src 'none'; script-src ${BLOG_SCRIPT_HASHES.map((h) => `'${h}'`).join(" ")}; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; form-action 'self'; frame-ancestors 'none'; base-uri 'none'`,
   };
 }

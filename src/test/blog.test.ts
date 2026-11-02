@@ -4,7 +4,7 @@
  * loses its draft box, and the admin bar carries the publish form.
  */
 import { describe, expect, it } from "vitest";
-import { isBlogAdmin, preparePost, renderFeed, renderIndex, setStatus, stripDraftBox, visiblePosts, type BlogIndex, type BlogPost } from "../../functions/_shared/blog";
+import { BLOG_SCRIPT_HASHES, isBlogAdmin, pageHeaders, preparePost, renderFeed, renderIndex, setStatus, stripDraftBox, visiblePosts, type BlogIndex, type BlogPost } from "../../functions/_shared/blog";
 
 const post = (slug: string, status: BlogPost["status"], date: string, extra: Partial<BlogPost> = {}): BlogPost => ({
   slug,
@@ -64,6 +64,13 @@ describe("blog", () => {
     const adm = renderIndex(visiblePosts(index, true), true);
     expect(adm).toContain("Draft");
     expect(adm).toContain('value="publish"');
+  });
+
+  it("lets a page run only the hashed outline script", () => {
+    const csp = pageHeaders("text/html; charset=utf-8", false)["Content-Security-Policy"];
+    expect(csp).toContain("default-src 'none'");
+    expect(csp).toContain(`script-src '${BLOG_SCRIPT_HASHES[0]}';`);
+    expect(csp).not.toMatch(/script-src[^;]*unsafe/);
   });
 
   it("lists only published posts in the feed", () => {
