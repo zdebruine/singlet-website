@@ -10,7 +10,7 @@
  */
 import type { AppEnv } from "../../_shared/env";
 import { requireUser } from "../../_shared/identity";
-import { RANGES, reportQueries, runAnalyticsQuery, type RangeDays } from "../../_shared/web-analytics";
+import { RANGES, reportQueries, runAnalyticsQueries, type RangeDays } from "../../_shared/web-analytics";
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
@@ -43,10 +43,8 @@ export const onRequest: PagesFunction<AppEnv> = async ({ request, env, waitUntil
   }
 
   try {
-    const entries = await Promise.all(
-      Object.entries(queries).map(async ([name, sql]) => [name, await runAnalyticsQuery(accountId, token, sql)] as const),
-    );
-    return json({ days, host, generated_at: new Date().toISOString(), reports: Object.fromEntries(entries) });
+    const reports = await runAnalyticsQueries(accountId, token, queries);
+    return json({ days, host, generated_at: new Date().toISOString(), reports });
   } catch (err) {
     // 503, not 502: Cloudflare replaces a Function's 502 with its own error page, hiding this message.
     const message = err instanceof Error ? err.message : "Analytics query failed.";
