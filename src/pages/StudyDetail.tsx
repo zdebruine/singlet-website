@@ -372,7 +372,7 @@ const StudyDetail = () => {
           <a href={GEO(gseId)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-muted-foreground hover:text-primary">
             View on GEO <ExternalLink size={11} />
           </a>
-          <CiteDialog gseId={gseId} title={series.title} year={year} pubmedIds={series.pubmed_ids} doi={series.doi} />
+          <CiteDialog gseId={gseId} title={series.title} year={year} pubmedIds={series.pubmed_ids} doi={series.doi} pipelineVersion={series.singlet_version} />
           <AddToLibraryMenu gseIds={[gseId]} label="Library" />
           <FeedbackButton category="data" prefill={`About ${gseId}: `} className="inline-flex items-center gap-1 text-muted-foreground hover:text-primary">
             Report a problem

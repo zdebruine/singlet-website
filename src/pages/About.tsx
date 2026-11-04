@@ -15,6 +15,7 @@ import { QcFunnel, sampleFunnel } from "@/components/landing/QcFunnel";
 import { QueryParse } from "@/components/landing/QueryParse";
 import { MODALITIES } from "@/components/landing/Modalities";
 import { EXAMPLE_GSE, GITHUB_ISSUES } from "@/lib/install-snippets";
+import { SOFTWARE_BIBTEX, SOFTWARE_CITATION, atlasBibtex, atlasCitation, atlasRis, today } from "../../functions/_shared/citation";
 
 const CHANGELOG_URL = "https://github.com/zdebruine/singlet-website/blob/main/CHANGELOG.md";
 
@@ -269,16 +270,29 @@ const About = () => {
                 <li>Genotypes and mitochondrial variants are never released.</li>
               </ul>
             </section>
-            <Fold id="cite" title="License and citation">
+            <Fold id="cite" title="How to cite">
               <p>
                 Data <a href="https://creativecommons.org/publicdomain/zero/1.0/" target="_blank" rel="noopener noreferrer">CC0</a>, code MIT.{" "}
-                <Link to="/data-license">License details</Link>. Cite the original study and the release you used:
+                <Link to="/data-license">License details</Link>. A citation lets readers find the data you used. In a paper, cite:
               </p>
-              <CodeBlock
-                label="text"
-                code={`<Original authors>. <Title>. GEO accession ${EXAMPLE_GSE} (<year>).
-Singlet Research Alpha (October 2026). https://singlet.bio (accessed ${new Date().getFullYear()}).`}
-              />
+              <ol className="list-decimal pl-5 space-y-1">
+                <li>
+                  The original study: its paper and GEO accession. The Cite button on each study page (for example{" "}
+                  <Link to={`/study/${EXAMPLE_GSE}`}>{EXAMPLE_GSE}</Link>) gives both.
+                </li>
+                <li>singlet.bio and its release, Singlet Research Alpha (October 2026), with the date you downloaded the data:</li>
+              </ol>
+              <CodeBlock label="text" code={atlasCitation(today())} wrap />
+              <CodeBlock label="BibTeX" code={atlasBibtex()} />
+              <CodeBlock label="RIS" code={atlasRis()} />
+              <p>
+                For reproducibility, also report the pipeline version shown on each study page. If you used the Python or R
+                package, cite it with the version you ran (<code className="code-inline">singlet.__version__</code>,{" "}
+                <code className="code-inline">packageVersion("singlet")</code>; in R,{" "}
+                <code className="code-inline">citation("singlet")</code> prints both entries):
+              </p>
+              <CodeBlock label="text" code={SOFTWARE_CITATION} wrap />
+              <CodeBlock label="BibTeX" code={SOFTWARE_BIBTEX} />
             </Fold>
           </div>
         </div>

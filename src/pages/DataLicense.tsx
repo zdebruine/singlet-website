@@ -1,7 +1,10 @@
 import { ArrowRight, ExternalLink } from "lucide-react";
+import { Link } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import { CodeBlock } from "@/components/CodeBlock";
 import { usePageMeta } from "@/hooks/usePageMeta";
+import { atlasCitation, today } from "../../functions/_shared/citation";
 
 const DataLicense = () => {
     usePageMeta({ title: "Data and software license", description: "atlas data is CC0; the singlet.bio site code and the singlet client are MIT licensed.", path: "/data-license" });
@@ -134,12 +137,15 @@ const DataLicense = () => {
                     <h2 className="font-display text-2xl font-bold text-foreground mb-4">How to Cite</h2>
                     <div className="rounded-xl border border-border bg-card p-6">
                         <p className="text-sm text-muted-foreground leading-relaxed mb-4">
-                            Citation is not required, but it helps others find the resource and supports continued work.
+                            CC0 leaves citation to you; a citation helps others find the data and supports continued work.
                             If you use the atlas or the <span className="font-mono">singlet</span> software in a publication,
-                            please cite Singlet Bio and the release you used: "Singlet Research Alpha (October 2026)".
+                            cite the original study (its paper and GEO accession) and singlet.bio with the release you used,
+                            Singlet Research Alpha (October 2026):
                         </p>
+                        <CodeBlock label="text" code={atlasCitation(today())} wrap className="mb-4" />
                         <p className="text-sm text-muted-foreground leading-relaxed">
-                            For specific datasets, include the original GEO accession number.
+                            BibTeX, RIS and the citation for the Python and R packages are under{" "}
+                            <Link to="/about#cite" className="text-primary hover:underline">How to cite</Link>; each study page has a Cite button for that study.
                         </p>
                     </div>
                 </section>
