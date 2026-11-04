@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from "vitest";
-import { describeAgent, isBot, parseWebEvent, reportQueries, runAnalyticsQuery, toDataPoint } from "../../functions/_shared/web-analytics";
+import { describeAgent, isBot, parseWebEvent, reportQueries, runAnalyticsQueries, runAnalyticsQuery, toDataPoint } from "../../functions/_shared/web-analytics";
 import { onRequest as beacon } from "../../functions/api/v";
 import { isAnalyticsAdmin, onRequest as adminReport } from "../../functions/api/admin/analytics";
 
@@ -158,5 +158,39 @@ describe("GET /api/admin/analytics token", () => {
     expect(new Headers(init.headers).get("Authorization")).toBe("Bearer tok");
     spy.mockRestore();
     vi.unstubAllGlobals();
+  });
+
+  it("retries a rate-limited query and then succeeds", async () => {
+    const answers = [429, 429, 200];
+    const fetcher = vi.fn(async () => {
+      const status = answers.shift() ?? 200;
+      return status === 200 ? Response.json({ data: [{ views: 1 }] }) : new Response("slow down", { status });
+    });
+    const rows = await runAnalyticsQuery("acct", "tok", "SELECT 1", fetcher as unknown as typeof fetch, 4, 0);
+    expect(rows).toEqual([{ views: 1 }]);
+    expect(fetcher).toHaveBeenCalledTimes(3);
+  });
+
+  it("gives up on a query that stays rate limited", async () => {
+    const fetcher = vi.fn(async () => new Response("slow down", { status: 429 }));
+    await expect(runAnalyticsQuery("acct", "tok", "SELECT 1", fetcher as unknown as typeof fetch, 2, 0)).rejects.toThrow("(429)");
+    expect(fetcher).toHaveBeenCalledTimes(3);
+  });
+
+  it("runs a report's queries a few at a time and keeps their names", async () => {
+    let live = 0;
+    let peak = 0;
+    const fetcher = vi.fn(async () => {
+      live++;
+      peak = Math.max(peak, live);
+      await new Promise((r) => setTimeout(r, 5));
+      live--;
+      return Response.json({ data: [{ n: 1 }] });
+    });
+    const queries = Object.fromEntries(Array.from({ length: 11 }, (_, i) => [`q${i}`, `SELECT ${i}`]));
+    const out = await runAnalyticsQueries("acct", "tok", queries, fetcher as unknown as typeof fetch, 3, 0);
+    expect(Object.keys(out)).toEqual(Object.keys(queries));
+    expect(fetcher).toHaveBeenCalledTimes(11);
+    expect(peak).toBeLessThanOrEqual(3);
   });
 });
