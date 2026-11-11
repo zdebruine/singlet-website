@@ -14,6 +14,7 @@
  * missing fields (arrays → [], counts → 0), so a partial or older-shaped
  * payload degrades to an empty section instead of a crash.
  */
+import type { StudyDesignView } from "../../../functions/_shared/design-view";
 import type {
   ApiKeyCreated,
   AuthMe,
@@ -996,6 +997,16 @@ export const apiClient = {
   /** GET /api/gse/:id — study detail with samples, conditions, publications. */
   async gse(id: string): Promise<GseDetailResponse> {
     return normalizeGseDetail(await get<unknown>(`/api/gse/${encodeURIComponent(id)}`));
+  },
+
+  /** GET /api/gse/:id/design — the curated study design (beta channel only; null when the study has none). */
+  async gseDesign(id: string, signal?: AbortSignal): Promise<StudyDesignView | null> {
+    try {
+      return await get<StudyDesignView>(`/api/gse/${encodeURIComponent(id)}/design`, undefined, signal);
+    } catch (e) {
+      if (isApiError(e) && e.status === 404) return null;
+      throw e;
+    }
   },
 
   /** GET /api/bundle/:gse/index — what is actually inside the published file. */

@@ -6,6 +6,7 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { DownloadPanel } from "@/components/DownloadPanel";
 import { ConditionsPanel, type ConditionFilter } from "@/components/study/ConditionsPanel";
+import { DesignPanel } from "@/components/study/DesignPanel";
 import { StudySamplesTable } from "@/components/study/StudySamplesTable";
 import { AddToLibraryMenu } from "@/components/library/AddToLibraryMenu";
 import { FeedbackButton } from "@/components/FeedbackDialog";
@@ -111,6 +112,16 @@ const StudyDetail = () => {
     const empty = new Set(rawData.series.unusable_gsm_ids ?? []);
     return { ...rawData, samples: rawData.samples.filter((s) => isProcessed(s.status) && !s.low_qc && !empty.has(s.gsm_id)) };
   }, [rawData]);
+
+  // The curated design (beta channel only; the endpoint answers 404 on Alpha and for studies without one, which the client maps to null).
+  const { data: design } = useQuery({
+    queryKey: ["study-design", gseId],
+    queryFn: () => apiClient.gseDesign(gseId),
+    enabled: !!data,
+    staleTime: 300_000,
+    retry: 1,
+  });
+  const [showRawConditions, setShowRawConditions] = useState(false);
 
   const { data: bundleIndex, isLoading: bundleIndexLoading, isError: bundleIndexError } = useQuery({
     queryKey: ["bundle-index", gseId],
@@ -428,17 +439,38 @@ const StudyDetail = () => {
             <div className="flex items-baseline justify-between gap-3 mb-2">
               <h2 id="conditions-h" className="text-[18px]">Experimental design</h2>
               <span className="text-[12px] text-muted-foreground">
-                read from GEO sample characteristics{nWithCharacteristics < samples.length ? ` (${fmtInt(nWithCharacteristics)} of ${fmtInt(samples.length)} samples annotated)` : ""}
+                {design && !showRawConditions ? (
+                  "curated from the GEO record"
+                ) : (
+                  <>
+                    read from GEO sample characteristics{nWithCharacteristics < samples.length ? ` (${fmtInt(nWithCharacteristics)} of ${fmtInt(samples.length)} samples annotated)` : ""}
+                    {design && (
+                      <button type="button" className="ml-2 text-primary hover:underline" onClick={() => { setShowRawConditions(false); setCondition(null); }}>
+                        Show curated design
+                      </button>
+                    )}
+                  </>
+                )}
               </span>
             </div>
-            <ConditionsPanel
-              conditions={conditions}
-              nWithCharacteristics={nWithCharacteristics}
-              nSamples={samples.length}
-              active={condition}
-              onToggle={toggleCondition}
-              onClear={() => setCondition(null)}
-            />
+            {design && !showRawConditions ? (
+              <DesignPanel
+                design={design}
+                inFile={new Set(samples.map((s) => s.gsm_id))}
+                active={condition}
+                onToggle={toggleCondition}
+                onShowRaw={() => { setShowRawConditions(true); setCondition(null); }}
+              />
+            ) : (
+              <ConditionsPanel
+                conditions={conditions}
+                nWithCharacteristics={nWithCharacteristics}
+                nSamples={samples.length}
+                active={condition}
+                onToggle={toggleCondition}
+                onClear={() => setCondition(null)}
+              />
+            )}
             {(cellTypesRaw.length > 0 || tissuesRaw.length > 1) && (
               <dl className="mt-3 grid gap-2 text-[13px]">
                 {tissuesRaw.length > 1 && (

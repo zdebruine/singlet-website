@@ -6,6 +6,8 @@ import type { Condition } from "@/integrations/api/types";
 export interface ConditionFilter {
   key: string;
   value: string;
+  /** When set (a curated design level), the samples to show; otherwise samples whose GEO characteristic `key` equals `value`. */
+  gsms?: Set<string>;
 }
 
 interface Props {
