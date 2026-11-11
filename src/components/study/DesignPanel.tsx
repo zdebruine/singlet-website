@@ -30,10 +30,12 @@ const TYPE_LABEL: Record<string, string> = {
 };
 const typeLabel = (t: string) => TYPE_LABEL[t] ?? t.replace(/_/g, " ");
 
+// Theme tokens only (src/styles/tokens.css), so both color schemes keep AA contrast: the site switches theme by prefers-color-scheme and
+// data-theme, not by Tailwind's `dark` class, so `dark:` variants never apply here. The letter carries the grade; color only reinforces it.
 const GRADE_CLASS: Record<string, string> = {
-  A: "border-emerald-500/50 text-emerald-700 dark:text-emerald-400",
-  B: "border-sky-500/50 text-sky-700 dark:text-sky-400",
-  C: "border-amber-500/50 text-amber-700 dark:text-amber-400",
+  A: "border-primary/50 bg-primary/10 text-primary",
+  B: "border-[var(--border-strong)] text-foreground",
+  C: "border-warning-border bg-warning-tint text-warning",
   D: "border-border text-muted-foreground",
 };
 
@@ -62,8 +64,8 @@ export function DesignPanel({ design, inFile, active, onToggle, onShowRaw }: Pro
         <div className="flex flex-wrap items-center gap-2">
           <span
             className={cn(
-              "rounded border px-1.5 py-0.5 text-[10.5px] uppercase tracking-wider",
-              design.tier === "confirmed" ? "border-emerald-500/50 text-emerald-700 dark:text-emerald-400" : "border-amber-500/50 text-amber-700 dark:text-amber-400"
+              "rounded border px-1.5 py-0.5 text-[11px] font-medium uppercase tracking-wider",
+              design.tier === "confirmed" ? "border-primary/50 bg-primary/10 text-primary" : "border-warning-border bg-warning-tint text-warning"
             )}
           >
             {design.tier}
@@ -196,10 +198,10 @@ function LevelChip({ factor, level, inFile, active, onToggle }: { factor: string
         onClick={() => onToggle({ key: factor, value: level.standard, gsms: new Set(available) })}
         aria-pressed={on}
         title={title}
-        className={cn("chip h-auto min-h-7 py-1 max-w-full sm:max-w-[420px] font-normal text-left disabled:opacity-60 disabled:cursor-default", on && "border-primary/60 bg-primary/[0.06] text-primary")}
+        className={cn("chip h-auto min-h-7 py-1 max-w-full sm:max-w-[420px] font-normal text-left disabled:cursor-default disabled:border-dashed disabled:text-muted-foreground", on && "border-primary/60 bg-primary/[0.06] text-primary")}
       >
         {level.role !== "other" && (
-          <span className={cn("shrink-0 rounded px-1 text-[10px] uppercase tracking-wider", level.role === "reference" ? "bg-muted text-muted-foreground" : "bg-primary/10 text-primary")}>
+          <span className={cn("shrink-0 rounded px-1 text-[11px] font-medium uppercase tracking-wide", level.role === "reference" ? "bg-muted text-foreground" : "bg-primary/10 text-primary")}>
             {level.role === "reference" ? "ref" : "test"}
           </span>
         )}
@@ -220,7 +222,7 @@ function ContrastRow({ c }: { c: DesignContrastView }) {
   return (
     <li className="py-2 text-[13px]">
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-        <span className={cn("rounded border px-1.5 text-[11px] font-mono", GRADE_CLASS[c.grade])} title={`Grade ${c.grade}: ${GRADE_TEXT[c.grade]}`}>
+        <span className={cn("rounded border px-1.5 text-[11px] font-mono font-semibold", GRADE_CLASS[c.grade])} title={`Grade ${c.grade}: ${GRADE_TEXT[c.grade]}`}>
           {c.grade}
         </span>
         <span className="font-medium text-foreground">
@@ -234,7 +236,7 @@ function ContrastRow({ c }: { c: DesignContrastView }) {
         </button>
       </div>
       {c.confounds.length > 0 && (
-        <ul className="mt-1 space-y-0.5 text-[12.5px] text-amber-700 dark:text-amber-400">
+        <ul className="mt-1 space-y-0.5 text-[12.5px] text-warning">
           {c.confounds.map((k) => (
             <li key={k}>{CONFOUND_TEXT[k] ?? k.replace(/_/g, " ")}</li>
           ))}
@@ -254,7 +256,7 @@ function ContrastRow({ c }: { c: DesignContrastView }) {
               <dd>
                 <ul>
                   {c.differs.map((d) => (
-                    <li key={d.attribute} className={cn(d.aligned && "text-amber-700 dark:text-amber-400")}>
+                    <li key={d.attribute} className={cn(d.aligned && "text-warning")}>
                       {d.attribute}: {d.test_values.join(", ") || "—"} <span className="text-muted-foreground">vs</span> {d.reference_values.join(", ") || "—"}
                       {d.aligned ? " (changes with the groups)" : ""}
                     </li>
