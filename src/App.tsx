@@ -24,6 +24,7 @@ import SplicePatternSpec from "./pages/SplicePatternSpec.tsx";
 import KnownIssues from "./pages/KnownIssues.tsx";
 import Beta from "./pages/Beta.tsx";
 import BetaGpuEngine from "./pages/BetaGpuEngine.tsx";
+import BetaCampaign from "./pages/BetaCampaign.tsx";
 import Benchmarking from "./pages/Benchmarking.tsx";
 import BenchmarkDetail from "./pages/BenchmarkDetail.tsx";
 import AuthCallback from "./pages/AuthCallback.tsx";
@@ -112,6 +113,7 @@ const App = () => (
               <Route path="/known-issues" element={<KnownIssues />} />
               <Route path="/beta" element={<Beta />} />
               <Route path="/beta/gpu-engine" element={<BetaGpuEngine />} />
+              <Route path="/beta/campaign" element={<BetaCampaign />} />
               <Route path="/benchmarking" element={<Benchmarking />} />
               <Route path="/benchmarking/:capability" element={<BenchmarkDetail />} />
 
