@@ -53,6 +53,7 @@ import { getCohort, saveCohort, ProductError, type ProductCtx } from "./_shared/
 import { dietEnabled, diet, withDataText } from "./_shared/mcp-core";
 import { s1ToolsVisible } from "./_shared/s1-gate";
 import { findCells, resolveFeatures, sliceCells, s1DownloadUrl } from "./_shared/mcp-s1";
+import { DESIGN_TOOLS, designText, designToolsVisible, findContrasts, getContrast, getDesign, getSampleStatus, studyDesignSummary } from "./_shared/mcp-design";
 import { CELL_TOOLS, cellFieldsTool, cellsPageTool, searchCellsTool } from "./_shared/cells/mcp";
 import { combineRev, fileRev, knownRev, unchangedBody } from "./_shared/rev";
 import { getS1State, isLegacyAlive } from "./_shared/s1-catalog";
@@ -525,14 +526,14 @@ const S1_PROPS: Record<string, Record<string, unknown>> = {
   },
 };
 
-const ALL_TOOL_NAMES = new Set([...TOOLS, ...NEW_TOOLS].map((t) => t.name));
+const ALL_TOOL_NAMES = new Set([...TOOLS, ...NEW_TOOLS, ...DESIGN_TOOLS].map((t) => t.name));
 
 /**
  * The tools as advertised. The original fourteen always, each with `known_rev` where it applies; `verbose` only when the response diet is on
  * (MCP_DIET=1); the s1 tools and the s1-only inputs only once some study is served from s1 (or S1_TOOLS=1, see _shared/s1-gate).
  */
-function toolList(opts: { s1: boolean; diet: boolean }) {
-  return (opts.s1 ? [...TOOLS, ...NEW_TOOLS] : TOOLS).map((t) => {
+function toolList(opts: { s1: boolean; diet: boolean; design?: boolean }) {
+  return [...(opts.s1 ? [...TOOLS, ...NEW_TOOLS] : TOOLS), ...(opts.design ? DESIGN_TOOLS : [])].map((t) => {
     const extra = { ...(REV_PROPS[t.name] ?? {}), ...(opts.s1 ? (S1_PROPS[t.name] ?? {}) : {}), ...(opts.diet ? { verbose: VERBOSE_PROP } : {}) };
     return Object.keys(extra).length ? { ...t, inputSchema: { ...t.inputSchema, properties: { ...t.inputSchema.properties, ...extra } } } : t;
   });
@@ -1044,7 +1045,11 @@ async function getStudy(env: Env, args: Record<string, unknown>) {
     geo_url: `https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=${d.series.id}`,
     ...LOADERS(d.series.id),
   };
-  return toolResult(studyText(d), structured);
+  // The curated design and sample status, when the design tables exist and hold this study (absent on Alpha).
+  const extra = await studyDesignSummary(env.DB, id);
+  const designLines = designText(extra.design, extra.status_counts);
+  return toolResult(designLines ? `${studyText(d)}
+${designLines}` : studyText(d), extra.design || extra.status_counts ? { ...structured, design: extra.design, status_counts: extra.status_counts } : structured);
 }
 
 /** Content-Length of a public object (one HEAD), or null when it cannot be read. */
@@ -1216,6 +1221,14 @@ async function callToolInner(ctx: CallContext, params: Record<string, unknown>) 
         return { result: withQuota(await cellFieldsTool(ctx.env, ctx.waitUntil, args), meta) };
       case "get_cells_page":
         return { result: withQuota(await cellsPageTool(ctx.env, ctx.request, ctx.identity, ctx.waitUntil, args), meta) };
+      case "get_design":
+        return { result: withQuota(await getDesign(ctx.env.DB, args), meta) };
+      case "find_contrasts":
+        return { result: withQuota(await findContrasts(ctx.env.DB, args), meta) };
+      case "get_contrast":
+        return { result: withQuota(await getContrast(ctx.env.DB, args), meta) };
+      case "get_sample_status":
+        return { result: withQuota(await getSampleStatus(ctx.env.DB, args), meta) };
       case "get_cohort": {
         // Every tool here already needs a key; a link cohort additionally opens with its share token.
         return { result: await productTool(ctx, meta, (p) => getCohort(p, uid, { id: args.id, token: args.token })) };
@@ -1261,7 +1274,7 @@ async function handleMessage(ctx: CallContext, msg: JsonRpcRequest): Promise<unk
     case "ping":
       return rpcResult(id, {});
     case "tools/list":
-      return rpcResult(id, { tools: toolList({ s1: await s1ToolsVisible(ctx.env), diet: dietEnabled(ctx.env) }) });
+      return rpcResult(id, { tools: toolList({ s1: await s1ToolsVisible(ctx.env), diet: dietEnabled(ctx.env), design: await designToolsVisible(ctx.env) }) });
     case "tools/call": {
       const r = await callTool(ctx, params);
       if ("error" in r && r.error) return { ...r.error, id };
@@ -1377,7 +1390,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env }) =>
       transport: "streamable-http",
       endpoint: `${SITE}/mcp`,
       protocol_versions: PROTOCOL_VERSIONS,
-      tools: toolList({ s1: await s1ToolsVisible(env), diet: false }).map((t) => t.name),
+      tools: toolList({ s1: await s1ToolsVisible(env), diet: false, design: await designToolsVisible(env) }).map((t) => t.name),
       docs: `${SITE}/docs#mcp`,
       note: "POST JSON-RPC 2.0 messages to this URL. Server-initiated streams are not offered.",
     },
