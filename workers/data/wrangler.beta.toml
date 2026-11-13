@@ -1,0 +1,31 @@
+# Beta channel data Worker: the same code as wrangler.toml (Alpha), different resources. Serves beta-data.singlet.bio/s1/*.
+# Deploy from this directory: `npx wrangler deploy -c wrangler.beta.toml`. Docs: docs/BETA-CHANNEL.md.
+name = "singlet-data-beta"
+main = "src/index.ts"
+compatibility_date = "2026-09-01"
+account_id = "2f8a8cc95b6bc0be84ac611fe2e5c3c2"
+workers_dev = false
+
+# A Workers Custom Domain: Cloudflare creates the DNS record and certificate. (beta.singlet.bio is the site; a second-level
+# name such as data.beta.singlet.bio is not covered by the zone's certificate.)
+routes = [{ pattern = "beta-data.singlet.bio", custom_domain = true }]
+
+[vars]
+# Edge-cache keys use this host so Beta manifests never collide with Alpha's (the Cache API is shared across the zone).
+CACHE_ORIGIN = "https://beta-data.singlet.bio"
+
+[[r2_buckets]]
+binding = "DATA"
+bucket_name = "singlet-beta-data"
+
+# API keys are checked read-only; Beta has its own D1 (cloned schema, no production rows).
+[[d1_databases]]
+binding = "DB"
+database_name = "singlet-beta-catalog"
+database_id = "75e54649-de1c-47c6-a242-718e2885748f"
+
+[observability]
+enabled = true
+
+# The cell-index endpoints (rate limits, quota Durable Object, SELF) are not bound: without them their layers are off and the
+# per-request caps in src/limits.ts still apply. Add them with the Alpha values when Beta's cell index is built.

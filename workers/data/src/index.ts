@@ -2,7 +2,7 @@
  * Worker entry for data.singlet.bio/s1/* (and /v2/* once it takes over from the old script). All behaviour lives in ./handler (GET/HEAD of objects) and ./routes (the cell-index POST
  * endpoints), both runtime-neutral and unit-tested in src/test/data-s1-*.test.ts; this file only hands them the bindings.
  */
-import { handle, type CacheLike, type R2BucketLike } from "./handler";
+import { handle, setCacheOrigin, type CacheLike, type R2BucketLike } from "./handler";
 import { CidxQuota, type D1Like, type QuotaNamespaceLike, type RateLimiterLike } from "./limits";
 import { CIDX_PATHS, handleCidx } from "./routes";
 
@@ -21,6 +21,8 @@ export interface Env {
   /** Service binding to this Worker: splits big gathers across invocations (optional, needs CIDX_INTERNAL_SECRET). */
   SELF?: Fetcher;
   CIDX_INTERNAL_SECRET?: string;
+  /** Origin used for edge-cache keys; set on every channel but Alpha (wrangler.beta.toml). */
+  CACHE_ORIGIN?: string;
   /** JSON overriding DEFAULT_LIMITS in limits.ts. */
   CIDX_LIMITS?: string;
   /** Reads in a gather plan before it is split across sub-invocations (default 48). */
@@ -45,6 +47,7 @@ function readOnly(bucket: R2Bucket): R2BucketLike {
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    setCacheOrigin(env.CACHE_ORIGIN);
     const deps = { bucket: readOnly(env.DATA), cache: edgeCache(), waitUntil: (p: Promise<unknown>) => ctx.waitUntil(p) };
     const path = new URL(request.url).pathname;
     if (CIDX_PATHS.has(path)) {

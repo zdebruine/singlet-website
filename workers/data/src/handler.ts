@@ -41,6 +41,11 @@ export const CACHE_CONTROL_SHORT = "public, max-age=300";
 /** s1/cidx/current.json: a new index version is visible within a minute. */
 export const CACHE_CONTROL_POINTER = "public, max-age=60";
 const CANONICAL_ORIGIN = "https://data.singlet.bio";
+/** Host part of the edge-cache keys. The Cache API is shared by every Worker on the zone, so a second channel (Beta) must not use the same keys: its manifests differ. */
+let cacheOrigin = CANONICAL_ORIGIN;
+export function setCacheOrigin(origin: string | undefined): void {
+  cacheOrigin = origin && /^https:\/\/[a-z0-9.-]+$/i.test(origin) ? origin : CANONICAL_ORIGIN;
+}
 const ALLOW = "GET, HEAD, OPTIONS";
 
 // ── dependencies ────────────────────────────────────────────────────────────
@@ -311,7 +316,7 @@ function okHeaders(cls: KeyClass, v: Validators, cache: string, length: number, 
 // ── cache ───────────────────────────────────────────────────────────────────
 
 function canonicalRequest(key: string, range?: string | null): Request {
-  return new Request(`${CANONICAL_ORIGIN}/${key}`, { method: "GET", headers: range ? { Range: range } : {} });
+  return new Request(`${cacheOrigin}/${key}`, { method: "GET", headers: range ? { Range: range } : {} });
 }
 
 function cacheResponse(cls: KeyClass, v: Validators, size: number, body: ReadableStream<Uint8Array>): Response {

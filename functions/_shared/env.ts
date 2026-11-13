@@ -17,6 +17,8 @@ export interface AppEnv {
   HPC_DASHBOARD?: R2Bucket;
   AI?: Ai;
   ENVIRONMENT?: string;
+  /** Release channel: "beta" on beta.singlet.bio; unset on singlet.bio (functions/_shared/channel.ts). */
+  CHANNEL?: string;
 
   // ── Sign-in (OAuth apps) ────────────────────────────────────────────────
   /** Public client id of the GitHub OAuth app (wrangler.toml var). */
