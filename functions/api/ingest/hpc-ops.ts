@@ -1,24 +1,30 @@
 /**
  * POST /api/ingest/hpc-ops — one `hpc-dashboard/1` snapshot from the Clipper collector (see _shared/hpc-ops.ts).
  *
- * Auth: `X-Ingest-Token`, as POST /api/ingest/hpc. Stores the snapshot as ops/latest.json and appends its `point` to
+ * Auth: `X-Ingest-Token`: the collector's own key (digest in HPC_OPS_TOKEN_SHA256) or the general ingest token as for POST /api/ingest/hpc. Stores the snapshot as ops/latest.json and appends its `point` to
  * ops/series.json in the HPC_DASHBOARD bucket (one writer, once per 30 minutes: two small puts and one get per run).
  */
 import { serverError } from "../../_shared/errors";
-import { checkIngestToken } from "../../_shared/ingest-auth";
+import { checkIngestToken, tokenAccepted } from "../../_shared/ingest-auth";
 import { appendPoint, checkSnapshot, OPS_LATEST, OPS_MAX_BODY_BYTES, OPS_SERIES, type Point } from "../../_shared/hpc-ops";
 
 interface Env {
   HPC_DASHBOARD?: R2Bucket;
   INGEST_TOKEN_SHA256?: string;
+  /** SHA-256 digest(s) of the token(s) only this endpoint accepts (the Clipper collector's own key). */
+  HPC_OPS_TOKEN_SHA256?: string;
 }
 
 const json = (body: unknown, status: number) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
 
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
-  const auth = await checkIngestToken(request, env);
-  if (!auth.ok) return json({ error: auth.error }, 401);
+  // The collector's own key (HPC_OPS_TOKEN_SHA256), or the general ingest token.
+  const own = request.headers.get("X-Ingest-Token") ?? "";
+  if (!(own && (await tokenAccepted({ INGEST_TOKEN_SHA256: env.HPC_OPS_TOKEN_SHA256 }, own)))) {
+    const auth = await checkIngestToken(request, env);
+    if (!auth.ok) return json({ error: auth.error }, 401);
+  }
   const bucket = env.HPC_DASHBOARD;
   if (!bucket) return json({ error: "HPC_DASHBOARD bucket is not bound" }, 503);
 
