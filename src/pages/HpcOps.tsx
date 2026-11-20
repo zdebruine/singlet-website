@@ -25,7 +25,20 @@ interface Snap {
   kinds: Record<string, Kind>;
   queue: { ours: { running: number; pending: number; cores: number; gpus: number; by_kind: Record<string, { r: number; p: number }> }; all: { running: number; pending: number } };
   storage: { used_tb?: number; total_tb?: number; pct?: number };
-  campaign: { present: boolean; age_s?: number | null; headline?: Head };
+  campaign: { present: boolean; age_s?: number | null; headline?: Head; beta?: Beta };
+}
+type N = number | null | undefined;
+interface Beta {
+  samples: Record<string, number>;
+  queue: Record<string, number>;
+  scope: { current_class?: string | null; total?: N; unfinished?: N; classes: Record<string, number> };
+  download: { mbit_s_15m?: N; mbit_s_1h?: N; mbit_s_24h?: N; saturation_mbit_s?: N; target_mbit_s?: N; share?: N; paused_backlog?: boolean | null; paused_disk_floor?: boolean | null; paused_staging_cap?: boolean | null };
+  throughput: { pairs_per_s_1h?: N; pairs_per_s_24h?: N; samples_1h?: N; samples_24h?: N };
+  lanes: Record<string, { running?: N; pending?: N; limit?: N; idle_units?: N }>;
+  disk: { free_gb?: N; floor_gb?: N; cap_gb?: N; inflight_gb?: N; parts_gb: Record<string, number> };
+  uploads: { bytes_public_total?: N; bytes_private_total?: N; objects_total?: N; objects_24h?: N; samples_24h?: N; stored_gb?: N; est_cost_usd_per_day?: N; est_storage_usd_per_month?: N };
+  shipper_backlog?: N;
+  errors?: number;
 }
 type Range = "24h" | "7d" | "all";
 type State =
@@ -158,6 +171,49 @@ function Chart({ title, unit, data, lines, domainMax, empty }: {
   );
 }
 
+const LANE_LABEL: Record<string, string> = { cpu: "CPU nodes", bigmem: "Big-memory", h100: "H100", v100s: "V100S", rtx8000: "RTX 8000" };
+
+function CampaignSection({ b }: { b: Beta }) {
+  const s = b.samples, d = b.download, u = b.uploads, dk = b.disk;
+  const mb = (v: N) => (v == null ? "—" : `${fmt(v / 1000, 2)} Gbps`);
+  const paused = [d.paused_backlog && "backlog", d.paused_disk_floor && "disk floor", d.paused_staging_cap && "staging cap"].filter(Boolean).join(", ");
+  const classes = Object.entries(b.scope.classes);
+  const parts = Object.entries(dk.parts_gb).filter(([, v]) => v > 0);
+  return (
+    <section aria-label="Campaign" className="space-y-3">
+      <h2 className="text-base font-semibold text-foreground">Beta campaign</h2>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+        <Tile label="Shipped" value={fmt(s.shipped)} note={`${fmt(s.awaiting_ship)} awaiting ship, ${fmt(s.done)} done`} />
+        <Tile label="In review" value={fmt(s.review)} note={`${fmt(s.review_auto)} auto, ${fmt(s.held_mux)} held (multiplexed)`} />
+        <Tile label="Excluded" value={fmt(s.excluded)} note={`${fmt(s.failed_final)} failed for good`} tone={(s.failed_final ?? 0) > 0 ? "warn" : undefined} />
+        <Tile label="Bytes shipped" value={bytes((u.bytes_public_total ?? 0) + (u.bytes_private_total ?? 0))} note={`${fmt(u.objects_total)} objects, ${fmt(u.samples_24h)} samples in 24 h; about $${fmt(u.est_cost_usd_per_day, 3)} a day`} />
+        <Tile label="Download, last 15 min" value={mb(d.mbit_s_15m)} note={`1 h ${mb(d.mbit_s_1h)}, 24 h ${mb(d.mbit_s_24h)}; target ${mb(d.target_mbit_s)} of ${mb(d.saturation_mbit_s)} measured`}
+          tone={d.mbit_s_15m != null && d.target_mbit_s && d.mbit_s_15m < 0.5 * d.target_mbit_s ? "warn" : undefined} />
+        <Tile label="Downloads" value={paused ? "Paused" : "Running"} note={paused ? `Paused for: ${paused}` : `${fmt((d.share ?? 0) * 100, 0)}% of the measured link allowed`} tone={paused ? "warn" : undefined} />
+        <Tile label="Clipper disk free" value={dk.free_gb != null ? `${fmt(dk.free_gb / 1000, 1)} TB` : "—"} note={`floor ${fmt((dk.floor_gb ?? 0) / 1000, 1)} TB; in flight ${fmt(dk.inflight_gb, 0)} GB`} tone={dk.free_gb != null && dk.floor_gb != null && dk.free_gb < dk.floor_gb * 1.2 ? "warn" : undefined} />
+        <Tile label="Queue remaining" value={fmt(b.scope.unfinished)} note={`class ${b.scope.current_class ?? "—"}, ${fmt(b.scope.total)} in the corpus; ${fmt(b.queue.running)} batches running, ${fmt(b.queue.pending)} pending`} />
+      </div>
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+        <div className="rounded-lg border border-border">
+          <h3 className="border-b border-border p-3 text-sm font-semibold text-foreground">Active pilots per lane</h3>
+          <table className="w-full text-[13px]">
+            <thead><tr className="text-left text-[11px] uppercase tracking-wide text-muted-foreground"><th className="p-2 font-medium">Lane</th><th className="p-2 text-right font-medium">Running</th><th className="p-2 text-right font-medium">Pending</th><th className="p-2 text-right font-medium">Cap</th><th className="p-2 text-right font-medium">Idle</th></tr></thead>
+            <tbody>{Object.entries(b.lanes).map(([k, v]) => (
+              <tr key={k} className="border-t border-border"><td className="p-2">{LANE_LABEL[k] ?? k}</td><td className="p-2 text-right tabular-nums">{fmt(v.running)}</td><td className="p-2 text-right tabular-nums">{fmt(v.pending)}</td><td className="p-2 text-right tabular-nums">{fmt(v.limit)}</td><td className="p-2 text-right tabular-nums">{fmt(v.idle_units)}</td></tr>
+            ))}</tbody>
+          </table>
+        </div>
+        <div className="rounded-lg border border-border p-3 text-[13px]">
+          <h3 className="text-sm font-semibold text-foreground">Queue per class and staging</h3>
+          <p className="mt-2 text-muted-foreground">{classes.length ? classes.map(([k, v]) => `class ${k}: ${fmt(v)} samples in the window`).join("; ") : "No classes in the window."}</p>
+          <p className="mt-2 text-muted-foreground">{parts.length ? "Staging by part: " + parts.map(([k, v]) => `${k} ${fmt(v, 1)} GB`).join(", ") : "Nothing staged."}</p>
+          <p className="mt-2 text-muted-foreground">Shipping backlog {fmt(b.shipper_backlog)}. Stored in the Beta bucket: {fmt(u.stored_gb, 2)} GB. {b.errors ? `${b.errors} coordinator errors.` : "No coordinator errors."}</p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function Dashboard({ snap, points, now, range }: { snap: Snap; points: Pt[]; now: number; range: Range }) {
   const h: Head = snap.campaign.present ? snap.campaign.headline ?? {} : {};
   const camp = snap.campaign.present;
@@ -197,6 +253,8 @@ function Dashboard({ snap, points, now, range }: { snap: Snap; points: Pt[]; now
           tone={(snap.storage.pct ?? 0) > 95 ? "bad" : (snap.storage.pct ?? 0) > 90 ? "warn" : undefined} />
         <Tile label="Uploads and cost" value={h.uploads != null ? `${fmt(h.uploads)} samples` : "—"} note={h.uploads != null ? `${bytes(h.uploaded_bytes)} to the Beta bucket${h.cf_cost_usd != null ? `; about $${fmt(h.cf_cost_usd, 2)} Cloudflare` : ""}` : waiting} />
       </section>
+
+      {snap.campaign.beta && <CampaignSection b={snap.campaign.beta} />}
 
       <section aria-label="Nodes">
         <h2 className="mb-2 text-base font-semibold text-foreground">Nodes</h2>
@@ -251,8 +309,8 @@ function Dashboard({ snap, points, now, range }: { snap: Snap; points: Pt[]; now
           <Chart title="Utilization by node kind" unit="% in use" data={data} domainMax={100}
             lines={kinds.map((k) => ({ key: "u_" + k, name: KIND_LABEL[k] ?? k }))} empty="No utilization history yet." />
           <Chart title="Queue" unit="jobs" data={data} lines={[{ key: "q_run", name: "Our running" }, { key: "q_pend", name: "Our pending" }, { key: "q_all_pend", name: "All pending" }]} empty="No queue history yet." />
-          <Chart title="Samples per hour" unit="samples" data={data} lines={[{ key: "samples_per_hour", name: "Per hour" }]} empty={`No sample counts yet. ${waiting}`} />
-          <Chart title="Disk" unit="% / GB" data={data} lines={[{ key: "disk_pct", name: "Project space %" }, { key: "staging_used_gb", name: "Staging GB" }]} empty="No disk history yet." />
+          <Chart title="Samples shipped and excluded" unit="samples" data={data} lines={[{ key: "shipped", name: "Shipped" }, { key: "excluded", name: "Excluded" }, { key: "review", name: "In review" }]} empty={`No sample counts yet. ${waiting}`} />
+          <Chart title="Disk" unit="% / GB" data={data} lines={[{ key: "disk_pct", name: "Project space %" }, { key: "staging_used_gb", name: "Staging GB" }, { key: "disk_free_gb", name: "Free GB" }]} empty="No disk history yet." />
         </div>
       </section>
     </div>
