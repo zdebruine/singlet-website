@@ -9,6 +9,7 @@
  */
 import type { AppEnv } from "../../_shared/env";
 import { configuredProviders } from "../../_shared/oauth";
+import { isAnalyticsAdmin } from "../admin/analytics";
 import { lookupSession, readSessionToken, sessionCookie } from "../../_shared/session";
 
 const HEADERS = { "Content-Type": "application/json", "Cache-Control": "no-store" };
@@ -16,7 +17,7 @@ const HEADERS = { "Content-Type": "application/json", "Cache-Control": "no-store
 export const onRequestGet: PagesFunction<AppEnv> = async ({ request, env, waitUntil }) => {
   const u = await lookupSession(env.DB, request, waitUntil);
   const body = {
-    user: u ? { id: u.userId, email: u.email, display_name: u.displayName, avatar_url: u.avatarUrl } : null,
+    user: u ? { id: u.userId, email: u.email, display_name: u.displayName, avatar_url: u.avatarUrl, is_admin: isAnalyticsAdmin(u.userId, env.ANALYTICS_ADMINS) } : null,
     providers: configuredProviders(env),
   };
   const headers = new Headers(HEADERS);

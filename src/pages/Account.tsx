@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Check, Copy, KeyRound, Loader2, Trash2 } from "lucide-react";
+import { Activity, Check, Copy, KeyRound, Loader2, Trash2 } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { CodeBlock } from "@/components/CodeBlock";
@@ -281,6 +281,19 @@ const Account = () => {
                 </p>
               )}
             </section>
+
+            {user.isAdmin && (
+              <section className="surface p-5" aria-labelledby="admin-h">
+                <h2 id="admin-h" className="text-[15px] font-semibold text-foreground inline-flex items-center gap-2">
+                  <Activity size={16} className="text-primary" aria-hidden="true" />
+                  Admin
+                </h2>
+                <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
+                  <Link to="/HPC-dashboard" className="text-primary hover:underline">HPC dashboard</Link>: Clipper node use and the Beta campaign, updated every 30 minutes.{" "}
+                  <Link to="/admin/analytics" className="text-primary hover:underline">Site analytics</Link>
+                </p>
+              </section>
+            )}
 
             {/* ── Claude connector and other OAuth-connected MCP clients ── */}
             <ConnectedApps userId={user.id} onUnauthorized={refresh} />

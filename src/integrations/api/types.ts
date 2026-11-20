@@ -732,7 +732,7 @@ export interface RelatedResponse {
 
 /** GET /api/auth/me */
 export interface AuthMe {
-  user: { id: string; email: string | null; displayName: string | null; avatarUrl: string | null } | null;
+  user: { id: string; email: string | null; displayName: string | null; avatarUrl: string | null; isAdmin: boolean } | null;
   /** Which sign-in providers are configured on this deployment. */
   providers: { github: boolean; google: boolean };
 }

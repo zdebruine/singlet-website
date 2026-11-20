@@ -74,10 +74,11 @@ describe("launch copy", { timeout: 20_000 }, () => {
     expect(read("functions/mcp.ts")).toMatch(/return \{\s*quota: \{/);
   });
 
-  it("keeps the HPC dashboard out of the public app", () => {
+  it("keeps the public HPC page out of the app; /HPC-dashboard is the owner-only page behind an admin check", () => {
     const app = read("src/App.tsx");
     expect(app).not.toMatch(/import HpcDashboard/);
-    expect(app).toMatch(/path="\/hpc-dashboard" element=\{<Navigate to="\/" replace \/>\}/);
+    expect(app).toMatch(/path="\/hpc-dashboard" element=\{<HpcOps \/>\}/);
+    expect(read("functions/api/admin/hpc.ts")).toMatch(/isAnalyticsAdmin\(/);
   });
 
   it("ships a static llms.txt", () => {
