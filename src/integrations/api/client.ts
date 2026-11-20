@@ -935,7 +935,7 @@ export const apiClient = {
       const p = rec(r.providers);
       return {
         user: u && typeof u.id === "string"
-          ? { id: u.id, email: strOrNull(u.email), displayName: strOrNull(u.display_name), avatarUrl: strOrNull(u.avatar_url) }
+          ? { id: u.id, email: strOrNull(u.email), displayName: strOrNull(u.display_name), avatarUrl: strOrNull(u.avatar_url), isAdmin: u.is_admin === true }
           : null,
         providers: { github: p.github === true, google: p.google === true },
       };
