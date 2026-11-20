@@ -40,9 +40,9 @@ const RANGES: { id: Range; label: string }[] = [
 ];
 const STALE_MIN = 75;
 const KIND_LABEL: Record<string, string> = {
-  cpu: "CPU nodes", bigmem: "Big-memory", gpu_h100: "H100 GPUs", gpu_v100s: "V100S GPUs", gpu_rtx8000: "RTX 8000 GPUs",
+  cpu: "CPU nodes", bigmem: "Big-memory", gpu_h100: "H100 GPUs", gpu_v100s: "V100S GPUs", gpu_rtx8000: "RTX 8000 GPUs", other: "Other (login, service)",
 };
-const KIND_ORDER = ["cpu", "bigmem", "gpu_h100", "gpu_v100s", "gpu_rtx8000"];
+const KIND_ORDER = ["cpu", "bigmem", "gpu_h100", "gpu_v100s", "gpu_rtx8000", "other"];
 // Series colors come from the site tokens, so they follow light and dark; a dash pattern repeats the distinction without color.
 const SERIES = [
   { color: "var(--primary)", dash: undefined },
@@ -171,7 +171,7 @@ function Dashboard({ snap, points, now, range }: { snap: Snap; points: Pt[]; now
   const sph = h.samples_per_hour;
   const etaMs = h.eta_iso ? Date.parse(h.eta_iso) : sph && h.samples_queued != null ? now + (h.samples_queued / sph) * 3600000 : null;
   const etaText = etaMs && Number.isFinite(etaMs) ? new Date(etaMs).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric" }) : "—";
-  const cores = Object.entries(snap.kinds).filter(([k]) => !k.startsWith("gpu")).reduce((a, [, t]) => [a[0] + t.ca, a[1] + t.ct], [0, 0]);
+  const cores = Object.entries(snap.kinds).filter(([k]) => !k.startsWith("gpu") && k !== "other").reduce((a, [, t]) => [a[0] + t.ca, a[1] + t.ct], [0, 0]);
   const gpus = Object.entries(snap.kinds).filter(([k]) => k.startsWith("gpu")).reduce((a, [, t]) => [a[0] + t.ga, a[1] + t.gt], [0, 0]);
   const waiting = "Waiting for the campaign runner's telemetry.";
   const q = snap.queue.ours;
