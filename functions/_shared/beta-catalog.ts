@@ -67,7 +67,12 @@ interface PendingStudy {
 const s = (v: unknown): string | null => (typeof v === "string" && v.trim() ? v : null);
 
 async function getJson(url: string, timeoutMs = 15000): Promise<unknown | null> {
-  const r = await fetch(url, { headers: { "User-Agent": UA, Accept: "application/json" }, signal: AbortSignal.timeout(timeoutMs) });
+  let r = await fetch(url, { headers: { "User-Agent": UA, Accept: "application/json" }, signal: AbortSignal.timeout(timeoutMs) });
+  // NCBI allows three requests a second per address, and Workers share addresses: back off twice on 429.
+  for (let i = 1; r.status === 429 && i <= 2; i++) {
+    await new Promise((res) => setTimeout(res, 1200 * i));
+    r = await fetch(url, { headers: { "User-Agent": UA, Accept: "application/json" }, signal: AbortSignal.timeout(timeoutMs) });
+  }
   if (r.status === 404) return null;
   if (!r.ok) throw new Error(`${new URL(url).host} answered ${r.status}`);
   return r.json();
