@@ -117,6 +117,16 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   const auth = await checkIngestToken(request, env);
   if (!auth.ok) return json({ error: auth.error }, 401);
+  // ?gse=GSE…: the stored manifest itself, read from R2 (no edge cache), so a shipper publishing one more group of a study can merge
+  // it with the samples already published (hpc/clipper/campaign/ship.py, singlet-agents). 404 when the study has no manifest yet.
+  const gse = (new URL(request.url).searchParams.get("gse") ?? "").trim().toUpperCase();
+  if (gse) {
+    if (!/^GSE\d+$/.test(gse)) return json({ error: "gse must look like GSE123" }, 400);
+    if (!env.SINGLET_DATA) return json({ error: "SINGLET_DATA binding missing" }, 503);
+    const obj = await env.SINGLET_DATA.get(manifestKey(gse));
+    if (!obj) return json({ error: "no manifest", gse }, 404);
+    return new Response(obj.body, { headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
+  }
   const n = Math.min(Math.max(Number(new URL(request.url).searchParams.get("n")) || 10, 1), 100);
   try {
     const rs = await env.DB.prepare(

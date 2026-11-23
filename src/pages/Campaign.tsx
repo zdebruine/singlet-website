@@ -145,7 +145,7 @@ const Campaign = () => {
             <>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <Tile label="Processed" value={nf(c.samples.processed)} hint="samples finished by the engine" />
-                <Tile label="Published" value={nf(c.samples.published)} hint={`in ${nf(c.studies.published)} studies`} />
+                <Tile label="Uploaded to Beta" value={nf(c.samples.published)} hint={`in ${nf(c.studies.published)} studies`} />
                 <Tile label="Held privately" value={nf(c.samples.held)} hint="kept off the public site" />
                 <Tile label="Excluded" value={nf(c.samples.excluded)} hint="set aside with a recorded reason" />
               </div>

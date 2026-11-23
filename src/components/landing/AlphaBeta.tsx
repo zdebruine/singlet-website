@@ -138,7 +138,15 @@ export function ZoomStrip() {
         </li>
       ))}
       <li className="pt-1 text-center text-[12.5px] text-muted-foreground">
-        Sizes from <A to="/study/GSE138867">GSE138867</A>, 8 samples, 47K cells.
+        {IS_BETA ? (
+          <>
+            Sizes from Alpha's <a className="underline underline-offset-2" href="https://singlet.bio/study/GSE138867">GSE138867</a>, 8 samples, 47K cells.
+          </>
+        ) : (
+          <>
+            Sizes from <A to="/study/GSE138867">GSE138867</A>, 8 samples, 47K cells.
+          </>
+        )}
       </li>
     </ol>
   );
