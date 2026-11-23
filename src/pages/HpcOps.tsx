@@ -16,7 +16,7 @@ interface Kind { nodes: number; up: number; ca: number; ct: number; ma: number; 
 interface Head {
   pairs_per_s?: number; download_gbps?: number; download_target_gbps?: number; samples_done?: number; samples_queued?: number;
   samples_running?: number; samples_failed?: number; samples_total?: number; samples_per_hour?: number; bottleneck?: string; phase?: string;
-  eta_iso?: string; uploads?: number; uploaded_bytes?: number; cf_cost_usd?: number; staging_used_gb?: number; staging_total_gb?: number;
+  eta_iso?: string; health?: string; health_reason?: string; uploads?: number; uploaded_bytes?: number; cf_cost_usd?: number; staging_used_gb?: number; staging_total_gb?: number;
 }
 interface Snap {
   generated_at: string;
@@ -214,6 +214,57 @@ function CampaignSection({ b }: { b: Beta }) {
   );
 }
 
+const HEALTH_COLOR: Record<string, string> = { green: "var(--primary)", amber: "var(--chart-warning)", red: "var(--chart-danger)" };
+
+/** Campaign health at the top: green is a quiet line, amber and red are banners with the reason. */
+function HealthBanner({ head, points, camp }: { head: Head; points: Pt[]; camp: boolean }) {
+  if (!camp) return null;
+  const h = head.health;
+  if (h !== "green" && h !== "amber" && h !== "red") return null;
+  if (h === "green") {
+    return (
+      <div className="flex items-center gap-2 rounded-lg border border-border p-3 text-[13px] text-foreground" role="status">
+        <span className="h-2.5 w-2.5 rounded-full" style={{ background: HEALTH_COLOR.green }} aria-hidden />
+        <span className="font-medium">Campaign healthy</span>
+      </div>
+    );
+  }
+  const lastGood = [...points].reverse().find((p) => p.health === "green");
+  const bad = h === "red";
+  return (
+    <div className="rounded-lg border-2 p-4" style={{ borderColor: HEALTH_COLOR[h], background: bad ? "var(--red-soft)" : "var(--warning-tint)" }} role="alert">
+      <div className="flex items-center gap-2 text-base font-semibold" style={{ color: bad ? "var(--destructive)" : "var(--warning)" }}>
+        <span className="h-3 w-3 rounded-full" style={{ background: HEALTH_COLOR[h] }} aria-hidden />
+        {bad ? "Campaign stalled or failing" : "Campaign needs attention"}
+      </div>
+      <p className="mt-1 text-[14px] text-foreground">{head.health_reason || "No reason was reported."}</p>
+      {bad && (
+        <p className="mt-1 text-[13px] text-muted-foreground">
+          {lastGood ? `Last good cycle: ${new Date(lastGood.t).toLocaleString()}.` : "No healthy cycle in the time range shown; try All."}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** One tick per snapshot, coloured by campaign health, so a stall shows as a red run under the charts. */
+function HealthStrip({ points }: { points: Pt[] }) {
+  const pts = points.filter((p) => typeof p.health === "string");
+  if (pts.length < 2) return null;
+  const t0 = Date.parse(pts[0].t), t1 = Date.parse(pts[pts.length - 1].t), span = Math.max(1, t1 - t0);
+  return (
+    <section className="rounded-lg border border-border p-3">
+      <h3 className="text-sm font-semibold text-foreground">Campaign health</h3>
+      <svg viewBox="0 0 1000 24" preserveAspectRatio="none" className="mt-2 h-6 w-full" role="img" aria-label="Campaign health over the time range">
+        {pts.map((p) => (
+          <rect key={p.t} x={(1000 * (Date.parse(p.t) - t0)) / span - 3} y={0} width={6} height={24} fill={HEALTH_COLOR[p.health as string] ?? "var(--chart-muted)"} />
+        ))}
+      </svg>
+      <div className="mt-1 flex justify-between text-[11px] text-muted-foreground"><span>{new Date(t0).toLocaleString()}</span><span>green ok, amber attention, red stalled</span><span>{new Date(t1).toLocaleString()}</span></div>
+    </section>
+  );
+}
+
 function Dashboard({ snap, points, now, range }: { snap: Snap; points: Pt[]; now: number; range: Range }) {
   const h: Head = snap.campaign.present ? snap.campaign.headline ?? {} : {};
   const camp = snap.campaign.present;
@@ -235,6 +286,7 @@ function Dashboard({ snap, points, now, range }: { snap: Snap; points: Pt[]; now
 
   return (
     <div className="space-y-6">
+      <HealthBanner head={h} points={points} camp={camp} />
       <div className={cn("rounded-lg border p-3 text-[13px]", stale ? "border-[var(--warning-border)] bg-[var(--warning-tint)] text-[var(--warning)]" : "border-border text-muted-foreground")} role={stale ? "alert" : undefined}>
         {stale ? `Stale data: the last snapshot is ${ago(ageMs)}, over ${STALE_MIN} minutes old. The collector job may be stopped. ` : ""}
         Snapshot {new Date(snap.generated_at).toLocaleString()} ({ago(ageMs)}); refreshed every 30 minutes.
@@ -303,6 +355,7 @@ function Dashboard({ snap, points, now, range }: { snap: Snap; points: Pt[]; now
 
       <section aria-label="History" className="space-y-3">
         <h2 className="text-base font-semibold text-foreground">History ({range === "24h" ? "last 24 hours" : range === "7d" ? "last 7 days" : "everything kept"})</h2>
+        <HealthStrip points={points} />
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
           <Chart title="Download bandwidth against target" unit="Gbps" data={data} lines={[{ key: "download_gbps", name: "Measured" }, { key: "download_target_gbps", name: "Target" }]} empty={`No bandwidth data yet. ${waiting}`} />
           <Chart title="Pairs processed per second" unit="pairs/s" data={data} lines={[{ key: "pairs_per_s", name: "Pairs/s" }]} empty={`No throughput data yet. ${waiting}`} />
