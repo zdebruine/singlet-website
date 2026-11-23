@@ -1,0 +1,13 @@
+# Keeps beta.singlet.bio's catalog in step with the campaign: every 10 minutes it fills catalog rows for newly published studies and
+# runs the refresh/index cranks (index.js). Secret: INGEST_TOKEN (the Beta ingest token; `npx wrangler secret put INGEST_TOKEN`).
+name = "singlet-beta-catalog-cron"
+main = "index.js"
+account_id = "2f8a8cc95b6bc0be84ac611fe2e5c3c2"
+compatibility_date = "2024-09-23"
+workers_dev = false
+
+[triggers]
+crons = ["*/10 * * * *"]
+
+[vars]
+BASE = "https://beta.singlet.bio"
