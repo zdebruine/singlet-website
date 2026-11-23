@@ -31,6 +31,7 @@ import AuthCallback from "./pages/AuthCallback.tsx";
 import Account from "./pages/Account.tsx";
 import Brand from "./pages/Brand.tsx";
 import AdminAnalytics from "./pages/AdminAnalytics.tsx";
+import HpcOps from "./pages/HpcOps.tsx";
 import ProductHub from "./pages/ProductHub.tsx";
 import ProjectDetail from "./pages/ProjectDetail.tsx";
 import PrivateStudyDetail from "./pages/PrivateStudyDetail.tsx";
@@ -138,8 +139,8 @@ const App = () => (
               <Route path="/terms" element={<Terms />} />
               <Route path="/privacy" element={<Privacy />} />
               <Route path="/specs/splice-patterns" element={<SplicePatternSpec />} />
-              {/* Internal campaign snapshot: not part of the public site (the /api/hpc endpoints are unchanged). */}
-              <Route path="/hpc-dashboard" element={<Navigate to="/" replace />} />
+              {/* Owner-only HPC dashboard (the API checks for an admin). Route matching ignores case, so /HPC-dashboard works. */}
+              <Route path="/hpc-dashboard" element={<HpcOps />} />
 
               {/* Retired routes → their new home */}
               <Route path="/download" element={<Navigate to="/docs#install" replace />} />

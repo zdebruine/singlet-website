@@ -34,6 +34,7 @@ export function isDataPath(pathname: string): boolean {
   return (
     pathname.startsWith("/api/") ||
     pathname === "/mcp" ||
+    pathname.startsWith("/mcp/") ||
     pathname.startsWith("/auth/") ||
     pathname.startsWith("/oauth/") ||
     pathname.startsWith("/.well-known/") ||

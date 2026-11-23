@@ -59,6 +59,10 @@ export interface AppEnv {
   AI_PRICE_OUT_USD_PER_M?: string;
   /** MCP calls per minute per API key (default 60). */
   MCP_RATE_PER_MIN?: string;
+  /** /mcp/public: calls an hour per salted network-address hash (default 60). */
+  MCP_PUBLIC_RATE_PER_HOUR?: string;
+  /** /mcp/public: calls a day for all addresses together (default 5000). */
+  MCP_PUBLIC_DAILY_CAP?: string;
   /** "1" shortens MCP result texts and makes `verbose` meaningful (the response diet, off by default; see _shared/mcp-core.ts). */
   MCP_DIET?: string;
   /** "1" lists find_cells, slice_cells and resolve_features in tools/list before any study is served from s1. */
@@ -69,6 +73,11 @@ export interface AppEnv {
   S1_ORIGIN?: string;
   /** DUAL: old name of S1_ORIGIN. */
   V2_ORIGIN?: string;
+  /**
+   * The data Worker's CIDX_INTERNAL_SECRET (Pages secret, optional). With it, cell exports opened through the site are counted against
+   * the downloader (their address, or their account for an MCP call) instead of against the site's own address.
+   */
+  CIDX_INTERNAL_SECRET?: string;
 
   /** Secret salt for hashing anonymous visitors' addresses (default: a public constant). */
   ANON_IP_SALT?: string;

@@ -14,7 +14,9 @@ import { FORMAT_NOTE, FormatSizeChart, H5AD_PAIRED, HBars } from "@/components/l
 import { QcFunnel, sampleFunnel } from "@/components/landing/QcFunnel";
 import { QueryParse } from "@/components/landing/QueryParse";
 import { MODALITIES } from "@/components/landing/Modalities";
-import { EXAMPLE_GSE } from "@/lib/install-snippets";
+import { EXAMPLE_GSE, GITHUB_ISSUES } from "@/lib/install-snippets";
+
+const CHANGELOG_URL = "https://github.com/zdebruine/singlet-website/blob/main/CHANGELOG.md";
 
 // About singlet: the journey of a sample, one station per claim, each with a visual, a "read more" and a docs link.
 
@@ -103,6 +105,7 @@ const About = () => {
             <p className="mt-6 mx-auto max-w-[620px] text-[18px] md:text-[20px] text-muted-foreground">
               Eight steps take a GEO sample to an AI-ready file you can load in one line.
             </p>
+            <p className="mt-4 text-[14px] text-muted-foreground">singlet.bio is developed at Grand Valley State University.</p>
             <a href="#sources" className="mt-10 inline-flex flex-col items-center gap-1 text-[13px] text-muted-foreground hover:text-foreground">
               Follow a sample
               <ChevronDown size={20} className="motion-safe:animate-bounce" aria-hidden="true" />
@@ -184,7 +187,12 @@ const About = () => {
                   ))}
                 </ul>
               }
-              detail={<p>Alpha is transcriptomics only. No genotypes, mtDNA alleles, ambient-RNA or doublet calls.</p>}
+              detail={
+                <>
+                  <p>Alpha is transcriptomics only. No genotypes, mtDNA alleles, ambient-RNA or doublet calls.</p>
+                  <p>Genotypes and mitochondrial variants are never released.</p>
+                </>
+              }
               link={{ to: "/docs#modalities", label: "Layers in the docs" }}
             />
 
@@ -239,6 +247,28 @@ const About = () => {
           </Railway>
 
           <div className="mt-10 pl-14 md:pl-24">
+            <section id="governance" aria-labelledby="governance-title" className="border-t border-border py-6 scroll-mt-20 max-w-[760px]">
+              <h2 id="governance-title" className="text-[17px] font-semibold">Governance</h2>
+              <ul className="mt-3 list-disc pl-5 space-y-1.5 text-[14.5px] leading-relaxed">
+                <li>Grand Valley State University (GVSU) holds custody of singlet.bio and its data.</li>
+                <li>
+                  Data <a href="https://creativecommons.org/publicdomain/zero/1.0/" target="_blank" rel="noopener noreferrer" className="text-primary underline underline-offset-2">CC0</a>,
+                  code MIT (<Link to="/data-license" className="text-primary underline underline-offset-2">license details</Link>).
+                </li>
+                <li>
+                  Takedowns and corrections: send feedback from any page or open a{" "}
+                  <a href={GITHUB_ISSUES} target="_blank" rel="noopener noreferrer" className="text-primary underline underline-offset-2">GitHub Issue</a>; we act
+                  within 30 days.
+                </li>
+                <li>
+                  Every change to what the site publishes is in the public{" "}
+                  <a href={CHANGELOG_URL} target="_blank" rel="noopener noreferrer" className="text-primary underline underline-offset-2">changelog</a>; open
+                  problems are on <Link to="/known-issues" className="text-primary underline underline-offset-2">Known issues</Link>.
+                </li>
+                <li>An advisory board with external members is being formed to guide the release policy.</li>
+                <li>Genotypes and mitochondrial variants are never released.</li>
+              </ul>
+            </section>
             <Fold id="cite" title="License and citation">
               <p>
                 Data <a href="https://creativecommons.org/publicdomain/zero/1.0/" target="_blank" rel="noopener noreferrer">CC0</a>, code MIT.{" "}

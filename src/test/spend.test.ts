@@ -10,6 +10,7 @@ import {
   estimateMicros,
   monthOf,
   priceFor,
+  pruneToolCalls,
   recordToolCall,
   releaseSpend,
   reserveSpend,
@@ -245,5 +246,30 @@ describe("usage across provider retries", () => {
     expect(snap.tokens_in).toBeGreaterThanOrEqual(100);
     expect(snap.tokens_in % 100).toBe(0);
     vi.unstubAllGlobals();
+  });
+});
+
+describe("retention of MCP counters and rate windows", () => {
+  it("drops anonymous counts after about 90 days and account counts after 24 months", async () => {
+    const db = createTestD1(SCHEMA);
+    for (const [subject, month] of [["anon:x", "2026-07"], ["anon:x", "2026-08"], ["user:a", "2024-09"], ["user:a", "2024-10"], ["user:a", "2026-07"]]) {
+      await db.prepare(`INSERT INTO mcp_usage (subject, month, tool, calls, last_at) VALUES (?1, ?2, 'get_study', 1, '')`).bind(subject, month).run();
+    }
+    await pruneToolCalls(db, NOW); // 15 Oct 2026
+    const rows = await db.prepare(`SELECT subject, month FROM mcp_usage ORDER BY subject, month`).all<{ subject: string; month: string }>();
+    expect(rows.results.map((r) => `${r.subject} ${r.month}`)).toEqual(["anon:x 2026-08", "user:a 2024-10", "user:a 2026-07"]);
+  });
+
+  it("cleans up old windows of the same bucket only, so a minute bucket never empties an hour bucket", async () => {
+    const db = createTestD1(SCHEMA);
+    expect(await withinRate(db, "anon:x", "mcp_public", 2, 3_600_000, NOW)).toBe(true);
+    const random = vi.spyOn(Math, "random").mockReturnValue(0);
+    try {
+      expect(await withinRate(db, "user:a", "mcp", 5, 60_000, NOW)).toBe(true);
+    } finally {
+      random.mockRestore();
+    }
+    expect(await withinRate(db, "anon:x", "mcp_public", 2, 3_600_000, NOW)).toBe(true);
+    expect(await withinRate(db, "anon:x", "mcp_public", 2, 3_600_000, NOW)).toBe(false);
   });
 });

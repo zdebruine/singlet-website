@@ -148,14 +148,52 @@ export function reportQueries(days: RangeDays, host: string): Record<string, str
 
 export type QueryRows = Record<string, string | number>[];
 
-/** One SQL API call. Needs an API token with Account Analytics: Read. */
-export async function runAnalyticsQuery(accountId: string, token: string, sql: string, fetcher: typeof fetch = fetch): Promise<QueryRows> {
-  const res = await fetcher(`https://api.cloudflare.com/client/v4/accounts/${accountId}/analytics_engine/sql`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${token}` },
-    body: `${sql} FORMAT JSON`,
-  });
-  if (!res.ok) throw new Error(`analytics query failed (${res.status}): ${(await res.text()).slice(0, 300)}`);
-  const out = (await res.json()) as { data?: QueryRows };
-  return out.data ?? [];
+/** The SQL API rate-limits bursts (429), so a report's queries run a few at a time and each retries a 429 after a pause. */
+export const QUERY_CONCURRENCY = 3;
+const RETRY_PAUSE_MS = 700;
+
+/** One SQL API call. Needs an API token with Account Analytics: Read. Retries a 429 up to `retries` times. */
+export async function runAnalyticsQuery(
+  accountId: string,
+  token: string,
+  sql: string,
+  fetcher: typeof fetch = fetch,
+  retries = 4,
+  pauseMs = RETRY_PAUSE_MS,
+): Promise<QueryRows> {
+  for (let attempt = 0; ; attempt++) {
+    const res = await fetcher(`https://api.cloudflare.com/client/v4/accounts/${accountId}/analytics_engine/sql`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: `${sql} FORMAT JSON`,
+    });
+    if (res.status === 429 && attempt < retries) {
+      await new Promise((resolve) => setTimeout(resolve, pauseMs * (attempt + 1)));
+      continue;
+    }
+    if (!res.ok) throw new Error(`analytics query failed (${res.status}): ${(await res.text()).slice(0, 300)}`);
+    const out = (await res.json()) as { data?: QueryRows };
+    return out.data ?? [];
+  }
+}
+
+/** Every named query, at most `concurrency` in flight at once. Rejects with the first failure. */
+export async function runAnalyticsQueries(
+  accountId: string,
+  token: string,
+  queries: Record<string, string>,
+  fetcher: typeof fetch = fetch,
+  concurrency = QUERY_CONCURRENCY,
+  pauseMs = RETRY_PAUSE_MS,
+): Promise<Record<string, QueryRows>> {
+  const pending = Object.entries(queries);
+  const results: Record<string, QueryRows> = {};
+  const worker = async () => {
+    for (let next = pending.shift(); next; next = pending.shift()) {
+      const [name, sql] = next;
+      results[name] = await runAnalyticsQuery(accountId, token, sql, fetcher, 4, pauseMs);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(concurrency, pending.length) }, worker));
+  return Object.fromEntries(Object.keys(queries).map((name) => [name, results[name]]));
 }

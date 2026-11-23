@@ -12,7 +12,7 @@ import { usePageMeta } from "@/hooks/usePageMeta";
 const Beta = () => {
   usePageMeta({
     title: "What's coming in Beta",
-    description: "Singlet Research Beta, estimated Q1 2027: a full re-run with every read, every molecule counted once, modern cell calling, benchmarked multimodal layers and per-request slicing. Join the Beta list.",
+    description: "Singlet Research Beta begins in Q1 2027; the full re-run continues through 2027: every sample re-run with every read, every molecule counted once, modern cell calling, benchmarked multimodal layers and per-request slicing. Join the Beta list.",
     path: "/beta",
   });
   return (
@@ -20,7 +20,7 @@ const Beta = () => {
       <Navbar />
       <main className="flex-1 container-site py-12 md:py-16">
         <div className="max-w-3xl">
-          <p className="text-[12.5px] font-medium uppercase tracking-wider text-primary">Estimated Q1 2027</p>
+          <p className="text-[12.5px] font-medium uppercase tracking-wider text-primary">Beta begins in Q1 2027; the full re-run continues through 2027</p>
           <h1 className="mt-1 font-display text-3xl md:text-4xl font-bold tracking-tightest text-foreground">What's coming in Beta</h1>
           <p className="mt-3 text-[15px] text-muted-foreground">
             A full re-run of every sample with a new, benchmarked engine, in the same per-sample format as Alpha, at{" "}

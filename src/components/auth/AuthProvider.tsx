@@ -22,6 +22,8 @@ export interface AuthUser {
   email: string | null;
   displayName: string | null;
   avatarUrl: string | null;
+  /** A site admin (ANALYTICS_ADMINS): sees links to the admin pages. */
+  isAdmin: boolean;
 }
 
 export interface SignInResult {
@@ -118,7 +120,7 @@ export function noteQuotaSubject(id: string | null, fallback?: string | null): b
 function sameUser(a: AuthUser | null, b: AuthUser | null): boolean {
   if (a === b) return true;
   if (!a || !b) return false;
-  return a.id === b.id && a.email === b.email && a.displayName === b.displayName && a.avatarUrl === b.avatarUrl;
+  return a.id === b.id && a.email === b.email && a.displayName === b.displayName && a.avatarUrl === b.avatarUrl && a.isAdmin === b.isAdmin;
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {

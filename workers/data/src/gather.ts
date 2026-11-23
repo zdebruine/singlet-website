@@ -235,7 +235,7 @@ export interface GatherCtx {
 
 const GSM_RE = /^GSM(\d{1,9})$/;
 
-async function resolveCells(ctx: GatherCtx, d: Directory, body: GatherBody, stats: ReadStats): Promise<Map<number, number[]>> {
+export async function resolveCells(ctx: Pick<GatherCtx, "deps" | "limits">, d: Directory, body: GatherBody, stats: ReadStats): Promise<Map<number, number[]>> {
   const want = new Map<number, number[]>();
   if (body.query) {
     const L = ctx.limits;

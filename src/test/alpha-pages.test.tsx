@@ -118,7 +118,7 @@ describe("/known-issues", () => {
   it("covers each issue with what Beta changes, and states inclusion criteria only", () => {
     const { container } = renderPage(<KnownIssues />);
     const text = container.textContent ?? "";
-    for (const s of [/first sequencing run/, /30 million reads/, /65%/, /2% to 19%/, /RNA velocity/, /CellRanger2\.2/, /at least 100 reads/, /not clonotypes/, /spots without coordinates/, /the file is the\s+truth/, /transit amplifying cell/, /not the expression values/]) {
+    for (const s of [/first sequencing run/, /30 million reads/, /65%/, /2% to 19%/, /RNA velocity/, /CellRanger2\.2/, /at least 100 reads/, /not clonotypes/, /spots without coordinates/, /the file is the\s+truth/, /transit amplifying cell/, /one page of cells per link/]) {
       expect(text).toMatch(s);
     }
     expect(screen.getAllByText("What Beta changes").length).toBeGreaterThanOrEqual(8);
@@ -132,7 +132,7 @@ describe("/beta", () => {
   it("shows the estimate, every Alpha-to-Beta row, the sign-up form and its privacy line", () => {
     renderPage(<Beta />);
     for (const r of ALPHA_TO_BETA) expect(screen.getByText(r.beta)).toBeTruthy();
-    expect(screen.getByText("Estimated Q1 2027")).toBeTruthy();
+    expect(screen.getByText("Beta begins in Q1 2027; the full re-run continues through 2027")).toBeTruthy();
     expect(screen.getByRole("form", { name: "Join the Beta" })).toBeTruthy();
     expect(screen.getByText(/never share\s+or sell it/)).toBeTruthy();
     expect(screen.getByRole("link", { name: "Privacy" }).getAttribute("href")).toBe("/privacy#beta");

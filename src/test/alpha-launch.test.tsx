@@ -30,7 +30,7 @@ describe("Research Alpha label", { timeout: 20_000 }, () => {
     const { unmount } = render(<MemoryRouter><AlphaBanner /></MemoryRouter>);
     expect(screen.getByRole("button", { name: "send feedback" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Dismiss/ }));
-    expect(screen.queryByText(/help us shape Beta/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Beta begins in Q1 2027/)).not.toBeInTheDocument();
     unmount();
     render(<MemoryRouter><AlphaBanner /></MemoryRouter>);
     expect(screen.queryByText(/help us shape Beta/)).not.toBeInTheDocument();
@@ -44,7 +44,7 @@ describe("Research Alpha label", { timeout: 20_000 }, () => {
       throw new Error("blocked");
     });
     render(<MemoryRouter><AlphaBanner /></MemoryRouter>);
-    expect(screen.getByText(/help us shape Beta \(Q1 2027\)/)).toBeInTheDocument();
+    expect(screen.getByText(/Beta begins in Q1 2027; the full re-run continues through 2027/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Dismiss/ }));
     expect(screen.queryByText(/help us shape Beta/)).not.toBeInTheDocument();
   });
@@ -74,10 +74,11 @@ describe("launch copy", { timeout: 20_000 }, () => {
     expect(read("functions/mcp.ts")).toMatch(/return \{\s*quota: \{/);
   });
 
-  it("keeps the HPC dashboard out of the public app", () => {
+  it("keeps the public HPC page out of the app; /HPC-dashboard is the owner-only page behind an admin check", () => {
     const app = read("src/App.tsx");
     expect(app).not.toMatch(/import HpcDashboard/);
-    expect(app).toMatch(/path="\/hpc-dashboard" element=\{<Navigate to="\/" replace \/>\}/);
+    expect(app).toMatch(/path="\/hpc-dashboard" element=\{<HpcOps \/>\}/);
+    expect(read("functions/api/admin/hpc.ts")).toMatch(/isAnalyticsAdmin\(/);
   });
 
   it("ships a static llms.txt", () => {

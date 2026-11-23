@@ -96,7 +96,12 @@ const Index = () => {
               <Logo variant="lockup" theme="auto" height={52} link={false} />
               <AlphaTag className="mt-0.5" />
             </span>
-            <div className="mt-10 w-full max-w-[680px]">
+            {/* What the resource is, in one line; the count is the live number of downloadable studies. */}
+            <p className="mt-5 max-w-[620px] text-[15px] text-muted-foreground tabular">
+              {stats ? `${fmtInt(stats.studies_with_files)} public` : "Public"} GEO single-cell studies, re-processed from raw reads with one
+              pipeline. CC0, free to download.
+            </p>
+            <div className="mt-8 w-full max-w-[680px]">
               <SearchBox variant="hero" placeholder={`Try "${EXAMPLE_QUERIES[0]}"`} />
               <p className="mt-3 text-[13px] text-muted-foreground tabular">
                 {stats ? `${fmtCompact(stats.cells_in_files)} single-cell transcriptomes` : "\u00a0"}

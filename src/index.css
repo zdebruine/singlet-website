@@ -288,6 +288,16 @@
   .prose-doc td {
     @apply px-3 py-2 border-b border-border align-top;
   }
+  /* Long accessions, URLs and paths wrap; on a narrow screen a wide table scrolls inside the column instead of widening the page. */
+  .prose-doc .code-inline {
+    overflow-wrap: anywhere;
+  }
+  @media (max-width: 767px) {
+    .prose-doc table {
+      display: block;
+      overflow-x: auto;
+    }
+  }
 
   .gradient-text { color: var(--primary); }
 }

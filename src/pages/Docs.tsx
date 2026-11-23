@@ -91,7 +91,7 @@ const Docs = () => {
     <div className="min-h-screen flex flex-col bg-background">
       <Navbar />
       <main className="container-site flex-1 py-10 md:py-14">
-        <div className="grid lg:grid-cols-[220px_minmax(0,1fr)] gap-10 xl:gap-16">
+        <div className="grid grid-cols-[minmax(0,1fr)] lg:grid-cols-[220px_minmax(0,1fr)] gap-10 xl:gap-16">
           {/* Sidebar */}
           <aside className="hidden lg:block">
             <nav aria-label="Docs sections" className="sticky top-20">
@@ -117,13 +117,13 @@ const Docs = () => {
           </aside>
 
           {/* Content */}
-          <article className="prose-doc max-w-[760px]">
+          <article className="prose-doc max-w-[760px] min-w-0">
             <header className="mb-10">
               <Logo variant="mark" height={28} link={false} className="docs-brand-mark mb-4" />
               <h1 className="text-[36px] md:text-[42px] mb-3">Docs</h1>
               <p className="text-[17px] text-muted-foreground">Reference for the packages, the file and the API. One topic at a time.</p>
               {/* Mobile TOC */}
-              <ul className="lg:hidden mt-5 flex flex-wrap gap-2">
+              <ul className="lg:hidden mt-5 flex flex-wrap gap-2 !list-none !pl-0 !space-y-0">
                 {SECTIONS.map((s) => (
                   <li key={s.id}>
                     <a href={`#${s.id}`} className={cn("chip", active === s.id && "chip-active")}>
@@ -305,8 +305,12 @@ sce  <- singlet::find_load("human PBMC, COVID-19, 10x 5'", limit = 2)`}
                 code={`import pandas as pd
 
 url = "https://singlet.bio/api/manifest?organism=Mus+musculus&tissue_group=Brain+%2F+CNS&format=tsv"
-studies = pd.read_csv(url, sep="\\t")`}
+studies = pd.read_csv(url, sep="\\t", storage_options={"User-Agent": "singlet-docs"})`}
               />
+              <p className="text-xs text-muted-foreground">
+                Send a User-Agent as above: requests with Python's default <Mono>Python-urllib</Mono> agent are refused (HTTP 403).
+                The <Mono>singlet</Mono> package and <Mono>requests</Mono> set their own.
+              </p>
               <p>
                 Search on this website, in the packages and in the MCP server all call the same public endpoint,{" "}
                 <Mono>GET https://singlet.bio/api/nl-search?q=…</Mono>, which returns the matched accessions and the
@@ -382,7 +386,7 @@ studies = pd.read_csv(url, sep="\\t")`}
 import pandas as pd
 study = singlet.open_study("${GSE}")
 url = "https://data.singlet.bio/" + study.doc["samples"][0]["annotations"]["a2026-10"]["key"]
-labels = pd.read_parquet(url)        # one row per called cell, joined on col`}
+labels = pd.read_parquet(url, storage_options={"User-Agent": "singlet-docs"})  # one row per called cell, joined on col`}
                 />
                 <CodeBlock
                   label="python — the atlas cell index"
@@ -840,13 +844,9 @@ accs <- singlet::find("microglia in the aging mouse brain")`}
   --header "Authorization: Bearer ${KEY_PLACEHOLDER}"`}
               />
               <p>
-                The server has 17 tools: <Mono>search_datasets</Mono>, <Mono>get_study</Mono>,{" "}
-                <Mono>get_download_url</Mono>, <Mono>get_atlas_stats</Mono>, <Mono>get_sample_qc</Mono>,{" "}
-                <Mono>list_bundle_files</Mono>, <Mono>get_modalities</Mono>, <Mono>get_partial_download</Mono>,{" "}
-                <Mono>export_manifest</Mono>, <Mono>find_matched_controls</Mono>, <Mono>compare_studies</Mono>,{" "}
-                <Mono>assess_study</Mono>, <Mono>get_cohort</Mono>, <Mono>save_cohort</Mono>, and for studies stored
-                per sample <Mono>find_cells</Mono>, <Mono>slice_cells</Mono> and <Mono>resolve_features</Mono>. Inputs, outputs and
-                notes for each are in the <Link to="/docs/mcp#tools">tool reference</Link>. Every tool call needs sign-in or a key.
+                Every tool, with its inputs, outputs and notes, is in the <Link to="/docs/mcp#tools">tool reference</Link>. Every
+                tool call on <Mono>{MCP_URL}</Mono> needs sign-in or a key. To try the read-only tools without an account, connect{" "}
+                <Mono>{MCP_URL}/public</Mono> (<Link to="/docs/mcp#public">details</Link>).
               </p>
               <p>
                 Try it from a terminal (listing the tools needs no key; calling one does):

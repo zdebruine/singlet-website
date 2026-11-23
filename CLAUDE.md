@@ -88,5 +88,5 @@ per write). Workers Paid includes 50M rows a month, then $1.00 per million. The 
 
 ## Style
 Match the surrounding code: comment density, naming, idioms. Keep copy short and factual — no superlatives.
-Examples use GSE138867 (flagship) and GSE128639 (modalities). Python install line:
+Examples use GSE138867 (flagship) and GSE144434 (modalities: CITE-seq, downloadable; GSE128639 is withheld in Alpha). Python install line:
 `pip install singlet` (PyPI, 1.2.0 and later; extras as `pip install "singlet[mcp]"`).

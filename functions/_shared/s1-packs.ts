@@ -336,6 +336,8 @@ function intronName(s: GeneStruct, i: number, tag: string): string {
 
 interface VocabPart {
   s: GeneStruct;
+  /** the exon pack whose gene table this part uses (its own id for an exon pack) */
+  exonId: string;
   member: "exon" | "intron";
   tag: string;
   start: number;
@@ -376,6 +378,7 @@ const whitelistCache = new BoundedCache<Whitelist>(MAX_CACHED);
 export function clearPackCache(): void {
   structCache.clear();
   vocabCache.clear();
+  rowMapCache.clear();
   whitelistCache.clear();
 }
 
@@ -407,14 +410,15 @@ async function loadPart(fetchPack: PackFetcher, id: string, w: Wrapper, tag: str
     if (member !== "exon") throw new PackError(`SVP0 pack ${id} must hold the exon member`);
     const s = await loadStruct(fetchPack, id, w);
     if (s.nExons !== n) throw new PackError(`pack ${id}: header says ${n} rows, the gene table has ${s.nExons}`);
-    return { s, member: "exon", tag, start, n };
+    return { s, exonId: id, member: "exon", tag, start, n };
   }
   if (w.header.coder === "SVPD") {
     if (member !== "intron") throw new PackError(`SVPD pack ${id} must hold the intron member`);
     if (w.body.length !== 16) throw new PackError(`SVPD pack ${id} has a body of ${w.body.length} bytes, expected 16`);
-    const s = await loadStruct(fetchPack, toHex(w.body));
+    const exonId = toHex(w.body);
+    const s = await loadStruct(fetchPack, exonId);
     if (s.nIntrons !== n) throw new PackError(`pack ${id}: header says ${n} rows, the gene table has ${s.nIntrons} introns`);
-    return { s, member: "intron", tag, start, n };
+    return { s, exonId, member: "intron", tag, start, n };
   }
   throw new PackError(`unknown pack coder '${String(w.header.coder)}'`);
 }
@@ -543,6 +547,44 @@ export async function geneTable(fetchPack: PackFetcher, exonPackId32: string): P
 }
 
 // ── whitelists ──────────────────────────────────────────────────────────────
+
+/**
+ * The gene of every row of a vocabulary pack (exon, intron or composite), for summing a matrix's rows into gene counts the way
+ * `singlet.s1.atlas.gather` does. Genes are numbered in the order of the exon packs' gene tables (part by part for a composite), so an
+ * exon matrix and the intron matrix derived from the same exon pack share one gene space: `space` names it (the exon pack ids).
+ */
+export interface GeneRowMap {
+  space: string;
+  member: "exon" | "intron";
+  gene_ids: string[];
+  symbols: string[];
+  /** row -> gene index (-1: none) */
+  rowGene: Int32Array;
+}
+
+const rowMapCache = new BoundedCache<GeneRowMap>(MAX_CACHED * 2);
+
+export function geneRowMap(fetchPack: PackFetcher, packId32: string): Promise<GeneRowMap> {
+  const id = normalizeId(packId32);
+  return rowMapCache.get(id, async () => {
+    const v = await loadVocab(fetchPack, id);
+    const gene_ids: string[] = [];
+    const symbols: string[] = [];
+    const rowGene = new Int32Array(v.info.n).fill(-1);
+    for (const part of v.parts) {
+      const s = part.s;
+      const g0 = gene_ids.length;
+      for (let g = 0; g < s.nums.length; g++) {
+        const gid = s.prefix + String(s.nums[g]).padStart(s.width, "0");
+        const k = s.kind[g];
+        gene_ids.push(gid);
+        symbols.push(k === 0 ? "" : k === 1 ? gid : s.syms[s.symIndex[g]]);
+      }
+      for (let i = 0; i < part.n; i++) rowGene[part.start + i] = g0 + (part.member === "exon" ? s.gidx[i] : s.gidx[s.inExon[i]]);
+    }
+    return { space: v.parts.map((p) => p.exonId).join("+"), member: v.info.member, gene_ids, symbols, rowGene };
+  });
+}
 
 interface Whitelist {
   info: BarcodePackInfo;

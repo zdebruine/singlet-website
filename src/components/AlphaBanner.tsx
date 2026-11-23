@@ -46,7 +46,7 @@ export function AlphaBanner() {
       <div className="container-site flex items-center gap-3 py-1.5 text-[12.5px]">
         <p className="flex-1 min-w-0">
           <span className="font-medium text-foreground">Research Alpha</span>
-          <span className="text-muted-foreground"> — help us shape Beta (Q1 2027): </span>
+          <span className="text-muted-foreground"> — Beta begins in Q1 2027; the full re-run continues through 2027. Help shape it: </span>
           <FeedbackButton category="idea" className="font-medium text-primary hover:underline underline-offset-2">
             send feedback
           </FeedbackButton>

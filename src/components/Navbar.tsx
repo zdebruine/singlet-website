@@ -8,10 +8,12 @@ import { AlphaBanner, AlphaTag } from "@/components/AlphaBanner";
 import { cn } from "@/lib/utils";
 
 /** Public navigation. "Your data" lives in the account menu, not here. */
-const NAV = [
+/** `reload`: a page served by Functions (the blog), not a route of this app, so the link loads it in full. */
+const NAV: { to: string; label: string; title?: string; wide?: boolean; reload?: boolean }[] = [
   { to: "/browse", label: "Browse" },
   { to: "/docs", label: "Docs" },
   { to: "/benchmarking", label: "Benchmarks", wide: true },
+  { to: "/blog/", label: "Blog", reload: true },
   { to: "/about", label: "About" },
   { to: "/beta", label: "Beta", title: "See what's coming in Beta", wide: true },
 ];
@@ -52,6 +54,7 @@ const Navbar = ({ search = true }: { search?: boolean }) => {
             <Link
               key={l.to}
               to={l.to}
+              reloadDocument={l.reload}
               title={l.title}
               className={cn("text-[14px] transition-colors", l.wide && "hidden lg:inline", isActive(l.to) ? "text-foreground font-medium" : "text-muted-foreground hover:text-foreground")}
             >
@@ -91,6 +94,7 @@ const Navbar = ({ search = true }: { search?: boolean }) => {
               <Link
                 key={l.to}
                 to={l.to}
+                reloadDocument={l.reload}
                 className={cn("text-[15px] py-1", isActive(l.to) ? "text-foreground font-medium" : "text-muted-foreground hover:text-foreground")}
               >
                 {l.label}

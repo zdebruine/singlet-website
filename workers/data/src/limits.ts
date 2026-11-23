@@ -81,7 +81,16 @@ async function sha256Hex(s: string): Promise<string> {
 
 const keyMemo = new Map<string, { at: number; id: string | null }>();
 
-export async function identify(request: Request, db: D1Like | null, now = Date.now()): Promise<Subject> {
+/**
+ * `trusted` is set when the request carries this Worker's internal secret (the website calling on behalf of someone): then
+ * `x-cidx-subject: acct:<account id>` names a signed-in singlet.bio account (key tier) and `x-cidx-client-ip` the address of an anonymous
+ * caller, so an export link opened through the site is counted against its downloader, not against the site.
+ */
+export async function identify(request: Request, db: D1Like | null, now = Date.now(), trusted = false): Promise<Subject> {
+  if (trusted) {
+    const acct = /^acct:([A-Za-z0-9-]{8,64})$/.exec(request.headers.get("x-cidx-subject") ?? "");
+    if (acct) return { id: `acct:${acct[1]}`, tier: "key" };
+  }
   const auth = request.headers.get("authorization") ?? "";
   const m = /^Bearer\s+(\S{8,200})$/i.exec(auth);
   const key = m ? m[1] : request.headers.get("x-singlet-key");
@@ -104,7 +113,8 @@ export async function identify(request: Request, db: D1Like | null, now = Date.n
     if (!hit.id) throw new CidxError(401, "bad_key", "Unknown, revoked or expired API key. Create one at https://singlet.bio/account.");
     return { id: `key:${hit.id}`, tier: "key" };
   }
-  const ip = request.headers.get("cf-connecting-ip") ?? "0.0.0.0";
+  const fwd = trusted ? request.headers.get("x-cidx-client-ip") : null;
+  const ip = (fwd && /^[0-9a-fA-F:.]{2,45}$/.test(fwd) ? fwd : null) ?? request.headers.get("cf-connecting-ip") ?? "0.0.0.0";
   return { id: `anon:${(await sha256Hex("singlet-cidx-v1|" + ip)).slice(0, 24)}`, tier: "anon" };
 }
 
