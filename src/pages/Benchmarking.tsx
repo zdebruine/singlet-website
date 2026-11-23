@@ -5,6 +5,7 @@ import { FeedbackButton } from "@/components/FeedbackDialog";
 import { usePageMeta } from "@/hooks/usePageMeta";
 import { ALPHA_BASE, ALPHA_STRENGTHS, CENSUS_PANEL } from "@/lib/alpha-benchmarks";
 import { ANNOTATIONS_LIVE } from "@/lib/release";
+import { IS_BETA } from "@/lib/channel";
 import { AlphaPendingPanel, AnnotationsPanel, ScbcSection, Stat } from "@/components/benchmarks/AlphaParts";
 
 /**
@@ -14,7 +15,9 @@ import { AlphaPendingPanel, AnnotationsPanel, ScbcSection, Stat } from "@/compon
 const Benchmarking = () => {
   usePageMeta({
     title: "Benchmarking",
-    description: "What the Singlet Research Alpha files do well, measured on real public data against the authors' own results.",
+    description: IS_BETA
+      ? "Benchmarks for Singlet Research Beta. Until Beta's own measurements are in, this page shows Research Alpha's, measured on real public data."
+      : "What the Singlet Research Alpha files do well, measured on real public data against the authors' own results.",
     path: "/benchmarking",
   });
 
@@ -23,6 +26,11 @@ const Benchmarking = () => {
       <Navbar />
       <main className="flex-1 container-site py-12 md:py-16">
         <h1 className="font-display text-3xl md:text-4xl font-bold tracking-tightest text-foreground">Benchmarking</h1>
+        {IS_BETA && (
+          <p className="mt-3 max-w-2xl text-[15px] text-foreground">
+            Beta's benchmarks have been measured on Alpha so far. The numbers below are Alpha's measurements, shown until Beta's are in.
+          </p>
+        )}
         <p className="mt-3 max-w-2xl text-[15px] text-muted-foreground">
           What the Research Alpha files you can download today do well. Every number is measured on real public data, against the
           authors' own Cell Ranger results or an independent atlas.
@@ -65,7 +73,7 @@ const Benchmarking = () => {
           <p className="mt-3 text-[14px]">
             <Link to="/known-issues" className="text-primary underline underline-offset-2">All known issues</Link>
             <span className="text-muted-foreground"> · </span>
-            <Link to="/beta" className="text-primary underline underline-offset-2">What the Beta re-run changes</Link>
+            <Link to="/beta" className="text-primary underline underline-offset-2">{IS_BETA ? "What Beta changes" : "What the Beta re-run changes"}</Link>
           </p>
         </section>
 

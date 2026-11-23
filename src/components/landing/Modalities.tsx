@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
-import { GitBranch, Scissors, Shield } from "lucide-react";
+import { Activity, Bug, Dna, GitBranch, Scissors, Shield } from "lucide-react";
 import type { ReactNode } from "react";
+import { IS_BETA } from "@/lib/channel";
 
 /** A true modality: a distinct measurement stored in the file, not a score derived from another one. */
 interface Modality {
@@ -33,12 +34,47 @@ export const MODALITIES: Modality[] = [
   },
 ];
 
+/** Research Beta adds layers beyond Alpha's three. */
+export const BETA_MODALITIES: Modality[] = [
+  {
+    icon: <Scissors {...ICON} />,
+    name: "Spliced, unspliced and ambiguous counts",
+    what: "Gene counts split by where the read falls, with exon, intron and multimapping-read counts alongside.",
+  },
+  {
+    icon: <GitBranch {...ICON} />,
+    name: "Splice junctions",
+    what: "Reads crossing each exon-exon junction, per cell.",
+  },
+  {
+    icon: <Activity {...ICON} />,
+    name: "Poly(A) sites",
+    what: "Counts at each polyadenylation site, per cell.",
+  },
+  {
+    icon: <Dna {...ICON} />,
+    name: "Transposable elements",
+    what: "Per-cell counts for transposable element families.",
+  },
+  {
+    icon: <Shield {...ICON} />,
+    name: "V(D)J gene usage",
+    what: "Per-cell use of T- and B-cell receptor V, D and J gene segments.",
+    note: "immune cells",
+  },
+  {
+    icon: <Bug {...ICON} />,
+    name: "Non-host reads",
+    what: "Per-sample summaries of microbial reads, with the rRNA report.",
+  },
+];
+
 /** The layers served in Research Alpha, then a line on what is not offered yet. */
 export function ModalityGrid() {
   return (
     <div>
       <ul className="grid sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-8 max-w-[1040px] mx-auto">
-        {MODALITIES.map((m) => (
+        {(IS_BETA ? BETA_MODALITIES : MODALITIES).map((m) => (
           <li key={m.name} className="flex gap-4">
             <span className="mt-0.5 shrink-0 grid place-items-center h-12 w-12 rounded-xl bg-[var(--teal-50)] text-primary">{m.icon}</span>
             <div className="min-w-0">
@@ -52,7 +88,7 @@ export function ModalityGrid() {
         ))}
       </ul>
       <dl className="mt-12 max-w-[760px] mx-auto space-y-3 text-[13.5px]">
-        {LABEL_ROWS.map((r) => (
+        {(IS_BETA ? BETA_LABEL_ROWS : LABEL_ROWS).map((r) => (
           <div key={r.title} className="flex flex-wrap items-center justify-center gap-2">
             <dt className="mr-1 text-[11.5px] font-semibold uppercase tracking-wider text-muted-foreground">{r.title}</dt>
             {r.items.map((it) => (
@@ -76,4 +112,10 @@ export function ModalityGrid() {
 const LABEL_ROWS = [
   { title: "Per-cell labels", items: ["Cell type", "Chromosomal sex", "Genetic ancestry"], muted: false },
   { title: "Not in Alpha", items: ["Genotypes", "mtDNA alleles", "Ambient RNA", "Doublets"], muted: true },
+];
+
+/** Per-cell labels served in Beta, and what is held back until its release gate passes. */
+const BETA_LABEL_ROWS = [
+  { title: "Per-cell labels", items: ["Cell calls", "Cell type", "Chromosomal sex", "Genetic ancestry", "Cell-cycle phase", "Donor"], muted: false },
+  { title: "Not public yet", items: ["Genotypes", "mtDNA alleles", "Ambient RNA", "Doublets"], muted: true },
 ];

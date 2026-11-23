@@ -6,6 +6,7 @@ import { SearchBox } from "@/components/SearchBox";
 import { AccountMenu } from "@/components/auth/AccountMenu";
 import { AlphaBanner, AlphaTag } from "@/components/AlphaBanner";
 import { cn } from "@/lib/utils";
+import { IS_BETA } from "@/lib/channel";
 
 /** Public navigation. "Your data" lives in the account menu, not here. */
 /** `reload`: a page served by Functions (the blog), not a route of this app, so the link loads it in full. */
@@ -15,7 +16,9 @@ const NAV: { to: string; label: string; title?: string; wide?: boolean; reload?:
   { to: "/benchmarking", label: "Benchmarks", wide: true },
   { to: "/blog/", label: "Blog", reload: true },
   { to: "/about", label: "About" },
-  { to: "/beta", label: "Beta", title: "See what's coming in Beta", wide: true },
+  IS_BETA
+    ? { to: "/campaign", label: "Campaign", title: "Live progress of the Research Beta campaign" }
+    : { to: "/beta", label: "Beta", title: "See what's coming in Beta", wide: true },
 ];
 
 /**
@@ -30,7 +33,7 @@ const Navbar = ({ search = true }: { search?: boolean }) => {
   const [open, setOpen] = useState(false);
   const isHome = location.pathname === "/";
   const showSearch = search && !isHome && location.pathname !== "/browse";
-  const onBeta = location.pathname === "/beta";
+  const onBeta = IS_BETA || location.pathname === "/beta";
 
   useEffect(() => {
     setOpen(false);

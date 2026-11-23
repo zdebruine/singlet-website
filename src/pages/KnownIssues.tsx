@@ -5,6 +5,7 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { FeedbackButton } from "@/components/FeedbackDialog";
 import { usePageMeta } from "@/hooks/usePageMeta";
+import { IS_BETA } from "@/lib/channel";
 
 // Known issues in the Research Alpha files, each with what Beta changes. Owner rule: excluded samples and studies are
 // never listed, counted or linked here; the page states the inclusion criteria only. Each issue leads with what it
@@ -191,6 +192,19 @@ const ISSUES: Issue[] = [
   },
 ];
 
+/** On the Beta site, "What Beta changes" states what the campaign output already does, from the release facts. */
+const BETA_NOW: Record<string, ReactNode> = {
+  reads: "Every read of every run, at full quality.",
+  counting: "Gene counts split into spliced, unspliced and ambiguous, with exon, intron and multimapping-read counts alongside.",
+  "cell-calling": "An EmptyDrops-style test with an FDR decides which barcodes are cells.",
+  annotations: "Cell-cycle phase, per-cell read QC and donor demultiplexing of pooled samples join the Alpha labels.",
+  modalities: "Per-cell V(D)J gene usage, poly(A) site counts and transposable-element counts join the layers.",
+  coverage: "Samples are published one by one as the campaign finishes them. The campaign page shows what is in so far.",
+  metadata: "Sample facts still come from each sample's GEO record.",
+  "ai-assistants": "The same tools, reading Beta's files.",
+  "two-numbers": "The file's own QC remains the reference.",
+};
+
 function Tag({ tone, children }: { tone: "do" | "beta"; children: ReactNode }) {
   return <span className={`mr-2 text-[11.5px] font-semibold uppercase tracking-wider ${tone === "beta" ? "text-primary" : "text-foreground"}`}>{children}</span>;
 }
@@ -198,7 +212,9 @@ function Tag({ tone, children }: { tone: "do" | "beta"; children: ReactNode }) {
 const KnownIssues = () => {
   usePageMeta({
     title: "Known issues",
-    description: "What is known to be wrong or missing in the Singlet Research Alpha files, what to do about it, and what Beta changes.",
+    description: IS_BETA
+      ? "Known issues in the Singlet Research Alpha files and what Research Beta changes for each."
+      : "What is known to be wrong or missing in the Singlet Research Alpha files, what to do about it, and what Beta changes.",
     path: "/known-issues",
   });
   return (
@@ -208,12 +224,13 @@ const KnownIssues = () => {
         <div className="max-w-3xl">
           <h1 className="font-display text-3xl md:text-4xl font-bold tracking-tightest text-foreground">Known issues</h1>
           <p className="mt-3 text-[15px] text-muted-foreground">
-            What we know is wrong or missing in the Research Alpha files, what to do about it, and what the Beta re-run changes (Beta begins in
-            Q1 2027; the full re-run continues through 2027). Found another? Tell us.
+            {IS_BETA
+              ? "These are the issues we know in the Research Alpha files, each with what Research Beta changes. Beta samples are still arriving, so issues in Beta files are added here once confirmed. Found one? Tell us."
+              : "What we know is wrong or missing in the Research Alpha files, what to do about it, and what the Beta re-run changes (Beta begins in Q1 2027; the full re-run continues through 2027). Found another? Tell us."}
           </p>
           <div className="mt-5 flex flex-wrap gap-3">
             <FeedbackButton category="data" className="btn-primary btn-sm">Report an issue</FeedbackButton>
-            <Link to="/beta" className="btn-secondary btn-sm">What's coming in Beta</Link>
+            <Link to="/beta" className="btn-secondary btn-sm">{IS_BETA ? "About this release" : "What's coming in Beta"}</Link>
             <Link to="/benchmarking#alpha" className="btn-secondary btn-sm">Alpha benchmarks</Link>
           </div>
 
@@ -240,7 +257,7 @@ const KnownIssues = () => {
                 )}
                 <p>
                   <Tag tone="beta">What Beta changes</Tag>
-                  {i.beta}
+                  {IS_BETA ? BETA_NOW[i.id] ?? i.beta : i.beta}
                 </p>
               </div>
               <details className="group mt-3">

@@ -3,6 +3,7 @@ import { ExternalLink } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { usePageMeta } from "@/hooks/usePageMeta";
+import { BETA_ENGINE, IS_BETA } from "@/lib/channel";
 
 // The Beta GPU engine (workstream W11), from Singlet-Bio/singlet docs/gpu-engine/exploration.md §12 (branch
 // gpu/w11-prototypes, PR #61) and docs/engine-gpu-results.md (branch gpu/engine-gpu, PR #66). Every number here is measured
@@ -71,8 +72,10 @@ const STATE_LABEL: Record<State, { text: string; cls: string }> = {
 
 const BetaGpuEngine = () => {
   usePageMeta({
-    title: "Beta GPU engine",
-    description: "A GPU port of STAR's alignment for Singlet Research Beta, built to give the same output as STAR read for read. Measured status of each stage on NVIDIA H100.",
+    title: IS_BETA ? "The GPU engine" : "Beta GPU engine",
+    description: IS_BETA
+      ? "The GPU engine that reprocesses every Research Beta sample: a port of STAR's alignment to NVIDIA H100 GPUs, checked against STAR read for read."
+      : "A GPU port of STAR's alignment for Singlet Research Beta, built to give the same output as STAR read for read. Measured status of each stage on NVIDIA H100.",
     path: "/beta/gpu-engine",
   });
   return (
@@ -81,15 +84,24 @@ const BetaGpuEngine = () => {
       <main className="flex-1 container-site py-12 md:py-16">
         <div className="max-w-3xl">
           <p className="text-[12.5px] font-medium uppercase tracking-wider text-primary">
-            <Link to="/beta" className="hover:underline">Beta</Link> · in development
+            <Link to="/beta" className="hover:underline">{IS_BETA ? "Research Beta" : "Beta"}</Link> · {IS_BETA ? "the engine" : "in development"}
           </p>
           <h1 className="mt-1 font-display text-3xl md:text-4xl font-bold tracking-tightest text-foreground">GPU engine</h1>
+          {IS_BETA ? (
+            <p className="mt-3 text-[15px] text-muted-foreground">
+              Research Beta reprocesses public single-cell RNA-seq from the raw reads in SRA, using every read of every run. That volume
+              needs accelerators, so the campaign runs {BETA_ENGINE} on the GPUs of Clipper at GVSU. The GPU engine ports STAR's alignment
+              to NVIDIA H100 GPUs and is written to give the same alignments as STAR, read for read, so the counts do not depend on which
+              engine produced them. The table below records the equivalence checks made while it was built.
+            </p>
+          ) : (
           <p className="mt-3 text-[15px] text-muted-foreground">
             Beta re-aligns about 70,000 samples from all of their reads, about 21.7 trillion read pairs. On CPUs that is 250–330
             thousand core-hours. The GPU engine is a port of STAR's alignment to NVIDIA H100 GPUs, written to give the same
             alignments as STAR, read for read, so that Beta's counts do not depend on which engine produced them. It is in the{" "}
             <span className="font-mono">singlet</span> engine as <span className="font-mono">singlet --engine gpu</span>, under review.
           </p>
+          )}
         </div>
 
         <section className="mt-10 max-w-3xl" aria-labelledby="design-h">
@@ -136,6 +148,7 @@ const BetaGpuEngine = () => {
           </div>
         </section>
 
+        {!IS_BETA && (
         <section className="mt-10 max-w-3xl" aria-labelledby="next-h">
           <h2 id="next-h" className="text-[22px] font-semibold text-foreground">What is left</h2>
           <ul className="mt-3 space-y-2 text-[14.5px] leading-relaxed text-foreground">
@@ -145,6 +158,7 @@ const BetaGpuEngine = () => {
             <li>Pass the same equivalence and Beta benchmarks as the CPU engine. Until it does, Beta runs on the CPU engine.</li>
           </ul>
         </section>
+        )}
 
         <section className="mt-10 max-w-3xl" aria-labelledby="code-h">
           <h2 id="code-h" className="text-[22px] font-semibold text-foreground">Code</h2>

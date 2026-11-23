@@ -8,6 +8,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { CodeBlock } from "@/components/CodeBlock";
+import { SITE_BASE } from "@/lib/channel";
 
 interface CiteDialogProps {
   gseId: string;
@@ -25,7 +26,7 @@ interface CiteDialogProps {
 export function CiteDialog({ gseId, title, year, pubmedIds, doi }: CiteDialogProps) {
   const [open, setOpen] = useState(false);
   const safeTitle = title ?? gseId;
-  const url = `https://singlet.bio/study/${gseId}`;
+  const url = `${SITE_BASE}/study/${gseId}`;
   const yearStr = year ? String(year) : "n.d.";
   const pubmedLine = pubmedIds.length
     ? `PubMed: ${pubmedIds.join(", ")} (https://pubmed.ncbi.nlm.nih.gov/${pubmedIds[0]}/)`

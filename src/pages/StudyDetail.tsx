@@ -19,6 +19,7 @@ import type { GseDetailResponse, GsmRow, PublicationRow } from "@/integrations/a
 import { usePageMeta } from "@/hooks/usePageMeta";
 import { fmtCompact, fmtInt, fmtPct, isProcessed, organismLabel } from "@/lib/catalog-display";
 import { cn } from "@/lib/utils";
+import { IS_BETA } from "@/lib/channel";
 
 const GEO = (acc: string) => `https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=${acc}`;
 
@@ -540,7 +541,9 @@ const StudyDetail = () => {
             <Link to="/about#processing" className="text-primary hover:underline">How processing works →</Link>
           </p>
           <p className="text-[12px] text-muted-foreground leading-relaxed px-0.5">
-            This is a Research Alpha file: it used at most 30M reads per sample, and some molecules are counted twice.{" "}
+            {IS_BETA
+              ? "This is a Research Beta file: every read of every run was used."
+              : "This is a Research Alpha file: it used at most 30M reads per sample, and some molecules are counted twice."}{" "}
             <Link to="/known-issues" className="text-primary hover:underline">Known issues →</Link>
           </p>
         </aside>

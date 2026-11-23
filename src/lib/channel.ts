@@ -14,3 +14,6 @@ export const BETA_ENGINE = "singlet 1.4";
 
 /** Alpha's site, where Alpha keeps serving until the cutover (docs/BETA_CUTOVER_PLAN.md in singlet-agents). */
 export const ALPHA_SITE = "https://singlet.bio";
+
+/** This build's own site origin: API, MCP and page links in docs and snippets name it. */
+export const SITE_BASE = IS_BETA ? "https://beta.singlet.bio" : "https://singlet.bio";
