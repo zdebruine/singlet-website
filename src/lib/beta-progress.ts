@@ -5,6 +5,15 @@ export const BETA_PROGRESS_PATH = "/api/beta/progress";
 
 export interface ReasonCount { reason: string; count: number }
 
+/** One point of the queue ahead of the H100s (status.json ready_history, thinned by public_feed.py). */
+export interface ReadyPoint {
+  t: string;
+  ready_hours_h100: number | null;
+  staged_samples_h100: number | null;
+  dl_gbps: number | null;
+  h100_avg60_pct: number | null;
+}
+
 export interface CampaignPublic {
   schema: "campaign-public/1";
   generated_at: string;
@@ -16,6 +25,8 @@ export interface CampaignPublic {
   held_reasons: ReasonCount[];
   per_day: { date: string; published: number; processed: number }[];
   scope: { total_samples: number | null; current_class: string | null };
+  /** Absent until the cluster publishes it; empty when there are no points. */
+  ready_history?: ReadyPoint[];
 }
 
 export interface BetaProgress {
