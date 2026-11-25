@@ -49,18 +49,20 @@ either back.
 - D1 limits: never `json_each` over all of `bundle_index` (chunk by `gse_id`); ≤ 100 bound parameters per
   statement; watch the daily read budget.
 
-## D1 writes cost money: the owner approves every one, in Claude
+## D1 writes cost money: stay inside the budget, ask only for expensive writes
 D1 bills rows written, not statements: the row, every secondary index it touches and any full-text index rows (`gsm` is about 30 rows
 per write). Workers Paid includes 50M rows a month, then $1.00 per million. The Sep 27 - Oct 26 2026 cycle wrote 419M rows into a
 430 MB database and cost $370 of a $429.74 bill (`docs/CLOUDFLARE_COST_PLAN.md`). Everything else on the account was inside its free allowance.
-- **Before any write to production D1** (INSERT / UPDATE / DELETE / DDL, `wrangler d1 execute|import|migrations apply`, the D1 HTTP API or MCP
-  tool, `POST /api/ingest/*` or its cranks, the Anvil / Clipper publishers and campaign loops, `s1_campaign.py` catalog writes) you must stop
-  and put a plan in front of the owner **in the Claude conversation**: what is written, how many rows per table, how many passes, the
-  estimate from `npm run d1:estimate` (`-- file.sql`, or `-- --rows gsm=118000 --passes 3`) and the dollar figure. Then wait for a
-  yes. A plan the owner has not answered is not approved; an earlier approval does not cover a different write, a bigger one or a repeat.
-- A Claude Code hook (`.claude/settings.json` → `scripts/hooks/d1-write-approval.mjs`) also stops these calls and shows the estimate; approving
-  the prompt is the owner's answer. Never work around it: no `--local` or dry-run flag to dodge the check, no splitting a write into
-  small ones, no moving the write into a script the hook cannot see.
+- **Do not ask the owner for routine Cloudflare work** (owner, 2026-11-23 and 2026-11-25: stop asking for Cloudflare permission except for
+  expensive operations). Small, bounded D1 writes, R2 uploads, Pages and Worker deploys, ingest calls and catalog posts proceed without a
+  question in chat. Estimate first (`npm run d1:estimate -- file.sql`, or `-- --rows gsm=118000 --passes 3`) and log what was written.
+- **Ask first, in the Claude conversation, only for an expensive operation:** a single write estimated above $1 worst case, anything that
+  would push the rolling 24-hour total above $5, a loop or recurring job that writes D1 (cron, self-resubmitting Slurm job, per-study
+  publisher run over many studies), DROP, creating or deleting a database, bucket or Worker, or anything else likely to cost more than
+  about $1. Put the plan in front of the owner (what is written, rows per table, passes, the estimate and the dollar figure) and wait for a yes.
+- A Claude Code hook (`d1-write-approval.mjs`) enforces the same budget and stops a call only in those cases; approving its prompt is the
+  owner's answer. Never work around it: no `--local` or dry-run flag to dodge the check, no splitting a write into small ones, no moving
+  the write into a script the hook cannot see.
 - **A loop is many writes.** Anything that runs repeatedly (cron, a self-resubmitting Slurm job, a per-study publisher) is estimated as
   rows per pass x passes, and must write only what changed: compare against D1 first (reads are nearly free: 25 billion included) and use
   `UPDATE ... WHERE col IS NOT ?` or `ON CONFLICT DO UPDATE ... WHERE <col> IS NOT excluded.<col>`. A publisher must not rewrite the whole
