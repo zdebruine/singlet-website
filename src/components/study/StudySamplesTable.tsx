@@ -265,7 +265,9 @@ export function StudySamplesTable({ gseId, studyTitle, samples, highlightGsm, co
   const rows = useMemo(() => {
     const needle = text.trim().toLowerCase();
     let out = samples.filter((s) => {
-      if (condition) {
+      if (condition?.gsms) {
+        if (!condition.gsms.has(s.gsm_id)) return false;
+      } else if (condition) {
         const v = s.characteristics?.[condition.key];
         if (!v || v.toLowerCase() !== condition.value.toLowerCase()) return false;
       }
