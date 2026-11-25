@@ -4,6 +4,7 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { usePageMeta } from "@/hooks/usePageMeta";
 const ReadyQueue = lazy(() => import("@/components/campaign/ReadyQueue"));
+const ProjectionTable = lazy(() => import("@/components/campaign/ProjectionTable"));
 import { BETA_PROGRESS_PATH, groupReasons, parseProgress, share, since, type BetaProgress } from "@/lib/beta-progress";
 
 // Public, live view of the Research Beta campaign. Published counts come straight from Beta's catalog; the processing counts come
@@ -175,6 +176,14 @@ const Campaign = () => {
             </>
           )}
         </Section>
+
+        {c && c.projection && Array.isArray(c.projection.campaigns) && c.projection.campaigns.length > 0 && (
+          <Section title="Estimated finish if the current pace holds">
+            <Suspense fallback={<div className="h-[260px]" />}>
+              <ProjectionTable projection={c.projection} nowMs={now} />
+            </Suspense>
+          </Section>
+        )}
 
         {c && Array.isArray(c.ready_history) && c.ready_history.length > 1 && (
           <Section title="Work queued ahead of the H100s">

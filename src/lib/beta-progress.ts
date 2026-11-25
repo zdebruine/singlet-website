@@ -5,6 +5,20 @@ export const BETA_PROGRESS_PATH = "/api/beta/progress";
 
 export interface ReasonCount { reason: string; count: number }
 
+export type ProjectionWindow = "6h" | "24h" | "7d";
+export interface ProjectionCounts { total: number | null; done: number | null; remaining: number | null }
+/** One sequential campaign's estimated finish (status.json projection, reduced by public_feed.py). */
+export interface ProjectionCampaign {
+  id: number;
+  label: string;
+  in_scope: boolean;
+  samples: ProjectionCounts;
+  pairs: ProjectionCounts;
+  eta: Partial<Record<ProjectionWindow, string | null>>;
+  window_actual_h?: Partial<Record<ProjectionWindow, number | null>>;
+}
+export interface Projection { generated_at?: string | null; campaigns: ProjectionCampaign[] }
+
 /** One point of the queue ahead of the H100s (status.json ready_history, thinned by public_feed.py). */
 export interface ReadyPoint {
   t: string;
@@ -27,6 +41,7 @@ export interface CampaignPublic {
   scope: { total_samples: number | null; current_class: string | null };
   /** Absent until the cluster publishes it; empty when there are no points. */
   ready_history?: ReadyPoint[];
+  projection?: Projection | null;
 }
 
 export interface BetaProgress {
