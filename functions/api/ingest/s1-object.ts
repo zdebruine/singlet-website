@@ -50,7 +50,7 @@ function declaredSha(request: Request, digest: string | null): string | Response
 }
 
 async function sha256Of(obj: R2ObjectBody): Promise<string> {
-  const ds = new crypto.DigestStream("SHA-256");
+  const ds = new (crypto as unknown as { DigestStream: new (algorithm: string) => WritableStream & { digest: Promise<ArrayBuffer> } }).DigestStream("SHA-256");
   await obj.body.pipeTo(ds);
   const buf = new Uint8Array(await ds.digest);
   return [...buf].map((b) => b.toString(16).padStart(2, "0")).join("");
