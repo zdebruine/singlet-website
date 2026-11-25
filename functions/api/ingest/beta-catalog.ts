@@ -4,9 +4,10 @@
  * Writes the catalog rows (gse, gsm) for published Beta studies that do not have them yet or whose rev changed since the last sync
  * (_shared/beta-catalog). Bounded: at most `n` studies per call (default 20, max 50). Returns { synced, failed, remaining }.
  * Follow it with the refresh-next and index-next cranks (GET /api/ingest/refresh-next, index-next), which build gse_meta and
- * sample_qc; workers/beta-catalog-cron runs all three every 10 minutes.
+ * sample_qc; workers/beta-catalog-cron runs all three every 10 minutes. Each call also sets gsm.protocol to the engine's call where
+ * sample_qc has one (applyEngineProtocol), keeping the inherited label in gsm.protocol_source_label.
  */
-import { syncStudies } from "../../_shared/beta-catalog";
+import { applyEngineProtocol, syncStudies } from "../../_shared/beta-catalog";
 import { isBeta } from "../../_shared/channel";
 import { serverError } from "../../_shared/errors";
 import { checkIngestToken } from "../../_shared/ingest-auth";
@@ -16,6 +17,7 @@ interface Env {
   CHANNEL?: string;
   INGEST_TOKEN_SHA256?: string;
   ALPHA_API?: string;
+  D1_DAILY_WRITE_ROWS?: string;
 }
 
 const json = (body: unknown, status = 200) =>
@@ -31,7 +33,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   try {
     const started = Date.now();
     const r = await syncStudies(env.DB, n, { alphaApi: env.ALPHA_API, only: only.length ? only : undefined });
-    return json({ ...r, ms: Date.now() - started });
+    const protocol = await applyEngineProtocol(env.DB, env);          // chemistry from the engine's call, the inherited label kept
+    return json({ ...r, protocol, ms: Date.now() - started });
   } catch (e) {
     return serverError(e, "ingest beta-catalog");
   }

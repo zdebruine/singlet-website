@@ -15,6 +15,8 @@
  * be fetched is recorded with its error and retried after RETRY_AFTER_MS.
  */
 
+import { reserveWrites } from "./write-budget";
+
 export const ALPHA_API_DEFAULT = "https://singlet.bio";
 const RETRY_AFTER_MS = 6 * 3600 * 1000;
 const EUTILS = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils";
@@ -147,6 +149,7 @@ export async function fromNcbi(gse: string): Promise<StudyMeta | null> {
 }
 
 export async function ensureSyncTable(db: D1Database): Promise<void> {
+  await ensureProtocolSourceColumn(db);
   await db
     .prepare(
       `CREATE TABLE IF NOT EXISTS beta_catalog_sync (gse_id TEXT PRIMARY KEY, rev TEXT NOT NULL, source TEXT, n_geo INTEGER,
@@ -226,8 +229,8 @@ export async function writeStudy(db: D1Database, st: PendingStudy, meta: StudyMe
              srr_ids, characteristics, last_updated, organism_primary, tissue_group, disease_group, assay_family)
            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, NULL, ?12, ?13, NULL, ?14, NULL, NULL, NULL, ?15, ?16, ?17, ?18, ?19, ?20, ?21,
              NULL, NULL, NULL, NULL)
-           ON CONFLICT(gsm_id) DO UPDATE SET gse_id = excluded.gse_id, organism = excluded.organism, protocol = excluded.protocol,
-             modality = excluded.modality, tissue = excluded.tissue, cell_type = excluded.cell_type, donor_id = excluded.donor_id,
+           ON CONFLICT(gsm_id) DO UPDATE SET gse_id = excluded.gse_id, organism = excluded.organism, protocol = COALESCE((SELECT q.protocol FROM sample_qc q WHERE q.gsm_id = excluded.gsm_id AND q.protocol <> ''), excluded.protocol),
+             protocol_source_label = excluded.protocol, modality = excluded.modality, tissue = excluded.tissue, cell_type = excluded.cell_type, donor_id = excluded.donor_id,
              disease = excluded.disease, sex = excluded.sex, n_cells = excluded.n_cells, mapping_rate = NULL, median_genes = excluded.median_genes,
              median_umis = excluded.median_umis, mt_pct = NULL, status = excluded.status, qc_flag = NULL, failure_category = NULL,
              failure_detail = NULL, singlet_version = excluded.singlet_version, pipeline_date = excluded.pipeline_date, title = excluded.title,
@@ -310,4 +313,39 @@ export async function syncStudies(
     }
   }
   return { synced, failed, remaining, statements };
+}
+
+
+/** gsm.protocol_source_label: the chemistry label a sample arrived with (Alpha's read-derived inference) once Beta's own call replaces it. */
+async function ensureProtocolSourceColumn(db: D1Database): Promise<void> {
+  try {
+    await db.prepare(`ALTER TABLE gsm ADD COLUMN protocol_source_label TEXT`).run();
+  } catch (e) {
+    if (!/duplicate column/i.test(String(e))) throw e;
+  }
+}
+
+const ENGINE_PROTOCOL_DIFFERS = `FROM sample_qc q JOIN gsm g ON g.gsm_id = q.gsm_id
+  WHERE q.protocol IS NOT NULL AND q.protocol <> '' AND g.protocol IS NOT q.protocol`;
+
+/**
+ * Beta's chemistry is the engine's own protocol call (summary.json protocol_name, which index-next keeps in sample_qc.protocol), never the
+ * label inherited from Alpha. Rows whose catalog label differs are corrected in one UPDATE, with the inherited label kept in
+ * protocol_source_label. The rows are counted against the daily D1 write budget first; a run with nothing to correct writes nothing.
+ */
+export async function applyEngineProtocol(db: D1Database, env: { D1_DAILY_WRITE_ROWS?: string }): Promise<{ updated: number; skipped?: string }> {
+  await ensureProtocolSourceColumn(db);
+  const c = await db.prepare(`SELECT count(*) AS n ${ENGINE_PROTOCOL_DIFFERS}`).first<{ n: number }>();
+  const n = Number(c?.n ?? 0);
+  if (!n) return { updated: 0 };
+  const reserved = await reserveWrites(db, env, 2 * n);
+  if (!reserved.ok) return { updated: 0, skipped: reserved.message };
+  const r = await db
+    .prepare(
+      `UPDATE gsm SET protocol_source_label = COALESCE(protocol_source_label, protocol),
+         protocol = (SELECT q.protocol FROM sample_qc q WHERE q.gsm_id = gsm.gsm_id)
+       WHERE gsm_id IN (SELECT g.gsm_id ${ENGINE_PROTOCOL_DIFFERS})`,
+    )
+    .run();
+  return { updated: Number(r.meta?.changes ?? 0) };
 }
