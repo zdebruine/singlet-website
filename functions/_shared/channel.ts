@@ -18,13 +18,16 @@ export interface ChannelEnv {
 export const isBeta = (env: ChannelEnv) => (env.CHANNEL ?? "").trim().toLowerCase() === "beta";
 
 export type ObjectClass =
-  | { ok: true; kind: "sample" | "label" | "pack" | "cells" | "design"; digest: string | null }
+  | { ok: true; kind: "sample" | "label" | "pack" | "cells" | "design" | "cidx"; digest: string | null }
   | { ok: false; error: string };
 
 const LABEL_KEY_RE = /^s1\/a\/GSM\d+\/([0-9a-f]{32})\.parquet$/;
 const PACK_KEY_RE = /^s1\/ref\/([0-9a-f]{32})\.pack$/;
 const CELLS_KEY_RE = /^s1\/cells\/GSE\d+\.cells$/;
 const DESIGN_KEY_RE = /^s1\/d\/(GSE\d+|[SED]RP\d+)\.design\.json$/; // curated study design sidecar (docs/CONTRASTS_CATALOG_SCHEMA.md)
+// the cell index (docs/format-s1-cell-index.md section 2): objects are content-addressed, the version directory is immutable, current.json is the one mutable key
+const CIDX_OBJ_KEY_RE = /^s1\/cidx\/obj\/([0-9a-f]{32})\.(scx|json|parquet)$/;
+const CIDX_DIR_KEY_RE = /^s1\/cidx\/(v\/\d{8}T\d{4}Z-[0-9a-f]{8}|current)\.json$/;
 
 /**
  * Which objects the rolling ingest may write. Content-addressed keys carry the first 16 bytes of the object's SHA-256 (docs/format-s1.md
@@ -41,5 +44,8 @@ export function classifyObjectKey(key: string): ObjectClass {
   if (p) return { ok: true, kind: "pack", digest: p[1] };
   if (CELLS_KEY_RE.test(key)) return { ok: true, kind: "cells", digest: null };
   if (DESIGN_KEY_RE.test(key)) return { ok: true, kind: "design", digest: null };
-  return { ok: false, error: "key is not an s1 sample, label, pack or cells object (manifests go through s1-publish)" };
+  const ci = CIDX_OBJ_KEY_RE.exec(key);
+  if (ci) return { ok: true, kind: "cidx", digest: ci[1] };
+  if (CIDX_DIR_KEY_RE.test(key)) return { ok: true, kind: "cidx", digest: null };
+  return { ok: false, error: "key is not an s1 sample, label, pack, cells or cell-index object (manifests go through s1-publish)" };
 }
