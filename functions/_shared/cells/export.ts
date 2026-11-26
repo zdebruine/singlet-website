@@ -9,11 +9,12 @@
  * No account is needed to open a link. With the Pages secret CIDX_INTERNAL_SECRET (the data Worker's), the Worker counts the request
  * against whoever opened it (their address, or their account when an MCP client asks) rather than against the site.
  */
+import { siteOrigin } from "../channel";
 import { CORS_HEADERS } from "../cors";
 import type { AppEnv, WaitUntil } from "../env";
 import type { Identity } from "../identity";
 import { s1Url } from "../s1-urls";
-import { loadInputs, parseCellRequest, readQuestion, type Inputs, type ParsedRequest } from "./http";
+import { assertQuestionUnderstood, loadInputs, parseCellRequest, readQuestion, type Inputs, type ParsedRequest } from "./http";
 import { parseCellQuestion } from "./nl";
 import { canonicalWhere, QueryError, rowScanWhere, runCellQuery, type CellQuery, type Expr } from "./query";
 import { DONOR_STATUS, TISSUE_TYPES, TUMOR_SAMPLE_TYPES, type SampleFacts } from "./sample-facts";
@@ -21,7 +22,7 @@ import { cellLineOf, CULTURED_CELL } from "./cell-lines";
 import { PAGE_CELLS_MAX, slicePage, type SlicePage } from "./slice";
 
 export const EXPORT_DEFAULT_CELLS = 2000;
-export const EXPORT_BASE = "https://singlet.bio/api/cells/export";
+export const exportBase = () => `${siteOrigin()}/api/cells/export`;
 const MODALITIES = ["counts", "spliced", "unspliced"];
 
 export interface ExportRequest {
@@ -59,7 +60,7 @@ export function exportLink(where: Expr | null, o: { include_low_qc?: boolean; ge
   if (o.modality && o.modality !== "counts") u.set("modality", o.modality);
   if (o.format && o.format !== "mtx") u.set("format", o.format);
   if (o.cursor) u.set("cursor", o.cursor);
-  return `${EXPORT_BASE}?${u}`;
+  return `${exportBase()}?${u}`;
 }
 
 async function hash8(s: string): Promise<string> {
@@ -130,6 +131,7 @@ export async function planExport(env: AppEnv, identity: Identity, waitUntil: Wai
   if (er.p.q) {
     // the link reads its question with the vocabulary only (no model call, so opening a link is free and repeatable)
     const nl = viaModel ? await readQuestion(env, identity, waitUntil, er.p, inputs) : parseCellQuestion(er.p.q, inputs.idx, inputs.facts);
+    assertQuestionUnderstood(er.p.q, nl, !!er.p.query.where);
     where = nl.where && where ? { and: [nl.where, where] } : (nl.where ?? where);
   }
   const query: CellQuery = { ...er.p.query, where, offset: 0 };
