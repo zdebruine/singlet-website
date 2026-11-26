@@ -10,7 +10,7 @@
 import { organismToScientific } from "../vocab";
 import type { CellIndex } from "./atlas-index";
 import { fieldDef } from "./fields";
-import { ANCESTRY_ALIASES, CELL_TYPE_ALIASES, STAGE_ALIASES, type Expr, type Leaf } from "./query";
+import { ANCESTRY_ALIASES, CELL_TYPE_ALIASES, STAGE_ALIASES, normalizeOboId, type Expr, type Leaf } from "./query";
 import { normLabel, type SampleFacts } from "./sample-facts";
 import { HANCESTRO_LABELS } from "../hancestro";
 
@@ -157,9 +157,21 @@ function tokenize(q: string): string[] {
 /** Read a question with the vocabulary alone (pure). */
 export function parseCellQuestion(q: string, idx: CellIndex, facts: SampleFacts): NlParse {
   const { dict, maxLen } = dictionary(idx, facts);
-  const toks = tokenize(q);
   const readings: Reading[] = [];
   const unparsed: string[] = [];
+  // ontology ids written into the question ("CL:0000084", "cl:84", "CL_0000084") name their term; the term's descendants follow from the filter itself
+  const idRe = /(?<![\w:])(?:(?:cl|uberon|mondo)[:_]\d+|hancestro[:_]\d{4})(?![\w:])/gi;
+  const rest = q.replace(idRe, (m) => {
+    const id = /^hancestro/i.test(m) ? `HANCESTRO:${m.slice(10)}` : normalizeOboId(m);
+    const field = id.startsWith("CL:") ? "cell_type" : id.startsWith("HANCESTRO:") ? "ancestry" : id.startsWith("UBERON:") ? "tissue" : "disease";
+    const known = field === "cell_type" ? !!(idx.terms[id] ?? facts.labels[id]) : field === "ancestry" ? !!HANCESTRO_LABELS[id] : !!facts.labels[id];
+    if (known) {
+      const def = fieldDef(field)!;
+      readings.push({ text: m, field: def.name, level: def.level, values: [id], labels: [idx.terms[id] ?? facts.labels[id] ?? HANCESTRO_LABELS[id] ?? id], negated: false });
+    } else unparsed.push(m);
+    return " ";
+  });
+  const toks = tokenize(rest);
   let neg = false;
   let orNext = false;
   const label = (field: string, v: string) => idx.terms[v] ?? facts.labels[v] ?? HANCESTRO_LABELS[v] ?? v;

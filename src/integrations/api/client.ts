@@ -14,6 +14,7 @@
  * missing fields (arrays → [], counts → 0), so a partial or older-shaped
  * payload degrades to an empty section instead of a crash.
  */
+import type { StudyDesignView } from "../../../functions/_shared/design-view";
 import type {
   ApiKeyCreated,
   AuthMe,
@@ -998,6 +999,16 @@ export const apiClient = {
     return normalizeGseDetail(await get<unknown>(`/api/gse/${encodeURIComponent(id)}`));
   },
 
+  /** GET /api/gse/:id/design — the curated study design (beta channel only; null when the study has none). */
+  async gseDesign(id: string, signal?: AbortSignal): Promise<StudyDesignView | null> {
+    try {
+      return await get<StudyDesignView>(`/api/gse/${encodeURIComponent(id)}/design`, undefined, signal);
+    } catch (e) {
+      if (isApiError(e) && e.status === 404) return null;
+      throw e;
+    }
+  },
+
   /** GET /api/bundle/:gse/index — what is actually inside the published file. */
   async bundleIndex(gseId: string, signal?: AbortSignal): Promise<BundleIndexResponse> {
     return normalizeBundleIndex(await get<unknown>(`/api/bundle/${encodeURIComponent(gseId)}/index`, undefined, signal));
@@ -1105,7 +1116,7 @@ export function normalizeRelated(raw: unknown): RelatedResponse {
 
 /** Public download URL for a study's legacy single bundle. It is a dead link once the study is retired: use studyFileUrl. */
 export function bundleUrl(gseId: string): string {
-  return `https://data.singlet.bio/data/${gseId}/${gseId}.singlet`;
+  return `${(import.meta.env?.VITE_DATA_BASE as string | undefined) || "https://data.singlet.bio"}/data/${gseId}/${gseId}.singlet`;
 }
 
 /** True when the study's single .singlet file is gone and its files are the per-sample objects listed in a manifest. */

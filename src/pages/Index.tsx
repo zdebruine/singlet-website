@@ -12,12 +12,13 @@ import { usePageMeta } from "@/hooks/usePageMeta";
 import { fmtCompact, fmtInt } from "@/lib/catalog-display";
 import { EXAMPLE_QUERIES } from "@/lib/search-routing";
 import { cn } from "@/lib/utils";
+import { ALPHA_SITE, BETA_ENGINE, IS_BETA } from "@/lib/channel";
 import { FORMAT_NOTE, FormatSizeChart, H5AD_PAIRED, HBars } from "@/components/landing/charts";
 import { QcFunnel, sampleFunnel } from "@/components/landing/QcFunnel";
 import { GetStarted } from "@/components/landing/GetStarted";
 import { ModalityGrid } from "@/components/landing/Modalities";
 import { QueryParse } from "@/components/landing/QueryParse";
-import { AlphaBetaTable, AlphaCtas, ALPHA_TO_BETA, RigorFooter, SpeedMeasured, ZoomStrip } from "@/components/landing/AlphaBeta";
+import { AlphaBetaTable, AlphaCtas, ALPHA_TO_BETA, BETA_CHANGES, RigorFooter, SpeedMeasured, ZoomStrip } from "@/components/landing/AlphaBeta";
 
 // One message per browser view. Each screen fills the visible window (below the header) up to a cap, so a large
 // monitor does not stretch it, and stacks naturally on a phone. Plan: docs/LANDING.md.
@@ -98,8 +99,17 @@ const Index = () => {
             </span>
             {/* What the resource is, in one line; the count is the live number of downloadable studies. */}
             <p className="mt-5 max-w-[620px] text-[15px] text-muted-foreground tabular">
-              {stats ? `${fmtInt(stats.studies_with_files)} public` : "Public"} GEO single-cell studies, re-processed from raw reads with one
-              pipeline. CC0, free to download.
+              {IS_BETA ? (
+                <>
+                  {stats ? `${fmtInt(stats.studies_with_files)} public` : "Public"} GEO single-cell studies so far, reprocessed again from every
+                  read in SRA with the new GPU engine. CC0, free to download.
+                </>
+              ) : (
+                <>
+                  {stats ? `${fmtInt(stats.studies_with_files)} public` : "Public"} GEO single-cell studies, re-processed from raw reads with one
+                  pipeline. CC0, free to download.
+                </>
+              )}
             </p>
             <div className="mt-8 w-full max-w-[680px]">
               <SearchBox variant="hero" placeholder={`Try "${EXAMPLE_QUERIES[0]}"`} />
@@ -119,10 +129,19 @@ const Index = () => {
                 </a>
               ))}
             </div>
-            <p className="mt-6 text-[13.5px] text-muted-foreground">
-              A research preview. Try it, tell us what you need, and{" "}
-              <Link to="/beta" className="text-primary underline underline-offset-2">see what's coming in Beta</Link>.
-            </p>
+            {IS_BETA ? (
+              <p className="mt-6 max-w-[620px] text-[13.5px] text-muted-foreground">
+                Research Beta is a running campaign. Each sample appears here when it finishes, so coverage grows every day. See the{" "}
+                <Link to="/campaign" className="text-primary underline underline-offset-2">live campaign page</Link>, read{" "}
+                <Link to="/beta" className="text-primary underline underline-offset-2">about this release</Link>, or open{" "}
+                <a href={ALPHA_SITE} className="text-primary underline underline-offset-2">Research Alpha</a>.
+              </p>
+            ) : (
+              <p className="mt-6 text-[13.5px] text-muted-foreground">
+                A research preview. Try it, tell us what you need, and{" "}
+                <Link to="/beta" className="text-primary underline underline-offset-2">see what's coming in Beta</Link>.
+              </p>
+            )}
             <AlphaCtas className="mt-3 flex flex-wrap items-center justify-center gap-3" />
             <nav aria-label="On this page" className="mt-8 flex flex-wrap justify-center gap-x-5 gap-y-2 text-[13.5px] text-muted-foreground">
               {JUMPS.map((j) => (
@@ -175,7 +194,9 @@ const Index = () => {
 
         {/* 4 · It holds more than counts */}
         <Screen id="layers" label="Layers">
-          <Title sub="Splicing layers in every file, plus per-cell labels.">Gene expression, plus splicing.</Title>
+          <Title sub={IS_BETA ? "Splicing, poly(A) sites, transposable elements and V(D)J usage, plus per-cell labels." : "Splicing layers in every file, plus per-cell labels."}>
+            {IS_BETA ? "Gene expression, and the layers behind it." : "Gene expression, plus splicing."}
+          </Title>
           <div className="mt-12">
             <ModalityGrid />
           </div>
@@ -220,9 +241,17 @@ const Index = () => {
 
         {/* 9 · It is honest about rigor: what Alpha is, and what Beta changes */}
         <Screen id="rigor" label="Rigor">
-          <Title sub="Alpha is a research preview. Beta re-runs every sample with a benchmarked engine.">Measured, and shown as measured.</Title>
+          <Title
+            sub={
+              IS_BETA
+                ? `Research Beta reprocesses every sample again with ${BETA_ENGINE} and checks its aligner against a ground-truth gate.`
+                : "Alpha is a research preview. Beta re-runs every sample with a benchmarked engine."
+            }
+          >
+            {IS_BETA ? "What changed since Alpha." : "Measured, and shown as measured."}
+          </Title>
           <div className="mt-12 max-w-[880px] mx-auto">
-            <AlphaBetaTable rows={ALPHA_TO_BETA.slice(0, 5)} />
+            <AlphaBetaTable rows={(IS_BETA ? BETA_CHANGES : ALPHA_TO_BETA).slice(0, 5)} />
             <p className="mt-6 text-center text-[14px] text-muted-foreground"><RigorFooter /></p>
             <AlphaCtas className="mt-8 flex flex-wrap items-center justify-center gap-3" />
           </div>
@@ -230,7 +259,7 @@ const Index = () => {
 
         {/* 10 · Start */}
         <Screen id="get-started" label="Get started">
-          <Title sub="Pick your tool.">Load singlet into your workspace.</Title>
+          <Title sub={IS_BETA ? "Pick your tool. Set SINGLET_DATA_BASE=https://beta-data.singlet.bio to read Beta." : "Pick your tool."}>Load singlet into your workspace.</Title>
           <div className="mt-12">
             <GetStarted />
           </div>

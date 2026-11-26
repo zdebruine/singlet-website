@@ -22,6 +22,7 @@ import { FIELDS, fieldDef, UNAVAILABLE } from "./fields";
 import { parseCellQuestion, toWhere, type Reading } from "./nl";
 import { canonicalWhere, cellPushdown, joinOf, labelIdsFor, leavesOf, parseWhere, QueryError, relaxations, rowScanWhere, runCellQuery, type CellQuery, type Expr } from "./query";
 import { sampleFacts, type SampleFacts } from "./sample-facts";
+import { siteOrigin } from "../channel";
 import { PAGE_CELLS_MAX, slicePage, slicePython } from "./slice";
 
 export const CELLS_CACHE_TTL = 300;
@@ -114,6 +115,13 @@ export async function loadInputs(env: AppEnv, waitUntil: WaitUntil): Promise<Inp
 }
 
 /** The natural-language reading: vocabulary first, then the catalog interpreter for what is left (charged to the caller's AI allowance). */
+/** A question that placed no term must not fall through to "every cell": it is an error that names what was not understood. */
+export function assertQuestionUnderstood(q: string, nl: { where: Expr | null; readings: unknown[]; unparsed: string[] }, hasWhere: boolean): void {
+  const content = nl.unparsed.filter((w) => w.length > 2);
+  if (!hasWhere && !nl.where && nl.readings.length === 0 && content.length)
+    throw new QueryError(`Could not place ${content.map((w) => `"${w}"`).join(", ")} in the vocabulary. Use an ontology id (CL:0000084), a label or a synonym; GET /api/cells/fields lists the fields.`, { unparsed: content, q });
+}
+
 export async function readQuestion(
   env: AppEnv,
   identity: Identity,
@@ -170,6 +178,7 @@ export async function cellSearchResponse(env: AppEnv, identity: Identity, waitUn
   let where = p.query.where;
   if (p.q) {
     nl = await readQuestion(env, identity, waitUntil, p, inputs);
+    assertQuestionUnderstood(p.q, nl, !!p.query.where);
     where = nl.where && where ? { and: [nl.where, where] } : (nl.where ?? where);
   }
   const query: CellQuery = { ...p.query, where };
@@ -210,9 +219,9 @@ export async function cellSearchResponse(env: AppEnv, identity: Identity, waitUn
     ...(rx.length ? { relaxations: rx } : {}),
     unmapped: unmappedFor(where, query.include_low_qc, inputs.idx, inputs.facts),
     slice: {
-      url: `https://singlet.bio/api/cells/slice?${params}`,
+      url: `${siteOrigin()}/api/cells/slice?${params}`,
       filtered: cellPushdown(where, inputs.idx, inputs.facts) ? "by the cell index" : "by the site (OR / NOT across cell fields)",
-      python: slicePython("https://singlet.bio", JSON.stringify(paramsObject(params))),
+      python: slicePython(siteOrigin(), JSON.stringify(paramsObject(params))),
     },
     basis: {
       index_version: inputs.idx.version,
@@ -254,7 +263,7 @@ export async function sliceResponse(env: AppEnv, request: Request, waitUntil: Wa
   if (where) params.set("where", canonicalWhere(where));
   if (query.include_low_qc) params.set("include_low_qc", "1");
   params.set("page_cells", String(p.pageCells));
-  return json(200, { ...page, python: slicePython("https://singlet.bio", JSON.stringify(paramsObject(params))) }, { "Cache-Control": "no-store" });
+  return json(200, { ...page, python: slicePython(siteOrigin(), JSON.stringify(paramsObject(params))) }, { "Cache-Control": "no-store" });
 }
 
 /** Sample-level fields a served sample can lack (the facts have no value for it). */

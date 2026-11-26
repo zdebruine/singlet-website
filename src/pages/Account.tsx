@@ -9,6 +9,7 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import { apiClient, isApiError, type AccountUsage } from "@/integrations/api/client";
 import type { ApiKeySummary } from "@/integrations/api/types";
 import { usePageMeta } from "@/hooks/usePageMeta";
+import { IS_BETA, SITE_BASE } from "@/lib/channel";
 import { cn } from "@/lib/utils";
 
 
@@ -110,7 +111,7 @@ function SignedOut({ openSignIn }: { openSignIn: () => void }) {
 }
 
 const Account = () => {
-  usePageMeta({ title: "Account", description: "Your singlet.bio account: today's AI usage and API keys for scripts and the MCP server.", noindex: true });
+  usePageMeta({ title: "Account", description: IS_BETA ? "Your Research Beta account: today's AI usage and API keys for scripts and the MCP server." : "Your singlet.bio account: today's AI usage and API keys for scripts and the MCP server.", noindex: true });
   const { user, loading, openSignIn, signOut, refresh } = useAuth();
   const signedIn = !!user;
 
@@ -221,7 +222,7 @@ const Account = () => {
   const activeCount = useMemo(() => (keys ?? []).filter((k) => keyState(k) === "active").length, [keys]);
 
   const curl = revealed
-    ? `curl -H "Authorization: Bearer ${revealed.secret}" \\\n  "https://singlet.bio/api/nl-search?q=microglia+in+the+aging+mouse+brain"`
+    ? `curl -H "Authorization: Bearer ${revealed.secret}" \\\n  "${SITE_BASE}/api/nl-search?q=microglia+in+the+aging+mouse+brain"`
     : null;
 
   return (

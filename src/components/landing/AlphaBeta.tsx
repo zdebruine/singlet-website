@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { ArrowRight } from "lucide-react";
 import { FeedbackButton } from "@/components/FeedbackDialog";
 import { cn } from "@/lib/utils";
+import { IS_BETA } from "@/lib/channel";
 
 // What Alpha does today and what Beta changes, one short row per topic. The home page, /beta and /known-issues all
 // read ALPHA_TO_BETA, so the story is told once. Plan: docs/LANDING.md and Singlet-Bio/singlet-agents
@@ -28,15 +29,27 @@ export const ALPHA_TO_BETA: AlphaToBeta[] = [
   { id: "metadata", topic: "Metadata", alpha: "Some GEO labels uncurated", beta: "Curated to standard ontologies" },
 ];
 
+/** What the Research Beta serves that Alpha does not, as measured on the campaign's own output. Shown on the Beta site. */
+export const BETA_CHANGES: AlphaToBeta[] = [
+  { id: "reads", topic: "Reads", alpha: "First run only, at most 30M reads", beta: "Every read of every run, at full quality" },
+  { id: "engine", topic: "Engine", alpha: "Earlier pipeline", beta: "GPU engine with an aligner configuration checked against a ground-truth gate" },
+  { id: "counting", topic: "Counting", alpha: "Spliced and unspliced counts", beta: "Spliced, unspliced and ambiguous counts, plus exon, intron and multimapping-read counts" },
+  { id: "cell-calling", topic: "Cell calling", alpha: "Conservative knee filter", beta: "EmptyDrops-style test with an FDR for every barcode" },
+  { id: "annotations", topic: "Labels", alpha: "Cell type, sex and ancestry", beta: "Adds cell-cycle phase, per-cell read QC and donor demultiplexing of pooled samples" },
+  { id: "modalities", topic: "Layers", alpha: "Gene counts, splice junctions, V(D)J usage", beta: "Adds poly(A) sites and transposable elements" },
+  { id: "qc", topic: "Sample QC", alpha: "Per-sample QC", beta: "Read QC, saturation curves, rRNA report and microbial read summaries" },
+  { id: "delivery", topic: "Delivery", alpha: "One release", beta: "Each sample published as soon as it finishes" },
+];
+
 /** Topic, Alpha today, Beta. Rows with a Known issues entry link to it. */
-export function AlphaBetaTable({ rows = ALPHA_TO_BETA, className }: { rows?: AlphaToBeta[]; className?: string }) {
+export function AlphaBetaTable({ rows = IS_BETA ? BETA_CHANGES : ALPHA_TO_BETA, className }: { rows?: AlphaToBeta[]; className?: string }) {
   return (
     <div className={cn("surface overflow-hidden", className)}>
       <div className="hidden sm:grid grid-cols-[120px_1fr_20px_1fr] gap-x-4 px-5 py-2.5 border-b border-border text-[11.5px] font-semibold uppercase tracking-wider">
         <span className="text-muted-foreground" />
-        <span className="text-foreground">Alpha today</span>
+        <span className="text-foreground">{IS_BETA ? "Alpha" : "Alpha today"}</span>
         <span aria-hidden="true" />
-        <span className="text-primary">Beta goal</span>
+        <span className="text-primary">{IS_BETA ? "Research Beta" : "Beta goal"}</span>
       </div>
       <ul>
         {rows.map((r) => (
@@ -125,13 +138,32 @@ export function ZoomStrip() {
         </li>
       ))}
       <li className="pt-1 text-center text-[12.5px] text-muted-foreground">
-        Sizes from <A to="/study/GSE138867">GSE138867</A>, 8 samples, 47K cells.
+        {IS_BETA ? (
+          <>
+            Sizes from Alpha's <a className="underline underline-offset-2" href="https://singlet.bio/study/GSE138867">GSE138867</a>, 8 samples, 47K cells.
+          </>
+        ) : (
+          <>
+            Sizes from <A to="/study/GSE138867">GSE138867</A>, 8 samples, 47K cells.
+          </>
+        )}
       </li>
     </ol>
   );
 }
 
 export function RigorFooter() {
+  if (IS_BETA) {
+    return (
+      <>
+        <A to="/benchmarking">Benchmarks</A>
+        <span className="mx-2" aria-hidden="true">·</span>
+        <A to="/known-issues">Known issues</A>
+        <span className="mx-2" aria-hidden="true">·</span>
+        <A to="/beta">About this release</A>
+      </>
+    );
+  }
   return (
     <>
       <A to="/benchmarking">Benchmarks</A>
@@ -145,6 +177,18 @@ export function RigorFooter() {
 
 /** The two calls to action: feedback and the Beta list. */
 export function AlphaCtas({ className }: { className?: string }) {
+  if (IS_BETA) {
+    return (
+      <div className={className ?? "flex flex-wrap items-center justify-center gap-3"}>
+        <Link to="/campaign" className="btn-primary">
+          Campaign progress
+        </Link>
+        <FeedbackButton category="idea" className="btn-secondary">
+          Send feedback
+        </FeedbackButton>
+      </div>
+    );
+  }
   return (
     <div className={className ?? "flex flex-wrap items-center justify-center gap-3"}>
       <Link to="/beta#join" className="btn-primary">

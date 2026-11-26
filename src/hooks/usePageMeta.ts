@@ -1,9 +1,12 @@
 import { useEffect } from "react";
+import { IS_BETA, SITE_BASE } from "@/lib/channel";
 
-const SITE = "https://singlet.bio";
-const DEFAULT_TITLE = "singlet.bio — AI-ready single-cell data, at your fingertips";
-const DEFAULT_DESC =
-  "Public scRNA-seq studies from GEO, reprocessed from raw reads, one .s1 file per sample. Free, CC0 data, no account.";
+const SITE = SITE_BASE;
+const SITE_NAME = IS_BETA ? "Research Beta" : "singlet.bio";
+const DEFAULT_TITLE = IS_BETA ? "Research Beta · singlet.bio: every read of public single-cell data" : "singlet.bio — AI-ready single-cell data, at your fingertips";
+const DEFAULT_DESC = IS_BETA
+  ? "Public scRNA-seq studies from GEO, reprocessed again from every read in SRA with the GPU engine, one .s1 file per sample, published as each finishes. Free, CC0 data."
+  : "Public scRNA-seq studies from GEO, reprocessed from raw reads, one .s1 file per sample. Free, CC0 data, no account.";
 const DEFAULT_IMAGE = `${SITE}/og-default.png`;
 
 function setMeta(selector: string, attr: string, value: string) {
@@ -73,7 +76,7 @@ export function usePageMeta(opts: {
     };
   }, [jsonLdText]);
   useEffect(() => {
-    const fullTitle = title ? `${title} · singlet.bio` : DEFAULT_TITLE;
+    const fullTitle = title ? `${title} · ${SITE_NAME}` : DEFAULT_TITLE;
     const desc = description ?? DEFAULT_DESC;
     const url = `${SITE}${path ?? window.location.pathname}`;
     document.title = fullTitle;
@@ -81,7 +84,7 @@ export function usePageMeta(opts: {
     setMeta('meta[property="og:title"]', "content", fullTitle);
     setMeta('meta[property="og:description"]', "content", desc);
     setMeta('meta[property="og:url"]', "content", url);
-    setMeta('meta[property="og:site_name"]', "content", "singlet.bio");
+    setMeta('meta[property="og:site_name"]', "content", SITE_NAME);
     // TODO: switch study pages to /og/:gse.png once a Pages-compatible PNG renderer is available.
     setMeta('meta[property="og:image"]', "content", DEFAULT_IMAGE);
     setMeta('meta[name="twitter:title"]', "content", fullTitle);

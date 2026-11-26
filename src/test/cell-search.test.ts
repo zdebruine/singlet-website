@@ -4,9 +4,9 @@
 import { describe, expect, it } from "vitest";
 import type { CellIndex } from "../../functions/_shared/cells/atlas-index";
 import { hydrateFacts, ageYears, type FactsWire } from "../../functions/_shared/cells/sample-facts";
-import { canonicalWhere, cellPushdown, filterCellRows, parseWhere, QueryError, relaxations, rowScanWhere, runCellQuery } from "../../functions/_shared/cells/query";
+import { normalizeOboId, canonicalWhere, cellPushdown, filterCellRows, parseWhere, QueryError, relaxations, rowScanWhere, runCellQuery } from "../../functions/_shared/cells/query";
 import { parseCellQuestion } from "../../functions/_shared/cells/nl";
-import { cacheKey, fieldsBody, parseCellRequest, unmappedFor } from "../../functions/_shared/cells/http";
+import { assertQuestionUnderstood, cacheKey, fieldsBody, parseCellRequest, unmappedFor } from "../../functions/_shared/cells/http";
 import { cellLineTypes, sampleColumns } from "../../functions/_shared/cells/export";
 import { withCellLines } from "../../functions/_shared/cells/cell-lines";
 
@@ -348,5 +348,51 @@ describe("cell lines carry their line as cell type", () => {
       ancestry: [null, null, null],
     });
     expect([...keep]).toEqual([0, 1]);
+  });
+});
+
+describe("cell search: ontology ids and unreadable questions", () => {
+  it("normalizes OBO id variants", () => {
+    expect(["CL:0000084", "cl:84", "CL_0000084", "cl:0000084", " CL:84 "].map(normalizeOboId)).toEqual(Array(5).fill("CL:0000084"));
+    expect(normalizeOboId("UBERON:2048")).toBe("UBERON:0002048");
+    expect(normalizeOboId("HANCESTRO:0010")).toBe("HANCESTRO:0010");
+    expect(normalizeOboId("T cell")).toBe("T cell");
+  });
+
+  it("reads a bare CL id in a question as that term (descendants follow from the filter)", () => {
+    for (const q of ["CL:0000084", "cl:84", "CL_0000084", "female CL:0000084"]) {
+      const p = parseCellQuestion(q, idx, facts);
+      const ct = p.readings.find((r) => r.field === "cell_type");
+      expect(ct?.values, q).toEqual(["CL:0000084"]);
+      expect(p.unparsed, q).toEqual([]);
+    }
+  });
+
+  it("an id variant in `where` selects the term and its descendants", () => {
+    const base = run({ cell_type: "CL:0000084" }).totals.cells;
+    expect(base).toBeGreaterThan(0);
+    for (const v of ["cl:84", "CL_0000084", "T cell"]) expect(run({ cell_type: v }).totals.cells, v).toBe(base);
+  });
+
+  it("an unknown id or label yields zero cells or an error, never every cell", () => {
+    const all = run({ cell_type: "CL:0000084" }).totals.cells;
+    const some = (() => {
+      try {
+        return run({ cell_type: "CL:9999999" }).totals.cells;
+      } catch (e) {
+        expect(e).toBeInstanceOf(QueryError);
+        return 0;
+      }
+    })();
+    expect(some).toBe(0);
+    expect(all).toBeGreaterThan(0);
+  });
+
+  it("a question that places no term is an error, not every cell", () => {
+    const nl = parseCellQuestion("CL:9999999 zorblax", idx, facts);
+    expect(nl.readings).toEqual([]);
+    expect(() => assertQuestionUnderstood("CL:9999999 zorblax", nl, false)).toThrow(QueryError);
+    const ok = parseCellQuestion("CL:0000084", idx, facts);
+    expect(() => assertQuestionUnderstood("CL:0000084", ok, false)).not.toThrow();
   });
 });

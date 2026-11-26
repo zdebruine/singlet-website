@@ -16,6 +16,7 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { cn } from "@/lib/utils";
 import { usePageMeta } from "@/hooks/usePageMeta";
+import { IS_BETA } from "@/lib/channel";
 import { fmtCompact, fmtInt, organismLabel } from "@/lib/catalog-display";
 import { searchDestination } from "@/lib/search-routing";
 import { SEARCH_PLACEHOLDER } from "@/components/SearchBox";
@@ -122,7 +123,9 @@ const Browse = () => {
 
   usePageMeta({
     title: state.q ? `${state.raw || state.q} — search` : "Browse studies",
-    description: "Search reprocessed public scRNA-seq studies from GEO by organism, tissue, disease, assay, cell type, or in plain English.",
+    description: IS_BETA
+      ? "Search the public scRNA-seq studies Research Beta has reprocessed so far, by organism, tissue, disease, assay, cell type, or in plain English."
+      : "Search reprocessed public scRNA-seq studies from GEO by organism, tissue, disease, assay, cell type, or in plain English.",
     path: "/browse",
     noindex: !!state.q || hasExplicitFilters(state),
   });
@@ -400,6 +403,12 @@ const Browse = () => {
             <h1 className="mb-3 text-[20px] font-semibold tracking-tight text-foreground">
               {state.q ? "Search results" : state.level === "gsm" ? "Browse samples" : "Browse studies"}
             </h1>
+            {IS_BETA && (
+              <p className="-mt-2 mb-3 type-small text-muted-foreground">
+                Research Beta: the studies finished so far. Coverage grows every day;{" "}
+                <a href="/campaign" className="text-primary underline underline-offset-2">see the campaign</a>.
+              </p>
+            )}
             <p className="-mt-2 mb-3 type-small text-muted-foreground">
               Looking for cells rather than studies? <a href="/cells" className="text-primary underline underline-offset-2">Search cells across the atlas</a> by cell type, sex, ancestry, tissue, disease and stage.
             </p>

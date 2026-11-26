@@ -2,6 +2,7 @@ import { ArrowRight, ExternalLink } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { usePageMeta } from "@/hooks/usePageMeta";
+import { IS_BETA } from "@/lib/channel";
 
 const DataLicense = () => {
     usePageMeta({ title: "Data and software license", description: "atlas data is CC0; the singlet.bio site code and the singlet client are MIT licensed.", path: "/data-license" });
@@ -136,7 +137,7 @@ const DataLicense = () => {
                         <p className="text-sm text-muted-foreground leading-relaxed mb-4">
                             Citation is not required, but it helps others find the resource and supports continued work.
                             If you use the atlas or the <span className="font-mono">singlet</span> software in a publication,
-                            please cite Singlet Bio and the release you used: "Singlet Research Alpha (October 2026)".
+                            please cite Singlet Bio and the release you used: "{IS_BETA ? "Singlet Research Beta (campaign started 2026-11-20)" : "Singlet Research Alpha (October 2026)"}".
                         </p>
                         <p className="text-sm text-muted-foreground leading-relaxed">
                             For specific datasets, include the original GEO accession number.

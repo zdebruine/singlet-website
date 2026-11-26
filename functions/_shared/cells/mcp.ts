@@ -8,7 +8,8 @@ import type { Identity } from "../identity";
 import { fmt, fmtBytes, toolError, toolResult, type ToolResult } from "../mcp-core";
 import { cellSearchResponse, fieldsBody, loadInputs, parseCellRequest, sliceResponse } from "./http";
 import { FIELDS } from "./fields";
-import { callExport, EXPORT_BASE, exportLink, parseExportRequest, planExport } from "./export";
+import { siteOrigin } from "../channel";
+import { callExport, exportBase, exportLink, parseExportRequest, planExport } from "./export";
 
 const FIELD_LIST = FIELDS.map((f) => `${f.name} (${f.level}${f.ontology ? `, ${f.ontology.join("/")}` : ""})`).join(", ");
 
@@ -92,7 +93,7 @@ function toParsed(args: Record<string, unknown>) {
   for (const k of ["include_low_qc", "limit", "offset", "page_cells", "cursor", "modalities"]) if (args[k] !== undefined) body[k] = args[k];
   // MCP callers bring their own model: `question` is read with the vocabulary only; words it cannot place are returned to the caller
   body.ai = false;
-  return parseCellRequest(new URL("https://singlet.bio/api/cells"), body);
+  return parseCellRequest(new URL(`${siteOrigin()}/api/cells`), body);
 }
 
 export async function searchCellsTool(env: AppEnv, identity: Identity, waitUntil: WaitUntil, args: Record<string, unknown>): Promise<ToolResult> {
@@ -234,7 +235,7 @@ export async function exportCellsTool(env: AppEnv, identity: Identity, waitUntil
     if (typeof args.question === "string") body.q = args.question;
     for (const k of ["include_low_qc", "genes", "max_cells", "modality", "cursor"]) if (args[k] !== undefined) body[k] = args[k];
     body.ai = false;
-    er = parseExportRequest(new URL(EXPORT_BASE), body);
+    er = parseExportRequest(new URL(exportBase()), body);
   } catch (e) {
     return toolError(e instanceof Error ? e.message : String(e));
   }

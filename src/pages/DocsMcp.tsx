@@ -5,7 +5,8 @@ import Footer from "@/components/Footer";
 import { CodeBlock } from "@/components/CodeBlock";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { usePageMeta } from "@/hooks/usePageMeta";
-import { GITHUB_ISSUES } from "@/lib/install-snippets";
+import { DATA_BASE, GITHUB_ISSUES } from "@/lib/install-snippets";
+import { IS_BETA, SITE_BASE } from "@/lib/channel";
 import {
   MCP_PUBLIC_URL,
   MCP_URL,
@@ -16,6 +17,8 @@ import {
 } from "@/lib/mcp-snippets";
 
 const KEY = "sk_live_…";
+const DATA_HOST = DATA_BASE.replace("https://", "");
+const SITE_HOST = SITE_BASE.replace("https://", "");
 
 const EXAMPLES: { ask: string; tools: string; gets: string }[] = [
   {
@@ -124,8 +127,9 @@ function Section({ id, title, children, collapsible }: { id: string; title: stri
 export default function DocsMcp() {
   usePageMeta({
     title: "Use singlet from Claude, Cursor or ChatGPT",
-    description:
-      "Connect an AI assistant to the singlet.bio atlas: search public single-cell studies, read their QC, download one sample by byte range and export a cohort manifest. Tool calls on /mcp need a free account; /mcp/public serves the read-only tools without one; downloads need none.",
+    description: IS_BETA
+      ? "Connect an AI assistant to the Research Beta atlas: search the studies finished so far, read their QC, download one sample by byte range and export a cohort manifest. Tool calls on /mcp need a free account; downloads need none."
+      : "Connect an AI assistant to the singlet.bio atlas: search public single-cell studies, read their QC, download one sample by byte range and export a cohort manifest. Tool calls on /mcp need a free account; /mcp/public serves the read-only tools without one; downloads need none.",
     path: "/docs/mcp",
   });
 
@@ -143,7 +147,9 @@ export default function DocsMcp() {
           <Logo variant="mark" height={28} link={false} className="docs-brand-mark mb-4" />
           <h1 className="text-[36px] md:text-[42px] mb-3">Ask your AI assistant for single-cell data</h1>
           <p className="text-lg text-muted-foreground">
-            Connect singlet.bio to Claude, Cursor, ChatGPT or VS Code. It searches the atlas, checks QC and writes the loading code.
+            {IS_BETA
+              ? "Connect Research Beta to Claude, Cursor, ChatGPT or VS Code. It searches the studies finished so far, checks QC and writes the loading code."
+              : "Connect singlet.bio to Claude, Cursor, ChatGPT or VS Code. It searches the atlas, checks QC and writes the loading code."}
           </p>
           <p className="text-sm text-muted-foreground">
             <strong className="text-foreground">Contact:</strong>{" "}
@@ -183,12 +189,12 @@ export default function DocsMcp() {
 
           <Section id="setup" title="Set it up">
             <p>
-              Hosted at <code className="code-inline">{MCP_URL}</code>. Tools need a free singlet.bio account: add the URL to your
+              Hosted at <code className="code-inline">{MCP_URL}</code>. Tools need a free {IS_BETA ? "Research Beta" : "singlet.bio"} account: add the URL to your
               client and sign in with GitHub or Google when it asks. Clients that only take a header can send a personal API key from{" "}
               <Link to="/account">your account</Link> instead. Without either, <code className="code-inline">initialize</code> and every{" "}
               <code className="code-inline">tools/call</code> answer HTTP 401 with <code className="code-inline">sign_in_required</code>, which is
               what makes a client start sign-in; <code className="code-inline">tools/list</code> and <code className="code-inline">ping</code> stay
-              open. Downloads from <code className="code-inline">data.singlet.bio</code> never need an account. To try the tools
+              open. Downloads from <code className="code-inline">{DATA_HOST}</code> never need an account. To try the tools
               without an account first, use the <a href="#public">public endpoint</a>.
             </p>
             <Tabs defaultValue="claude">
@@ -202,7 +208,7 @@ export default function DocsMcp() {
               <TabsContent value="claude" className="mt-4">
                 <p className="text-sm text-muted-foreground">
                   Claude on the web, Desktop or mobile: Settings → Connectors → Add custom connector, paste the URL, then Connect and sign in
-                  to singlet.bio with GitHub or Google. No key to copy; disconnect any time from <Link to="/account#connectors">your account</Link>.
+                  to {IS_BETA ? SITE_HOST : "singlet.bio"} with GitHub or Google. No key to copy; disconnect any time from <Link to="/account#connectors">your account</Link>.
                 </p>
                 <CodeBlock label="connector url" code={MCP_URL} />
               </TabsContent>
@@ -324,7 +330,7 @@ export default function DocsMcp() {
                 Disease and tissue labels are study-level, taken from GEO text. Matched controls are candidates to check,
                 not drop-in replacements.
               </li>
-              <li>Data is CC0 and downloads from <code className="code-inline">data.singlet.bio</code> never need a key or an account.</li>
+              <li>Data is CC0 and downloads from <code className="code-inline">{DATA_HOST}</code> never need a key or an account.</li>
             </ul>
           </Section>
 

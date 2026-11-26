@@ -2,6 +2,7 @@ import { ArrowRight, SearchX } from "lucide-react";
 import { fmtInt, organismLabel } from "@/lib/catalog-display";
 import type { Suggestion } from "@/integrations/api/types";
 import { FIELD_LABEL } from "./browse-state";
+import { IS_BETA } from "@/lib/channel";
 
 interface Props {
   level: "gse" | "gsm";
@@ -62,6 +63,13 @@ export function EmptyState({ level, suggestions, hasFilters, onApply, onClear, o
         </ul>
       ) : (
         <p className="mt-4 text-[13px] text-muted-foreground">No single change rescues this search.</p>
+      )}
+
+      {IS_BETA && (
+        <p className="mt-4 text-[13px] text-muted-foreground max-w-[520px] mx-auto">
+          Research Beta publishes each sample as it finishes, so a study you expect may not be here yet.{" "}
+          <a href="/campaign" className="text-primary underline underline-offset-2">Campaign progress</a>
+        </p>
       )}
 
       <div className="mt-5 flex flex-wrap justify-center gap-2">

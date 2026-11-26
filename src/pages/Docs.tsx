@@ -6,7 +6,8 @@ import Footer from "@/components/Footer";
 import { CodeBlock } from "@/components/CodeBlock";
 import { usePageMeta } from "@/hooks/usePageMeta";
 import { cn } from "@/lib/utils";
-import { BUILD_DEPS, EXAMPLE_GSE, GITHUB_ISSUES, GITHUB_REPO, PY_INSTALL, R_INSTALL_STANDALONE, pyInstallExtra } from "@/lib/install-snippets";
+import { IS_BETA, SITE_BASE } from "@/lib/channel";
+import { BUILD_DEPS, EXAMPLE_GSE, GITHUB_ISSUES, GITHUB_REPO, DATA_BASE, PY_INSTALL, R_INSTALL_STANDALONE, pyInstallExtra } from "@/lib/install-snippets";
 
 const SECTIONS = [
   { id: "install", label: "Install" },
@@ -24,7 +25,7 @@ const SECTIONS = [
   { id: "pipeline", label: "Run the pipeline (advanced)" },
 ] as const;
 
-const MCP_URL = "https://singlet.bio/mcp";
+const MCP_URL = `${SITE_BASE}/mcp`;
 const KEY_PLACEHOLDER = "sk_live_…";
 /** Flagship example (8/8 usable samples, ~193 MB) and its first sample. */
 const GSE = EXAMPLE_GSE;
@@ -72,6 +73,20 @@ const MODALITIES: [string, string, string][] = [
   ["Cell type (Cell Ontology, with every level of the call)", "label sidecar, cell index", "Per-study accuracy by depth: compartment 0.84, lineage 0.75, cell type 0.43, subtype 0.32. The last two are previews"],
   ["Chromosomal sex (human, mouse)", "label sidecar, cell index", "XIST against chrY: 98.1% of samples agree with GEO (153 of 156 called)"],
   ["Genetic ancestry (human donors with enough covered sites)", "label sidecar, cell index", "Continental group (HANCESTRO) at q ≥ 0.8, else admixed. Validated on 1000 Genomes simulations and 22 self-reported donors (no call contradicted the report)"],
+];
+
+/** What Research Beta serves for each sample. Layers beyond Alpha's are listed per sample by get_modalities. */
+const BETA_MODALITIES: [string, string, string][] = [
+  ["Gene counts: spliced, unspliced and ambiguous, each as a layer", "counts, spliced, unspliced", "Default of load(); get_modalities lists the ambiguous layer"],
+  ["Exon, intron and multimapping-read counts", "get_modalities", "Per cell"],
+  ["Splice junctions", "splice_junctions", "Reads per junction and cell"],
+  ["Poly(A) site counts", "get_modalities", "Per cell"],
+  ["Transposable-element counts", "get_modalities", "Per cell"],
+  ["V(D)J gene usage", "get_modalities", "Per-cell use of receptor V, D and J gene segments"],
+  ["Cell calls and per-cell QC", "cells table", "EmptyDrops-style test with an FDR; reads, saturation, mitochondrial, exonic, intergenic and multimapped fractions"],
+  ["Per-sample read QC", "manifest", "Saturation curves, rRNA report and non-host (microbial) read summaries"],
+  ["Cell type, chromosomal sex, genetic ancestry, cell-cycle phase", "label sidecar, cell index", "Cell Ontology cell type with scores; ancestry as HANCESTRO groups"],
+  ["Donor", "cells table", "Demultiplexing of pooled samples; pools whose donors cannot be separated are held privately"],
 ];
 
 const Mono = ({ children }: { children: React.ReactNode }) => <code className="code-inline">{children}</code>;
@@ -150,7 +165,7 @@ const Docs = () => {
               <CodeBlock label="r" code={R_INSTALL_STANDALONE} />
               <p className="mt-4">
                 No account, API key or configuration is needed to load data. Files are fetched from{" "}
-                <a href="https://data.singlet.bio" rel="noopener noreferrer">data.singlet.bio</a> on first use and cached
+                <a href={DATA_BASE} rel="noopener noreferrer">{DATA_BASE.replace("https://", "")}</a> on first use and cached
                 locally.
               </p>
               <h3>Optional extras (Python)</h3>
@@ -174,7 +189,7 @@ const Docs = () => {
                   </tr>
                   <tr>
                     <td><Mono>[mcp]</Mono></td>
-                    <td>A local MCP server (the hosted one at <Mono>singlet.bio/mcp</Mono> needs no install; see <a href="#api-keys">API keys &amp; MCP</a>).</td>
+                    <td>A local MCP server (the hosted one at <Mono>{MCP_URL.replace("https://", "")}</Mono> needs no install; see <a href="#api-keys">API keys &amp; MCP</a>).</td>
                   </tr>
                   <tr>
                     <td><Mono>[analysis]</Mono></td>
@@ -239,15 +254,15 @@ head(colData(sce)$gsm_id)`}
               <h3>Files on disk</h3>
               <p>
                 Every study is a set of immutable per-sample objects in the <Mono>.s1</Mono> format, one per sample at{" "}
-                <Mono>https://data.singlet.bio/s1/s/&lt;GSM&gt;/&lt;digest&gt;.s1</Mono>, and a study manifest at{" "}
-                <Mono>https://data.singlet.bio/s1/m/&lt;GSE&gt;.json</Mono> that lists every sample, member and byte range. The
+                <Mono>{DATA_BASE}/s1/s/&lt;GSM&gt;/&lt;digest&gt;.s1</Mono>, and a study manifest at{" "}
+                <Mono>{DATA_BASE}/s1/m/&lt;GSE&gt;.json</Mono> that lists every sample, member and byte range. The
                 matrices inside use the pz2 codec (rANS-coded sparse chunks of cells, decodable one chunk at a time). An object never
                 changes: its name carries its digest, so a byte range you read once stays valid. <Mono>GET /api/gse/:id</Mono> returns
                 the manifest URL as <Mono>series.s1.manifest_url</Mono>.
               </p>
               <CodeBlock
                 label="bash"
-                code={`curl -s https://data.singlet.bio/s1/m/${GSE}.json | head -c 600   # the manifest: samples, keys, sizes, members`}
+                code={`curl -s ${DATA_BASE}/s1/m/${GSE}.json | head -c 600   # the manifest: samples, keys, sizes, members`}
               />
               <div className="grid md:grid-cols-2 gap-3 mt-3">
                 <CodeBlock
@@ -304,7 +319,7 @@ sce  <- singlet::find_load("human PBMC, COVID-19, 10x 5'", limit = 2)`}
                 label="python"
                 code={`import pandas as pd
 
-url = "https://singlet.bio/api/manifest?organism=Mus+musculus&tissue_group=Brain+%2F+CNS&format=tsv"
+url = "${SITE_BASE}/api/manifest?organism=Mus+musculus&tissue_group=Brain+%2F+CNS&format=tsv"
 studies = pd.read_csv(url, sep="\\t", storage_options={"User-Agent": "singlet-docs"})`}
               />
               <p className="text-xs text-muted-foreground">
@@ -313,7 +328,7 @@ studies = pd.read_csv(url, sep="\\t", storage_options={"User-Agent": "singlet-do
               </p>
               <p>
                 Search on this website, in the packages and in the MCP server all call the same public endpoint,{" "}
-                <Mono>GET https://singlet.bio/api/nl-search?q=…</Mono>, which returns the matched accessions and the
+                <Mono>GET {SITE_BASE}/api/nl-search?q=…</Mono>, which returns the matched accessions and the
                 filters it interpreted. Results are catalog metadata. Most questions are read by the built-in vocabulary
                 (organisms, tissues, diseases, assays, cell types, cell counts, years) at no cost. Model readings are cached
                 per question text and are not tied to you; the only thing kept per visitor is a daily count of AI requests.
@@ -373,7 +388,7 @@ studies = pd.read_csv(url, sep="\\t", storage_options={"User-Agent": "singlet-do
                 <Mono>sex_chrom</Mono> / <Mono>sex_score</Mono>, <Mono>ancestry_hancestro</Mono> / <Mono>ancestry_prob</Mono>, joined to
                 the matrix by <Mono>col</Mono>. Raw genotype inputs are never written to a public file.
               </p>
-              <h3 id="modalities" className="scroll-mt-24">What Alpha serves</h3>
+              <h3 id="modalities" className="scroll-mt-24">{IS_BETA ? "What Beta serves" : "What Alpha serves"}</h3>
               <p>
                 <Mono>load()</Mono> returns the gene-level counts. Ask for other members by name with <Mono>modalities=</Mono>; the
                 labels are read from the sidecar or across studies from the atlas cell index.
@@ -385,7 +400,7 @@ studies = pd.read_csv(url, sep="\\t", storage_options={"User-Agent": "singlet-do
 
 import pandas as pd
 study = singlet.open_study("${GSE}")
-url = "https://data.singlet.bio/" + study.doc["samples"][0]["annotations"]["a2026-10"]["key"]
+url = "${DATA_BASE}/" + study.doc["samples"][0]["annotations"]["a2026-10"]["key"]
 labels = pd.read_parquet(url, storage_options={"User-Agent": "singlet-docs"})  # one row per called cell, joined on col`}
                 />
                 <CodeBlock
@@ -405,7 +420,7 @@ cells = atlas.find_cells(cell_type="CL:0000084", ancestry="European")`}
                   </tr>
                 </thead>
                 <tbody>
-                  {MODALITIES.map(([what, name, note]) => (
+                  {(IS_BETA ? BETA_MODALITIES : MODALITIES).map(([what, name, note]) => (
                     <tr key={what}>
                       <td>{what}</td>
                       <td><Mono>{name}</Mono></td>
@@ -419,6 +434,12 @@ cells = atlas.find_cells(cell_type="CL:0000084", ancestry="European")`}
                 <Mono>ancestry_genetic</Mono> filter <Mono>/api/search</Mono> and the MCP tools, and <Mono>find_cells</Mono> filters
                 single cells by them. From an assistant, <Mono>get_modalities</Mono> lists what each sample holds.
               </p>
+              {IS_BETA && (
+                <p className="text-sm text-muted-foreground">
+                  Genotypes, mitochondrial alleles, and ambient-RNA and doublet scores stay out of the public files until their release
+                  gates pass.
+                </p>
+              )}
             </Section>
 
             {/* ── Download just part of a study ── */}
@@ -432,12 +453,12 @@ cells = atlas.find_cells(cell_type="CL:0000084", ancestry="European")`}
                 <Mono>GET /api/bundle/:gse/index</Mono> lists every sample object and its members (<Mono>format: "singlet-s1"</Mono>),
                 and <Mono>GET /api/bundle/:gse/samples</Mono> the per-sample QC, without downloading anything:
               </p>
-              <CodeBlock label="bash" code={`curl "https://singlet.bio/api/bundle/${GSE}/index"`} />
+              <CodeBlock label="bash" code={`curl "${SITE_BASE}/api/bundle/${GSE}/index"`} />
               <p>
                 <Mono>GET /api/bundle/:gse/entry?path=samples/&lt;GSM&gt;/&lt;member&gt;</Mono> says where a member's bytes are inside its
                 sample object: a URL, a byte range and the command to fetch it.
               </p>
-              <CodeBlock label="bash" code={`curl "https://singlet.bio/api/bundle/${GSE}/entry?path=samples/${GSM}/exon_counts.1pz"`} />
+              <CodeBlock label="bash" code={`curl "${SITE_BASE}/api/bundle/${GSE}/entry?path=samples/${GSM}/exon_counts.1pz"`} />
               <p className="text-sm text-muted-foreground">
                 From an assistant, <Mono>list_bundle_files</Mono> and <Mono>get_partial_download</Mono> return the same ranges;{" "}
                 <Mono>find_cells</Mono> picks cells by their statistics or labels and <Mono>slice_cells</Mono> gives the ranges of just
@@ -483,13 +504,13 @@ cells = atlas.find_cells(cell_type="CL:0000084", ancestry="European")`}
               <div className="grid md:grid-cols-2 gap-3">
                 <CodeBlock
                   label="bash — download everything matching a search"
-                  code={`curl -L "https://singlet.bio/api/manifest?organism=Homo+sapiens&tissue_group=Brain+%2F+CNS&format=curl" \
+                  code={`curl -L "${SITE_BASE}/api/manifest?organism=Homo+sapiens&tissue_group=Brain+%2F+CNS&format=curl" \
   -o get-studies.sh
 bash get-studies.sh`}
                 />
                 <CodeBlock
                   label="python — load everything matching a search"
-                  code={`curl -L "https://singlet.bio/api/manifest?disease_group=COVID-19&format=python" -o load_studies.py
+                  code={`curl -L "${SITE_BASE}/api/manifest?disease_group=COVID-19&format=python" -o load_studies.py
 python load_studies.py`}
                 />
               </div>
@@ -502,7 +523,7 @@ python load_studies.py`}
                 The atlas, every study and every sample are described in{" "}
                 <a href="https://docs.mlcommons.org/croissant/" className="text-primary underline underline-offset-2">MLCommons Croissant 1.1</a>{" "}
                 JSON-LD, with the Responsible AI fields (collection, preprocessing, annotation, biases, limitations, sensitive
-                information, maintenance). The document's <Mono>version</Mono> is the Research Alpha release policy in force.
+                information, maintenance). The document's <Mono>version</Mono> is the Research {IS_BETA ? "Beta" : "Alpha"} release policy in force.
               </p>
               <table>
                 <thead>
@@ -530,8 +551,8 @@ python load_studies.py`}
                 label="python — read a study's samples and one sample's cells with mlcroissant"
                 code={`# pip install "mlcroissant[parquet]"
 import mlcroissant as mlc
-samples = mlc.Dataset("https://singlet.bio/api/croissant/${GSE}").records("samples")
-cells = mlc.Dataset("https://singlet.bio/api/croissant/${GSE}/${GSM}").records("cells")`}
+samples = mlc.Dataset("${SITE_BASE}/api/croissant/${GSE}").records("samples")
+cells = mlc.Dataset("${SITE_BASE}/api/croissant/${GSE}/${GSM}").records("cells")`}
               />
               <p className="text-sm text-muted-foreground">
                 mlcroissant reads <Mono>samples</Mono>, <Mono>features</Mono> and a sample's <Mono>cells</Mono>; the count matrices and{" "}
@@ -551,11 +572,21 @@ cells = mlc.Dataset("https://singlet.bio/api/croissant/${GSE}/${GSM}").records("
                 <li><Mono>created_at</Mono> — when the study's objects were written, in its manifest (returned as <Mono>created_at</Mono> by <Mono>/api/bundle/:gse/index</Mono> and as <Mono>packed_at</Mono> by <Mono>/api/gse/:id</Mono>), and shown as "Packed" on the study page. The manifest's <Mono>rev</Mono> changes whenever any sample object or study file does.</li>
               </ul>
               <p>
-                The pipeline version is not the same for every file. Published files record <Mono>2.0.0</Mono> (about
-                half), <Mono>1.0.0</Mono>, or no version at all (mostly mouse files, packed by a build that did not record it),
-                and input was capped at 30,000,000 reads per sample (see{" "}
-                <Link to="/about#processing">What a study goes through</Link>). Before merging studies, check that they
-                share a reference build and pipeline version. The atlas data is <Mono>CC0</Mono>{" "}
+                {IS_BETA ? (
+                  <>
+                    Beta files record the pipeline release in their manifest, and every read of every run is used, with no cap on input
+                    (see <Link to="/about#processing">What a study goes through</Link>). Before merging studies, check that they
+                    share a reference build and pipeline version.
+                  </>
+                ) : (
+                  <>
+                    The pipeline version is not the same for every file. Published files record <Mono>2.0.0</Mono> (about
+                    half), <Mono>1.0.0</Mono>, or no version at all (mostly mouse files, packed by a build that did not record it),
+                    and input was capped at 30,000,000 reads per sample (see{" "}
+                    <Link to="/about#processing">What a study goes through</Link>). Before merging studies, check that they
+                    share a reference build and pipeline version.
+                  </>
+                )} The atlas data is <Mono>CC0</Mono>{" "}
                 (public domain, no attribution required); the pipeline, packages and site code are <Mono>MIT</Mono> licensed.
                 Details on the <Link to="/data-license">license page</Link>.
               </p>
@@ -667,7 +698,7 @@ BiocManager::install(c("SingleCellExperiment", "SummarizedExperiment", "S4Vector
               <p>
                 <Mono>singlet_study()</Mono> reads a study's manifest, <Mono>singlet_study_modalities()</Mono> says what each sample
                 holds, and <Mono>singlet_cells()</Mono> fetches only the chunks of the cells you ask for. Matrices come back
-                features × cells, the Bioconductor orientation. See <a href="#modalities" className="text-primary hover:underline">What Alpha serves</a>{" "}
+                features × cells, the Bioconductor orientation. See <a href="#modalities" className="text-primary hover:underline">{IS_BETA ? "What Beta serves" : "What Alpha serves"}</a>{" "}
                 for the full list.
               </p>
               <CodeBlock
@@ -770,7 +801,7 @@ sc.pp.highly_variable_genes(adata, batch_key="gsm_id")`}
               <CodeBlock
                 label="bash"
                 code={`curl -H "Authorization: Bearer ${KEY_PLACEHOLDER}" \\
-  "https://singlet.bio/api/nl-search?q=microglia+in+the+aging+mouse+brain"`}
+  "${SITE_BASE}/api/nl-search?q=microglia+in+the+aging+mouse+brain"`}
               />
               <h3>In the packages</h3>
               <p className="text-sm text-muted-foreground">

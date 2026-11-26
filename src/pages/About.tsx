@@ -13,8 +13,9 @@ import { Railway, Station } from "@/components/about/Railway";
 import { FORMAT_NOTE, FormatSizeChart, H5AD_PAIRED, HBars } from "@/components/landing/charts";
 import { QcFunnel, sampleFunnel } from "@/components/landing/QcFunnel";
 import { QueryParse } from "@/components/landing/QueryParse";
-import { MODALITIES } from "@/components/landing/Modalities";
+import { BETA_MODALITIES, MODALITIES } from "@/components/landing/Modalities";
 import { EXAMPLE_GSE, GITHUB_ISSUES } from "@/lib/install-snippets";
+import { BETA_ENGINE, IS_BETA } from "@/lib/channel";
 
 const CHANGELOG_URL = "https://github.com/zdebruine/singlet-website/blob/main/CHANGELOG.md";
 
@@ -70,7 +71,9 @@ function Fold({ id, title, children }: { id: string; title: string; children: Re
 const About = () => {
   usePageMeta({
     title: "About singlet",
-    description: "Every study on singlet.bio is reprocessed from raw reads. Follow a sample from GEO to your notebook: protocol detection, alignment, extra layers, QC, one file per study and plain-English search.",
+    description: IS_BETA
+      ? "Research Beta reprocesses every study again from all of its raw reads with the GPU engine. Follow a sample from GEO to your notebook: protocol detection, alignment, extra layers, QC, one file per sample and plain-English search."
+      : "Every study on singlet.bio is reprocessed from raw reads. Follow a sample from GEO to your notebook: protocol detection, alignment, extra layers, QC, one file per study and plain-English search.",
     path: "/about",
   });
   const { hash } = useLocation();
@@ -137,7 +140,7 @@ const About = () => {
                   <Loading />
                 )
               }
-              detail={<p>Up to 30 million reads per sample. Sample characteristics from GEO are kept word for word.</p>}
+              detail={<p>{IS_BETA ? "Every read of every run in SRA is used. Sample characteristics from GEO are kept word for word." : "Up to 30 million reads per sample. Sample characteristics from GEO are kept word for word."}</p>}
               link={{ to: "/docs#provenance", label: "Provenance in the docs" }}
             />
 
@@ -147,7 +150,7 @@ const About = () => {
               title="Protocol detected from the reads"
               claim="The barcode and UMI layout is read from the reads themselves, so each library is counted the way it was built."
               visual={facets ? (<><Caption>Studies by assay</Caption><HBars data={assays} labelWidth="w-[150px] sm:w-[190px]" /></>) : <Loading />}
-              detail={<p>10x 3′ and 5′, Multiome and CITE-seq (RNA library), Drop-seq, inDrop, Seq-Well, BD Rhapsody, CEL-seq2, MARS-seq2, SPLiT-seq, DNBelab C4 and more. Plate-based Smart-seq is not processed in Alpha.</p>}
+              detail={<p>10x 3′ and 5′, Multiome and CITE-seq (RNA library), Drop-seq, inDrop, Seq-Well, BD Rhapsody, CEL-seq2, MARS-seq2, SPLiT-seq, DNBelab C4 and more.{!IS_BETA && " Plate-based Smart-seq is not processed in Alpha."}</p>}
               link={{ to: "/browse", label: "Filter by assay in Browse" }}
             />
 
@@ -163,7 +166,14 @@ const About = () => {
                     Human GRCh38 (GENCODE v44), mouse GRCm39 (vM33), rat mRatBN7.2, macaque Mmul_10, zebrafish GRCz11, and a combined
                     human-mouse reference for mixed-species studies. The build is in every study manifest and on every cell you load.
                   </p>
-                  <p>In Alpha some molecules are counted twice, so the spliced and unspliced layers are not yet suited to RNA velocity.</p>
+                  {IS_BETA ? (
+                    <p>
+                      The GPU engine ({BETA_ENGINE}) does the alignment and counting. Gene counts come split into spliced, unspliced and
+                      ambiguous, with exon, intron and multimapping-read counts alongside.
+                    </p>
+                  ) : (
+                    <p>In Alpha some molecules are counted twice, so the spliced and unspliced layers are not yet suited to RNA velocity.</p>
+                  )}
                 </>
               }
               link={{ to: "/docs#provenance", label: "References and versions" }}
@@ -173,10 +183,10 @@ const About = () => {
               id="layers"
               n={4}
               title="More than gene expression"
-              claim="Splicing layers, immune receptor genes, and a cell type, sex and ancestry label for each cell where the data allow."
+              claim={IS_BETA ? "Splicing layers, poly(A) sites, transposable elements, V(D)J gene usage, and per-cell labels for cell type, sex, ancestry and cell cycle where the data allow." : "Splicing layers, immune receptor genes, and a cell type, sex and ancestry label for each cell where the data allow."}
               visual={
                 <ul className="space-y-4">
-                  {MODALITIES.map((m) => (
+                  {(IS_BETA ? BETA_MODALITIES : MODALITIES).map((m) => (
                     <li key={m.name} className="flex gap-3">
                       <span className="shrink-0 grid place-items-center h-10 w-10 rounded-lg bg-[var(--teal-50)] text-primary">{m.icon}</span>
                       <div className="min-w-0">
@@ -189,7 +199,11 @@ const About = () => {
               }
               detail={
                 <>
-                  <p>Alpha is transcriptomics only. No genotypes, mtDNA alleles, ambient-RNA or doublet calls.</p>
+                  {IS_BETA ? (
+                    <p>Genotypes, mitochondrial alleles, and ambient-RNA and doublet scores stay out of the public files until their release gates pass.</p>
+                  ) : (
+                    <p>Alpha is transcriptomics only. No genotypes, mtDNA alleles, ambient-RNA or doublet calls.</p>
+                  )}
                   <p>Genotypes and mitochondrial variants are never released.</p>
                 </>
               }
@@ -277,7 +291,7 @@ const About = () => {
               <CodeBlock
                 label="text"
                 code={`<Original authors>. <Title>. GEO accession ${EXAMPLE_GSE} (<year>).
-Singlet Research Alpha (October 2026). https://singlet.bio (accessed ${new Date().getFullYear()}).`}
+${IS_BETA ? "Singlet Research Beta (campaign started 2026-11-20). https://beta.singlet.bio" : "Singlet Research Alpha (October 2026). https://singlet.bio"} (accessed ${new Date().getFullYear()}).`}
               />
             </Fold>
           </div>

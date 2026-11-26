@@ -23,10 +23,14 @@ export const R_INSTALL_STANDALONE = `install.packages(c("remotes", "BiocManager"
 
 export const GITHUB_REPO = "https://github.com/Singlet-Bio/singlet";
 export const GITHUB_ISSUES = "https://github.com/Singlet-Bio/singlet/issues";
-export const DATA_BASE = "https://data.singlet.bio";
+/** Data host in snippets. A Beta build sets VITE_DATA_BASE (docs/BETA-CHANNEL.md); the code is the same. */
+export const DATA_BASE: string = (import.meta.env?.VITE_DATA_BASE as string | undefined) || "https://data.singlet.bio";
 
-/** The flagship example study used across the site (8/8 usable samples, ~193 MB). */
-export const EXAMPLE_GSE = "GSE138867";
+/** The flagship example study used across the site (8/8 usable samples, ~193 MB). A Beta build uses a study Beta serves
+ *  (GSE292829: 8/8 usable samples, ~161 MB, reprocessed by the Beta campaign). */
+const BETA_BUILD =
+  String((import.meta.env?.VITE_CHANNEL as string | undefined) ?? "").trim().toLowerCase() === "beta" || /beta-data\./.test(DATA_BASE);
+export const EXAMPLE_GSE = BETA_BUILD ? "GSE292829" : "GSE138867";
 
 /** Python: load one study (install is a separate bash block — never mix pip into Python). */
 export function pySnippet(gse = EXAMPLE_GSE): string {

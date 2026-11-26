@@ -74,6 +74,7 @@ import { checkIngestToken } from "../../_shared/ingest-auth";
 import { estimateIngest, reserveWrites } from "../../_shared/write-budget";
 import { getS1State, isLegacyAlive, legacyRetiredSql, s1Available } from "../../_shared/s1-catalog";
 import { readS1Summaries } from "../../_shared/s1-summaries";
+import { configureS1 } from "../../_shared/s1-urls";
 
 const MAX_ROWS = 2000;
 const MAX_BODY_BYTES = 4 * 1024 * 1024;
@@ -91,6 +92,7 @@ const ALLOWED_ORIGIN_RE = /^https:\/\/(singlet\.bio|[a-z0-9-]+\.singlet-4gc\.pag
 interface Env {
   DB: D1Database;
   INGEST_TOKEN_SHA256?: string;
+  S1_ORIGIN?: string;
   /** Daily cap on estimated D1 rows written through this endpoint (default 1.5M); the owner raises it after approving an estimate. */
   D1_DAILY_WRITE_ROWS?: string;
 }
@@ -275,6 +277,7 @@ export const onRequestOptions: PagesFunction<Env> = async ({ request }) =>
   new Response(null, { status: 204, headers: cors(request.headers.get("Origin")) });
 
 export const onRequestPost: PagesFunction<Env> = async ({ request, env, params }) => {
+  configureS1(env); // sample objects of this channel (Beta: beta-data.singlet.bio)
   const origin = request.headers.get("Origin");
   const started = Date.now();
 
@@ -574,6 +577,7 @@ async function parkStudy(db: D1Database, gse: string, reason: string): Promise<v
 }
 
 export const onRequestGet: PagesFunction<Env> = async ({ request, env, params }) => {
+  configureS1(env);
   const origin = request.headers.get("Origin");
   const route = String(params.table ?? "");
   const auth = await checkIngestToken(request, env);

@@ -1,0 +1,40 @@
+name: Beta product test
+
+# Daily check of the Beta channel (beta.singlet.bio): takes the newest samples in Beta's catalog and verifies the data Worker's objects and
+# manifests (sizes, SHA-256), the site, the Python client and the MCP server with only the data base URL changed (scripts/beta/product-test.mjs).
+# The report is posted to https://beta.singlet.bio/api/hpc/beta/product-test.json for the launch checklist, and kept as a run artifact.
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+    inputs:
+      n:
+        description: "Newest samples to check"
+        required: false
+        default: "5"
+        type: string
+
+jobs:
+  product-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install singlet
+      - name: Product test
+        env:
+          SINGLET_INGEST_TOKEN: ${{ secrets.BETA_INGEST_TOKEN }}
+          BETA_MCP_KEY: ${{ secrets.BETA_MCP_KEY }}
+          SINGLET_DATA_BASE: https://beta-data.singlet.bio
+        run: node scripts/beta/product-test.mjs --site https://beta.singlet.bio --n "${{ inputs.n || '5' }}" --out beta-product-test.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: beta-product-test
+          path: beta-product-test.json

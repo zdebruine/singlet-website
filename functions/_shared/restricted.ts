@@ -41,8 +41,16 @@ export function isRestrictedMember(rel: string): boolean {
   return /^snp_/.test(name) || /\.(vcf|bcf)(\.gz)?$/i.test(name) || /_mt_(consensus|variants)/.test(name);
 }
 
+/**
+ * Beta channel: private outputs of a finished sample (genotype calls, donor mitochondrial sequence, anything read-level) go to the restricted
+ * sidecar under the key prefix `private/`, in storage that has no public route. The rolling ingest refuses such keys for the public bucket and the
+ * data Worker answers only anchored `s1/...` keys, so a `private/` object is never listed, served or counted.
+ */
+export const isPrivateKey = (key: string) => key.replace(/^\/+/, "").startsWith("private/");
+
 /** True for a full archive path (`samples/<GSM>/…`) or a bare member name. */
 export function isRestrictedPath(path: string): boolean {
+  if (isPrivateKey(path)) return true;
   const m = SAMPLE_RE.exec(path);
   if (m) return isRestrictedMember(path.slice(m[0].length));
   if (path.startsWith("samples/")) return false;

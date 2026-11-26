@@ -5,6 +5,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "beta:deploy": "bash scripts/beta/deploy.sh",
     "dev": "vite",
     "enrich:attrs": "esbuild scripts/enrich/extract-attrs.ts --bundle --platform=node --format=esm --outfile=scripts/enrich/.run-attrs.mjs --log-level=error && node scripts/enrich/.run-attrs.mjs",
     "enrich:ingest": "esbuild scripts/enrich/ingest.ts --bundle --platform=node --format=esm --outfile=scripts/enrich/.run-ingest.mjs --log-level=error && node scripts/enrich/.run-ingest.mjs",

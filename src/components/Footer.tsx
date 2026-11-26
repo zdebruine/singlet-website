@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { FeedbackButton } from "@/components/FeedbackDialog";
 import { GITHUB_ISSUES, GITHUB_REPO } from "@/lib/install-snippets";
+import { ALPHA_SITE, IS_BETA } from "@/lib/channel";
 
 /** `reload`: a page served by Functions (the blog), so the link loads it in full instead of routing in the app. */
 const LINKS: { label: string; to?: string; href?: string; reload?: boolean }[] = [
@@ -10,7 +11,8 @@ const LINKS: { label: string; to?: string; href?: string; reload?: boolean }[] =
   { label: "About", to: "/about" },
   { label: "Benchmarks", to: "/benchmarking" },
   { label: "Known issues", to: "/known-issues" },
-  { label: "What's coming in Beta", to: "/beta" },
+  IS_BETA ? { label: "Campaign", to: "/campaign" } : { label: "What's coming in Beta", to: "/beta" },
+  ...(IS_BETA ? [{ label: "About this release", to: "/beta" }, { label: "Research Alpha", href: ALPHA_SITE }] : []),
   { label: "Cite", to: "/about#cite" },
   { label: "GitHub", href: GITHUB_REPO },
 ];
@@ -25,7 +27,7 @@ const Footer = () => (
   <footer className="mt-auto border-t border-border bg-background">
     <div className="container-site py-7 flex flex-col md:flex-row md:items-center gap-5 md:gap-8">
       <div className="md:flex-1 space-y-1">
-        <p className="text-[13px] text-muted-foreground">Data CC0 · Code MIT · No account to download or search</p>
+        <p className="text-[13px] text-muted-foreground">{IS_BETA ? "Data CC0 · Code MIT · No account to download" : "Data CC0 · Code MIT · No account to download or search"}</p>
         {/* The support contact for the site, the API and the MCP connector (no email address exists). */}
         <p className="text-[13px] text-muted-foreground">
           Contact and support (site, API, MCP connector):{" "}

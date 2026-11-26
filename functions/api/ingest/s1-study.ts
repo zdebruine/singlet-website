@@ -34,6 +34,7 @@
  * 503 with a clear message when schema/032 or schema/033 has not been applied.
  */
 import { serverError } from "../../_shared/errors";
+import { applyIngest } from "../../_shared/s1-apply";
 import { checkIngestToken } from "../../_shared/ingest-auth";
 import {
   GSE_RE,
@@ -41,7 +42,6 @@ import {
   S1ManifestError,
   getS1Migration,
   getS1Study,
-  ingestStatements,
   parseIngestBody,
 } from "../../_shared/s1-catalog";
 
@@ -59,19 +59,6 @@ const HEADERS = {
   Vary: "Origin",
 };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: HEADERS });
-const nowIso = () => new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
-const SERVED = new Set(["verified", "retired"]);
-
-/** What D1 says this post cost: the sum of meta.rows_written (table and index rows) over every statement, or null when the binding does not report it. */
-function rowsWritten(results: unknown[]): number | null {
-  let total = 0;
-  for (const r of results) {
-    const n = (r as { meta?: { rows_written?: unknown } } | null)?.meta?.rows_written;
-    if (typeof n !== "number") return null;
-    total += n;
-  }
-  return results.length ? total : 0;
-}
 
 export const onRequestOptions: PagesFunction<Env> = async () => new Response(null, { status: 204, headers: HEADERS });
 
@@ -92,35 +79,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   }
 
   try {
-    const parsed = parseIngestBody(body);
-    const stamp = nowIso();
-    // The rev already stored decides what is rewritten: an unchanged rev costs no sample or study rows (see ingestStatements).
-    const stored = parsed.study ? await env.DB.prepare(`SELECT rev FROM s1_study WHERE gse_id = ?`).bind(parsed.gse).first<{ rev: string }>() : null;
-    const { batches, tail, unchanged } = ingestStatements(env.DB, parsed, stamp, stored?.rev ?? null);
-    const results: unknown[] = [];
-    for (const batch of batches) results.push(...(await env.DB.batch(batch)));
-    // The tail is one atomic batch: the s1_study row (the flip), the removal of the other revs' sample rows, the migration row.
-    if (tail.length) results.push(...(await env.DB.batch(tail)));
-    // A study that is now served from s1 but has no legacy file (gse_meta.has_bundle = 0) is queued for the catalog crank, which recomputes
-    // has_bundle from the s1 tables. Best effort and no write at all for a study with a legacy file (the WHERE matches nothing).
-    if (parsed.final && parsed.migration && SERVED.has(parsed.migration.status)) {
-      await env.DB.prepare(`UPDATE gse_meta SET n_usable_samples = NULL WHERE gse_id = ? AND COALESCE(has_bundle, 0) = 0`)
-        .bind(parsed.gse)
-        .run()
-        .catch(() => undefined);
-    }
-    return json({
-      ok: true,
-      gse_id: parsed.gse,
-      rev: parsed.study?.rev ?? null,
-      unchanged,
-      samples_written: unchanged ? 0 : (parsed.study?.samples.length ?? 0),
-      rows_written: rowsWritten(results),
-      n_samples: parsed.study?.n_samples ?? null,
-      final: parsed.final,
-      migration_status: parsed.migration && parsed.final && !(parsed.migrationImplicit && unchanged) ? parsed.migration.status : null,
-      ms: Date.now() - started,
-    });
+    return json(await applyIngest(env.DB, parseIngestBody(body), started));
   } catch (e) {
     if (e instanceof S1ManifestError) return json({ error: e.message }, e.status);
     if (/no such table/i.test(String(e))) return json({ error: "The catalog tables are missing: apply schema/032_v2_catalog.sql and schema/033_v2_sample_rev_key.sql and schema/038_s1_catalog.sql first" }, 503);
