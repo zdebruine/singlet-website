@@ -1,4 +1,5 @@
 import { wellKnown } from "./_shared/mcp-oauth";
+import { configureSiteOrigin } from "./_shared/channel";
 
 /**
  * Security headers for every Pages Function response (API, MCP, sign-in,
@@ -42,7 +43,8 @@ export function isDataPath(pathname: string): boolean {
   );
 }
 
-export const onRequest: PagesFunction = async ({ request, next }) => {
+export const onRequest: PagesFunction<{ CHANNEL?: string }> = async ({ request, next, env }) => {
+  configureSiteOrigin(env);
   const res = wellKnown(request) ?? (await next());
   return isDataPath(new URL(request.url).pathname) ? withSecurityHeaders(res) : res;
 };

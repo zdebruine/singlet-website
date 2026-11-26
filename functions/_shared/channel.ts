@@ -15,10 +15,17 @@ export interface ChannelEnv {
   CHANNEL?: string;
 }
 
+let SITE_ORIGIN = "https://singlet.bio";
+/** The public origin of this deployment, for links the API hands out (export, slice). Set once per request from CHANNEL; each Pages project is one channel. */
+export const siteOrigin = () => SITE_ORIGIN;
+export function configureSiteOrigin(env: ChannelEnv) {
+  SITE_ORIGIN = (env.CHANNEL ?? "").trim().toLowerCase() === "beta" ? "https://beta.singlet.bio" : "https://singlet.bio";
+}
+
 export const isBeta = (env: ChannelEnv) => (env.CHANNEL ?? "").trim().toLowerCase() === "beta";
 
 export type ObjectClass =
-  | { ok: true; kind: "sample" | "label" | "pack" | "cells" | "cidx"; digest: string | null }
+  | { ok: true; kind: "sample" | "label" | "pack" | "cells" | "cidx" | "refindex"; digest: string | null }
   | { ok: false; error: string };
 
 const LABEL_KEY_RE = /^s1\/a\/GSM\d+\/([0-9a-f]{32})\.parquet$/;
@@ -42,6 +49,7 @@ export function classifyObjectKey(key: string): ObjectClass {
   const p = PACK_KEY_RE.exec(key);
   if (p) return { ok: true, kind: "pack", digest: p[1] };
   if (CELLS_KEY_RE.test(key)) return { ok: true, kind: "cells", digest: null };
+  if (key === "s1/ref/index.json") return { ok: true, kind: "refindex", digest: null }; // the list of packs (mutable, max-age=300)
   const ci = CIDX_OBJ_KEY_RE.exec(key);
   if (ci) return { ok: true, kind: "cidx", digest: ci[1] };
   if (CIDX_DIR_KEY_RE.test(key)) return { ok: true, kind: "cidx", digest: null };

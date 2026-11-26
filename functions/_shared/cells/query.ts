@@ -230,7 +230,12 @@ export const STAGE_ALIASES: Record<string, string[]> = {
   elderly: ["HsapDv:0000227"],
 };
 
-const ID_RE = /^(?:[A-Za-z][A-Za-z_]*:\d+|[Cc][Vv][Cc][Ll]_[A-Za-z0-9]{4})$/;
+const ID_RE = /^(?:[A-Za-z][A-Za-z_]*:\d+|(?:cl|uberon|mondo)_\d+|[Cc][Vv][Cc][Ll]_[A-Za-z0-9]{4})$/i;
+/** OBO ids are written PREFIX:0000084; "cl:84", "CL_0000084" and "cl:0000084" name the same term. */
+export function normalizeOboId(v: string): string {
+  const m = /^(cl|uberon|mondo)[:_]0*(\d+)$/i.exec(v.trim());
+  return m ? `${m[1].toUpperCase()}:${m[2].padStart(7, "0")}` : v;
+}
 /** Whether a term id belongs to an ontology; Cellosaurus accessions are written CVCL_xxxx, the others PREFIX:digits. */
 const inOntology = (id: string, o: string) => (o === "Cellosaurus" ? id.startsWith("CVCL_") : id.startsWith(o + ":"));
 
@@ -287,7 +292,8 @@ function labelIds(idx: CellIndex, facts: SampleFacts, v: string, ontologies: str
 /** CL ids for a cell-type label or synonym (for the catalog interpreter's cell types). */
 export const labelIdsFor = (idx: CellIndex, facts: SampleFacts, v: string): string[] => labelIds(idx, facts, v, ["CL"], CELL_TYPE_ALIASES);
 
-function canonId(facts: SampleFacts, idx: CellIndex, v: string): string {
+function canonId(facts: SampleFacts, idx: CellIndex, v0: string): string {
+  const v = normalizeOboId(v0);
   const lower = v.toLowerCase();
   const known = facts.idCase.get(lower);
   if (known) return known;

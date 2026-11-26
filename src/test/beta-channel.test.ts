@@ -21,6 +21,7 @@ describe("beta channel", () => {
     expect(classifyObjectKey(`s1/cidx/obj/${D}.scx`)).toEqual({ ok: true, kind: "cidx", digest: D });
     expect(classifyObjectKey("s1/cidx/v/20261125T1700Z-0123abcd.json")).toMatchObject({ ok: true, kind: "cidx", digest: null });
     expect(classifyObjectKey("s1/cidx/current.json")).toMatchObject({ ok: true, kind: "cidx", digest: null });
+    expect(classifyObjectKey("s1/ref/index.json")).toMatchObject({ ok: true, kind: "refindex", digest: null });
     for (const bad of ["s1/cidx/x.json", "s1/cidx/obj/abc.scx", `s1/cidx/obj/${D}.exe`, "s1/cidx/v/../current.json", "s1/m/GSE1.json", "s1/s/GSM1/abc.s1", `data/GSE1/GSE1.singlet`, `s1/s/GSM1/${D}.s1/../x`, ""]) {
       expect(classifyObjectKey(bad).ok).toBe(false);
     }
